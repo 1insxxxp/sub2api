@@ -182,6 +182,10 @@ function vueSource(): string {
   return readFileSync('src/views/user/ImageStudioView.vue', 'utf-8')
 }
 
+function surfaceSource(): string {
+  return readFileSync('src/styles/image-studio-surfaces.css', 'utf-8')
+}
+
 function cssRulesFor(selector: string): string[] {
   const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const matches = vueSource().matchAll(new RegExp(`${escapedSelector}\\s*\\{([^}]*)\\}`, 'g'))
@@ -286,6 +290,50 @@ describe('ImageStudioView', () => {
       created_at: '2026-06-22T00:00:00Z',
       updated_at: '2026-06-22T00:00:00Z',
     })
+  })
+
+  it('does not fall back to the global model list when the selected key has no image models', async () => {
+    getOptions.mockResolvedValueOnce({ ...options, groups: [{ ...options.groups[0], models: [] }] })
+    const wrapper = mount(ImageStudioView, { global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Icon: true } } })
+    await flushPromises()
+    expect(wrapper.get('[data-testid="image-studio-generate-button"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="image-studio-model-select"]').text()).not.toContain('gpt-image')
+    wrapper.unmount()
+  })
+
+  it('updates discovered models on key switch and preserves a model supported by both keys', async () => {
+    const extra = { model: 'gpt-image-new', label: 'gpt-image-new', capabilities: ['generation', 'edit'] }
+    getOptions.mockResolvedValueOnce({ ...options, groups: [
+      { ...options.groups[0], models: [...options.groups[0].models, extra] },
+      { ...options.groups[0], id: 10, name: 'Second group', models: [extra] },
+    ] })
+    listKeys.mockResolvedValueOnce({ ...apiKeys, items: [...apiKeys.items, { ...apiKeys.items[0], id: 16, name: 'Second key', group_id: 10 }] })
+    const wrapper = mount(ImageStudioView, { global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Icon: true } } })
+    await flushPromises()
+    await wrapper.get('[data-testid="image-studio-model-select"]').trigger('click')
+    await wrapper.findAll('[data-testid="image-studio-model-menu"] button')[1].trigger('click')
+    await wrapper.get('[data-testid="image-studio-api-key-select"]').trigger('click')
+    await wrapper.findAll('[data-testid="image-studio-api-key-menu"] button')[1].trigger('click')
+    expect(wrapper.get('[data-testid="image-studio-model-select"]').text()).toContain('gpt-image-new')
+    await wrapper.get('[data-testid="image-studio-api-key-select"]').trigger('click')
+    await wrapper.findAll('[data-testid="image-studio-api-key-menu"] button')[0].trigger('click')
+    expect(wrapper.get('[data-testid="image-studio-model-select"]').text()).toContain('gpt-image-new')
+    wrapper.unmount()
+  })
+
+  it('filters models by generation and edit capability', async () => {
+    getOptions.mockResolvedValueOnce({ ...options, groups: [{ ...options.groups[0], models: [
+      { model: 'generation-only', label: 'generation-only', capabilities: ['generation'] },
+      { model: 'edit-only', label: 'edit-only', capabilities: ['edit'] },
+    ] }] })
+    const wrapper = mount(ImageStudioView, { global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Icon: true } } })
+    await flushPromises()
+    await wrapper.get('[data-testid="image-studio-model-select"]').trigger('click')
+    expect(wrapper.get('[data-testid="image-studio-model-menu"]').text()).not.toContain('edit-only')
+    await wrapper.findAll('.image-studio-mode-switch button')[1].trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="image-studio-model-select"]').text()).toContain('edit-only')
+    wrapper.unmount()
   })
 
   it('renders enabled config controls and appends generated images to gallery', async () => {
@@ -1734,12 +1782,12 @@ describe('ImageStudioView', () => {
   it('stacks the workstation when its available content width is too narrow', () => {
     const source = vueSource()
     const containerQueryStart = source.indexOf('@container image-studio-workspace (max-width: 72rem)')
-    const mobileMediaStart = source.indexOf('@media (max-width: 760px)')
+    const nextMediaStart = source.indexOf('@media', containerQueryStart)
 
     expect(containerQueryStart).toBeGreaterThan(-1)
-    expect(mobileMediaStart).toBeGreaterThan(containerQueryStart)
+    expect(nextMediaStart).toBeGreaterThan(containerQueryStart)
 
-    const adaptiveRules = source.slice(containerQueryStart, mobileMediaStart)
+    const adaptiveRules = source.slice(containerQueryStart, nextMediaStart)
     expect(adaptiveRules).toMatch(/\.image-studio-shell\s*\{[^}]*height:\s*auto[^}]*overflow:\s*visible/s)
     expect(adaptiveRules).toMatch(/\.image-studio-grid\s*\{[^}]*grid-template-columns:\s*1fr/s)
     expect(adaptiveRules).toMatch(/\.image-studio-command-surface\s*\{[^}]*overflow:\s*visible/s)
@@ -1759,6 +1807,14 @@ describe('ImageStudioView', () => {
     const emptyPreviewRule = cssRulesFor('.image-studio-empty-preview')[0] ?? ''
 
     expect(emptyPreviewRule).toMatch(/place-self:\s*center/)
+  })
+
+  it('keeps preview state content on a single canvas surface', () => {
+    const source = surfaceSource()
+
+    expect(source).toMatch(/\.image-studio-preview-frame > \.image-studio-preview-body > :is\(\.image-studio-empty-preview, \.image-studio-failure-state, \.image-studio-preview-open\)/)
+    expect(source).toMatch(/border:\s*0;[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;/)
+    expect(source).toMatch(/\.image-studio-preview-frame > \.image-studio-preview-body > \.image-studio-result-batch[\s\S]*background:\s*transparent;/)
   })
 
   it('keeps the cost and generate action panel in normal flow with an opaque surface', () => {
@@ -1901,6 +1957,57 @@ describe('ImageStudioView', () => {
     await flushPromises()
 
     expect(wrapper.find('[data-testid="image-studio-image-preview-dialog"]').exists()).toBe(false)
+  })
+
+  it('switches between images in the active generation batch from the preview dialog', async () => {
+    const batchImages = [1, 2].map((id) => ({
+      id,
+      user_id: 42,
+      mode: 'generation',
+      model: 'gpt-image-2',
+      prompt: 'batch preview',
+      aspect_ratio: '1:1',
+      size: '1024x1024',
+      image_url: `https://assets.example.com/batch-${id}.png`,
+      storage_driver: 'local',
+      storage_object_key: `images/batch-${id}.png`,
+      mime_type: 'image/png',
+      cost: 0.1,
+      bytes: 100,
+      source_image_count: 0,
+      created_at: '2026-06-22T00:00:00Z',
+      updated_at: '2026-06-22T00:00:00Z',
+    }))
+    list.mockResolvedValueOnce({ items: batchImages, total: 2, page: 1, page_size: 12, pages: 1 })
+
+    const wrapper = mount(ImageStudioView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          Icon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+    const vm = wrapper.vm as any
+    vm.currentResultImages = batchImages
+    vm.currentImage = batchImages[0]
+    await flushPromises()
+
+    await wrapper.findAll('.image-studio-result-tile-preview')[0].trigger('click')
+    expect(wrapper.get('[data-testid="image-studio-preview-position"]').text()).toBe('1 / 2')
+    expect(wrapper.get('.image-studio-preview-canvas img').attributes('src')).toBe(batchImages[0].image_url)
+    expect(wrapper.get('[data-testid="image-studio-preview-previous"]').attributes('disabled')).toBeDefined()
+
+    await wrapper.get('[data-testid="image-studio-preview-next"]').trigger('click')
+    expect(wrapper.get('[data-testid="image-studio-preview-position"]').text()).toBe('2 / 2')
+    expect(wrapper.get('.image-studio-preview-canvas img').attributes('src')).toBe(batchImages[1].image_url)
+    expect(wrapper.get('[data-testid="image-studio-preview-next"]').attributes('disabled')).toBeDefined()
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft' }))
+    await flushPromises()
+    expect(wrapper.get('[data-testid="image-studio-preview-position"]').text()).toBe('1 / 2')
   })
 
   it('keeps preview actions reachable when the prompt is long', () => {

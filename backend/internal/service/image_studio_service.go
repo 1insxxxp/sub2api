@@ -82,6 +82,8 @@ type ImageStudioService struct {
 	taskRepo       UserImageTaskRepository
 	configReader   ImageStudioConfigReader
 	groupResolver  ImageStudioGroupResolver
+	modelAccounts  ImageStudioModelAccounts
+	modelChannels  *ChannelService
 	executor       ImageStudioExecutor
 	storageFactory ImageStudioStorageFactory
 	taskQueue      chan int64
@@ -145,7 +147,12 @@ func (s *ImageStudioService) GetOptions(ctx context.Context, userID int64) (*Ima
 	}
 	for i := range groups {
 		group := groups[i]
+		models, err := s.discoverImageModels(ctx, &group, cfg)
+		if err != nil {
+			return nil, err
+		}
 		option := imageStudioGroupOptionFromGroup(&group, cfg)
+		option.Models = imageStudioModelOptions(models)
 		if len(option.Models) == 0 {
 			continue
 		}
@@ -502,6 +509,10 @@ func (s *ImageStudioService) prepareGenerateInput(ctx context.Context, input Ima
 	if model == "" {
 		model = cfg.DefaultModel
 	}
+	input.GroupID, err = s.resolveImageStudioKeyGroup(ctx, input.UserID, input.APIKeyID, input.GroupID)
+	if err != nil {
+		return nil, ImageStudioGenerateInput{}, err
+	}
 	group, err := s.resolveSelectedImageStudioGroup(ctx, input.UserID, input.GroupID, model, cfg)
 	if err != nil {
 		return nil, ImageStudioGenerateInput{}, err
@@ -554,6 +565,10 @@ func (s *ImageStudioService) prepareEditInput(ctx context.Context, input ImageSt
 	model := strings.TrimSpace(input.Model)
 	if model == "" {
 		model = cfg.DefaultModel
+	}
+	input.GroupID, err = s.resolveImageStudioKeyGroup(ctx, input.UserID, input.APIKeyID, input.GroupID)
+	if err != nil {
+		return nil, ImageStudioEditInput{}, err
 	}
 	group, err := s.resolveSelectedImageStudioGroup(ctx, input.UserID, input.GroupID, model, cfg)
 	if err != nil {
@@ -635,7 +650,11 @@ func (s *ImageStudioService) resolveSelectedImageStudioGroup(ctx context.Context
 		if group.ID != selectedID {
 			continue
 		}
-		if err := ValidateImageStudioModel(model, imageStudioModelsForGroup(&group, cfg)); err != nil {
+		models, err := s.discoverImageModels(ctx, &group, cfg)
+		if err != nil {
+			return nil, err
+		}
+		if err := ValidateImageStudioModel(model, models); err != nil {
 			return nil, infraerrors.BadRequest("IMAGE_STUDIO_MODEL_NOT_AVAILABLE", err.Error())
 		}
 		return &group, nil

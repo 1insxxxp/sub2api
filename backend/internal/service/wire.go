@@ -830,10 +830,13 @@ func ProvideImageStudioService(
 	configReader ImageStudioConfigReader,
 	groupResolver ImageStudioGroupResolver,
 	executor *ImageStudioGatewayExecutor,
+	accounts AccountRepository,
+	channels *ChannelService,
 ) *ImageStudioService {
 	svc := NewImageStudioService(repo, configReader)
 	svc.SetTaskRepository(taskRepo)
 	svc.SetGroupResolver(groupResolver)
+	svc.SetModelDiscovery(accounts, channels)
 	svc.SetExecutor(executor)
 	if affected, err := svc.MarkInterruptedRunningTasks(context.Background()); err != nil {
 		logger.LegacyPrintf("service.image_studio", "[ImageStudio] failed to mark interrupted running tasks: %v", err)

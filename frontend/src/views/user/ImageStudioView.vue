@@ -20,13 +20,15 @@
             <div class="image-studio-mode-switch" role="tablist" :aria-label="t('imageStudio.mode')">
               <button
                 type="button"
+                role="tab"
+                :aria-selected="mode === 'generation'"
                 :class="{ active: mode === 'generation' }"
                 @click="mode = 'generation'"
               >
                 <Icon name="sparkles" size="sm" />
                 {{ t('imageStudio.textToImage') }}
               </button>
-              <button type="button" :class="{ active: mode === 'edit' }" @click="mode = 'edit'">
+              <button type="button" role="tab" :aria-selected="mode === 'edit'" :class="{ active: mode === 'edit' }" @click="mode = 'edit'">
                 <Icon name="edit" size="sm" />
                 {{ t('imageStudio.imageEdit') }}
               </button>
@@ -388,7 +390,7 @@
               <div class="image-studio-stage-meta">
                 <span>{{ model || '-' }}</span>
                 <span>{{ aspectRatio }}</span>
-                <button type="button" class="image-studio-icon-button" :disabled="loadingHistory" @click="loadHistory">
+                <button type="button" class="image-studio-icon-button" :aria-label="t('common.refresh')" :title="t('common.refresh')" :disabled="loadingHistory" @click="loadHistory">
                   <Icon name="refresh" size="md" :class="loadingHistory ? 'animate-spin' : ''" />
                 </button>
               </div>
@@ -396,7 +398,7 @@
 
             <div
               class="image-studio-preview-frame"
-              :class="{ 'is-generating': submitting, 'is-failure': !!generationFailure }"
+              :class="{ 'is-generating': submitting, 'is-failure': !!generationFailure, 'is-empty': !currentImage && !currentResultImages.length && !generationFailure }"
             >
               <div v-if="submitting" class="image-studio-generating-overlay" data-testid="image-studio-generating-overlay" aria-live="polite">
                 <div class="image-studio-generating-state">
@@ -651,8 +653,37 @@
             </button>
           </div>
 
-          <div class="image-studio-preview-canvas">
+          <div
+            class="image-studio-preview-canvas"
+            @touchstart.passive="handlePreviewTouchStart"
+            @touchend.passive="handlePreviewTouchEnd"
+          >
             <img :src="previewImage.image_url" :alt="previewImage.prompt" />
+            <template v-if="previewImages.length > 1">
+              <button
+                type="button"
+                class="image-studio-preview-nav image-studio-preview-nav-previous"
+                data-testid="image-studio-preview-previous"
+                aria-label="上一张图片"
+                :disabled="!canPreviewPrevious"
+                @click.stop="showPreviousPreviewImage"
+              >
+                <Icon name="chevronDown" size="md" class="image-studio-preview-nav-icon-previous" />
+              </button>
+              <button
+                type="button"
+                class="image-studio-preview-nav image-studio-preview-nav-next"
+                data-testid="image-studio-preview-next"
+                aria-label="下一张图片"
+                :disabled="!canPreviewNext"
+                @click.stop="showNextPreviewImage"
+              >
+                <Icon name="chevronDown" size="md" class="image-studio-preview-nav-icon-next" />
+              </button>
+              <span class="image-studio-preview-position" data-testid="image-studio-preview-position">
+                {{ previewImageIndex + 1 }} / {{ previewImages.length }}
+              </span>
+            </template>
           </div>
 
           <div class="image-studio-preview-details">
@@ -825,6 +856,7 @@ const activeTasks = ref<ImageStudioTask[]>([])
 const taskPollTimers = new Set<number>()
 const activeGenerationTaskStorageKey = 'image-studio-active-generation-task-id'
 const previewImage = ref<ImageStudioImage | null>(null)
+const previewTouchStartX = ref<number | null>(null)
 const pendingDeleteImage = ref<ImageStudioImage | null>(null)
 const deletingImage = ref(false)
 const generationFailure = ref<{
@@ -862,16 +894,9 @@ const selectedAPIKey = computed(() =>
 const selectedGroup = computed(() =>
   groupOptions.value.find((item) => item.id === selectedAPIKey.value?.group_id) ?? null,
 )
-const modelOptions = computed<ImageStudioModelOption[]>(() => {
-  if (selectedGroup.value?.models?.length) {
-    return selectedGroup.value.models
-  }
-  return (config.value?.allowed_models ?? []).map((item) => ({
-    model: item,
-    label: item,
-    capabilities: ['generation', 'edit'],
-  }))
-})
+const modelOptions = computed<ImageStudioModelOption[]>(() =>
+  (selectedGroup.value?.models ?? []).filter((item) => item.capabilities.includes(mode.value)),
+)
 const qualityOptions = computed<ImageStudioQualityOption[]>(() => {
   if (selectedGroup.value?.qualities?.length) {
     return selectedGroup.value.qualities
@@ -935,6 +960,22 @@ const selectedPreviewMeta = computed(() => {
   }
   return `${size} / ${tier} ×${outputCount.value}`
 })
+const previewImages = computed(() => {
+  if (!previewImage.value) return []
+  if (currentResultImages.value.length > 1 && currentResultImages.value.some((item) => item.id === previewImage.value?.id)) {
+    return currentResultImages.value
+  }
+  return [previewImage.value]
+})
+const previewImageIndex = computed(() => {
+  if (!previewImage.value) return 0
+  return Math.max(
+    0,
+    previewImages.value.findIndex((item) => item.id === previewImage.value?.id),
+  )
+})
+const canPreviewPrevious = computed(() => previewImageIndex.value > 0)
+const canPreviewNext = computed(() => previewImageIndex.value < previewImages.value.length - 1)
 const failureDescription = computed(() => {
   if (!generationFailure.value) return ''
   return imageFailureMessage(generationFailure.value.reason, generationFailure.value.message)
@@ -1012,7 +1053,9 @@ watch(availableAPIKeys, (items) => {
 })
 
 watch(selectedAPIKeyID, () => {
-  model.value = chooseModel(options.value?.default_model || config.value?.default_model, modelOptions.value)
+  if (!modelOptions.value.some((item) => item.model === model.value)) {
+    model.value = chooseModel(options.value?.default_model || config.value?.default_model, modelOptions.value)
+  }
   quality.value = qualityOptions.value[0]?.quality ?? '1K'
 })
 
@@ -1775,17 +1818,54 @@ function openImagePreview(image: ImageStudioImage) {
   previewImage.value = image
 }
 
+function showPreviousPreviewImage() {
+  if (!canPreviewPrevious.value) return
+  previewImage.value = previewImages.value[previewImageIndex.value - 1] ?? previewImage.value
+}
+
+function showNextPreviewImage() {
+  if (!canPreviewNext.value) return
+  previewImage.value = previewImages.value[previewImageIndex.value + 1] ?? previewImage.value
+}
+
+function handlePreviewTouchStart(event: TouchEvent) {
+  previewTouchStartX.value = event.changedTouches[0]?.clientX ?? null
+}
+
+function handlePreviewTouchEnd(event: TouchEvent) {
+  const startX = previewTouchStartX.value
+  previewTouchStartX.value = null
+  const endX = event.changedTouches[0]?.clientX
+  if (startX == null || endX == null || Math.abs(endX - startX) < 48) return
+  if (endX < startX) {
+    showNextPreviewImage()
+  } else {
+    showPreviousPreviewImage()
+  }
+}
+
 function closeImagePreview() {
   previewImage.value = null
 }
 
 function handlePreviewKeydown(event: KeyboardEvent) {
-  if (event.key !== 'Escape') return
+  if (!previewImage.value && event.key !== 'Escape') return
   if (pendingDeleteImage.value) {
     closeDeleteDialog()
     return
   }
   if (previewImage.value) {
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault()
+      showPreviousPreviewImage()
+      return
+    }
+    if (event.key === 'ArrowRight') {
+      event.preventDefault()
+      showNextPreviewImage()
+      return
+    }
+    if (event.key !== 'Escape') return
     closeImagePreview()
   }
 }
@@ -3780,6 +3860,7 @@ onBeforeUnmount(() => {
 }
 
 .image-studio-preview-canvas {
+  position: relative;
   display: grid;
   min-width: 0;
   min-height: 0;
@@ -3794,6 +3875,7 @@ onBeforeUnmount(() => {
   background-position: 0 0, 0 12px, 12px -12px, -12px 0;
   background-size: 24px 24px;
   padding: clamp(0.8rem, 2vw, 1.3rem);
+  touch-action: pan-y;
 }
 
 .image-studio-preview-canvas img {
@@ -3803,6 +3885,69 @@ onBeforeUnmount(() => {
   object-fit: contain;
   border-radius: 0.75rem;
   box-shadow: 0 18px 42px rgba(15, 23, 42, 0.18);
+}
+
+.image-studio-preview-nav {
+  position: absolute;
+  top: 50%;
+  display: inline-flex;
+  height: 2.75rem;
+  width: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(203, 213, 225, 0.72);
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--brand-700);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  transform: translateY(-50%);
+  transition: opacity 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+  z-index: 2;
+}
+
+.image-studio-preview-nav:hover:not(:disabled),
+.image-studio-preview-nav:focus-visible {
+  border-color: rgba(var(--brand-rgb), 0.54);
+  box-shadow: 0 12px 28px rgba(var(--brand-rgb), 0.2), 0 0 0 3px rgba(var(--brand-rgb), 0.1);
+  transform: translateY(-50%) scale(1.04);
+}
+
+.image-studio-preview-nav:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+.image-studio-preview-nav-previous {
+  left: clamp(0.65rem, 2vw, 1.25rem);
+}
+
+.image-studio-preview-nav-next {
+  right: clamp(0.65rem, 2vw, 1.25rem);
+}
+
+.image-studio-preview-nav-icon-previous,
+.image-studio-preview-nav-icon-next {
+  transform: rotate(90deg);
+}
+
+.image-studio-preview-nav-icon-next {
+  transform: rotate(-90deg);
+}
+
+.image-studio-preview-position {
+  position: absolute;
+  bottom: 0.9rem;
+  left: 50%;
+  z-index: 2;
+  padding: 0.28rem 0.62rem;
+  border: 1px solid rgba(203, 213, 225, 0.62);
+  border-radius: 9999px;
+  background: rgba(15, 23, 42, 0.58);
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 750;
+  letter-spacing: 0.03em;
+  transform: translateX(-50%);
 }
 
 .image-studio-preview-details {
@@ -4640,119 +4785,29 @@ onBeforeUnmount(() => {
   }
 }
 
-@media (max-width: 760px) {
-  .image-studio-panel-header {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .image-studio-action-bar {
-    align-items: stretch;
-    grid-template-columns: 1fr;
-  }
-
-  .image-studio-foundation-row,
-  .image-studio-output-row {
-    grid-template-columns: 1fr;
-  }
-
-  .image-studio-current-actions {
-    grid-template-columns: 1fr;
-  }
-
-  .image-studio-preview-frame {
-    min-height: 24rem;
-  }
-
-  .image-studio-result-batch {
-    align-content: start;
-    padding: 0.62rem;
-  }
-
-  .image-studio-result-batch-header {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .image-studio-result-batch-actions {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .image-studio-result-grid.is-count-2,
-  .image-studio-result-grid.is-count-3,
-  .image-studio-result-grid.is-count-4 {
-    grid-template-columns: 1fr;
-  }
-
-  .image-studio-gallery-grid,
-  .image-studio-gallery-loading {
-    grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
-  }
-
-  .image-studio-stage-meta {
-    flex-wrap: wrap;
-  }
-
-  .image-studio-preview-modal {
-    align-items: end;
-    padding: 0;
-  }
-
-  .image-studio-preview-dialog {
-    width: 100%;
-    height: 96dvh;
-    max-height: 96dvh;
-    border-bottom-left-radius: 0;
-    border-bottom-right-radius: 0;
-  }
-
-  .image-studio-preview-canvas {
-    min-height: 0;
-  }
-
-  .image-studio-preview-canvas img {
-    max-height: 100%;
-  }
-
-  .image-studio-preview-actions {
-    grid-template-columns: 1fr;
-  }
-
-  .image-studio-delete-modal {
-    align-items: end;
-    padding: 0;
-  }
-
-  .image-studio-delete-dialog {
-    grid-template-columns: 1fr;
-    width: 100%;
-    border-bottom-left-radius: 0;
-    border-bottom-right-radius: 0;
-  }
-
-  .image-studio-delete-visual {
-    min-height: 12rem;
-    max-height: 32vh;
-  }
-
-  .image-studio-delete-actions {
-    grid-template-columns: 1fr;
-  }
-
-  .image-studio-submit-button {
-    width: 100%;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
+  .image-studio-select-pop-enter-active,
+  .image-studio-select-pop-leave-active,
+  .image-studio-fade-enter-active,
+  .image-studio-fade-leave-active,
+  .image-studio-select-trigger,
+  .image-studio-select-trigger svg,
+  .image-studio-select-option,
+  .image-studio-mode-switch button,
+  .image-studio-dropzone,
+  .image-studio-failure-actions button {
+    transition: none;
+  }
+
   .image-studio-loader,
   .image-studio-gallery-loading div,
   .image-studio-preview-modal,
   .image-studio-preview-dialog,
   .image-studio-delete-modal,
-  .image-studio-delete-dialog {
+  .image-studio-delete-dialog,
+  .image-studio-preview-nav {
     animation: none;
+    transition: none;
   }
 
   .image-studio-choice-picker button,
@@ -4770,3 +4825,6 @@ onBeforeUnmount(() => {
   }
 }
 </style>
+
+<style scoped src="@/styles/image-studio-surfaces.css"></style>
+<style scoped src="@/styles/image-studio-mobile.css"></style>

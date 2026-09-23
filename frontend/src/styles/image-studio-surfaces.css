@@ -1,0 +1,276 @@
+/* Keep Image Studio surfaces aligned with the API key cards. */
+.image-studio-shell {
+  --studio-card-rule: rgb(148 163 184 / 24%);
+  --studio-card-divider: rgb(148 163 184 / 14%);
+  --studio-card-surface: rgb(255 255 255 / 96%);
+  --studio-card-control: rgb(255 255 255 / 92%);
+  --studio-card-highlight: rgb(255 255 255 / 82%);
+  --studio-card-hover: rgb(148 163 184 / 7%);
+  --studio-card-ink: #202731;
+  --studio-card-muted: #677282;
+  --studio-card-shadow: inset 0 1px 0 rgb(255 255 255 / 90%), 0 2px 4px rgb(15 23 42 / 4%);
+}
+
+.image-studio-shell :is(.image-studio-workspace, .image-studio-preview-panel, .image-studio-gallery) {
+  border: 1px solid var(--studio-card-rule);
+  border-radius: 8px;
+  background: linear-gradient(125deg, var(--studio-card-highlight) 15%, transparent 65%), var(--studio-card-surface);
+  box-shadow: var(--studio-card-shadow);
+}
+
+.image-studio-shell :is(.image-studio-panel-header, .image-studio-control-dock.is-edit-mode .image-studio-output-row) {
+  border-color: var(--studio-card-divider);
+}
+
+.image-studio-shell .image-studio-panel-header h2,
+.image-studio-shell .image-studio-step-heading,
+.image-studio-shell .image-studio-cost-preview strong,
+.image-studio-shell .image-studio-generating-state strong,
+.image-studio-shell .image-studio-failure-state strong,
+.image-studio-shell .image-studio-empty-preview strong,
+.image-studio-shell .image-studio-empty-gallery strong,
+.image-studio-shell .image-studio-image-card-body strong,
+.image-studio-shell .image-studio-result-batch-header strong {
+  color: var(--studio-card-ink);
+}
+
+.image-studio-shell :is(.image-studio-field > span, .image-studio-cost-preview span, .image-studio-cost-preview small, .image-studio-field > small, .image-studio-generating-state, .image-studio-failure-state, .image-studio-empty-preview, .image-studio-empty-gallery, .image-studio-image-card-body span, .image-studio-image-card-body p, .image-studio-result-batch-header span) {
+  color: var(--studio-card-muted);
+}
+
+.image-studio-shell :is(.image-studio-field textarea, .image-studio-select-trigger, .image-studio-select-menu, .image-studio-reference-item, .image-studio-choice-picker button, .image-studio-dropzone, .image-studio-action-bar, .image-studio-failure-state, .image-studio-result-batch-header, .image-studio-result-tile, .image-studio-image-card, .image-studio-empty-gallery) {
+  border-color: var(--studio-card-rule);
+  background: linear-gradient(125deg, var(--studio-card-highlight) 15%, transparent 70%), var(--studio-card-control);
+  box-shadow: var(--studio-card-shadow);
+}
+
+.image-studio-shell .image-studio-command-surface {
+  background: transparent;
+}
+
+.image-studio-shell .image-studio-control-dock {
+  border-top: 1px solid var(--studio-card-divider);
+  background: transparent;
+  box-shadow: none;
+}
+
+.image-studio-shell .image-studio-mode-switch {
+  border-color: var(--studio-card-rule);
+  background: var(--studio-card-hover);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 75%);
+}
+
+.image-studio-shell .image-studio-mode-switch button {
+  color: var(--studio-card-muted);
+}
+
+.image-studio-shell .image-studio-mode-switch button.active {
+  color: var(--studio-card-ink);
+  background: var(--studio-card-control);
+  box-shadow: var(--studio-card-shadow);
+}
+
+.image-studio-shell :is(.image-studio-field textarea, .image-studio-select-trigger, .image-studio-choice-picker button, .image-studio-dropzone):hover,
+.image-studio-shell :is(.image-studio-field textarea, .image-studio-select-trigger, .image-studio-choice-picker button, .image-studio-dropzone):focus-visible,
+.image-studio-shell .image-studio-choice-picker button.active {
+  border-color: rgb(var(--brand-rgb) / 40%);
+  background: linear-gradient(125deg, var(--studio-card-highlight) 15%, transparent 70%), var(--studio-card-control);
+  box-shadow: 0 0 0 2px rgb(var(--brand-rgb) / 8%), var(--studio-card-shadow);
+}
+
+.image-studio-shell .image-studio-select-trigger::before {
+  width: 2px;
+  background: var(--brand-500);
+}
+
+.image-studio-shell .image-studio-select-menu {
+  background: var(--studio-card-surface);
+  box-shadow: var(--studio-card-shadow), 0 12px 32px rgb(15 23 42 / 12%);
+}
+
+.image-studio-shell .image-studio-select-option {
+  color: var(--studio-card-ink);
+}
+
+.image-studio-shell .image-studio-select-option:hover,
+.image-studio-shell .image-studio-select-option:focus-visible,
+.image-studio-shell .image-studio-select-option.is-selected {
+  color: var(--studio-card-ink);
+  background: var(--studio-card-hover);
+  box-shadow: inset 0 0 0 1px rgb(var(--brand-rgb) / 12%);
+}
+
+.image-studio-shell .image-studio-select-option small {
+  color: var(--studio-card-muted);
+}
+
+.image-studio-shell .image-studio-choice-picker button {
+  color: var(--studio-card-ink);
+}
+
+.image-studio-shell .image-studio-choice-picker button small {
+  color: var(--studio-card-muted);
+}
+
+.image-studio-shell .image-studio-dropzone {
+  color: var(--studio-card-muted);
+}
+
+.image-studio-shell .image-studio-reference-item {
+  box-shadow: var(--studio-card-shadow);
+}
+
+.image-studio-shell .image-studio-action-bar {
+  border-radius: 8px;
+  background: linear-gradient(125deg, var(--studio-card-highlight) 15%, transparent 70%), var(--studio-card-surface);
+  box-shadow: var(--studio-card-shadow);
+}
+
+.image-studio-shell .image-studio-submit-button {
+  border-radius: 6px;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 25%), 0 2px 5px rgb(var(--brand-rgb) / 16%);
+}
+
+.image-studio-shell .image-studio-preview-frame {
+  border-color: var(--studio-card-rule);
+  background:
+    linear-gradient(45deg, rgb(148 163 184 / 7%) 25%, transparent 25%, transparent 75%, rgb(148 163 184 / 7%) 75%),
+    linear-gradient(45deg, rgb(148 163 184 / 7%) 25%, transparent 25%, transparent 75%, rgb(148 163 184 / 7%) 75%),
+    transparent;
+  background-position: 0 0, 8px 8px;
+  background-size: 16px 16px;
+}
+
+/* The preview frame owns the canvas surface. Status and single-image content
+   sit inside it without creating a second panel layer. */
+.image-studio-shell .image-studio-preview-frame > .image-studio-preview-body > :is(.image-studio-empty-preview, .image-studio-failure-state, .image-studio-preview-open) {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.image-studio-shell .image-studio-preview-frame > .image-studio-preview-body > .image-studio-result-batch {
+  background: transparent;
+  box-shadow: none;
+}
+
+.image-studio-shell .image-studio-stage-panel .image-studio-preview-open {
+  background: rgb(255 255 255 / 42%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 72%);
+}
+
+.image-studio-shell :is(.image-studio-empty-preview, .image-studio-failure-state, .image-studio-empty-gallery) {
+  border-color: var(--studio-card-rule);
+  background: linear-gradient(125deg, var(--studio-card-highlight) 15%, transparent 70%), var(--studio-card-control);
+  box-shadow: var(--studio-card-shadow);
+}
+
+.image-studio-shell .image-studio-failure-state {
+  border-radius: 8px;
+}
+
+.image-studio-shell .image-studio-failure-icon {
+  background: var(--studio-card-hover);
+  box-shadow: inset 0 0 0 1px var(--studio-card-divider);
+}
+
+.image-studio-shell :is(.image-studio-failure-actions button, .image-studio-current-actions button, .image-studio-image-card-actions button, .image-studio-result-batch-actions button, .image-studio-result-tile-actions button, .image-studio-icon-button) {
+  border-color: var(--studio-card-rule);
+  border-radius: 6px;
+  background: var(--studio-card-control);
+  color: var(--studio-card-ink);
+  box-shadow: var(--studio-card-shadow);
+}
+
+.image-studio-shell :is(.image-studio-failure-actions button, .image-studio-current-actions button, .image-studio-image-card-actions button, .image-studio-result-batch-actions button, .image-studio-result-tile-actions button, .image-studio-icon-button):hover,
+.image-studio-shell :is(.image-studio-failure-actions button, .image-studio-current-actions button, .image-studio-image-card-actions button, .image-studio-result-batch-actions button, .image-studio-result-tile-actions button, .image-studio-icon-button):focus-visible {
+  border-color: rgb(var(--brand-rgb) / 40%);
+  background: var(--studio-card-hover);
+  box-shadow: 0 0 0 2px rgb(var(--brand-rgb) / 8%), var(--studio-card-shadow);
+}
+
+.image-studio-shell .image-studio-result-batch-header,
+.image-studio-shell .image-studio-result-tile,
+.image-studio-shell .image-studio-image-card {
+  border-radius: 8px;
+  box-shadow: var(--studio-card-shadow);
+}
+
+.image-studio-shell .image-studio-result-tile-preview,
+.image-studio-shell .image-studio-image-thumb {
+  background: var(--studio-card-hover);
+}
+
+.image-studio-shell .image-studio-gallery-rail .image-studio-image-card-body {
+  background: linear-gradient(180deg, transparent, rgb(32 39 49 / 78%));
+}
+
+.image-studio-shell .image-studio-gallery-rail .image-studio-image-card-actions button {
+  border-color: rgb(255 255 255 / 34%);
+  background: rgb(255 255 255 / 14%);
+  color: white;
+  box-shadow: none;
+}
+
+.image-studio-shell :is(.image-studio-preview-dialog, .image-studio-delete-dialog) {
+  border-color: var(--studio-card-rule);
+  border-radius: 8px;
+  background: linear-gradient(125deg, var(--studio-card-highlight) 15%, transparent 70%), var(--studio-card-surface);
+  box-shadow: 0 24px 64px rgb(15 23 42 / 20%), inset 0 1px 0 rgb(255 255 255 / 90%);
+}
+
+.image-studio-shell :is(.image-studio-preview-toolbar, .image-studio-preview-details, .image-studio-preview-actions) {
+  border-color: var(--studio-card-divider);
+}
+
+.image-studio-shell .image-studio-preview-close,
+.image-studio-shell .image-studio-preview-actions button,
+.image-studio-shell .image-studio-delete-cancel {
+  border-color: var(--studio-card-rule);
+  border-radius: 6px;
+  background: var(--studio-card-control);
+  color: var(--studio-card-ink);
+  box-shadow: var(--studio-card-shadow);
+}
+
+.dark .image-studio-shell {
+  --studio-card-rule: rgb(255 255 255 / 11%);
+  --studio-card-divider: rgb(255 255 255 / 7%);
+  --studio-card-surface: #27292e;
+  --studio-card-control: #2b2e34;
+  --studio-card-highlight: rgb(255 255 255 / 4%);
+  --studio-card-hover: rgb(255 255 255 / 5%);
+  --studio-card-ink: #e8ecf2;
+  --studio-card-muted: #a0a9b7;
+  --studio-card-shadow: inset 0 1px 0 rgb(255 255 255 / 5%), 0 2px 5px rgb(0 0 0 / 12%);
+}
+
+.dark .image-studio-shell :is(.image-studio-field textarea, .image-studio-select-trigger, .image-studio-select-menu, .image-studio-reference-item, .image-studio-choice-picker button, .image-studio-dropzone, .image-studio-action-bar, .image-studio-failure-state, .image-studio-result-batch-header, .image-studio-result-tile, .image-studio-image-card, .image-studio-empty-gallery),
+.dark .image-studio-shell :is(.image-studio-workspace, .image-studio-preview-panel, .image-studio-gallery) {
+  background: linear-gradient(125deg, var(--studio-card-highlight) 15%, transparent 70%), var(--studio-card-surface);
+  box-shadow: var(--studio-card-shadow);
+}
+
+.dark .image-studio-shell .image-studio-preview-frame {
+  background:
+    linear-gradient(45deg, rgb(255 255 255 / 5%) 25%, transparent 25%, transparent 75%, rgb(255 255 255 / 5%) 75%),
+    linear-gradient(45deg, rgb(255 255 255 / 5%) 25%, transparent 25%, transparent 75%, rgb(255 255 255 / 5%) 75%),
+    transparent;
+  background-position: 0 0, 8px 8px;
+  background-size: 16px 16px;
+}
+
+.dark .image-studio-shell .image-studio-stage-panel .image-studio-preview-open {
+  background: rgb(255 255 255 / 3%);
+}
+
+.dark .image-studio-shell .image-studio-gallery-rail .image-studio-image-card-body {
+  background: linear-gradient(180deg, transparent, rgb(0 0 0 / 78%));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .image-studio-shell :is(.image-studio-field textarea, .image-studio-select-trigger, .image-studio-choice-picker button, .image-studio-dropzone, .image-studio-failure-actions button, .image-studio-current-actions button, .image-studio-image-card-actions button, .image-studio-result-batch-actions button, .image-studio-result-tile-actions button, .image-studio-icon-button, .image-studio-preview-close, .image-studio-preview-actions button) {
+    transition: none;
+  }
+}
