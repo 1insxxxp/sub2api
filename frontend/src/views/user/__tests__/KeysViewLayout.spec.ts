@@ -29,6 +29,11 @@ describe('KeysView toolbar layout', () => {
     expect(keysViewSource).toContain('max-[359px]:hidden')
   })
 
+  it('uses the compact key cards on small desktop screens', () => {
+    expect(keysViewSource).toContain(':desktop-breakpoint="1280"')
+    expect(keysViewSource).toContain('<KeyMobileCard')
+  })
+
   it('preserves the desktop table scroll height chain', () => {
     expect(keysViewSource).toMatch(
       /\.keys-table\s*\{[^}]*display:\s*flex;[^}]*min-height:\s*0;[^}]*flex:\s*1;[^}]*flex-direction:\s*column;/s

@@ -219,6 +219,7 @@
             row-key="id"
             :selected-keys="selectedIds"
             :selection-label="(key: ApiKey) => t('keys.bulkEdit.selectKey', { name: key.name })"
+            :desktop-breakpoint="1280"
             @update:selected-keys="handleSelectionChange"
             :server-side-sort="true"
             default-sort-key="created_at"

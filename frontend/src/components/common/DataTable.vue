@@ -363,11 +363,6 @@ import Icon from '@/components/icons/Icon.vue'
 
 const { t } = useI18n()
 
-const desktopViewportQuery = '(min-width: 768px)'
-const isDesktopViewport = ref(
-  typeof window === 'undefined' ? true : window.matchMedia(desktopViewportQuery).matches
-)
-
 const emit = defineEmits<{
   sort: [key: string, order: 'asc' | 'desc']
   rowClick: [row: any]
@@ -495,7 +490,7 @@ const attachDesktopTableTracking = () => {
 
 onMounted(() => {
   if (typeof window !== 'undefined') {
-    desktopViewportMediaQuery = window.matchMedia(desktopViewportQuery)
+    desktopViewportMediaQuery = window.matchMedia(desktopViewportQuery.value)
     isDesktopViewport.value = desktopViewportMediaQuery.matches
     desktopViewportListener = (event: MediaQueryListEvent) => {
       isDesktopViewport.value = event.matches
@@ -559,6 +554,8 @@ interface Props {
   virtualizeThreshold?: number
   /** Enable controlled row selection. Stable row keys are strongly recommended. */
   selectable?: boolean
+  /** CSS breakpoint at which the desktop table becomes the compact mobile/card layout. */
+  desktopBreakpoint?: number
   /** Selected row keys. Keys outside the current data page are preserved. */
   selectedKeys?: Array<string | number>
   /** Accessible label for a row selection checkbox. */
@@ -582,8 +579,14 @@ const props = withDefaults(defineProps<Props>(), {
   defaultSortOrder: 'asc',
   serverSideSort: false,
   selectable: false,
+  desktopBreakpoint: 768,
   selectedKeys: () => []
 })
+
+const desktopViewportQuery = computed(() => `(min-width: ${props.desktopBreakpoint}px)`)
+const isDesktopViewport = ref(
+  typeof window === 'undefined' ? true : window.matchMedia(desktopViewportQuery.value).matches
+)
 
 const sortKey = ref<string>('')
 const sortOrder = ref<'asc' | 'desc'>('asc')
