@@ -56,6 +56,7 @@
 <script setup lang="ts">
 import { computed, ref, type Slots } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useMediaQuery } from '@vueuse/core'
 import type { ApiKey } from '@/types'
 import type { Column } from '@/components/common/types'
 import Icon from '@/components/icons/Icon.vue'
@@ -73,6 +74,7 @@ const props = defineProps<{
 const emit = defineEmits<{ select: [checked: boolean] }>()
 const { t } = useI18n()
 const detailsOpen = ref(false)
+const useMobileActions = useMediaQuery('(max-width: 767px)')
 const detailsToggleLabel = computed(() => detailsOpen.value ? t('common.collapse') : t('common.details'))
 const detailsId = computed(() => `key-details-${props.row.id}`)
 const accentColor = computed(() => {
@@ -88,7 +90,7 @@ const details = computed(() => props.columns.filter(column => !primaryFields.has
 const Cell = ({ field }: { field: string }) => {
   const value = props.row[field as keyof ApiKey]
   const slot = props.cells[`cell-${field}`]
-  if (slot) return slot({ row: props.row, value, expanded: false, mobile: true })
+  if (slot) return slot({ row: props.row, value, expanded: false, mobile: useMobileActions.value })
   const column = props.columns.find(column => column.key === field)
   return String(column?.formatter ? column.formatter(value, props.row) : value ?? '')
 }

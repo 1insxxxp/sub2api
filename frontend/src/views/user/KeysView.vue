@@ -2853,7 +2853,31 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-@media (max-width: 1023px) {
+@media (min-width: 1280px) {
+  .keys-workspace {
+    height: max(42rem, calc(100dvh - 64px - var(--app-content-padding-total-y, 4rem)));
+  }
+}
+
+@media (max-width: 1279px) {
+  .keys-workspace {
+    height: auto;
+    min-height: 0;
+  }
+
+  .keys-workspace :deep(.layout-section-scrollable) {
+    min-height: auto;
+    flex: none;
+  }
+
+  .keys-workspace :deep(.table-scroll-container) {
+    height: auto;
+    overflow: visible;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
   .keys-table {
     flex: none;
   }
