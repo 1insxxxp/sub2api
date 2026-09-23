@@ -61,6 +61,11 @@ func ensureModelPricingAvailableWithServices(ctx context.Context, resolver *Mode
 }
 
 func (s *OpenAIGatewayService) validateSelectedAccountPricing(ctx context.Context, groupID *int64, requestedModel string, account *Account) error {
+	// Dedicated Images requests use image pricing (group, channel, or default),
+	// which does not require an entry in the token-price catalog.
+	if OpenAIImagesEndpointFromContext(ctx) {
+		return nil
+	}
 	requestedModel = strings.TrimSpace(requestedModel)
 	if requestedModel == "" || account == nil || s == nil || s.billingService == nil {
 		return nil

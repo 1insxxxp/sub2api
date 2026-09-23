@@ -231,7 +231,7 @@ func (r *userRepository) ListRecentBalanceCosts(ctx context.Context, userID int6
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	costs := make([]float64, 0, limit)
 	for rows.Next() {

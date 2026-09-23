@@ -212,6 +212,17 @@ func TestOpenAISelectedAccountPricingAdmissionRejectsUnknownConcreteModel(t *tes
 	require.ErrorIs(t, err, ErrModelPricingUnavailable)
 }
 
+func TestOpenAISelectedAccountPricingAdmissionDedicatedImages(t *testing.T) {
+	svc := &OpenAIGatewayService{billingService: newTestBillingService()}
+	account := &Account{Platform: PlatformOpenAI, Type: AccountTypeAPIKey}
+	const model = "gemini-3.1-flash-image"
+
+	// Images have separate per-image pricing; a Responses tool declaration
+	// must still require resolvable token pricing.
+	require.NoError(t, svc.validateSelectedAccountPricing(WithOpenAIImagesEndpoint(context.Background()), nil, model, account))
+	require.ErrorIs(t, svc.validateSelectedAccountPricing(WithOpenAIImageGenerationIntent(context.Background()), nil, model, account), ErrModelPricingUnavailable)
+}
+
 func TestGatewayRecordUsageRejectsUnexpectedPricingMiss(t *testing.T) {
 	svc := &GatewayService{billingService: newTestBillingService()}
 	result := &ForwardResult{Model: "vendor-unknown-model", UpstreamModel: "vendor-unknown-model"}
