@@ -350,7 +350,7 @@
             title: 'email',
             subtitle: 'username',
             status: 'status',
-            summary: ['balance', 'usage', 'concurrency']
+            summary: ['balance', 'usage', 'concurrency', 'last_used_at']
           }"
           row-key="id"
           selectable

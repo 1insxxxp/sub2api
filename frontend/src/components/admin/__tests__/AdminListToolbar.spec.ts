@@ -26,6 +26,7 @@ describe('AdminListToolbar', () => {
     })
     await wrapper.vm.$nextTick()
     const toggle = wrapper.get('[data-test="admin-filter-toggle"]')
+    expect(toggle.attributes('aria-label')).toBe('common.filter')
     expect(toggle.attributes('aria-expanded')).toBe('false')
     expect(toggle.text()).toContain('2')
     expect(wrapper.get('[data-test="admin-filter-panel"]').isVisible()).toBe(false)

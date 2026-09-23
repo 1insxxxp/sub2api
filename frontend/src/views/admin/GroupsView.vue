@@ -161,7 +161,7 @@
             subtitle: 'id',
             leading: 'platform',
             status: 'status',
-            summary: ['rate_multiplier', 'account_count', 'capacity', 'billing_type']
+            summary: ['rate_multiplier', 'capacity', 'billing_type', 'usage']
           }"
           :server-side-sort="true"
           default-sort-key="sort_order"
@@ -388,32 +388,32 @@
 
           <template #cell-usage="{ row }">
             <div v-if="usageLoading" class="text-xs text-gray-400">—</div>
-            <div v-else class="space-y-0.5 text-xs">
-              <div class="text-gray-500 dark:text-gray-400">
+            <div v-else class="groups-usage-summary text-xs">
+              <div class="groups-usage-item text-gray-500 dark:text-gray-400">
                 <span class="text-gray-400 dark:text-gray-500">{{
                   t("admin.groups.usageToday")
                 }}</span>
-                <span class="ml-1 font-medium text-gray-700 dark:text-gray-300"
+                <span class="groups-usage-value font-medium text-gray-700 dark:text-gray-300"
                   >${{
                     formatCost(usageMap.get(row.id)?.today_cost ?? 0)
                   }}</span
                 >
               </div>
-              <div class="text-gray-500 dark:text-gray-400">
+              <div class="groups-usage-item text-gray-500 dark:text-gray-400">
                 <span class="text-gray-400 dark:text-gray-500">{{
                   t("admin.groups.usageYesterday")
                 }}</span>
-                <span class="ml-1 font-medium text-gray-700 dark:text-gray-300"
+                <span class="groups-usage-value font-medium text-gray-700 dark:text-gray-300"
                   >${{
                     formatCost(usageMap.get(row.id)?.yesterday_cost ?? 0)
                   }}</span
                 >
               </div>
-              <div class="text-gray-500 dark:text-gray-400">
+              <div class="groups-usage-item text-gray-500 dark:text-gray-400">
                 <span class="text-gray-400 dark:text-gray-500">{{
                   t("admin.groups.usageTotal")
                 }}</span>
-                <span class="ml-1 font-medium text-gray-700 dark:text-gray-300"
+                <span class="groups-usage-value font-medium text-gray-700 dark:text-gray-300"
                   >${{
                     formatCost(usageMap.get(row.id)?.total_cost ?? 0)
                   }}</span
@@ -7695,14 +7695,61 @@ onUnmounted(() => {
   background: var(--workspace-surface);
 }
 
+.groups-workbench :deep(.admin-record-summary [data-field='usage']) {
+  grid-column: 1 / -1;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--workspace-divider);
+}
+
+.groups-workbench :deep(.admin-record-summary [data-field='usage'] .groups-usage-summary) {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.625rem;
+  margin-top: 0.125rem;
+}
+
+.groups-workbench :deep(.admin-record-summary [data-field='usage'] .groups-usage-item) {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.groups-workbench :deep(.admin-record-summary [data-field='usage'] .groups-usage-value) {
+  margin-left: 0;
+  color: var(--workspace-ink);
+  font-variant-numeric: tabular-nums;
+}
+
 @media (max-width: 767px) {
+  .groups-workbench :deep(.admin-record-summary) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  :deep(.admin-list-actions) {
+    display: grid;
+    width: 100%;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+
+  :deep(.admin-list-actions > .admin-list-filter-toggle) {
+    width: 100%;
+    min-width: 0;
+    margin-right: 0;
+  }
+
   .groups-list-actions {
     display: contents;
   }
 
   .groups-list-create-actions {
-    flex: 1 1 100%;
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
     align-items: stretch;
+    gap: 0.5rem;
   }
 
   .groups-list-filters {
@@ -7716,14 +7763,15 @@ onUnmounted(() => {
   }
 
   .groups-list-actions .groups-create-button {
-    flex: 1 1 0;
+    width: 100%;
     min-width: 0;
     min-height: 2.5rem;
   }
 
   .groups-list-actions .groups-tool-button {
+    width: 100%;
     min-height: 2.75rem;
-    min-width: 2.75rem;
+    min-width: 0;
   }
 
   .groups-identity {

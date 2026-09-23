@@ -33,6 +33,7 @@ async function closeFilters(event: KeyboardEvent) {
           type="button"
           class="admin-list-filter-toggle"
           :class="{ 'is-active': activeFilters > 0 || open }"
+          :aria-label="t('common.filter')"
           :aria-expanded="filtersVisible"
           :aria-controls="panelId"
           :title="t('common.filter')"
@@ -83,7 +84,8 @@ async function closeFilters(event: KeyboardEvent) {
 @media (max-width: 639px) {
   .admin-list-search { flex-basis: 100%; }
   .admin-list-actions { flex: 1 1 100%; gap: 0.375rem; }
-  .admin-list-filter-toggle { margin-right: auto; min-height: 2.75rem; }
+  .admin-list-filter-toggle { flex: none; margin-right: auto; width: 2.75rem; min-width: 2.75rem; min-height: 2.75rem; padding-inline: 0.5rem; }
+  .admin-list-filter-toggle > span:first-of-type { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .admin-list-filter-toggle { transition: none; }

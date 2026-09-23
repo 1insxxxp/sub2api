@@ -219,11 +219,11 @@
                 </div>
               </div>
 
-              <div class="brand-floating-card mt-3">
+              <div class="brand-floating-card mt-3" data-test="daily-checkin-eligibility">
                 <div class="flex items-start justify-between gap-3">
                   <div>
                     <p class="text-xs font-semibold text-slate-700 dark:text-slate-200">
-                      {{ t('checkin.eligibilityTitle') }}
+                      {{ t('checkin.cumulativeEligibilityTitle') }}
                     </p>
                     <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
                       {{ eligibilityMessage }}
@@ -231,23 +231,21 @@
                   </div>
                   <span
                     class="brand-floating-chip shrink-0 px-2.5 py-1 text-[11px]"
-                    :class="checkinStatus?.eligible === false
-                      ? 'bg-amber-50/85 text-amber-700 dark:bg-amber-500/14 dark:text-amber-200'
-                      : 'bg-emerald-50/85 text-emerald-700 dark:bg-emerald-500/14 dark:text-emerald-200'"
+                    :class="cumulativeEligibilitySatisfied
+                      ? 'bg-emerald-50/85 text-emerald-700 dark:bg-emerald-500/14 dark:text-emerald-200'
+                      : 'bg-amber-50/85 text-amber-700 dark:bg-amber-500/14 dark:text-amber-200'"
                   >
-                    {{ checkinStatus?.eligible === false ? t('checkin.eligibilityPendingBadge') : t('checkin.eligibilityReadyBadge') }}
+                    {{ cumulativeEligibilitySatisfied ? t('checkin.eligibilityReadyBadge') : t('checkin.eligibilityPendingBadge') }}
                   </span>
                 </div>
-                <div v-if="eligibilityCriteria.length > 0" class="mt-3 space-y-3">
+                <div v-if="eligibilityCriteria.length > 0" class="mt-3 space-y-3" data-test="daily-checkin-cumulative-criteria">
                   <div v-for="criterion in eligibilityCriteria" :key="criterion.key">
                     <div class="mb-1.5 flex items-center justify-between gap-3 text-[11px]">
                       <span class="font-medium text-slate-600 dark:text-slate-300">
                         {{ criterion.label }}
                       </span>
                       <span class="shrink-0 text-slate-500 dark:text-slate-400">
-                        {{ criterion.kind === 'count'
-                          ? t('checkin.countCriterionProgress', { current: criterion.current, min: criterion.min })
-                          : t('checkin.criterionProgress', { current: formatUsd(criterion.current), min: formatUsd(criterion.min) }) }}
+                        {{ t('checkin.criterionProgress', { current: formatUsd(criterion.current), min: formatUsd(criterion.min) }) }}
                       </span>
                     </div>
                     <div
@@ -261,6 +259,50 @@
                       >
                         <span class="checkin-progress-sheen" aria-hidden="true" />
                       </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div
+                v-if="checkinMinDailyUsageCount > 0"
+                class="brand-floating-card mt-3"
+                data-test="daily-checkin-daily-usage"
+              >
+                <div class="flex items-start justify-between gap-3">
+                  <div>
+                    <p class="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                      {{ t('checkin.dailyUsageSectionTitle') }}
+                    </p>
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                      {{ dailyUsageMessage }}
+                    </p>
+                  </div>
+                  <span
+                    class="brand-floating-chip shrink-0 px-2.5 py-1 text-[11px]"
+                    :class="dailyUsageQualified
+                      ? 'bg-emerald-50/85 text-emerald-700 dark:bg-emerald-500/14 dark:text-emerald-200'
+                      : 'bg-amber-50/85 text-amber-700 dark:bg-amber-500/14 dark:text-amber-200'"
+                  >
+                    {{ dailyUsageQualified ? t('checkin.eligibilityReadyBadge') : t('checkin.eligibilityPendingBadge') }}
+                  </span>
+                </div>
+                <div v-if="!checkinStatus?.whitelist_exempt && !checkinStatus?.daily_usage_count_exempt" class="mt-3">
+                  <div class="mb-1.5 flex items-center justify-between gap-3 text-[11px]">
+                    <span class="font-medium text-slate-600 dark:text-slate-300">
+                      {{ t('checkin.dailyUsageCriterion') }}
+                    </span>
+                    <span class="shrink-0 text-slate-500 dark:text-slate-400">
+                      {{ t('checkin.countCriterionProgress', { current: checkinTodayUsageCount, min: checkinMinDailyUsageCount }) }}
+                    </span>
+                  </div>
+                  <div class="checkin-progress-track" :aria-label="t('checkin.dailyUsageCriterion')">
+                    <div
+                      class="checkin-progress-fill"
+                      data-test="daily-checkin-count-progress"
+                      :style="{ width: `${dailyUsageProgressPercent}%` }"
+                    >
+                      <span class="checkin-progress-sheen" aria-hidden="true" />
                     </div>
                   </div>
                 </div>
@@ -659,11 +701,10 @@ const checkinTodayUsageCount = computed(() => {
 })
 
 const eligibilityCriteria = computed(() => {
-  if (checkinStatus.value?.whitelist_exempt || checkinStatus.value?.daily_usage_count_exempt) return []
+  if (checkinStatus.value?.whitelist_exempt) return []
 
   const criteria: Array<{
-    key: 'usage' | 'recharge' | 'count'
-    kind: 'money' | 'count'
+    key: 'usage' | 'recharge'
     label: string
     min: number
     current: number
@@ -672,7 +713,6 @@ const eligibilityCriteria = computed(() => {
   if (checkinMinSpend.value > 0) {
     criteria.push({
       key: 'usage',
-      kind: 'money',
       label: t('checkin.usageCriterion'),
       min: checkinMinSpend.value,
       current: checkinCurrentSpend.value,
@@ -682,47 +722,56 @@ const eligibilityCriteria = computed(() => {
   if (checkinMinRecharge.value > 0) {
     criteria.push({
       key: 'recharge',
-      kind: 'money',
       label: t('checkin.rechargeCriterion'),
       min: checkinMinRecharge.value,
       current: checkinCurrentRecharge.value,
       percent: Math.min(100, (checkinCurrentRecharge.value / checkinMinRecharge.value) * 100),
     })
   }
-  if (checkinMinDailyUsageCount.value > 0) {
-    criteria.push({
-      key: 'count',
-      kind: 'count',
-      label: t('checkin.dailyUsageCriterion'),
-      min: checkinMinDailyUsageCount.value,
-      current: checkinTodayUsageCount.value,
-      percent: Math.min(100, (checkinTodayUsageCount.value / checkinMinDailyUsageCount.value) * 100),
-    })
-  }
   return criteria
 })
 
-const eligibilityMessage = computed(() => {
+const cumulativeEligibilitySatisfied = computed(() => {
+  if (checkinStatus.value?.whitelist_exempt) return true
+  const usageEnabled = checkinMinSpend.value > 0
+  const rechargeEnabled = checkinMinRecharge.value > 0
+  if (!usageEnabled && !rechargeEnabled) return true
+  return (usageEnabled && checkinCurrentSpend.value >= checkinMinSpend.value) ||
+    (rechargeEnabled && checkinCurrentRecharge.value >= checkinMinRecharge.value)
+})
+
+const dailyUsageQualified = computed(() => Boolean(
+  checkinStatus.value?.whitelist_exempt ||
+  checkinStatus.value?.daily_usage_count_exempt ||
+  checkinTodayUsageCount.value >= checkinMinDailyUsageCount.value
+))
+
+const dailyUsageProgressPercent = computed(() => {
+  if (checkinMinDailyUsageCount.value <= 0) return 0
+  return Math.min(100, (checkinTodayUsageCount.value / checkinMinDailyUsageCount.value) * 100)
+})
+
+const dailyUsageMessage = computed(() => {
   if (checkinStatus.value?.whitelist_exempt) return t('checkin.whitelistExempt')
   if (checkinStatus.value?.daily_usage_count_exempt) return t('checkin.dailyUsageWeekdayExempt')
-  if (
-    checkinMinDailyUsageCount.value > 0 &&
-    checkinTodayUsageCount.value < checkinMinDailyUsageCount.value
-  ) {
+  if (checkinTodayUsageCount.value < checkinMinDailyUsageCount.value) {
     return t('checkin.dailyUsagePending', {
       min: checkinMinDailyUsageCount.value,
       current: checkinTodayUsageCount.value,
     })
   }
+  return t('checkin.dailyUsageSatisfied', { count: checkinTodayUsageCount.value })
+})
+
+const eligibilityMessage = computed(() => {
+  if (checkinStatus.value?.whitelist_exempt) return t('checkin.whitelistExempt')
   const usageEnabled = checkinMinSpend.value > 0
   const rechargeEnabled = checkinMinRecharge.value > 0
   if (!usageEnabled && !rechargeEnabled) {
-    return checkinMinDailyUsageCount.value > 0
-      ? t('checkin.dailyUsageSatisfied', { count: checkinTodayUsageCount.value })
-      : t('checkin.eligibilityNoThreshold')
+    return t('checkin.eligibilityNoThreshold')
   }
   if (usageEnabled && rechargeEnabled) {
-    return checkinStatus.value?.eligible === false
+    return !cumulativeEligibilitySatisfied.value
       ? t('checkin.eligibilityEitherPending')
       : t('checkin.eligibilityEitherSatisfied')
   }
@@ -731,7 +780,7 @@ const eligibilityMessage = computed(() => {
       min: formatUsd(checkinMinSpend.value),
       current: formatUsd(checkinCurrentSpend.value),
     }
-    return checkinStatus.value?.eligible === false
+    return !cumulativeEligibilitySatisfied.value
       ? t('checkin.eligibilityPending', params)
       : t('checkin.eligibilitySatisfied', params)
   }
@@ -739,7 +788,7 @@ const eligibilityMessage = computed(() => {
     min: formatUsd(checkinMinRecharge.value),
     current: formatUsd(checkinCurrentRecharge.value),
   }
-  return checkinStatus.value?.eligible === false
+  return !cumulativeEligibilitySatisfied.value
     ? t('checkin.eligibilityRechargePending', params)
     : t('checkin.eligibilityRechargeSatisfied', params)
 })

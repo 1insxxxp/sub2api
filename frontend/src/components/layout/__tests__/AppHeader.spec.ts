@@ -95,6 +95,8 @@ vi.mock('vue-i18n', async () => {
     'checkin.success': '签到成功，获得 $3.00',
     'checkin.failed': '签到失败',
     'checkin.eligibilityTitle': 'Check-in eligibility',
+    'checkin.cumulativeEligibilityTitle': 'Cumulative eligibility',
+    'checkin.dailyUsageSectionTitle': 'Daily check-in requirement',
     'checkin.eligibilitySatisfied': 'Cumulative spend reached {min}; current {current}',
     'checkin.eligibilityPending': 'Check-in unlocks at {min} cumulative spend; current {current}',
     'checkin.eligibilityEitherSatisfied': 'Usage or recharge requirement reached',
@@ -589,7 +591,7 @@ describe('AppHeader daily check-in entry', () => {
     const wrapper = await mountHeader()
     const text = wrapper.text()
 
-    expect(text).toContain('Check-in eligibility')
+    expect(text).toContain('Cumulative eligibility')
     expect(text).toContain('Cumulative spend reached $10.00; current $18.50')
     expect(text).toContain('Reward breakdown')
     expect(text).toContain('Random reward')
@@ -1032,6 +1034,36 @@ describe('AppHeader daily check-in entry', () => {
     const progress = wrapper.get('[data-test="daily-checkin-usage-progress"]')
 
     expect(progress.attributes('style')).toContain('width: 100%')
+  })
+
+  it('separates the daily request threshold from cumulative check-in eligibility', async () => {
+    getCheckinStatus.mockResolvedValue({
+      enabled: true,
+      eligible: false,
+      checked_in: false,
+      blacklisted: false,
+      checkin_date: '2026-06-16',
+      reward_amount: null,
+      current_streak: 0,
+      lifetime_checkin_days: 0,
+      min_total_usage_usd: 10,
+      total_usage_usd: 10,
+      min_total_recharge_usd: 0,
+      total_recharge_usd: 0,
+      min_daily_usage_count: 5,
+      today_usage_count: 2,
+      recent_records: []
+    })
+
+    const wrapper = await mountHeader()
+    const eligibility = wrapper.get('[data-test="daily-checkin-eligibility"]')
+    const dailyRequirement = wrapper.get('[data-test="daily-checkin-daily-usage"]')
+
+    expect(eligibility.text()).toContain('Cumulative usage')
+    expect(eligibility.text()).not.toContain('Requests today')
+    expect(eligibility.find('[data-test="daily-checkin-count-progress"]').exists()).toBe(false)
+    expect(dailyRequirement.text()).toContain('Requests today')
+    expect(dailyRequirement.get('[data-test="daily-checkin-count-progress"]').attributes('style')).toContain('width: 40%')
   })
 
   it('renders usage and recharge progress and enables check-in when recharge qualifies', async () => {

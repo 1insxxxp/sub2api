@@ -320,7 +320,7 @@ describe('admin UsersView', () => {
 
     const table = wrapper.findComponent(DataTableStub)
     expect(table.props('mobileLayout')).toEqual({
-      title: 'email', subtitle: 'username', status: 'status', summary: ['balance', 'usage', 'concurrency']
+      title: 'email', subtitle: 'username', status: 'status', summary: ['balance', 'usage', 'concurrency', 'last_used_at']
     })
     expect(table.props('columns').map((column: { key: string }) => column.key)).toEqual([
       'email', 'id', 'username', 'notes', 'registration_ip', 'last_login_ip', 'attr_7', 'role',

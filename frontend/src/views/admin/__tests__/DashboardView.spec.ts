@@ -234,6 +234,7 @@ describe('admin DashboardView', () => {
     })
 
     expect(wrapper.get('[data-test="dashboard-filter-row"]').find('.dashboard-date-controls').exists()).toBe(true)
+    expect(wrapper.get('[data-test="dashboard-filter-row"]').find('[data-test="dashboard-chart-actions"]').exists()).toBe(true)
     expect(wrapper.get('[data-test="dashboard-chart-actions"]').classes()).toContain('dashboard-chart-actions-row')
   })
 

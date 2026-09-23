@@ -26,6 +26,18 @@ describe("admin GroupsView layout", () => {
     expect(groupsViewSource).toContain("min-height: 2.75rem");
   });
 
+  it("keeps narrow mobile group actions aligned in fixed utility and create rows", () => {
+    expect(groupsViewSource).toContain("grid-template-columns: repeat(4, minmax(0, 1fr));");
+    expect(groupsViewSource).toContain("grid-column: 1 / -1;");
+    expect(groupsViewSource).toContain("grid-template-columns: repeat(2, minmax(0, 1fr));");
+    expect(groupsViewSource).toContain(".groups-list-actions .groups-tool-button {\n    width: 100%;");
+  });
+
+  it("keeps compact group metadata in one mobile row while usage stays full width", () => {
+    expect(groupsViewSource).toContain(".groups-workbench :deep(.admin-record-summary) {");
+    expect(groupsViewSource).toContain("grid-template-columns: repeat(3, minmax(0, 1fr));");
+  });
+
   it("renders the empty response refund policy in both group forms", () => {
     expect(groupsViewSource).toContain('v-model="createForm.empty_response_compensation_enabled"');
     expect(groupsViewSource).toContain('v-model="editForm.empty_response_compensation_enabled"');

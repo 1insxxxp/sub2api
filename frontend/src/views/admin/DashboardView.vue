@@ -227,17 +227,17 @@
                     @change="onDateRangeChange"
                   />
                 </div>
-              </div>
-              <div data-test="dashboard-chart-actions" class="dashboard-chart-actions dashboard-chart-actions-row">
-                <div class="dashboard-granularity" role="group" :aria-label="t('admin.dashboard.granularity')">
-                  <button v-for="option in granularityOptions" :key="option.value" type="button"
-                    :aria-pressed="granularity === option.value"
-                    @click="granularity = option.value; loadChartData()">{{ option.label }}</button>
+                <div data-test="dashboard-chart-actions" class="dashboard-chart-actions dashboard-chart-actions-row">
+                  <div class="dashboard-granularity" role="group" :aria-label="t('admin.dashboard.granularity')">
+                    <button v-for="option in granularityOptions" :key="option.value" type="button"
+                      :aria-pressed="granularity === option.value"
+                      @click="granularity = option.value; loadChartData()">{{ option.label }}</button>
+                  </div>
+                  <button type="button" data-test="dashboard-refresh" @click="loadDashboardStats" :disabled="chartsLoading"
+                    class="btn btn-secondary btn-icon" :title="t('common.refresh')" :aria-label="t('common.refresh')">
+                    <Icon name="refresh" size="sm" :class="{ 'animate-spin': chartsLoading }" />
+                  </button>
                 </div>
-                <button type="button" data-test="dashboard-refresh" @click="loadDashboardStats" :disabled="chartsLoading"
-                  class="btn btn-secondary btn-icon" :title="t('common.refresh')" :aria-label="t('common.refresh')">
-                  <Icon name="refresh" size="sm" :class="{ 'animate-spin': chartsLoading }" />
-                </button>
               </div>
             </div>
           </div>
@@ -770,12 +770,14 @@ onMounted(() => {
 .dashboard-workbench .stat-label { max-width: calc(100% - 2.25rem); min-height: 1.875rem; padding-top: 0.25rem; font-size: 0.8125rem; }
 .dashboard-workbench .stat-value { margin: 0.625rem 0; font-size: 1.75rem; font-weight: 600; line-height: 1.15; letter-spacing: 0; white-space: normal; overflow: visible; text-overflow: clip; }
 .dashboard-analysis { display: flex; flex-direction: column; gap: 1.25rem; min-width: 0; }
-.dashboard-analysis-controls .admin-toolbar { flex-direction: row; flex-wrap: wrap; gap: 0.75rem; justify-content: space-between; align-items: center; }
-.dashboard-filter-row,
-.dashboard-date-controls { min-width: 0; }
-.dashboard-chart-actions { display: flex; align-items: center; gap: 0.625rem; }
+.dashboard-analysis-controls .admin-toolbar { flex-direction: row; flex-wrap: nowrap; gap: 0.625rem; justify-content: space-between; align-items: center; }
+.dashboard-filter-row { display: flex; flex: 1 1 auto; align-items: center; justify-content: space-between; gap: 0.625rem; min-width: 0; }
+.dashboard-date-controls { flex: 1 1 auto; min-width: 0; }
+.dashboard-date-controls :deep(.date-picker-trigger) { width: 100%; min-width: 0; }
+.dashboard-date-controls :deep(.date-picker-value) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dashboard-chart-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 0.5rem; }
 .dashboard-granularity { display: inline-flex; gap: 0.25rem; padding: 0.25rem; border: 1px solid var(--workspace-rule); border-radius: 7px; background: var(--workspace-hover); }
-.dashboard-granularity button { min-width: 3.5rem; min-height: 1.875rem; padding: 0.25rem 0.625rem; border: 1px solid transparent; border-radius: 4px; color: var(--workspace-muted); font-size: 0.75rem; font-weight: 500; }
+.dashboard-granularity button { min-width: 3.5rem; min-height: 1.875rem; padding: 0.25rem 0.625rem; border: 1px solid transparent; border-radius: 4px; color: var(--workspace-muted); font-size: 0.75rem; font-weight: 500; white-space: nowrap; }
 .dashboard-granularity button[aria-pressed='true'] { border-color: var(--workspace-rule); background: var(--workspace-control); color: var(--workspace-ink); box-shadow: var(--workspace-shadow); }
 .dashboard-granularity button:focus-visible { outline: 2px solid rgb(var(--brand-rgb) / 50%); outline-offset: 1px; }
 .dashboard-charts-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.5rem; }
@@ -805,16 +807,18 @@ onMounted(() => {
   .dashboard-charts-grid :deep(.card),
   .dashboard-user-trend .admin-panel-header,
   .dashboard-user-trend > .p-4 { padding: 0.875rem; }
-  .dashboard-analysis-controls .admin-toolbar { align-items: stretch; }
-  .dashboard-filter-row,
-  .dashboard-chart-actions-row { width: 100%; }
-  .dashboard-chart-actions-row { justify-content: flex-end; margin-left: 0; }
+  .dashboard-analysis-controls .admin-toolbar { align-items: center; }
+  .dashboard-filter-row { width: 100%; gap: 0.5rem; }
+  .dashboard-date-controls :deep(.date-picker-trigger) { gap: 0.375rem; padding-inline: 0.625rem; }
+  .dashboard-chart-actions-row { justify-content: flex-end; gap: 0.375rem; }
 }
 @media (max-width: 359px) {
   .dashboard-core-metrics,
   .dashboard-secondary-metrics { grid-template-columns: minmax(0, 1fr); }
   .dashboard-workbench .stat-card { min-width: 0; }
   .dashboard-workbench .stat-value { overflow-wrap: anywhere; }
+  .dashboard-granularity button { min-width: 2.875rem; padding-inline: 0.375rem; }
+  .dashboard-chart-actions-row > :deep(.btn-icon) { min-width: 2.25rem; min-height: 2.25rem; padding: 0.5rem; }
 }
 @media (prefers-reduced-motion: reduce) {
   .dashboard-shortcuts button { transition: none; }

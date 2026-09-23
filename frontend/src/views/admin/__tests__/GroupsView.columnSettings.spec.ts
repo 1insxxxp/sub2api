@@ -346,7 +346,7 @@ describe('admin GroupsView column settings', () => {
     const table = wrapper.findComponent(DataTableStub)
     expect(table.props('mobileLayout')).toEqual({
       title: 'name', subtitle: 'id', leading: 'platform', status: 'status',
-      summary: ['rate_multiplier', 'account_count', 'capacity', 'billing_type']
+      summary: ['rate_multiplier', 'capacity', 'billing_type', 'usage']
     })
     expect(columnKeys(wrapper)).toEqual([
       'name', 'id', 'platform', 'billing_type', 'rate_multiplier', 'is_exclusive',

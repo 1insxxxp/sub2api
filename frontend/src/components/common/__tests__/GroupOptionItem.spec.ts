@@ -150,4 +150,16 @@ describe('GroupOptionItem', () => {
 
     expect(wrapper.get('[data-test="group-option-name"]').classes()).toContain('font-semibold')
   })
+
+  it('keeps the card content in distinct header, body, and meta regions', () => {
+    const wrapper = mountActualOption({
+      tag: 'chat',
+      description: 'A production group description',
+      rateMultiplier: 1.5,
+    })
+
+    expect(wrapper.get('[data-test="group-option-header"]').exists()).toBe(true)
+    expect(wrapper.get('[data-test="group-option-body"]').exists()).toBe(true)
+    expect(wrapper.get('[data-test="group-option-meta"]').classes()).toContain('group-option-meta')
+  })
 })
