@@ -3,7 +3,7 @@ name: Build deployment image
 on:
   push:
     branches:
-      - codex/build-0.2.8-87f231809
+      - codex/build-0.2.8-6cc4b78d3
 
 permissions:
   contents: read
@@ -13,13 +13,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
-      SOURCE_COMMIT: 87f231809c85e6885d04fd120de9d7d1814594bc
+      SOURCE_COMMIT: 6cc4b78d34f1d0f7fdd614bd136b52fc52b0d001
       APP_VERSION: 0.2.8
-      IMAGE: sub2api-custom:0.2.8-87f231809
+      IMAGE: sub2api-custom:0.2.8-6cc4b78d3
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: 87f231809c85e6885d04fd120de9d7d1814594bc
+          ref: 6cc4b78d34f1d0f7fdd614bd136b52fc52b0d001
           persist-credentials: false
       - uses: docker/setup-buildx-action@v3
       - name: Verify source and build image
@@ -41,12 +41,12 @@ jobs:
           grep -F "$APP_VERSION" image-artifact/version.txt
           grep -F "$SOURCE_COMMIT" image-artifact/version.txt
           docker image inspect "$IMAGE" --format '{{.Id}}' > image-artifact/image-id.txt
-          docker save "$IMAGE" | gzip -1 > image-artifact/sub2api-0.2.8-87f231809.tar.gz
+          docker save "$IMAGE" | gzip -1 > image-artifact/sub2api-0.2.8-6cc4b78d3.tar.gz
           cd image-artifact
-          sha256sum sub2api-0.2.8-87f231809.tar.gz > SHA256SUMS
+          sha256sum sub2api-0.2.8-6cc4b78d3.tar.gz > SHA256SUMS
       - uses: actions/upload-artifact@v7
         with:
-          name: sub2api-0.2.8-87f231809-linux-amd64
+          name: sub2api-0.2.8-6cc4b78d3-linux-amd64
           path: image-artifact/
           compression-level: 0
           retention-days: 3
