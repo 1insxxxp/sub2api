@@ -56,8 +56,6 @@ func imageStudioConfigResponse(cfg *service.ImageStudioSettings) gin.H {
 	}
 	return gin.H{
 		"enabled":                cfg.Enabled,
-		"allowed_models":         cfg.AllowedModels,
-		"default_model":          cfg.DefaultModel,
 		"storage_driver":         cfg.StorageDriver,
 		"local_root_dir":         cfg.LocalRootDir,
 		"local_public_base_url":  cfg.LocalPublicBaseURL,

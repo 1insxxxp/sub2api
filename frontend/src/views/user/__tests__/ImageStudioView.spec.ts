@@ -69,8 +69,6 @@ vi.mock('vue-i18n', async (importOriginal) => {
 
 const config = {
   enabled: true,
-  allowed_models: ['gpt-image-1', 'gpt-image-2'],
-  default_model: 'gpt-image-1',
   aspect_ratios: [
     { ratio: '1:1', size: '1024x1024', billing_tier: '1K' },
     { ratio: '16:9', size: '1536x864', billing_tier: '2K' },
@@ -83,7 +81,6 @@ const config = {
 const options = {
   enabled: true,
   default_group_id: 9,
-  default_model: 'gpt-image-2',
   groups: [
     {
       id: 9,
@@ -484,7 +481,6 @@ describe('ImageStudioView', () => {
     vi.useFakeTimers()
     getOptions.mockResolvedValueOnce({
       ...options,
-      default_model: 'gpt-image-1',
       groups: [
         {
           ...options.groups[0],
@@ -808,7 +804,6 @@ describe('ImageStudioView', () => {
   it('does not expose background controls when jpeg output is selected', async () => {
     getOptions.mockResolvedValueOnce({
       ...options,
-      default_model: 'gpt-image-1',
       groups: [
         {
           ...options.groups[0],

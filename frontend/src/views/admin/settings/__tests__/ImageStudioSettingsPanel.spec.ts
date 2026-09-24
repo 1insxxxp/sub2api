@@ -50,8 +50,6 @@ vi.mock('vue-i18n', () => ({
 
 const baseSettings = {
   enabled: true,
-  allowed_models: ['gpt-image-1'],
-  default_model: 'gpt-image-1',
   storage_driver: 'local',
   local_root_dir: '',
   local_public_base_url: 'http://127.0.0.1:18080/api/v1/user/images/assets',
@@ -114,7 +112,8 @@ describe('ImageStudioSettingsPanel', () => {
 
     expect(getImageStudioSettings).toHaveBeenCalledTimes(1)
     expect((wrapper.get('[data-test="image-studio-enabled"]').element as HTMLInputElement).checked).toBe(true)
-    expect((wrapper.get('[data-test="image-studio-models"]').element as HTMLTextAreaElement).value).toBe('gpt-image-1')
+    expect(wrapper.find('[data-test="image-studio-models"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="image-studio-default-model"]').exists()).toBe(false)
     expect(wrapper.text()).toContain('1024x1024')
     expect(wrapper.text()).toContain('admin.settings.imageStudio.storageStatus.ok')
   })
@@ -133,12 +132,10 @@ describe('ImageStudioSettingsPanel', () => {
     expect(text).toContain('admin.settings.imageStudio.renderSizeMatrixHint')
   })
 
-  it('saves normalized models and storage settings', async () => {
+  it('saves storage settings without manual model fields', async () => {
     const wrapper = mountPanel()
     await flushPromises()
 
-    await wrapper.get('[data-test="image-studio-models"]').setValue('gpt-image-1\nflux-dev\ngpt-image-1')
-    await wrapper.get('[data-test="image-studio-default-model"]').setValue('flux-dev')
     await wrapper.get('[data-test="image-studio-storage-driver"]').setValue('r2')
     await wrapper.get('[data-test="image-studio-r2-public-base-url"]').setValue('https://images.example.com/')
     await wrapper.get('[data-test="image-studio-save"]').trigger('click')
@@ -146,8 +143,8 @@ describe('ImageStudioSettingsPanel', () => {
 
     expect(updateImageStudioSettings).toHaveBeenCalledTimes(1)
     const payload = updateImageStudioSettings.mock.calls[0][0]
-    expect(payload.allowed_models).toEqual(['gpt-image-1', 'flux-dev'])
-    expect(payload.default_model).toBe('flux-dev')
+    expect(payload).not.toHaveProperty('allowed_models')
+    expect(payload).not.toHaveProperty('default_model')
     expect(payload.storage_driver).toBe('r2')
     expect(payload.r2_public_base_url).toBe('https://images.example.com')
     expect(fetchPublicSettings).toHaveBeenCalledWith(true)

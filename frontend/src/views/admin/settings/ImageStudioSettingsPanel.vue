@@ -10,10 +10,6 @@
             {{ form.enabled ? t('admin.settings.imageStudio.enabledStatus') : t('admin.settings.imageStudio.disabledStatus') }}
           </span>
           <span class="admin-page-meta-chip">
-            <span>{{ t('admin.settings.imageStudio.models') }}</span>
-            <strong>{{ form.allowed_models.length }}</strong>
-          </span>
-          <span class="admin-page-meta-chip">
             <span>{{ t('admin.settings.imageStudio.storage') }}</span>
             <strong>{{ form.storage_driver.toUpperCase() }}</strong>
           </span>
@@ -88,33 +84,6 @@
               />
             </label>
 
-            <div>
-              <label class="input-label">{{ t('admin.settings.imageStudio.defaultModel') }}</label>
-              <input
-                v-model.trim="form.default_model"
-                data-test="image-studio-default-model"
-                type="text"
-                class="input"
-                placeholder="gpt-image-1"
-              />
-              <p class="mt-2 text-xs text-gray-500 dark:text-dark-400">
-                {{ t('admin.settings.imageStudio.defaultModelHint') }}
-              </p>
-            </div>
-
-            <div>
-              <label class="input-label">{{ t('admin.settings.imageStudio.allowedModels') }}</label>
-              <textarea
-                v-model="modelsText"
-                data-test="image-studio-models"
-                rows="5"
-                class="input font-mono text-sm"
-                placeholder="gpt-image-1"
-              ></textarea>
-              <p class="mt-2 text-xs text-gray-500 dark:text-dark-400">
-                {{ t('admin.settings.imageStudio.allowedModelsHint') }}
-              </p>
-            </div>
           </div>
         </div>
 
@@ -310,8 +279,6 @@ const renderSizeByRatioAndTier: Record<string, Record<RenderQualityTier, string>
 
 const form = reactive<ImageStudioSettings>({
   enabled: false,
-  allowed_models: ['gpt-image-1'],
-  default_model: 'gpt-image-1',
   storage_driver: 'local',
   local_root_dir: '',
   local_public_base_url: '',
@@ -325,7 +292,6 @@ const form = reactive<ImageStudioSettings>({
 const loading = ref(true)
 const saving = ref(false)
 const testingStorage = ref(false)
-const modelsText = ref('gpt-image-1')
 const storageStatus = ref<ImageStudioStorageStatus | undefined>()
 
 const storageStatusLabel = computed(() => {
@@ -355,19 +321,6 @@ const renderSizeRows = computed(() =>
   })),
 )
 
-function parseModels(text: string): string[] {
-  const seen = new Set<string>()
-  return text
-    .split(/[\n,]/)
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .filter((item) => {
-      if (seen.has(item)) return false
-      seen.add(item)
-      return true
-    })
-}
-
 function positiveInteger(value: unknown, fallback: number): number {
   const normalized = Math.floor(Number(value))
   return Number.isFinite(normalized) && normalized > 0 ? normalized : fallback
@@ -376,26 +329,15 @@ function positiveInteger(value: unknown, fallback: number): number {
 function applySettings(settings: ImageStudioSettings): void {
   Object.assign(form, {
     ...settings,
-    allowed_models: settings.allowed_models?.length ? [...settings.allowed_models] : ['gpt-image-1'],
     aspect_ratios: settings.aspect_ratios?.length ? [...settings.aspect_ratios] : defaultAspectRatios,
     storage_driver: settings.storage_driver || 'local',
   })
-  modelsText.value = form.allowed_models.join('\n')
   storageStatus.value = settings.storage_status
 }
 
 function buildPayload(): ImageStudioSettings {
-  const allowedModels = parseModels(modelsText.value)
-  const models = allowedModels.length ? allowedModels : ['gpt-image-1']
-  const defaultModel = form.default_model.trim() && models.includes(form.default_model.trim())
-    ? form.default_model.trim()
-    : models[0]
-
   return {
-    ...form,
     enabled: Boolean(form.enabled),
-    allowed_models: models,
-    default_model: defaultModel,
     storage_driver: form.storage_driver === 'r2' ? 'r2' : 'local',
     local_root_dir: form.local_root_dir?.trim() || '',
     local_public_base_url: form.local_public_base_url?.trim().replace(/\/+$/, '') || '',

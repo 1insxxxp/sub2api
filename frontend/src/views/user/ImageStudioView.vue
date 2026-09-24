@@ -1032,7 +1032,7 @@ const currentResultSummary = computed(() =>
 
 watch(modelOptions, (items) => {
   if (!items.some((item) => item.model === model.value)) {
-    model.value = chooseModel(options.value?.default_model || config.value?.default_model, items)
+    model.value = chooseModel(items)
   }
 })
 
@@ -1056,7 +1056,7 @@ watch(availableAPIKeys, (items) => {
 
 watch(selectedAPIKeyID, () => {
   if (!modelOptions.value.some((item) => item.model === model.value)) {
-    model.value = chooseModel(options.value?.default_model || config.value?.default_model, modelOptions.value)
+    model.value = chooseModel(modelOptions.value)
   }
   quality.value = qualityOptions.value[0]?.quality ?? '1K'
 })
@@ -1128,7 +1128,7 @@ async function loadInitialData() {
     options.value = selectableOptions
     apiKeys.value = keyResponse.items ?? []
     selectedAPIKeyID.value = defaultAPIKeyID(selectableOptions, apiKeys.value)
-    model.value = chooseModel(selectableOptions.default_model || cfg.default_model, modelOptions.value)
+    model.value = chooseModel(modelOptions.value)
     quality.value = qualityOptions.value[0]?.quality ?? '1K'
     aspectRatio.value = cfg.aspect_ratios[0]?.ratio || '1:1'
     await loadHistory()
@@ -1656,12 +1656,9 @@ function defaultAPIKeyID(selectableOptions: ImageStudioOptions, keys: ApiKey[]):
   return usableKeys[0]?.id ?? null
 }
 
-function chooseModel(preferred: string | undefined, models: ImageStudioModelOption[]): string {
+function chooseModel(models: ImageStudioModelOption[]): string {
   if (!models.length) {
     return ''
-  }
-  if (preferred && models.some((item) => item.model === preferred)) {
-    return preferred
   }
   return models[0]?.model ?? ''
 }

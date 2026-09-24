@@ -13,8 +13,6 @@ export interface ImageStudioAspectRatio {
 
 export interface ImageStudioConfig {
   enabled: boolean
-  allowed_models: string[]
-  default_model: string
   aspect_ratios: ImageStudioAspectRatio[]
   max_reference_image_mb: number
   retention_days: number
@@ -56,7 +54,6 @@ export interface ImageStudioGroupOption {
 export interface ImageStudioOptions {
   enabled: boolean
   default_group_id?: number | null
-  default_model: string
   groups: ImageStudioGroupOption[]
 }
 

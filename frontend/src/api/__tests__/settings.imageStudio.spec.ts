@@ -31,8 +31,6 @@ describe('admin image studio settings api', () => {
   it('loads, saves, and tests image studio settings through backend endpoints', async () => {
     const settings: ImageStudioSettings = {
       enabled: true,
-      allowed_models: ['gpt-image-1'],
-      default_model: 'gpt-image-1',
       storage_driver: 'local',
       retention_days: 30,
       max_images_per_user: 100,

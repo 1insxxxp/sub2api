@@ -16,9 +16,9 @@ func (s *ImageStudioService) SetModelDiscovery(accounts ImageStudioModelAccounts
 	s.modelChannels = channels
 }
 
-func (s *ImageStudioService) discoverImageModels(ctx context.Context, group *Group, cfg *ImageStudioSettings) ([]string, error) {
+func (s *ImageStudioService) discoverImageModels(ctx context.Context, group *Group) ([]string, error) {
 	if s.modelAccounts == nil {
-		return imageStudioModelsForGroup(group, cfg), nil
+		return imageStudioModelsForGroup(group), nil
 	}
 	models := []string{}
 	if group == nil || (group.Platform != PlatformOpenAI && group.Platform != PlatformGemini && group.Platform != PlatformGrok) {

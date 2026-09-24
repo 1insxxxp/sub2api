@@ -44,7 +44,10 @@ func TestSettingHandlerGetImageStudioConfig(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	data := resp.Data.(map[string]any)
 	require.Equal(t, false, data["enabled"])
-	require.Equal(t, "gpt-image-1", data["default_model"])
+	_, hasAllowedModels := data["allowed_models"]
+	_, hasDefaultModel := data["default_model"]
+	require.False(t, hasAllowedModels)
+	require.False(t, hasDefaultModel)
 	require.Equal(t, "local", data["storage_driver"])
 	require.NotEmpty(t, data["aspect_ratios"])
 	status := data["storage_status"].(map[string]any)
@@ -71,8 +74,8 @@ func TestSettingHandlerUpdateImageStudioConfig(t *testing.T) {
 	var saved service.ImageStudioSettings
 	require.NoError(t, json.Unmarshal([]byte(repo.values[service.SettingKeyImageStudioConfig]), &saved))
 	require.True(t, saved.Enabled)
-	require.Equal(t, []string{"gpt-image-1", "gpt-image-2"}, saved.AllowedModels)
-	require.Equal(t, "gpt-image-2", saved.DefaultModel)
+	require.Empty(t, saved.AllowedModels)
+	require.Empty(t, saved.DefaultModel)
 	require.Equal(t, service.ImageStorageDriverR2, saved.StorageDriver)
 	require.Equal(t, "https://assets.example.com", saved.R2PublicBaseURL)
 	require.Equal(t, 30, saved.RetentionDays)

@@ -131,9 +131,8 @@ func (s *ImageStudioService) GetOptions(ctx context.Context, userID int64) (*Ima
 		return nil, err
 	}
 	options := &ImageStudioOptions{
-		Enabled:      cfg.Enabled,
-		DefaultModel: cfg.DefaultModel,
-		Groups:       []ImageStudioGroupOption{},
+		Enabled: cfg.Enabled,
+		Groups:  []ImageStudioGroupOption{},
 	}
 	if !cfg.Enabled {
 		return options, nil
@@ -147,11 +146,11 @@ func (s *ImageStudioService) GetOptions(ctx context.Context, userID int64) (*Ima
 	}
 	for i := range groups {
 		group := groups[i]
-		models, err := s.discoverImageModels(ctx, &group, cfg)
+		models, err := s.discoverImageModels(ctx, &group)
 		if err != nil {
 			return nil, err
 		}
-		option := imageStudioGroupOptionFromGroup(&group, cfg)
+		option := imageStudioGroupOptionFromGroup(&group)
 		option.Models = imageStudioModelOptions(models)
 		if len(option.Models) == 0 {
 			continue
@@ -506,24 +505,20 @@ func (s *ImageStudioService) prepareGenerateInput(ctx context.Context, input Ima
 		return nil, ImageStudioGenerateInput{}, infraerrors.BadRequest("INVALID_IMAGE_PROMPT", err.Error())
 	}
 	model := strings.TrimSpace(input.Model)
-	if model == "" {
-		model = cfg.DefaultModel
-	}
 	input.GroupID, err = s.resolveImageStudioKeyGroup(ctx, input.UserID, input.APIKeyID, input.GroupID)
 	if err != nil {
 		return nil, ImageStudioGenerateInput{}, err
 	}
-	group, err := s.resolveSelectedImageStudioGroup(ctx, input.UserID, input.GroupID, model, cfg)
+	group, err := s.resolveSelectedImageStudioGroup(ctx, input.UserID, input.GroupID)
 	if err != nil {
 		return nil, ImageStudioGenerateInput{}, err
 	}
-	if group == nil {
-		if err := ValidateImageStudioModel(model, cfg.AllowedModels); err != nil {
-			return nil, ImageStudioGenerateInput{}, infraerrors.BadRequest("INVALID_IMAGE_MODEL", err.Error())
-		}
-	}
 	if group != nil && input.GroupID == nil {
 		input.GroupID = &group.ID
+	}
+	model, err = s.resolveImageStudioModel(ctx, group, model)
+	if err != nil {
+		return nil, ImageStudioGenerateInput{}, err
 	}
 	aspectRatio := firstNonEmptyTrimmed(input.AspectRatio, "1:1")
 	quality := NormalizeImageStudioQuality(input.Quality)
@@ -563,24 +558,20 @@ func (s *ImageStudioService) prepareEditInput(ctx context.Context, input ImageSt
 		return nil, ImageStudioEditInput{}, infraerrors.BadRequest("INVALID_IMAGE_PROMPT", err.Error())
 	}
 	model := strings.TrimSpace(input.Model)
-	if model == "" {
-		model = cfg.DefaultModel
-	}
 	input.GroupID, err = s.resolveImageStudioKeyGroup(ctx, input.UserID, input.APIKeyID, input.GroupID)
 	if err != nil {
 		return nil, ImageStudioEditInput{}, err
 	}
-	group, err := s.resolveSelectedImageStudioGroup(ctx, input.UserID, input.GroupID, model, cfg)
+	group, err := s.resolveSelectedImageStudioGroup(ctx, input.UserID, input.GroupID)
 	if err != nil {
 		return nil, ImageStudioEditInput{}, err
 	}
-	if group == nil {
-		if err := ValidateImageStudioModel(model, cfg.AllowedModels); err != nil {
-			return nil, ImageStudioEditInput{}, infraerrors.BadRequest("INVALID_IMAGE_MODEL", err.Error())
-		}
-	}
 	if group != nil && input.GroupID == nil {
 		input.GroupID = &group.ID
+	}
+	model, err = s.resolveImageStudioModel(ctx, group, model)
+	if err != nil {
+		return nil, ImageStudioEditInput{}, err
 	}
 	aspectRatio := firstNonEmptyTrimmed(input.AspectRatio, "1:1")
 	quality := NormalizeImageStudioQuality(input.Quality)
@@ -626,7 +617,7 @@ func (s *ImageStudioService) prepareEditInput(ctx context.Context, input ImageSt
 	return cfg, input, nil
 }
 
-func (s *ImageStudioService) resolveSelectedImageStudioGroup(ctx context.Context, userID int64, groupID *int64, model string, cfg *ImageStudioSettings) (*Group, error) {
+func (s *ImageStudioService) resolveSelectedImageStudioGroup(ctx context.Context, userID int64, groupID *int64) (*Group, error) {
 	if s.groupResolver == nil {
 		return nil, nil
 	}
@@ -650,16 +641,33 @@ func (s *ImageStudioService) resolveSelectedImageStudioGroup(ctx context.Context
 		if group.ID != selectedID {
 			continue
 		}
-		models, err := s.discoverImageModels(ctx, &group, cfg)
-		if err != nil {
-			return nil, err
-		}
-		if err := ValidateImageStudioModel(model, models); err != nil {
-			return nil, infraerrors.BadRequest("IMAGE_STUDIO_MODEL_NOT_AVAILABLE", err.Error())
-		}
 		return &group, nil
 	}
 	return nil, infraerrors.BadRequest("IMAGE_STUDIO_GROUP_NOT_AVAILABLE", "selected image group is not available")
+}
+
+func (s *ImageStudioService) resolveImageStudioModel(ctx context.Context, group *Group, requested string) (string, error) {
+	model := strings.TrimSpace(requested)
+	if group == nil {
+		if model == "" {
+			return "", infraerrors.BadRequest("IMAGE_STUDIO_MODEL_REQUIRED", "image model is required")
+		}
+		return model, nil
+	}
+	models, err := s.discoverImageModels(ctx, group)
+	if err != nil {
+		return "", err
+	}
+	if model == "" {
+		if len(models) == 0 {
+			return "", infraerrors.BadRequest("IMAGE_STUDIO_NO_MODELS", "no image model is available for the selected API key group")
+		}
+		return models[0], nil
+	}
+	if err := ValidateImageStudioModel(model, models); err != nil {
+		return "", infraerrors.BadRequest("IMAGE_STUDIO_MODEL_NOT_AVAILABLE", err.Error())
+	}
+	return model, nil
 }
 
 func (s *ImageStudioService) availableImageStudioGroups(ctx context.Context, userID int64) ([]Group, error) {
@@ -680,11 +688,11 @@ func (s *ImageStudioService) availableImageStudioGroups(ctx context.Context, use
 	return out, nil
 }
 
-func imageStudioGroupOptionFromGroup(group *Group, cfg *ImageStudioSettings) ImageStudioGroupOption {
+func imageStudioGroupOptionFromGroup(group *Group) ImageStudioGroupOption {
 	if group == nil {
 		return ImageStudioGroupOption{}
 	}
-	models := imageStudioModelsForGroup(group, cfg)
+	models := imageStudioModelsForGroup(group)
 	qualityOptions := imageStudioQualityOptionsForGroup(group)
 	return ImageStudioGroupOption{
 		ID:          group.ID,
@@ -697,21 +705,11 @@ func imageStudioGroupOptionFromGroup(group *Group, cfg *ImageStudioSettings) Ima
 	}
 }
 
-func imageStudioModelsForGroup(group *Group, cfg *ImageStudioSettings) []string {
-	var models []string
-	if group != nil && group.CustomModelsListEnabled() {
-		for _, model := range group.ModelsListConfig.Models {
-			if imageStudioModelSupportedByGroup(group, model) {
-				models = append(models, model)
-			}
-		}
-		return dedupeImageStudioModelsForGroup(group, models)
+func imageStudioModelsForGroup(group *Group) []string {
+	if group == nil {
+		return nil
 	}
-	if len(models) == 0 && cfg != nil {
-		models = append(models, cfg.AllowedModels...)
-	}
-	models = append(models, "gpt-image-2")
-	return dedupeImageStudioModelsForGroup(group, models)
+	return dedupeImageStudioModelsForGroup(group, DefaultModelIDsForPlatform(group.Platform))
 }
 
 func imageStudioModelOptions(models []string) []ImageStudioModelOption {
@@ -1004,8 +1002,6 @@ func imageStudioPublicConfig(cfg *ImageStudioSettings) *ImageStudioConfig {
 	}
 	return &ImageStudioConfig{
 		Enabled:             cfg.Enabled,
-		AllowedModels:       append([]string(nil), cfg.AllowedModels...),
-		DefaultModel:        cfg.DefaultModel,
 		AspectRatios:        append([]ImageStudioAspectRatio(nil), cfg.AspectRatios...),
 		MaxReferenceImageMB: cfg.MaxReferenceImageMB,
 		RetentionDays:       cfg.RetentionDays,

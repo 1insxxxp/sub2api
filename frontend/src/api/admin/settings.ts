@@ -1672,8 +1672,6 @@ export interface ImageStudioStorageStatus {
 
 export interface ImageStudioSettings {
   enabled: boolean;
-  allowed_models: string[];
-  default_model: string;
   storage_driver: "local" | "r2" | string;
   local_root_dir?: string;
   local_public_base_url?: string;

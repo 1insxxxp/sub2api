@@ -69,8 +69,8 @@ func TestGetImageStudioConfigReturnsDefaultsWhenMissing(t *testing.T) {
 	cfg, err := svc.GetImageStudioConfig(context.Background())
 	require.NoError(t, err)
 	require.False(t, cfg.Enabled)
-	require.Equal(t, []string{"gpt-image-1"}, cfg.AllowedModels)
-	require.Equal(t, "gpt-image-1", cfg.DefaultModel)
+	require.Empty(t, cfg.AllowedModels)
+	require.Empty(t, cfg.DefaultModel)
 	require.Equal(t, ImageStorageDriverLocal, cfg.StorageDriver)
 	require.Equal(t, 30, cfg.RetentionDays)
 	require.Equal(t, 100, cfg.MaxImagesPerUser)
@@ -102,8 +102,10 @@ func TestSaveImageStudioConfigNormalizesAndPersists(t *testing.T) {
 	var saved ImageStudioSettings
 	require.NoError(t, json.Unmarshal([]byte(raw), &saved))
 	require.True(t, saved.Enabled)
-	require.Equal(t, []string{"gpt-image-1", "gpt-image-2"}, saved.AllowedModels)
-	require.Equal(t, "gpt-image-2", saved.DefaultModel)
+	require.Empty(t, saved.AllowedModels)
+	require.Empty(t, saved.DefaultModel)
+	require.NotContains(t, raw, "allowed_models")
+	require.NotContains(t, raw, "default_model")
 	require.Equal(t, ImageStorageDriverR2, saved.StorageDriver)
 	require.Equal(t, "https://assets.example.com", saved.R2PublicBaseURL)
 	require.Equal(t, 30, saved.RetentionDays)
@@ -111,7 +113,7 @@ func TestSaveImageStudioConfigNormalizesAndPersists(t *testing.T) {
 	require.Equal(t, 20, saved.MaxReferenceImageMB)
 }
 
-func TestSaveImageStudioConfigRejectsDefaultModelOutsideAllowedList(t *testing.T) {
+func TestSaveImageStudioConfigIgnoresLegacyModelSettings(t *testing.T) {
 	resetImageStudioConfigTestCache(t)
 
 	repo := &imageStudioSettingRepoStub{}
@@ -121,6 +123,7 @@ func TestSaveImageStudioConfigRejectsDefaultModelOutsideAllowedList(t *testing.T
 		AllowedModels: []string{"gpt-image-1"},
 		DefaultModel:  "gpt-image-2",
 	})
-	require.Error(t, err)
-	require.Empty(t, repo.saved)
+	require.NoError(t, err)
+	require.NotContains(t, repo.saved[SettingKeyImageStudioConfig], "allowed_models")
+	require.NotContains(t, repo.saved[SettingKeyImageStudioConfig], "default_model")
 }

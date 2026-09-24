@@ -27,7 +27,7 @@ func TestImageStudioAutomaticModelsUseChannelMappingsWithoutHidingAccountDefault
 	channels := newTestChannelService(makeStandardRepo(channel, map[int64]string{9: PlatformOpenAI}))
 	svc := NewImageStudioService(nil, nil)
 	svc.SetModelDiscovery(&imageStudioDiscoveryAccounts{accounts: []Account{{Platform: PlatformOpenAI}}}, channels)
-	models, err := svc.discoverImageModels(context.Background(), &Group{ID: 9, Platform: PlatformOpenAI}, nil)
+	models, err := svc.discoverImageModels(context.Background(), &Group{ID: 9, Platform: PlatformOpenAI})
 	require.NoError(t, err)
 	want := dedupeImageStudioModelsForGroup(&Group{Platform: PlatformOpenAI}, append(DefaultModelIDsForPlatform(PlatformOpenAI), "gpt-image-alias"))
 	sort.Strings(want)
@@ -109,7 +109,7 @@ func TestImageStudioAutomaticModels(t *testing.T) {
 			svc := NewImageStudioService(nil, nil)
 			svc.SetModelDiscovery(repo, nil)
 			group := &Group{ID: 9, Platform: tc.platform, ModelAllowlist: tc.allowlist}
-			models, err := svc.discoverImageModels(context.Background(), group, &ImageStudioSettings{AllowedModels: []string{"gpt-image-2"}})
+			models, err := svc.discoverImageModels(context.Background(), group)
 			require.NoError(t, err)
 			require.Equal(t, tc.want, models)
 			require.Equal(t, int64(9), repo.groupID)
@@ -136,7 +136,7 @@ func TestImageStudioAutomaticModelsIgnoreConfiguredImageModelLists(t *testing.T)
 			Enabled: true,
 			Models:  []string{"gpt-image-live"},
 		},
-	}, &ImageStudioSettings{AllowedModels: []string{"gpt-image-configured"}})
+	})
 
 	require.NoError(t, err)
 	require.Equal(t, []string{"gpt-image-live", "gpt-image-other"}, models)
@@ -165,4 +165,30 @@ func TestImageStudioAutomaticModelsShareSubmissionValidation(t *testing.T) {
 	repo.err = errors.New("catalog unavailable")
 	_, err = svc.GetOptions(context.Background(), 7)
 	require.ErrorContains(t, err, "catalog unavailable")
+}
+
+func TestImageStudioAutomaticModelsChooseFirstDiscoveredModelWhenRequestOmitsModel(t *testing.T) {
+	repo := &imageStudioDiscoveryAccounts{accounts: []Account{{
+		Platform: PlatformOpenAI,
+		Credentials: map[string]any{"model_mapping": map[string]any{
+			"gpt-image-z": "gpt-image-z",
+			"gpt-image-a": "gpt-image-a",
+		}},
+	}}}
+	svc := NewImageStudioService(nil, &imageStudioConfigReaderStub{cfg: &ImageStudioSettings{Enabled: true}})
+	svc.SetModelDiscovery(repo, nil)
+	svc.SetGroupResolver(&imageStudioDiscoveryKeyResolver{
+		imageStudioGroupResolverStub: imageStudioGroupResolverStub{groups: []Group{{
+			ID: 9, Status: StatusActive, Platform: PlatformOpenAI, AllowImageGeneration: true,
+		}}},
+	})
+
+	_, prepared, err := svc.prepareGenerateInput(context.Background(), ImageStudioGenerateInput{
+		UserID:  7,
+		GroupID: imageStudioInt64Ptr(9),
+		Prompt:  "test",
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, "gpt-image-a", prepared.Model)
 }

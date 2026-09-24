@@ -27,9 +27,11 @@ type ImageStudioAspectRatio struct {
 }
 
 type ImageStudioConfig struct {
-	Enabled             bool                     `json:"enabled"`
-	AllowedModels       []string                 `json:"allowed_models"`
-	DefaultModel        string                   `json:"default_model"`
+	Enabled bool `json:"enabled"`
+	// Deprecated: retained for source compatibility; public JSON omits legacy
+	// manual model settings because models are discovered per key group.
+	AllowedModels       []string                 `json:"-"`
+	DefaultModel        string                   `json:"-"`
 	AspectRatios        []ImageStudioAspectRatio `json:"aspect_ratios"`
 	MaxReferenceImageMB int                      `json:"max_reference_image_mb"`
 	RetentionDays       int                      `json:"retention_days"`
@@ -37,10 +39,11 @@ type ImageStudioConfig struct {
 }
 
 type ImageStudioOptions struct {
-	Enabled        bool                     `json:"enabled"`
-	DefaultGroupID *int64                   `json:"default_group_id,omitempty"`
-	DefaultModel   string                   `json:"default_model"`
-	Groups         []ImageStudioGroupOption `json:"groups"`
+	Enabled        bool   `json:"enabled"`
+	DefaultGroupID *int64 `json:"default_group_id,omitempty"`
+	// Deprecated: model selection is based on the selected API key group.
+	DefaultModel string                   `json:"-"`
+	Groups       []ImageStudioGroupOption `json:"groups"`
 }
 
 type ImageStudioGroupOption struct {

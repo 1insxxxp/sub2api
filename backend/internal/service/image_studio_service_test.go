@@ -407,8 +407,8 @@ func TestImageStudioServiceGetConfigReturnsPublicConfig(t *testing.T) {
 	cfg, err := svc.GetConfig(context.Background())
 	require.NoError(t, err)
 	require.True(t, cfg.Enabled)
-	require.Equal(t, settings.AllowedModels, cfg.AllowedModels)
-	require.Equal(t, "custom-image-model", cfg.DefaultModel)
+	require.Empty(t, cfg.AllowedModels)
+	require.Empty(t, cfg.DefaultModel)
 	require.Equal(t, 42, cfg.MaxImagesPerUser)
 	require.Equal(t, 12, cfg.MaxReferenceImageMB)
 	require.NotEmpty(t, cfg.AspectRatios)
@@ -424,6 +424,9 @@ func TestImageStudioServiceGetOptionsReturnsSelectableGroupsModelsQualitiesAndPr
 	settings.DefaultModel = "gpt-image-2"
 
 	svc := NewImageStudioService(&imageStudioRepoStub{}, &imageStudioConfigReaderStub{cfg: settings})
+	svc.SetModelDiscovery(&imageStudioDiscoveryAccounts{accounts: []Account{{Platform: PlatformOpenAI, Credentials: map[string]any{
+		"model_mapping": map[string]any{"gpt-image-2": "gpt-image-2"},
+	}}}}, nil)
 	svc.SetGroupResolver(&imageStudioGroupResolverStub{groups: []Group{
 		{
 			ID:                   2,
@@ -451,7 +454,6 @@ func TestImageStudioServiceGetOptionsReturnsSelectableGroupsModelsQualitiesAndPr
 	require.True(t, options.Enabled)
 	require.NotNil(t, options.DefaultGroupID)
 	require.Equal(t, int64(2), *options.DefaultGroupID)
-	require.Equal(t, "gpt-image-2", options.DefaultModel)
 	require.Len(t, options.Groups, 1)
 	group := options.Groups[0]
 	require.Equal(t, int64(2), group.ID)
@@ -475,13 +477,16 @@ func TestImageStudioServiceGetOptionsReturnsSelectableGroupsModelsQualitiesAndPr
 	})
 }
 
-func TestImageStudioServiceGetOptionsUsesConfiguredDefaultModel(t *testing.T) {
+func TestImageStudioServiceGetOptionsIgnoresConfiguredModelSettings(t *testing.T) {
 	settings := defaultImageStudioSettings()
 	settings.Enabled = true
 	settings.AllowedModels = []string{"gpt-image-1", "gpt-image-2"}
 	settings.DefaultModel = "gpt-image-2"
 
 	svc := NewImageStudioService(&imageStudioRepoStub{}, &imageStudioConfigReaderStub{cfg: settings})
+	svc.SetModelDiscovery(&imageStudioDiscoveryAccounts{accounts: []Account{{Platform: PlatformOpenAI, Credentials: map[string]any{
+		"model_mapping": map[string]any{"gpt-image-1": "gpt-image-1", "gpt-image-2": "gpt-image-2"},
+	}}}}, nil)
 	svc.SetGroupResolver(&imageStudioGroupResolverStub{groups: []Group{
 		{
 			ID:                   2,
@@ -495,7 +500,7 @@ func TestImageStudioServiceGetOptionsUsesConfiguredDefaultModel(t *testing.T) {
 	options, err := svc.GetOptions(context.Background(), 7)
 
 	require.NoError(t, err)
-	require.Equal(t, "gpt-image-2", options.DefaultModel)
+	require.Empty(t, options.DefaultModel)
 	require.Len(t, options.Groups, 1)
 	require.Equal(t, []ImageStudioModelOption{
 		{Model: "gpt-image-1", Label: "gpt-image-1", Capabilities: []string{ImageStudioModeGeneration, ImageStudioModeEdit}},
@@ -503,13 +508,16 @@ func TestImageStudioServiceGetOptionsUsesConfiguredDefaultModel(t *testing.T) {
 	}, options.Groups[0].Models)
 }
 
-func TestImageStudioServiceGetOptionsUsesOnlyGroupCustomImageModelsWhenEnabled(t *testing.T) {
+func TestImageStudioServiceGetOptionsIgnoresGroupCustomModelSettings(t *testing.T) {
 	settings := defaultImageStudioSettings()
 	settings.Enabled = true
 	settings.AllowedModels = []string{"gpt-image-2"}
 	settings.DefaultModel = "gpt-image-2"
 
 	svc := NewImageStudioService(&imageStudioRepoStub{}, &imageStudioConfigReaderStub{cfg: settings})
+	svc.SetModelDiscovery(&imageStudioDiscoveryAccounts{accounts: []Account{{Platform: PlatformOpenAI, Credentials: map[string]any{
+		"model_mapping": map[string]any{"gpt-image-1": "gpt-image-1", "gpt-image-2": "gpt-image-2"},
+	}}}}, nil)
 	svc.SetGroupResolver(&imageStudioGroupResolverStub{groups: []Group{
 		{
 			ID:                   2,
@@ -528,11 +536,10 @@ func TestImageStudioServiceGetOptionsUsesOnlyGroupCustomImageModelsWhenEnabled(t
 
 	require.NoError(t, err)
 	require.Len(t, options.Groups, 1)
-	require.Equal(t, []ImageStudioModelOption{{
-		Model:        "gpt-image-1",
-		Label:        "gpt-image-1",
-		Capabilities: []string{ImageStudioModeGeneration, ImageStudioModeEdit},
-	}}, options.Groups[0].Models)
+	require.Equal(t, []ImageStudioModelOption{
+		{Model: "gpt-image-1", Label: "gpt-image-1", Capabilities: []string{ImageStudioModeGeneration, ImageStudioModeEdit}},
+		{Model: "gpt-image-2", Label: "gpt-image-2", Capabilities: []string{ImageStudioModeGeneration, ImageStudioModeEdit}},
+	}, options.Groups[0].Models)
 }
 
 func TestImageStudioServiceGetOptionsReturnsGeminiImageModelsForGeminiGroup(t *testing.T) {
@@ -542,6 +549,10 @@ func TestImageStudioServiceGetOptionsReturnsGeminiImageModelsForGeminiGroup(t *t
 	settings.DefaultModel = "gpt-image-2"
 
 	svc := NewImageStudioService(&imageStudioRepoStub{}, &imageStudioConfigReaderStub{cfg: settings})
+	svc.SetModelDiscovery(&imageStudioDiscoveryAccounts{accounts: []Account{
+		{Platform: PlatformOpenAI, Credentials: map[string]any{"model_mapping": map[string]any{"gpt-image-2": "gpt-image-2"}}},
+		{Platform: PlatformGemini, Credentials: map[string]any{"model_mapping": map[string]any{"gemini-3.1-flash-image-preview": "gemini-3.1-flash-image-preview"}}},
+	}}, nil)
 	svc.SetGroupResolver(&imageStudioGroupResolverStub{groups: []Group{
 		{
 			ID:                   2,
@@ -589,6 +600,7 @@ func TestImageStudioServiceOpenAICompatibleGrokModelAvailability(t *testing.T) {
 			name:      "group allowlist still restricts global models",
 			platform:  PlatformOpenAI,
 			allowlist: GroupModelsListConfig{Enabled: true, Models: []string{"gpt-image-2"}},
+			allowed:   true,
 		},
 		{name: "Gemini group still excludes Grok", platform: PlatformGemini},
 	} {
@@ -598,6 +610,14 @@ func TestImageStudioServiceOpenAICompatibleGrokModelAvailability(t *testing.T) {
 			settings.AllowedModels = []string{"gpt-image-2", "grok-imagine-image", "gemini-3.1-flash-image-preview"}
 			settings.DefaultModel = "gpt-image-2"
 			svc := NewImageStudioService(&imageStudioRepoStub{}, &imageStudioConfigReaderStub{cfg: settings})
+			svc.SetModelDiscovery(&imageStudioDiscoveryAccounts{accounts: []Account{{
+				Platform: tc.platform,
+				Credentials: map[string]any{"model_mapping": map[string]any{
+					"gpt-image-2":                    "gpt-image-2",
+					"grok-imagine-image":             "grok-imagine-image",
+					"gemini-3.1-flash-image-preview": "gemini-3.1-flash-image-preview",
+				}},
+			}}}, nil)
 			svc.SetGroupResolver(&imageStudioGroupResolverStub{groups: []Group{{
 				ID:                   133,
 				Platform:             tc.platform,
@@ -639,13 +659,20 @@ func TestImageStudioServiceOpenAICompatibleGrokModelAvailability(t *testing.T) {
 	}
 }
 
-func TestImageStudioServiceGetOptionsFiltersGeminiTextModelsFromCustomGroupList(t *testing.T) {
+func TestImageStudioServiceGetOptionsFiltersGeminiTextModelsFromDiscoveredModels(t *testing.T) {
 	settings := defaultImageStudioSettings()
 	settings.Enabled = true
 	settings.AllowedModels = []string{"gpt-image-2"}
 	settings.DefaultModel = "gpt-image-2"
 
 	svc := NewImageStudioService(&imageStudioRepoStub{}, &imageStudioConfigReaderStub{cfg: settings})
+	svc.SetModelDiscovery(&imageStudioDiscoveryAccounts{accounts: []Account{{
+		Platform: PlatformGemini,
+		Credentials: map[string]any{"model_mapping": map[string]any{
+			"gemini-2.5-pro":                 "gemini-2.5-pro",
+			"gemini-3.1-flash-image-preview": "gemini-3.1-flash-image-preview",
+		}},
+	}}}, nil)
 	svc.SetGroupResolver(&imageStudioGroupResolverStub{groups: []Group{
 		{
 			ID:                   4,

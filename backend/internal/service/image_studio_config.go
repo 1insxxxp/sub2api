@@ -15,7 +15,6 @@ import (
 )
 
 const (
-	imageStudioDefaultModel          = "gpt-image-1"
 	imageStudioDefaultRetentionDays  = 30
 	imageStudioDefaultMaxImages      = 100
 	imageStudioDefaultMaxReferenceMB = 20
@@ -31,9 +30,12 @@ const (
 )
 
 type ImageStudioSettings struct {
-	Enabled             bool                     `json:"enabled"`
-	AllowedModels       []string                 `json:"allowed_models"`
-	DefaultModel        string                   `json:"default_model"`
+	Enabled bool `json:"enabled"`
+	// Deprecated: model catalogs are discovered from the selected key's group.
+	// Keep these fields only so old Go callers can still compile; never read or
+	// write them as part of the persisted/public configuration.
+	AllowedModels       []string                 `json:"-"`
+	DefaultModel        string                   `json:"-"`
 	StorageDriver       string                   `json:"storage_driver"`
 	LocalRootDir        string                   `json:"local_root_dir,omitempty"`
 	LocalPublicBaseURL  string                   `json:"local_public_base_url,omitempty"`
@@ -62,8 +64,6 @@ var imageStudioConfigSF singleflight.Group
 func defaultImageStudioSettings() *ImageStudioSettings {
 	return &ImageStudioSettings{
 		Enabled:             false,
-		AllowedModels:       []string{imageStudioDefaultModel},
-		DefaultModel:        imageStudioDefaultModel,
 		StorageDriver:       ImageStorageDriverLocal,
 		RetentionDays:       imageStudioDefaultRetentionDays,
 		MaxImagesPerUser:    imageStudioDefaultMaxImages,
@@ -77,7 +77,8 @@ func cloneImageStudioSettings(cfg *ImageStudioSettings) *ImageStudioSettings {
 		return nil
 	}
 	out := *cfg
-	out.AllowedModels = append([]string(nil), cfg.AllowedModels...)
+	out.AllowedModels = nil
+	out.DefaultModel = ""
 	out.AspectRatios = append([]ImageStudioAspectRatio(nil), cfg.AspectRatios...)
 	return &out
 }
@@ -89,18 +90,10 @@ func normalizeImageStudioSettings(cfg *ImageStudioSettings) (*ImageStudioSetting
 	}
 
 	out := *cfg
-	out.AllowedModels = normalizeImageStudioModels(cfg.AllowedModels)
-	if len(out.AllowedModels) == 0 {
-		out.AllowedModels = append([]string(nil), base.AllowedModels...)
-	}
-
-	out.DefaultModel = strings.TrimSpace(out.DefaultModel)
-	if out.DefaultModel == "" {
-		out.DefaultModel = out.AllowedModels[0]
-	}
-	if err := ValidateImageStudioModel(out.DefaultModel, out.AllowedModels); err != nil {
-		return nil, err
-	}
+	// Ignore legacy model settings. The model catalog is discovered from the
+	// accounts available through the user's selected API key group.
+	out.AllowedModels = nil
+	out.DefaultModel = ""
 
 	out.StorageDriver = strings.ToLower(strings.TrimSpace(out.StorageDriver))
 	if out.StorageDriver == "" {
@@ -127,23 +120,6 @@ func normalizeImageStudioSettings(cfg *ImageStudioSettings) (*ImageStudioSetting
 	}
 	out.AspectRatios = SupportedImageStudioAspectRatios()
 	return &out, nil
-}
-
-func normalizeImageStudioModels(models []string) []string {
-	normalized := make([]string, 0, len(models))
-	seen := make(map[string]struct{}, len(models))
-	for _, model := range models {
-		model = strings.TrimSpace(model)
-		if model == "" {
-			continue
-		}
-		if _, ok := seen[model]; ok {
-			continue
-		}
-		seen[model] = struct{}{}
-		normalized = append(normalized, model)
-	}
-	return normalized
 }
 
 func parseImageStudioSettingsJSON(raw string) *ImageStudioSettings {
