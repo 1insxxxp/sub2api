@@ -156,9 +156,7 @@ func TestImageStudioHandlerGetConfig(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	svc := &imageStudioHandlerServiceStub{
 		config: &service.ImageStudioConfig{
-			Enabled:       true,
-			AllowedModels: []string{"gpt-image-1"},
-			DefaultModel:  "gpt-image-1",
+			Enabled: true,
 		},
 	}
 	h := NewImageStudioHandler(svc)
@@ -183,7 +181,6 @@ func TestImageStudioHandlerGetOptionsUsesAuthenticatedUser(t *testing.T) {
 		options: &service.ImageStudioOptions{
 			Enabled:        true,
 			DefaultGroupID: &groupID,
-			DefaultModel:   "gpt-image-2",
 			Groups:         []service.ImageStudioGroupOption{{ID: groupID, Name: "Image Pro"}},
 		},
 	}
