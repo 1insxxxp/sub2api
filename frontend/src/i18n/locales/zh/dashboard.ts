@@ -72,7 +72,7 @@ export default {
     endpoints: {
       title: 'API 端点',
       routes: '接入线路',
-      routesCompact: '线路',
+      routesCompact: '线路/URL',
       default: '默认',
       copied: '已复制',
       copiedHint: '已复制到剪贴板',
