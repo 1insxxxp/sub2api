@@ -51,7 +51,7 @@ func (s *imageStudioHandlerServiceStub) GetConfig(ctx context.Context) (*service
 	if s.config != nil {
 		return s.config, nil
 	}
-	return &service.ImageStudioConfig{Enabled: true, DefaultModel: "gpt-image-1"}, nil
+	return &service.ImageStudioConfig{Enabled: true}, nil
 }
 
 func (s *imageStudioHandlerServiceStub) GetOptions(ctx context.Context, userID int64) (*service.ImageStudioOptions, error) {
@@ -63,7 +63,6 @@ func (s *imageStudioHandlerServiceStub) GetOptions(ctx context.Context, userID i
 	return &service.ImageStudioOptions{
 		Enabled:        true,
 		DefaultGroupID: &groupID,
-		DefaultModel:   "gpt-image-2",
 		Groups: []service.ImageStudioGroupOption{{
 			ID:   groupID,
 			Name: "Image Pro",
