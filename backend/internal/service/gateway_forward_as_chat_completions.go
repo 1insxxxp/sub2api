@@ -43,6 +43,10 @@ func (s *GatewayService) ForwardAsChatCompletions(
 	originalModel := ccReq.Model
 	clientStream := ccReq.Stream
 	includeUsage := ccReq.StreamOptions != nil && ccReq.StreamOptions.IncludeUsage
+	var group *Group
+	if parsed != nil {
+		group = s.groupForReasoningEffort(ctx, parsed.GroupID)
+	}
 
 	// 2. Convert CC → Responses → Anthropic (chained conversion)
 	responsesReq, err := apicompat.ChatCompletionsToResponses(&ccReq)
@@ -71,6 +75,7 @@ func (s *GatewayService) ForwardAsChatCompletions(
 		return nil, err
 	}
 	responsesReq.Model = mappedModel
+	applyOpus55GroupReasoningDefault(responsesReq, group)
 	anthropicReq, err := apicompat.ResponsesToAnthropicRequest(responsesReq)
 	if err != nil {
 		if claude.IsOpus55(mappedModel) {
@@ -96,13 +101,9 @@ func (s *GatewayService) ForwardAsChatCompletions(
 	if err != nil {
 		return nil, fmt.Errorf("marshal anthropic request: %w", err)
 	}
-	if parsed != nil && parsed.GroupID != nil {
-		if group := s.groupFromContext(ctx, *parsed.GroupID); group != nil {
-			if rewritten, applied := ApplyGroupDefaultReasoningEffort(anthropicBody, group); applied {
-				anthropicBody = rewritten
-				logger.LegacyPrintf("service.gateway", "Applied group default reasoning effort for chat completions: group=%d effort=%s", group.ID, group.DefaultReasoningEffort)
-			}
-		}
+	if rewritten, applied := ApplyGroupDefaultReasoningEffort(anthropicBody, group); applied {
+		anthropicBody = rewritten
+		logger.LegacyPrintf("service.gateway", "Applied group default reasoning effort for chat completions: group=%d effort=%s", group.ID, group.DefaultReasoningEffort)
 	}
 
 	// 6. Apply Claude Code mimicry for OAuth accounts.

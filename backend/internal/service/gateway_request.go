@@ -1473,8 +1473,10 @@ func NormalizeClaudeOutputEffort(raw string) *string {
 
 // ApplyGroupDefaultReasoningEffort injects a group's default Anthropic thinking
 // controls only when the client did not provide any top-level thinking or
-// output_config.effort. The caller should invoke this only on Anthropic-format
-// forwarding paths after model mapping and request normalization.
+// output_config.effort. Opus 5.5 receives adaptive thinking without a budget;
+// other Claude models use enabled thinking with the corresponding budget. The
+// caller should invoke this only on Anthropic-format forwarding paths after
+// model mapping and request normalization.
 func ApplyGroupDefaultReasoningEffort(body []byte, group *Group) ([]byte, bool) {
 	if group == nil {
 		return body, false
@@ -1495,6 +1497,7 @@ func ApplyGroupDefaultReasoningEffort(body []byte, group *Group) ([]byte, bool) 
 	if strings.TrimSpace(gjson.GetBytes(body, "output_config.effort").String()) != "" {
 		return body, false
 	}
+	isOpus55 := claude.IsOpus55(gjson.GetBytes(body, "model").String())
 
 	modified := body
 	changed := false
@@ -1507,12 +1510,18 @@ func ApplyGroupDefaultReasoningEffort(body []byte, group *Group) ([]byte, bool) 
 		changed = true
 	}
 	set("output_config.effort", effort)
-	set("thinking.type", "enabled")
-	set("thinking.budget_tokens", budget)
-	minMaxTokens := int64(budget + 1)
-	currentMaxTokens := gjson.GetBytes(modified, "max_tokens").Int()
-	if currentMaxTokens < minMaxTokens {
-		set("max_tokens", minMaxTokens)
+	if isOpus55 {
+		// Opus 5.5 only accepts adaptive thinking and derives its budget from
+		// output_config.effort. Sending enabled/budget_tokens is rejected.
+		set("thinking.type", "adaptive")
+	} else {
+		set("thinking.type", "enabled")
+		set("thinking.budget_tokens", budget)
+		minMaxTokens := int64(budget + 1)
+		currentMaxTokens := gjson.GetBytes(modified, "max_tokens").Int()
+		if currentMaxTokens < minMaxTokens {
+			set("max_tokens", minMaxTokens)
+		}
 	}
 	if !changed {
 		return body, false

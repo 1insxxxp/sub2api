@@ -866,6 +866,26 @@ func (s *GatewayService) groupFromContext(ctx context.Context, groupID int64) *G
 	return nil
 }
 
+// groupForReasoningEffort resolves the request group even when account
+// selection loaded it on a child context that is not reused by forwarding.
+func (s *GatewayService) groupForReasoningEffort(ctx context.Context, groupID *int64) *Group {
+	if groupID == nil || *groupID <= 0 {
+		return nil
+	}
+	if group := s.groupFromContext(ctx, *groupID); group != nil {
+		return group
+	}
+	if s.groupRepo == nil {
+		return nil
+	}
+	group, err := s.resolveGroupByID(ctx, *groupID)
+	if err != nil {
+		logger.LegacyPrintf("service.gateway", "resolve group for reasoning effort failed: group=%d err=%v", *groupID, err)
+		return nil
+	}
+	return group
+}
+
 func (s *GatewayService) resolveGroupByID(ctx context.Context, groupID int64) (*Group, error) {
 	if group := s.groupFromContext(ctx, groupID); group != nil {
 		return group, nil
