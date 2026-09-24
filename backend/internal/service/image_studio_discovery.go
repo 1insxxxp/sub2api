@@ -30,11 +30,22 @@ func (s *ImageStudioService) discoverImageModels(ctx context.Context, group *Gro
 	if err != nil {
 		return nil, fmt.Errorf("discover image models: %w", err)
 	}
-	allowlist := group.EffectiveModelAllowlist()
-	candidates := append([]string(nil), DefaultModelIDsForPlatform(group.Platform)...)
-	candidates = append(candidates, allowlist.Models...)
-	if cfg != nil {
-		candidates = append(candidates, cfg.AllowedModels...)
+	// The image studio catalog is derived from schedulable account capability.
+	// ImageStudioSettings.AllowedModels and the group's model allowlist belong to
+	// the legacy manual catalog and must not hide models an account supports.
+	candidates := make([]string, 0)
+	for i := range accounts {
+		if accounts[i].Platform != group.Platform {
+			continue
+		}
+		mapping := accounts[i].GetModelMapping()
+		if len(mapping) == 0 {
+			candidates = append(candidates, DefaultModelIDsForPlatform(group.Platform)...)
+			continue
+		}
+		for model := range mapping {
+			candidates = append(candidates, model)
+		}
 	}
 	if s.modelChannels != nil && group.Platform != PlatformGemini {
 		channel, err := s.modelChannels.GetChannelForGroup(ctx, group.ID)
@@ -47,20 +58,9 @@ func (s *ImageStudioService) discoverImageModels(ctx context.Context, group *Gro
 			}
 		}
 	}
-	for i := range accounts {
-		if accounts[i].Platform != group.Platform {
-			continue
-		}
-		for model := range accounts[i].GetModelMapping() {
-			candidates = append(candidates, model)
-		}
-	}
 	candidates = dedupeImageStudioModelsForGroup(group, candidates)
 	for _, model := range candidates {
-		if strings.Contains(model, "*") || !allowlist.Allows(model) {
-			continue
-		}
-		if s.modelChannels != nil && s.modelChannels.IsModelRestricted(ctx, group.ID, model) {
+		if strings.Contains(model, "*") {
 			continue
 		}
 		requestModel := model

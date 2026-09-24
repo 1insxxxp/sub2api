@@ -5,6 +5,7 @@ package service
 import (
 	"context"
 	"errors"
+	"sort"
 	"testing"
 	"time"
 
@@ -18,7 +19,7 @@ type imageStudioDiscoveryAccounts struct {
 	platforms []string
 }
 
-func TestImageStudioAutomaticModelsHonorChannelMappingAndRestrictions(t *testing.T) {
+func TestImageStudioAutomaticModelsUseChannelMappingsWithoutHidingAccountDefaults(t *testing.T) {
 	channel := Channel{ID: 1, Status: StatusActive, GroupIDs: []int64{9}, RestrictModels: true,
 		ModelMapping: map[string]map[string]string{PlatformOpenAI: {"gpt-image-alias": "gpt-image-2", "gpt-image-invalid": "gpt-5"}},
 		ModelPricing: []ChannelModelPricing{{Platform: PlatformOpenAI, Models: []string{"gpt-image-alias", "gpt-image-invalid"}}},
@@ -28,7 +29,9 @@ func TestImageStudioAutomaticModelsHonorChannelMappingAndRestrictions(t *testing
 	svc.SetModelDiscovery(&imageStudioDiscoveryAccounts{accounts: []Account{{Platform: PlatformOpenAI}}}, channels)
 	models, err := svc.discoverImageModels(context.Background(), &Group{ID: 9, Platform: PlatformOpenAI}, nil)
 	require.NoError(t, err)
-	require.Equal(t, []string{"gpt-image-alias"}, models)
+	want := dedupeImageStudioModelsForGroup(&Group{Platform: PlatformOpenAI}, append(DefaultModelIDsForPlatform(PlatformOpenAI), "gpt-image-alias"))
+	sort.Strings(want)
+	require.Equal(t, want, models)
 }
 
 type imageStudioDiscoveryKeyResolver struct {
@@ -94,8 +97,8 @@ func TestImageStudioAutomaticModels(t *testing.T) {
 		{name: "discovers account models absent from studio settings", platform: PlatformOpenAI, accounts: []Account{{Platform: PlatformOpenAI, Credentials: map[string]any{"model_mapping": map[string]any{"gpt-image-new": "gpt-image-1", "gpt-5": "gpt-5"}}}}, want: []string{"gpt-image-new"}},
 		{name: "no accounts has no default model", platform: PlatformOpenAI, want: []string{}},
 		{name: "text-only accounts have no default image model", platform: PlatformOpenAI, accounts: []Account{{Platform: PlatformOpenAI, Credentials: map[string]any{"model_mapping": map[string]any{"gpt-5": "gpt-5"}}}}, want: []string{}},
-		{name: "canonical allowlist filters models", platform: PlatformOpenAI, accounts: []Account{{Platform: PlatformOpenAI, Credentials: map[string]any{"model_mapping": map[string]any{"gpt-image-1": "gpt-image-1", "gpt-image-2": "gpt-image-2"}}}}, allowlist: GroupModelAllowlist{Enabled: true, Models: []string{"gpt-image-1"}}, want: []string{"gpt-image-1"}},
-		{name: "enabled empty allowlist denies all", platform: PlatformOpenAI, accounts: []Account{{Platform: PlatformOpenAI}}, allowlist: GroupModelAllowlist{Enabled: true}, want: []string{}},
+		{name: "group allowlist does not hide account models", platform: PlatformOpenAI, accounts: []Account{{Platform: PlatformOpenAI, Credentials: map[string]any{"model_mapping": map[string]any{"gpt-image-1": "gpt-image-1", "gpt-image-2": "gpt-image-2"}}}}, allowlist: GroupModelAllowlist{Enabled: true, Models: []string{"gpt-image-1"}}, want: []string{"gpt-image-1", "gpt-image-2"}},
+		{name: "empty allowlist does not hide platform defaults", platform: PlatformOpenAI, accounts: []Account{{Platform: PlatformOpenAI}}, allowlist: GroupModelAllowlist{Enabled: true}, want: dedupeImageStudioModelsForGroup(&Group{Platform: PlatformOpenAI}, DefaultModelIDsForPlatform(PlatformOpenAI))},
 		{name: "gemini mappings filter chat models", platform: PlatformGemini, accounts: []Account{{Platform: PlatformGemini, Credentials: map[string]any{"model_mapping": map[string]any{"gemini-3.1-flash-image": "gemini-3.1-flash-image", "gemini-2.5-pro": "gemini-2.5-pro"}}}}, want: []string{"gemini-3.1-flash-image"}},
 		{name: "grok mapping cannot leak gpt fallback", platform: PlatformGrok, accounts: []Account{{Platform: PlatformGrok, Credentials: map[string]any{"model_mapping": map[string]any{"grok-imagine-image": "grok-imagine-image", "grok-4.6": "grok-4.6"}}}}, want: []string{"grok-imagine-image"}},
 		{name: "image name mapped to chat is excluded", platform: PlatformOpenAI, accounts: []Account{{Platform: PlatformOpenAI, Credentials: map[string]any{"model_mapping": map[string]any{"gpt-image-2": "gpt-5"}}}}, want: []string{}},
@@ -115,9 +118,36 @@ func TestImageStudioAutomaticModels(t *testing.T) {
 	}
 }
 
-func TestImageStudioAutomaticModelsExpandWildcardsAndShareSubmissionValidation(t *testing.T) {
-	repo := &imageStudioDiscoveryAccounts{accounts: []Account{{Platform: PlatformOpenAI, Credentials: map[string]any{"model_mapping": map[string]any{"gpt-image-*": "gpt-image-1"}}}}}
-	svc := NewImageStudioService(nil, &imageStudioConfigReaderStub{cfg: &ImageStudioSettings{Enabled: true, AllowedModels: []string{"gpt-image-custom"}, DefaultModel: "gpt-image-custom"}})
+func TestImageStudioAutomaticModelsIgnoreConfiguredImageModelLists(t *testing.T) {
+	repo := &imageStudioDiscoveryAccounts{accounts: []Account{{
+		Platform: PlatformOpenAI,
+		Credentials: map[string]any{"model_mapping": map[string]any{
+			"gpt-image-live":  "gpt-image-live",
+			"gpt-image-other": "gpt-image-other",
+		}},
+	}}}
+	svc := NewImageStudioService(nil, nil)
+	svc.SetModelDiscovery(repo, nil)
+
+	models, err := svc.discoverImageModels(context.Background(), &Group{
+		ID:       9,
+		Platform: PlatformOpenAI,
+		ModelAllowlist: GroupModelAllowlist{
+			Enabled: true,
+			Models:  []string{"gpt-image-live"},
+		},
+	}, &ImageStudioSettings{AllowedModels: []string{"gpt-image-configured"}})
+
+	require.NoError(t, err)
+	require.Equal(t, []string{"gpt-image-live", "gpt-image-other"}, models)
+}
+
+func TestImageStudioAutomaticModelsShareSubmissionValidation(t *testing.T) {
+	repo := &imageStudioDiscoveryAccounts{accounts: []Account{{Platform: PlatformOpenAI, Credentials: map[string]any{"model_mapping": map[string]any{
+		"gpt-image-live":   "gpt-image-live",
+		"gpt-image-custom": "gpt-image-custom",
+	}}}}}
+	svc := NewImageStudioService(nil, &imageStudioConfigReaderStub{cfg: &ImageStudioSettings{Enabled: true, AllowedModels: []string{"gpt-image-configured"}, DefaultModel: "gpt-image-configured"}})
 	svc.SetModelDiscovery(repo, nil)
 	svc.SetGroupResolver(&imageStudioGroupResolverStub{groups: []Group{{ID: 9, Status: StatusActive, Platform: PlatformOpenAI, AllowImageGeneration: true}}})
 	options, err := svc.GetOptions(context.Background(), 7)
@@ -129,6 +159,7 @@ func TestImageStudioAutomaticModelsExpandWildcardsAndShareSubmissionValidation(t
 		require.NoError(t, err, model.Model)
 	}
 	require.Contains(t, options.Groups[0].Models, ImageStudioModelOption{Model: "gpt-image-custom", Label: "gpt-image-custom", Capabilities: []string{"generation", "edit"}})
+	require.NotContains(t, options.Groups[0].Models, ImageStudioModelOption{Model: "gpt-image-configured", Label: "gpt-image-configured", Capabilities: []string{"generation", "edit"}})
 	_, _, err = svc.prepareGenerateInput(context.Background(), ImageStudioGenerateInput{UserID: 7, Model: "grok-imagine-image", Prompt: "test"})
 	require.Error(t, err)
 	repo.err = errors.New("catalog unavailable")

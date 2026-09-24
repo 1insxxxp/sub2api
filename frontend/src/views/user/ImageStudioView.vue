@@ -480,7 +480,7 @@
                         class="image-studio-result-tile-preview"
                         :style="{ aspectRatio: cssAspectRatio(item.aspect_ratio) }"
                         :aria-label="t('imageStudio.openPreview')"
-                        @click="openImagePreview(item)"
+                        @click="openImagePreview(item, 'current')"
                       >
                         <img :src="item.image_url" :alt="item.prompt" loading="lazy" />
                         <span class="image-studio-result-index">{{ index + 1 }}</span>
@@ -517,7 +517,7 @@
                   class="image-studio-preview-open"
                   data-testid="image-studio-current-preview"
                   :aria-label="t('imageStudio.openPreview')"
-                  @click="openImagePreview(currentImage)"
+                  @click="openImagePreview(currentImage, 'current')"
                 >
                   <img :src="currentImage.image_url" :alt="currentImage.prompt" />
                   <span>
@@ -588,7 +588,7 @@
                 type="button"
                 class="image-studio-image-thumb"
                 :aria-label="t('imageStudio.openPreview')"
-                @click="openImagePreview(item)"
+                @click="openImagePreview(item, 'history')"
               >
                 <img :src="item.image_url" :alt="item.prompt" loading="lazy" />
                 <span>
@@ -659,7 +659,7 @@
             @touchend.passive="handlePreviewTouchEnd"
           >
             <img :src="previewImage.image_url" :alt="previewImage.prompt" />
-            <template v-if="previewImages.length > 1">
+            <template v-if="previewImages.length > 0">
               <button
                 type="button"
                 class="image-studio-preview-nav image-studio-preview-nav-previous"
@@ -856,6 +856,7 @@ const activeTasks = ref<ImageStudioTask[]>([])
 const taskPollTimers = new Set<number>()
 const activeGenerationTaskStorageKey = 'image-studio-active-generation-task-id'
 const previewImage = ref<ImageStudioImage | null>(null)
+const previewCollection = ref<'current' | 'history' | null>(null)
 const previewTouchStartX = ref<number | null>(null)
 const pendingDeleteImage = ref<ImageStudioImage | null>(null)
 const deletingImage = ref(false)
@@ -962,9 +963,10 @@ const selectedPreviewMeta = computed(() => {
 })
 const previewImages = computed(() => {
   if (!previewImage.value) return []
-  if (currentResultImages.value.length > 1 && currentResultImages.value.some((item) => item.id === previewImage.value?.id)) {
+  if (previewCollection.value === 'current' && currentResultImages.value.length) {
     return currentResultImages.value
   }
+  if (previewCollection.value === 'history' && images.value.length) return images.value
   return [previewImage.value]
 })
 const previewImageIndex = computed(() => {
@@ -1814,8 +1816,9 @@ function requestDeletePreviewImage() {
   requestDeleteImage(image)
 }
 
-function openImagePreview(image: ImageStudioImage) {
+function openImagePreview(image: ImageStudioImage, collection: 'current' | 'history' = 'history') {
   previewImage.value = image
+  previewCollection.value = collection
 }
 
 function showPreviousPreviewImage() {
@@ -1846,6 +1849,7 @@ function handlePreviewTouchEnd(event: TouchEvent) {
 
 function closeImagePreview() {
   previewImage.value = null
+  previewCollection.value = null
 }
 
 function handlePreviewKeydown(event: KeyboardEvent) {

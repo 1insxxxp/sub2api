@@ -2010,6 +2010,56 @@ describe('ImageStudioView', () => {
     expect(wrapper.get('[data-testid="image-studio-preview-position"]').text()).toBe('1 / 2')
   })
 
+  it('switches between history images and keeps navigation visible for a single image', async () => {
+    const historyImages = [1, 2, 3].map((id) => ({
+      id,
+      user_id: 42,
+      mode: 'generation',
+      model: 'gpt-image-2',
+      prompt: `history ${id}`,
+      aspect_ratio: '1:1',
+      size: '1024x1024',
+      image_url: `https://assets.example.com/history-${id}.png`,
+      storage_driver: 'local',
+      storage_object_key: `images/history-${id}.png`,
+      mime_type: 'image/png',
+      cost: 0.1,
+      bytes: 100,
+      source_image_count: 0,
+      created_at: '2026-06-22T00:00:00Z',
+      updated_at: '2026-06-22T00:00:00Z',
+    }))
+    list.mockResolvedValueOnce({ items: historyImages, total: 3, page: 1, page_size: 12, pages: 1 })
+
+    const wrapper = mount(ImageStudioView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          Icon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+    await wrapper.findAll('.image-studio-image-thumb')[0].trigger('click')
+
+    expect(wrapper.get('[data-testid="image-studio-preview-position"]').text()).toBe('1 / 3')
+    await wrapper.get('[data-testid="image-studio-preview-next"]').trigger('click')
+    expect(wrapper.get('[data-testid="image-studio-preview-position"]').text()).toBe('2 / 3')
+    expect(wrapper.get('.image-studio-preview-canvas img').attributes('src')).toBe(historyImages[1].image_url)
+
+    await wrapper.get('[data-testid="image-studio-preview-previous"]').trigger('click')
+    expect(wrapper.get('[data-testid="image-studio-preview-position"]').text()).toBe('1 / 3')
+
+    const historyVm = wrapper.vm as any
+    historyVm.images = [historyImages[0]]
+    await flushPromises()
+    expect(wrapper.find('[data-testid="image-studio-preview-previous"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="image-studio-preview-next"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="image-studio-preview-previous"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="image-studio-preview-next"]').attributes('disabled')).toBeDefined()
+  })
+
   it('keeps preview actions reachable when the prompt is long', () => {
     const dialogRule = cssRulesFor('.image-studio-preview-dialog')[0] ?? ''
     const detailsRule = cssRulesFor('.image-studio-preview-details')[0] ?? ''
