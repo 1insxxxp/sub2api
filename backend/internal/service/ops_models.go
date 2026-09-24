@@ -179,3 +179,52 @@ type OpsErrorLogList struct {
 	Page     int            `json:"page"`
 	PageSize int            `json:"page_size"`
 }
+
+// OpsUpstreamErrorSummary is the grouped view of upstream errors used by the
+// operations dashboard. The repository returns groups ordered by error count.
+type OpsUpstreamErrorSummary struct {
+	TotalErrors int64                           `json:"total_errors"`
+	GroupCount  int                             `json:"group_count"`
+	LatestAt    *time.Time                      `json:"latest_at"`
+	Groups      []*OpsUpstreamErrorSummaryGroup `json:"groups"`
+}
+
+// OpsUpstreamErrorSummaryGroup aggregates errors for one configured group.
+type OpsUpstreamErrorSummaryGroup struct {
+	GroupID      *int64                          `json:"group_id"`
+	GroupName    string                          `json:"group_name"`
+	ErrorCount   int64                           `json:"error_count"`
+	ModelCount   int                             `json:"model_count"`
+	AccountCount int                             `json:"account_count"`
+	LatestAt     *time.Time                      `json:"latest_at"`
+	Models       []*OpsUpstreamErrorSummaryModel `json:"models"`
+}
+
+// OpsUpstreamErrorSummaryModel aggregates errors for one requested model.
+type OpsUpstreamErrorSummaryModel struct {
+	Model       string                            `json:"model"`
+	ErrorCount  int64                             `json:"error_count"`
+	LatestAt    *time.Time                        `json:"latest_at"`
+	StatusCodes map[int]int64                     `json:"status_codes"`
+	Accounts    []*OpsUpstreamErrorSummaryAccount `json:"accounts"`
+}
+
+// OpsUpstreamErrorSummaryAccount aggregates errors for one upstream account.
+type OpsUpstreamErrorSummaryAccount struct {
+	AccountID        *int64                           `json:"account_id"`
+	AccountName      string                           `json:"account_name"`
+	ErrorCount       int64                            `json:"error_count"`
+	LatestAt         *time.Time                       `json:"latest_at"`
+	LatestStatusCode int                              `json:"latest_status_code"`
+	Reasons          []*OpsUpstreamErrorSummaryReason `json:"reasons"`
+}
+
+// OpsUpstreamErrorSummaryReason is a sanitized error reason aggregate.
+type OpsUpstreamErrorSummaryReason struct {
+	Message               string     `json:"message"`
+	ErrorType             string     `json:"error_type"`
+	StatusCode            int        `json:"status_code"`
+	Count                 int64      `json:"count"`
+	LatestAt              *time.Time `json:"latest_at"`
+	RepresentativeErrorID int64      `json:"representative_error_id"`
+}
