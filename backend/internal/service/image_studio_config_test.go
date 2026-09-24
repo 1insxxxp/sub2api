@@ -127,3 +127,13 @@ func TestSaveImageStudioConfigIgnoresLegacyModelSettings(t *testing.T) {
 	require.NotContains(t, repo.saved[SettingKeyImageStudioConfig], "allowed_models")
 	require.NotContains(t, repo.saved[SettingKeyImageStudioConfig], "default_model")
 }
+
+func TestParseImageStudioConfigIgnoresInvalidLegacyModelsWithoutDisablingStudio(t *testing.T) {
+	cfg := parseImageStudioSettingsJSON(`{"enabled":true,"allowed_models":["old-image-model"],"default_model":"different-model","storage_driver":"local","retention_days":15}`)
+	require.True(t, cfg.Enabled)
+	require.Equal(t, 15, cfg.RetentionDays)
+	encoded, err := json.Marshal(imageStudioPublicConfig(cfg))
+	require.NoError(t, err)
+	require.NotContains(t, string(encoded), "default_model")
+	require.NotContains(t, string(encoded), "allowed_models")
+}

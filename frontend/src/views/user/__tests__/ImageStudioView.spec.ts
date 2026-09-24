@@ -333,6 +333,37 @@ describe('ImageStudioView', () => {
     wrapper.unmount()
   })
 
+  it('ignores legacy defaults and replaces incompatible models when switching key groups', async () => {
+    getConfig.mockResolvedValueOnce({ ...config, default_model: 'gpt-image-legacy', allowed_models: ['gpt-image-legacy'] })
+    getOptions.mockResolvedValueOnce({
+      ...options,
+      default_model: 'gpt-image-legacy',
+      groups: [
+        { ...options.groups[0], models: [
+          ...options.groups[0].models,
+          { model: 'gpt-image-legacy', label: 'gpt-image-legacy', capabilities: ['generation', 'edit'] },
+        ] },
+        { ...options.groups[0], id: 10, platform: 'grok', models: [
+          { model: 'grok-imagine-image', label: 'grok-imagine-image', capabilities: ['generation', 'edit'] },
+        ] },
+      ],
+    })
+    listKeys.mockResolvedValueOnce({ ...apiKeys, items: [
+      ...apiKeys.items,
+      { ...apiKeys.items[0], id: 16, name: 'Grok key', group_id: 10 },
+    ] })
+    const wrapper = mount(ImageStudioView, { global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Icon: true } } })
+    await flushPromises()
+    expect(wrapper.get('[data-testid="image-studio-model-select"]').text()).toContain('gpt-image-2')
+    await wrapper.get('[data-testid="image-studio-api-key-select"]').trigger('click')
+    await wrapper.findAll('[data-testid="image-studio-api-key-menu"] button')[1].trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="image-studio-model-select"]').text()).toContain('grok-imagine-image')
+    await wrapper.get('[data-testid="image-studio-model-select"]').trigger('click')
+    expect(wrapper.get('[data-testid="image-studio-model-menu"]').text()).not.toContain('gpt-image')
+    wrapper.unmount()
+  })
+
   it('renders enabled config controls and appends generated images to gallery', async () => {
     vi.useFakeTimers()
     const wrapper = mount(ImageStudioView, {

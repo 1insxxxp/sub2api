@@ -172,7 +172,8 @@ func TestImageStudioHandlerGetConfig(t *testing.T) {
 	data, ok := envelope["data"].(map[string]any)
 	require.True(t, ok)
 	require.Equal(t, true, data["enabled"])
-	require.Equal(t, "gpt-image-1", data["default_model"])
+	require.NotContains(t, data, "default_model")
+	require.NotContains(t, data, "allowed_models")
 }
 
 func TestImageStudioHandlerGetOptionsUsesAuthenticatedUser(t *testing.T) {
@@ -197,7 +198,7 @@ func TestImageStudioHandlerGetOptionsUsesAuthenticatedUser(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &envelope))
 	data, ok := envelope["data"].(map[string]any)
 	require.True(t, ok)
-	require.Equal(t, "gpt-image-2", data["default_model"])
+	require.NotContains(t, data, "default_model")
 	groups, ok := data["groups"].([]any)
 	require.True(t, ok)
 	require.Len(t, groups, 1)

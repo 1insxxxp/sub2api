@@ -133,6 +133,11 @@ describe('ImageStudioSettingsPanel', () => {
   })
 
   it('saves storage settings without manual model fields', async () => {
+    getImageStudioSettings.mockResolvedValueOnce({
+      ...baseSettings,
+      allowed_models: ['legacy-image-model'],
+      default_model: 'legacy-image-model',
+    })
     const wrapper = mountPanel()
     await flushPromises()
 
