@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -64,12 +65,207 @@ func NewOpsRepository(db *sql.DB) service.OpsRepository {
 	return &opsRepository{db: db}
 }
 
-// GetUpstreamErrorSummary is a contract placeholder for the grouped upstream
-// error query. The aggregation is intentionally left to the follow-up
-// repository task; keeping this implementation side-effect free lets the
-// service contract compile without changing existing repository behavior.
 func (r *opsRepository) GetUpstreamErrorSummary(ctx context.Context, filter *service.OpsErrorLogFilter) (*service.OpsUpstreamErrorSummary, error) {
-	return &service.OpsUpstreamErrorSummary{Groups: make([]*service.OpsUpstreamErrorSummaryGroup, 0)}, nil
+	if r == nil || r.db == nil {
+		return nil, fmt.Errorf("nil ops repository")
+	}
+	if filter == nil {
+		filter = &service.OpsErrorLogFilter{}
+	}
+	where, args := buildOpsErrorLogsWhere(filter)
+	// Keep this query's source rows and predicates aligned with ListErrorLogs.
+	// Only fields already persisted in ops_error_logs are selected; in particular,
+	// no request body, URL, or account credentials are read for the reason text.
+	q := `
+SELECT
+  e.group_id,
+  COALESCE(NULLIF(TRIM(g.name), ''), '未分组'),
+  COALESCE(NULLIF(TRIM(e.requested_model), ''), NULLIF(TRIM(e.model), ''), '未知模型'),
+  e.account_id,
+  COALESCE(NULLIF(TRIM(a.name), ''), '未知账号'),
+  COALESCE(e.upstream_status_code, e.status_code, 0),
+  COALESCE(NULLIF(TRIM(e.upstream_error_message), ''), NULLIF(TRIM(e.error_message), ''), '未知错误'),
+  COALESCE(e.error_type, ''),
+  COUNT(*)::bigint,
+  MAX(e.created_at),
+  (array_agg(e.id ORDER BY e.created_at DESC, e.id DESC))[1]
+FROM ops_error_logs e
+LEFT JOIN groups g ON g.id = e.group_id
+LEFT JOIN accounts a ON a.id = e.account_id
+` + where + `
+GROUP BY e.group_id, g.name, COALESCE(NULLIF(TRIM(e.requested_model), ''), NULLIF(TRIM(e.model), ''), '未知模型'),
+         e.account_id, a.name, COALESCE(e.upstream_status_code, e.status_code, 0),
+         COALESCE(NULLIF(TRIM(e.upstream_error_message), ''), NULLIF(TRIM(e.error_message), ''), '未知错误'),
+         COALESCE(e.error_type, '')
+ORDER BY COUNT(*) DESC, MAX(e.created_at) DESC, e.group_id NULLS FIRST, e.account_id NULLS FIRST`
+
+	rows, err := r.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	type groupState struct {
+		value  *service.OpsUpstreamErrorSummaryGroup
+		models map[string]*service.OpsUpstreamErrorSummaryModel
+	}
+	groups := make(map[string]*groupState)
+	for rows.Next() {
+		var groupID, accountID sql.NullInt64
+		var groupName, model, accountName, reason, errorType string
+		var status int
+		var count, representativeID int64
+		var latest time.Time
+		if err := rows.Scan(&groupID, &groupName, &model, &accountID, &accountName, &status, &reason, &errorType, &count, &latest, &representativeID); err != nil {
+			return nil, err
+		}
+		groupKey := "nil"
+		if groupID.Valid {
+			groupKey = fmt.Sprintf("%d", groupID.Int64)
+		}
+		gs := groups[groupKey]
+		if gs == nil {
+			var gid *int64
+			if groupID.Valid {
+				v := groupID.Int64
+				gid = &v
+			}
+			gs = &groupState{value: &service.OpsUpstreamErrorSummaryGroup{GroupID: gid, GroupName: groupName, Models: make([]*service.OpsUpstreamErrorSummaryModel, 0)}, models: make(map[string]*service.OpsUpstreamErrorSummaryModel)}
+			groups[groupKey] = gs
+		}
+		g := gs.value
+		g.ErrorCount += count
+		g.LatestAt = maxTimePtr(g.LatestAt, latest)
+		gModel := gs.models[model]
+		if gModel == nil {
+			gModel = &service.OpsUpstreamErrorSummaryModel{Model: model, StatusCodes: make(map[int]int64), Accounts: make([]*service.OpsUpstreamErrorSummaryAccount, 0)}
+			gs.models[model] = gModel
+			g.Models = append(g.Models, gModel)
+		}
+		gModel.ErrorCount += count
+		gModel.StatusCodes[status] += count
+		gModel.LatestAt = maxTimePtr(gModel.LatestAt, latest)
+		accountKey := "nil"
+		if accountID.Valid {
+			accountKey = fmt.Sprintf("%d", accountID.Int64)
+		}
+		account := findSummaryAccount(gModel.Accounts, accountKey)
+		if account == nil {
+			var aid *int64
+			if accountID.Valid {
+				v := accountID.Int64
+				aid = &v
+			}
+			account = &service.OpsUpstreamErrorSummaryAccount{AccountID: aid, AccountName: accountName, Reasons: make([]*service.OpsUpstreamErrorSummaryReason, 0)}
+			gModel.Accounts = append(gModel.Accounts, account)
+		}
+		account.ErrorCount += count
+		if account.LatestAt == nil || latest.After(*account.LatestAt) {
+			account.LatestAt = timePtr(latest)
+			account.LatestStatusCode = status
+		}
+		reasonKey := errorType + "\x00" + fmt.Sprintf("%d", status) + "\x00" + reason
+		r := findSummaryReason(account.Reasons, reasonKey)
+		if r == nil {
+			r = &service.OpsUpstreamErrorSummaryReason{Message: reason, ErrorType: errorType, StatusCode: status, RepresentativeErrorID: representativeID}
+			account.Reasons = append(account.Reasons, r)
+		}
+		r.Count += count
+		r.LatestAt = maxTimePtr(r.LatestAt, latest)
+		if r.LatestAt != nil && r.LatestAt.Equal(latest) && representativeID > 0 {
+			r.RepresentativeErrorID = representativeID
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	result := &service.OpsUpstreamErrorSummary{Groups: make([]*service.OpsUpstreamErrorSummaryGroup, 0, len(groups))}
+	for _, gs := range groups {
+		g := gs.value
+		g.ModelCount = len(g.Models)
+		for _, m := range g.Models {
+			g.AccountCount += len(m.Accounts)
+			sortSummaryAccounts(m.Accounts)
+			for _, a := range m.Accounts {
+				sortSummaryReasons(a.Reasons)
+			}
+		}
+		sortSummaryModels(g.Models)
+		result.TotalErrors += g.ErrorCount
+		result.Groups = append(result.Groups, g)
+	}
+	result.GroupCount = len(result.Groups)
+	sortSummaryGroups(result.Groups)
+	if result.TotalErrors > 0 {
+		result.LatestAt = latestSummaryGroup(result.Groups)
+	}
+	return result, nil
+}
+
+func timePtr(t time.Time) *time.Time { v := t; return &v }
+func maxTimePtr(current *time.Time, candidate time.Time) *time.Time {
+	if current == nil || candidate.After(*current) {
+		return timePtr(candidate)
+	}
+	return current
+}
+func findSummaryAccount(accounts []*service.OpsUpstreamErrorSummaryAccount, key string) *service.OpsUpstreamErrorSummaryAccount {
+	for _, a := range accounts {
+		if (key == "nil" && a.AccountID == nil) || (a.AccountID != nil && fmt.Sprintf("%d", *a.AccountID) == key) {
+			return a
+		}
+	}
+	return nil
+}
+func findSummaryReason(reasons []*service.OpsUpstreamErrorSummaryReason, key string) *service.OpsUpstreamErrorSummaryReason {
+	for _, r := range reasons {
+		if r.ErrorType+"\x00"+fmt.Sprintf("%d", r.StatusCode)+"\x00"+r.Message == key {
+			return r
+		}
+	}
+	return nil
+}
+func sortSummaryGroups(v []*service.OpsUpstreamErrorSummaryGroup) {
+	sort.SliceStable(v, func(i, j int) bool {
+		return summaryBefore(v[i].ErrorCount, v[i].LatestAt, v[j].ErrorCount, v[j].LatestAt, v[i].GroupName, v[j].GroupName)
+	})
+}
+func sortSummaryModels(v []*service.OpsUpstreamErrorSummaryModel) {
+	sort.SliceStable(v, func(i, j int) bool {
+		return summaryBefore(v[i].ErrorCount, v[i].LatestAt, v[j].ErrorCount, v[j].LatestAt, v[i].Model, v[j].Model)
+	})
+}
+func sortSummaryAccounts(v []*service.OpsUpstreamErrorSummaryAccount) {
+	sort.SliceStable(v, func(i, j int) bool {
+		return summaryBefore(v[i].ErrorCount, v[i].LatestAt, v[j].ErrorCount, v[j].LatestAt, v[i].AccountName, v[j].AccountName)
+	})
+}
+func sortSummaryReasons(v []*service.OpsUpstreamErrorSummaryReason) {
+	sort.SliceStable(v, func(i, j int) bool {
+		return summaryBefore(v[i].Count, v[i].LatestAt, v[j].Count, v[j].LatestAt, v[i].Message, v[j].Message)
+	})
+}
+func summaryBefore(c1 int64, t1 *time.Time, c2 int64, t2 *time.Time, n1, n2 string) bool {
+	if c1 != c2 {
+		return c1 > c2
+	}
+	if t1 != nil && t2 != nil && !t1.Equal(*t2) {
+		return t1.After(*t2)
+	}
+	if t1 != nil && t2 == nil {
+		return true
+	}
+	if t1 == nil && t2 != nil {
+		return false
+	}
+	return n1 < n2
+}
+func latestSummaryGroup(v []*service.OpsUpstreamErrorSummaryGroup) *time.Time {
+	var latest *time.Time
+	for _, g := range v {
+		latest = maxTimePtr(latest, *g.LatestAt)
+	}
+	return latest
 }
 
 func (r *opsRepository) InsertErrorLog(ctx context.Context, input *service.OpsInsertErrorLogInput) (int64, error) {
