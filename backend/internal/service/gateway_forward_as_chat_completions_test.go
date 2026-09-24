@@ -3,6 +3,7 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -13,7 +14,39 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
 )
+
+func TestForwardAsChatCompletions_AppliesGroupDefaultBeforeOpus55Conversion(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+
+	upstream := &anthropicHTTPUpstreamRecorder{
+		resp: &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{},
+			Body:       io.NopCloser(strings.NewReader(namespaceToolAnthropicStream())),
+		},
+	}
+	svc := &GatewayService{
+		cfg:                 rawChatCompletionsTestConfig(),
+		httpUpstream:        upstream,
+		tlsFPProfileService: &TLSFingerprintProfileService{},
+	}
+	account := newAnthropicAPIKeyAccountForTest()
+	account.Credentials["model_mapping"] = map[string]any{"public-opus": "claude-opus-5-5"}
+	group := &Group{ID: 84, Platform: PlatformAnthropic, Status: StatusActive, Hydrated: true, DefaultReasoningEffort: "low"}
+	ctx := svc.withGroupContext(context.Background(), group)
+	body := []byte(`{"model":"public-opus","max_tokens":256,"messages":[{"role":"user","content":"hello"}]}`)
+
+	_, err := svc.ForwardAsChatCompletions(ctx, c, account, body, &ParsedRequest{GroupID: &group.ID})
+	require.NoError(t, err)
+	require.Equal(t, "claude-opus-5-5", gjson.GetBytes(upstream.lastBody, "model").String())
+	require.Equal(t, "adaptive", gjson.GetBytes(upstream.lastBody, "thinking.type").String())
+	require.Equal(t, "low", gjson.GetBytes(upstream.lastBody, "output_config.effort").String())
+}
 
 func TestHandleCCBufferedFromAnthropic_ToolArgumentsAreValidJSON(t *testing.T) {
 	t.Parallel()

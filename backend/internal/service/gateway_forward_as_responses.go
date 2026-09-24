@@ -58,6 +58,10 @@ func (s *GatewayService) ForwardAsResponses(
 	}
 	originalModel := responsesReq.Model
 	clientStream := responsesReq.Stream
+	var group *Group
+	if parsed != nil {
+		group = s.groupForReasoningEffort(ctx, parsed.GroupID)
+	}
 
 	// 3. Convert Responses → Anthropic
 	// Resolve the final upstream model before model-specific conversion.
@@ -81,6 +85,7 @@ func (s *GatewayService) ForwardAsResponses(
 		return nil, err
 	}
 	responsesReq.Model = mappedModel
+	applyOpus55GroupReasoningDefault(&responsesReq, group)
 	anthropicReq, err := apicompat.ResponsesToAnthropicRequest(&responsesReq)
 	if err != nil {
 		if claude.IsOpus55(mappedModel) {
@@ -105,13 +110,9 @@ func (s *GatewayService) ForwardAsResponses(
 	if err != nil {
 		return nil, fmt.Errorf("marshal anthropic request: %w", err)
 	}
-	if parsed != nil && parsed.GroupID != nil {
-		if group := s.groupFromContext(ctx, *parsed.GroupID); group != nil {
-			if rewritten, applied := ApplyGroupDefaultReasoningEffort(anthropicBody, group); applied {
-				anthropicBody = rewritten
-				logger.LegacyPrintf("service.gateway", "Applied group default reasoning effort for responses: group=%d effort=%s", group.ID, group.DefaultReasoningEffort)
-			}
-		}
+	if rewritten, applied := ApplyGroupDefaultReasoningEffort(anthropicBody, group); applied {
+		anthropicBody = rewritten
+		logger.LegacyPrintf("service.gateway", "Applied group default reasoning effort for responses: group=%d effort=%s", group.ID, group.DefaultReasoningEffort)
 	}
 
 	// 6. Apply Claude Code mimicry for OAuth accounts (non-Claude-Code endpoints).
@@ -213,6 +214,25 @@ func (s *GatewayService) ForwardAsResponses(
 	}
 
 	return result, handleErr
+}
+
+// Opus 5.5's converter supplies medium when effort is omitted. Apply the group
+// default first; other models keep the existing budget-aware post-conversion path.
+func applyOpus55GroupReasoningDefault(req *apicompat.ResponsesRequest, group *Group) {
+	if !claude.IsOpus55(req.Model) || group == nil || (group.Platform != "" && group.Platform != PlatformAnthropic) {
+		return
+	}
+	if req.Reasoning != nil && req.Reasoning.Effort != "" {
+		return
+	}
+	effort, _ := normalizeGroupDefaultReasoningEffort(group.DefaultReasoningEffort)
+	if effort == "" {
+		return
+	}
+	if req.Reasoning == nil {
+		req.Reasoning = &apicompat.ResponsesReasoning{}
+	}
+	req.Reasoning.Effort = effort
 }
 
 func adaptResponsesClientToolsForAnthropic(body []byte) ([]byte, apicompat.ResponsesClientToolMapping, error) {
