@@ -1445,6 +1445,45 @@ export async function updateStreamTimeoutSettings(
   return data;
 }
 
+// ==================== Model First Output Timeout Settings ====================
+
+export interface ModelFirstOutputTimeoutPolicy {
+  enabled: boolean;
+  target_seconds: number;
+  switch_seconds: number;
+  hard_cap_seconds: number;
+}
+
+export type ModelFirstOutputTimeoutProfile =
+  | "gemini_flash"
+  | "gemini_pro"
+  | "gemini_thinking";
+
+export interface ModelFirstOutputTimeoutSettings {
+  enabled: boolean;
+  default: ModelFirstOutputTimeoutPolicy;
+  profiles: Record<ModelFirstOutputTimeoutProfile, ModelFirstOutputTimeoutPolicy>;
+  platforms: Record<string, ModelFirstOutputTimeoutPolicy>;
+  models: Record<string, ModelFirstOutputTimeoutPolicy>;
+}
+
+export async function getModelFirstOutputTimeoutSettings(): Promise<ModelFirstOutputTimeoutSettings> {
+  const { data } = await apiClient.get<ModelFirstOutputTimeoutSettings>(
+    "/admin/settings/model-first-output-timeout",
+  );
+  return data;
+}
+
+export async function updateModelFirstOutputTimeoutSettings(
+  settings: ModelFirstOutputTimeoutSettings,
+): Promise<ModelFirstOutputTimeoutSettings> {
+  const { data } = await apiClient.put<ModelFirstOutputTimeoutSettings>(
+    "/admin/settings/model-first-output-timeout",
+    settings,
+  );
+  return data;
+}
+
 // ==================== Rectifier Settings ====================
 
 /**
@@ -1722,6 +1761,8 @@ export const settingsAPI = {
   updatePanelRateLimitSettings,
   getStreamTimeoutSettings,
   updateStreamTimeoutSettings,
+  getModelFirstOutputTimeoutSettings,
+  updateModelFirstOutputTimeoutSettings,
   getRectifierSettings,
   updateRectifierSettings,
   getBetaPolicySettings,

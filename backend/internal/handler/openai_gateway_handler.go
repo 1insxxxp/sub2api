@@ -80,6 +80,18 @@ func shouldReportOpenAIWSProxyAccountFailure(err error) bool {
 	return err != nil && !errors.Is(err, errOpenAIWSUnsupportedModelSwitch) && !service.IsOpenAIWSSessionPreemptedError(err)
 }
 
+// shouldStopAccountSwitching keeps ordinary upstream failures bounded while
+// allowing a first-output timeout to walk the entire eligible account pool.
+// A timeout is an internal account-attempt signal; it should only become a
+// client-visible error after account selection confirms that no candidates
+// remain.
+func shouldStopAccountSwitching(switchCount, maxAccountSwitches int, firstOutputTimeoutPoolTraversal bool, failoverErr *service.UpstreamFailoverError) bool {
+	if switchCount < maxAccountSwitches {
+		return false
+	}
+	return !firstOutputTimeoutPoolTraversalAllowed(firstOutputTimeoutPoolTraversal, failoverErr)
+}
+
 // openAIWSIngressEndedByClient reports whether a finished ingress WebSocket turn
 // ended the way a healthy client ends one, rather than through an upstream or
 // account fault.
@@ -171,8 +183,6 @@ func openAIChannelForwardModel(mapping service.ChannelMappingResult, requestedMo
 type grokMediaEligibilityProber interface {
 	ProbeMediaEligibility(ctx context.Context, accountID int64) (bool, string, error)
 }
-
-const maxOpenAIFirstOutputTimeoutSwitches = 1
 
 func openAIForwardSucceededForScheduling(result *service.OpenAIForwardResult) bool {
 	return result.SucceededForScheduling()
@@ -639,7 +649,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 
 	maxAccountSwitches := h.maxAccountSwitches
 	switchCount := 0
-	firstOutputTimeoutSwitchCount := 0
+	firstOutputTimeoutPoolTraversal := false
 	profitVetoCount := 0
 	failedAccountIDs := make(map[int64]struct{})
 	sameAccountRetryCount := make(map[int64]int)
@@ -907,9 +917,8 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 						h.handleFailoverExhausted(c, failoverErr, streamStarted)
 						return
 					}
-					if openAIFirstOutputFailoverExhausted(failoverErr, &firstOutputTimeoutSwitchCount) {
-						h.handleFailoverExhausted(c, failoverErr, streamStarted)
-						return
+					if failoverErr.Reason == service.GatewayFailureReason("first_output_timeout") {
+						firstOutputTimeoutPoolTraversal = true
 					}
 					// 池模式：同账号重试
 					if failoverErr.RetryableOnSameAccount {
@@ -935,7 +944,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 					h.gatewayService.RecordOpenAIAccountSwitch()
 					failedAccountIDs[account.ID] = struct{}{}
 					lastFailoverErr = failoverErr
-					if switchCount >= maxAccountSwitches {
+					if shouldStopAccountSwitching(switchCount, maxAccountSwitches, firstOutputTimeoutPoolTraversal, failoverErr) {
 						h.handleFailoverExhausted(c, failoverErr, streamStarted)
 						return
 					}
@@ -1280,6 +1289,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 
 	maxAccountSwitches := h.maxAccountSwitches
 	switchCount := 0
+	firstOutputTimeoutPoolTraversal := false
 	profitVetoCount := 0
 	failedAccountIDs := make(map[int64]struct{})
 	sameAccountRetryCount := make(map[int64]int)
@@ -1463,10 +1473,13 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 						)
 						return
 					}
-					if c.Writer.Size() != writerSizeBeforeForward {
+					if !openAIForwardMayFailover(c, writerSizeBeforeForward, failoverErr) {
 						h.gatewayService.ObserveOpenAIAccountHealthFailure(c.Request.Context(), account, err)
 						h.handleAnthropicFailoverExhausted(c, failoverErr, true)
 						return
+					}
+					if c.Writer.Written() {
+						streamStarted = true
 					}
 					if failoverErr.ShouldReportAccountScheduleFailure() {
 						h.gatewayService.ReportOpenAIAccountScheduleResult(account, openAIAccountScheduleModel(c, account, currentRoutingModel, false, nil), false, nil, err)
@@ -1474,6 +1487,9 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 					if !failoverErr.ShouldRetryNextAccount() {
 						h.handleAnthropicFailoverExhausted(c, failoverErr, streamStarted)
 						return
+					}
+					if failoverErr.Reason == service.GatewayFailureReason("first_output_timeout") {
+						firstOutputTimeoutPoolTraversal = true
 					}
 					// 池模式：同账号重试
 					if failoverErr.RetryableOnSameAccount {
@@ -1499,7 +1515,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 					h.gatewayService.RecordOpenAIAccountSwitch()
 					failedAccountIDs[account.ID] = struct{}{}
 					lastFailoverErr = failoverErr
-					if switchCount >= maxAccountSwitches {
+					if shouldStopAccountSwitching(switchCount, maxAccountSwitches, firstOutputTimeoutPoolTraversal, failoverErr) {
 						h.handleAnthropicFailoverExhausted(c, failoverErr, streamStarted)
 						return
 					}
@@ -2578,6 +2594,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 	ctx = service.WithOpenAIGuardianParentAffinity(ctx, c, firstMessage, reqModel)
 	maxAccountSwitches := h.maxAccountSwitches
 	switchCount := 0
+	firstOutputTimeoutPoolTraversal := false
 	profitVetoCount := 0
 	failedAccountIDs := make(map[int64]struct{})
 	sameAccountRetryCount := make(map[int64]int)
@@ -2619,13 +2636,16 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 			closeOpenAIWSFailoverExhausted(c, wsConn, failoverErr)
 			return false
 		}
+		if failoverErr.Reason == service.GatewayFailureReason("first_output_timeout") {
+			firstOutputTimeoutPoolTraversal = true
+		}
 		if ctx.Err() != nil {
 			return false
 		}
 		h.gatewayService.RecordOpenAIAccountSwitch()
 		failedAccountIDs[account.ID] = struct{}{}
 		lastFailoverErr = failoverErr
-		if switchCount >= maxAccountSwitches {
+		if shouldStopAccountSwitching(switchCount, maxAccountSwitches, firstOutputTimeoutPoolTraversal, failoverErr) {
 			closeOpenAIWSFailoverExhausted(c, wsConn, failoverErr)
 			return false
 		}
@@ -3735,17 +3755,6 @@ func openAIRequestAllowsFailoverReplay(c *gin.Context) bool {
 		return false
 	}
 	return !failoverClientGone(c)
-}
-
-func openAIFirstOutputFailoverExhausted(failoverErr *service.UpstreamFailoverError, switchCount *int) bool {
-	if failoverErr == nil || !failoverErr.SafeToFailoverAfterWrite || switchCount == nil {
-		return false
-	}
-	if *switchCount >= maxOpenAIFirstOutputTimeoutSwitches {
-		return true
-	}
-	*switchCount = *switchCount + 1
-	return false
 }
 
 // errorResponse returns OpenAI API format error response

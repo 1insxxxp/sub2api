@@ -839,6 +839,11 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 	if keepaliveTimer != nil {
 		keepaliveCh = keepaliveTimer.C
 	}
+	firstOutputPolicy := ModelFirstOutputTimeoutPolicy{}
+	if s.settingService != nil {
+		firstOutputPolicy = s.settingService.ResolveModelFirstOutputTimeout(ctx, account.Platform, originalModel)
+	}
+	firstOutputGuard := modelFirstOutputGuardFromContext(ctx)
 	lastDataAt := time.Now()
 	resetKeepaliveTimer := func() {
 		if keepaliveTimer == nil {
@@ -889,6 +894,22 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 	noopDeltaKeepaliveDeltaType := ""
 
 	pendingEventLines := make([]string, 0, 4)
+	pendingBeforeSemantic := make([]string, 0, 4)
+	semanticCommitted := firstOutputGuard == nil || !modelFirstOutputTimeoutEnabled(ctx, firstOutputPolicy)
+	writeBlock := func(block string) {
+		if clientDisconnected {
+			return
+		}
+		restored := reverseToolNamesIfPresent(c, []byte(block))
+		if _, werr := fmt.Fprint(w, string(restored)); werr != nil {
+			clientDisconnected = true
+			logger.LegacyPrintf("service.gateway", "Client disconnected during streaming, continuing to drain upstream for billing")
+			return
+		}
+		flusher.Flush()
+		lastDataAt = time.Now()
+		resetKeepaliveTimer()
+	}
 
 	processSSEEvent := func(lines []string) ([]string, string, *sseUsagePatch, error) {
 		if len(lines) == 0 {
@@ -1067,6 +1088,10 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 				if sawTerminalEvent {
 					return &streamingResult{usage: usage, firstTokenMs: firstTokenMs, clientDisconnect: clientDisconnected}, nil
 				}
+				if firstOutputGuard != nil && firstOutputGuard.TimedOut() && !outcomeCollector.Snapshot().HasEffectiveOutput() {
+					_ = resp.Body.Close()
+					return nil, newModelFirstOutputTimeoutFailoverError(c, account, originalModel, firstOutputPolicy, resp.Header)
+				}
 				// 检测 context 取消（客户端断开会导致 context 取消，进而影响上游读取）
 				if errors.Is(ev.err, context.Canceled) || errors.Is(ev.err, context.DeadlineExceeded) {
 					return &streamingResult{usage: usage, firstTokenMs: firstTokenMs, clientDisconnect: true}, fmt.Errorf("stream usage incomplete: %w", ev.err)
@@ -1124,22 +1149,23 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 				}
 
 				for _, block := range outputBlocks {
-					if !clientDisconnected {
-						restored := reverseToolNamesIfPresent(c, []byte(block))
-						if _, werr := fmt.Fprint(w, string(restored)); werr != nil {
-							clientDisconnected = true
-							logger.LegacyPrintf("service.gateway", "Client disconnected during streaming, continuing to drain upstream for billing")
-							// 不 break：客户端断开后仍需继续合并本事件及后续事件的 usage，
-							// 否则会漏计当前事件携带的 usage 导致少计费。后续写入由
-							// clientDisconnected 守卫跳过。
-						} else {
-							flusher.Flush()
-							lastDataAt = time.Now()
-							resetKeepaliveTimer()
-						}
+					if !semanticCommitted && !outcomeCollector.Snapshot().HasEffectiveOutput() {
+						pendingBeforeSemantic = append(pendingBeforeSemantic, block)
+						continue
 					}
+					if !semanticCommitted {
+						if firstOutputGuard != nil {
+							firstOutputGuard.Stop()
+						}
+						for _, pendingBlock := range pendingBeforeSemantic {
+							writeBlock(pendingBlock)
+						}
+						pendingBeforeSemantic = pendingBeforeSemantic[:0]
+						semanticCommitted = true
+					}
+					writeBlock(block)
 					if data != "" {
-						if firstTokenMs == nil && data != "[DONE]" {
+						if firstTokenMs == nil && data != "[DONE]" && outcomeCollector.Snapshot().HasEffectiveOutput() {
 							ms := int(time.Since(startTime).Milliseconds())
 							firstTokenMs = &ms
 						}

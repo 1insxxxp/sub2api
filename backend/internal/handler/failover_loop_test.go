@@ -214,6 +214,26 @@ func TestSleepWithContext(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestHandleFailoverError_BasicSwitch(t *testing.T) {
+	t.Run("首字超时可以越过普通切换上限继续遍历号池", func(t *testing.T) {
+		mock := &mockTempUnscheduler{}
+		fs := NewFailoverState(1, false)
+		err := &service.UpstreamFailoverError{NextAccountAction: service.NextAccountRetry, Reason: service.GatewayFailureReason("first_output_timeout")}
+		require.Equal(t, FailoverContinue, fs.HandleFailoverError(context.Background(), mock, 100, service.PlatformGemini, maxSameAccountRetries, err))
+		require.Equal(t, 1, fs.SwitchCount)
+		require.Equal(t, FailoverContinue, fs.HandleFailoverError(context.Background(), mock, 200, service.PlatformGemini, maxSameAccountRetries, err))
+		require.Equal(t, 2, fs.SwitchCount)
+		require.Equal(t, FailoverContinue, fs.HandleFailoverError(context.Background(), mock, 300, service.PlatformGemini, maxSameAccountRetries, err))
+		require.Equal(t, 3, fs.SwitchCount)
+	})
+
+	t.Run("普通错误仍遵守切换上限", func(t *testing.T) {
+		mock := &mockTempUnscheduler{}
+		fs := NewFailoverState(1, false)
+		err := newTestFailoverErr(http.StatusBadGateway, false, false)
+		require.Equal(t, FailoverContinue, fs.HandleFailoverError(context.Background(), mock, 100, service.PlatformGemini, maxSameAccountRetries, err))
+		require.Equal(t, FailoverExhausted, fs.HandleFailoverError(context.Background(), mock, 200, service.PlatformGemini, maxSameAccountRetries, err))
+	})
+
 	t.Run("显式停止不切换账号且旧错误默认仍切换", func(t *testing.T) {
 		mock := &mockTempUnscheduler{}
 		fs := NewFailoverState(3, false)

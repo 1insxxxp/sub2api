@@ -723,6 +723,10 @@ const (
 	// SettingKeyStreamTimeoutSettings stores JSON config for stream timeout handling.
 	SettingKeyStreamTimeoutSettings = "stream_timeout_settings"
 
+	// SettingKeyModelFirstOutputTimeoutSettings stores model-aware semantic
+	// first-output timeout and failover policy.
+	SettingKeyModelFirstOutputTimeoutSettings = "model_first_output_timeout_settings"
+
 	// =========================
 	// Request Rectifier (请求整流器)
 	// =========================

@@ -311,9 +311,12 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 		if err != nil {
 			var failoverErr *service.UpstreamFailoverError
 			if errors.As(err, &failoverErr) {
-				if c.Writer.Size() != writerSizeBeforeForward {
+				if !gatewayForwardMayFailoverAfterWrite(writerSizeBeforeForward, c.Writer.Size(), failoverErr) {
 					h.handleCCFailoverExhausted(c, failoverErr, true)
 					return
+				}
+				if c.Writer.Size() != writerSizeBeforeForward {
+					streamStarted = true
 				}
 				action := fs.HandleFailoverError(c.Request.Context(), h.gatewayService, account.ID, account.Platform, account.GetPoolModeRetryCount(), failoverErr)
 				switch action {

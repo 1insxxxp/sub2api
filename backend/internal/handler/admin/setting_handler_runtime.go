@@ -458,6 +458,26 @@ func (h *SettingHandler) UpdateStreamTimeoutSettings(c *gin.Context) {
 	})
 }
 
+// GetModelFirstOutputTimeoutSettings returns semantic first-output timeout policies.
+func (h *SettingHandler) GetModelFirstOutputTimeoutSettings(c *gin.Context) {
+	settings := h.settingService.GetModelFirstOutputTimeoutSettings(c.Request.Context())
+	response.Success(c, settings)
+}
+
+// UpdateModelFirstOutputTimeoutSettings updates semantic first-output timeout policies.
+func (h *SettingHandler) UpdateModelFirstOutputTimeoutSettings(c *gin.Context) {
+	var settings service.ModelFirstOutputTimeoutSettings
+	if err := c.ShouldBindJSON(&settings); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	if err := h.settingService.SetModelFirstOutputTimeoutSettings(c.Request.Context(), &settings); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	response.Success(c, h.settingService.GetModelFirstOutputTimeoutSettings(c.Request.Context()))
+}
+
 // GetWebSearchEmulationConfig 获取 Web Search 模拟配置
 // GET /api/v1/admin/settings/web-search-emulation
 func (h *SettingHandler) GetWebSearchEmulationConfig(c *gin.Context) {

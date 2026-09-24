@@ -55,6 +55,21 @@ const (
 // 语义上等同于「无可用账号」：候选账号都不满足分组的利润约束。
 const profitVetoExhaustedMessage = "No available accounts: all candidates rejected by group profit control"
 
+// gatewayForwardMayFailoverAfterWrite keeps a failover attempt eligible when
+// the upstream only emitted non-semantic bytes (for example an SSE keepalive)
+// before returning a timeout. Once semantic output has been sent, callers
+// leave this false for errors that do not explicitly opt into safe failover.
+func gatewayForwardMayFailoverAfterWrite(writerSizeBeforeForward, writerSize int, failoverErr *service.UpstreamFailoverError) bool {
+	if writerSize == writerSizeBeforeForward {
+		return true
+	}
+	return failoverErr != nil && failoverErr.SafeToFailoverAfterWrite
+}
+
+func firstOutputTimeoutPoolTraversalAllowed(enabled bool, failoverErr *service.UpstreamFailoverError) bool {
+	return enabled && failoverErr != nil && failoverErr.Reason == service.GatewayFailureReason("first_output_timeout")
+}
+
 func sameAccountRetryDelayFor(failoverErr *service.UpstreamFailoverError, retryCount int) time.Duration {
 	if failoverErr == nil {
 		return sameAccountRetryDelay
@@ -123,13 +138,17 @@ func effectiveSameAccountRetryLimit(failoverErr *service.UpstreamFailoverError, 
 
 // FailoverState 跨循环迭代共享的 failover 状态
 type FailoverState struct {
-	SwitchCount           int
-	MaxSwitches           int
-	FailedAccountIDs      map[int64]struct{}
-	SameAccountRetryCount map[int64]int
-	LastFailoverErr       *service.UpstreamFailoverError
-	ForceCacheBilling     bool
-	hasBoundSession       bool
+	SwitchCount int
+	MaxSwitches int
+	// firstOutputTimeoutPoolTraversal lets timeout failover keep walking the
+	// remaining account pool. The request-scoped first-output hard cap remains
+	// the time boundary; ordinary upstream errors still honor MaxSwitches.
+	firstOutputTimeoutPoolTraversal bool
+	FailedAccountIDs                map[int64]struct{}
+	SameAccountRetryCount           map[int64]int
+	LastFailoverErr                 *service.UpstreamFailoverError
+	ForceCacheBilling               bool
+	hasBoundSession                 bool
 
 	// profitVetoedAccountIDs 记录被分组利润门终检否决的账号，是 FailedAccountIDs
 	// 的子集。之所以单独维护：HandleSelectionExhausted 的 503 退避分支会清空
@@ -207,7 +226,9 @@ func (s *FailoverState) HandleFailoverError(
 	if failoverErr == nil || !failoverErr.ShouldRetryNextAccount() {
 		return FailoverExhausted
 	}
-
+	if failoverErr.Reason == service.GatewayFailureReason("first_output_timeout") {
+		s.firstOutputTimeoutPoolTraversal = true
+	}
 	// 同账号重试不算切换账号，粘性会话仅在实际切换时强制缓存计费。
 	retryCount := s.SameAccountRetryCount[accountID]
 	sameAccountRetry := sameAccountRetryAllowed(failoverErr, retryCount, retryLimit)
@@ -242,7 +263,7 @@ func (s *FailoverState) HandleFailoverError(
 	s.FailedAccountIDs[accountID] = struct{}{}
 
 	// 检查是否耗尽
-	if s.SwitchCount >= s.MaxSwitches {
+	if s.SwitchCount >= s.MaxSwitches && !firstOutputTimeoutPoolTraversalAllowed(s.firstOutputTimeoutPoolTraversal, failoverErr) {
 		return FailoverExhausted
 	}
 
