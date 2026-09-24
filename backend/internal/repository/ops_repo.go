@@ -64,6 +64,14 @@ func NewOpsRepository(db *sql.DB) service.OpsRepository {
 	return &opsRepository{db: db}
 }
 
+// GetUpstreamErrorSummary is a contract placeholder for the grouped upstream
+// error query. The aggregation is intentionally left to the follow-up
+// repository task; keeping this implementation side-effect free lets the
+// service contract compile without changing existing repository behavior.
+func (r *opsRepository) GetUpstreamErrorSummary(ctx context.Context, filter *service.OpsErrorLogFilter) (*service.OpsUpstreamErrorSummary, error) {
+	return &service.OpsUpstreamErrorSummary{Groups: make([]*service.OpsUpstreamErrorSummaryGroup, 0)}, nil
+}
+
 func (r *opsRepository) InsertErrorLog(ctx context.Context, input *service.OpsInsertErrorLogInput) (int64, error) {
 	if r == nil || r.db == nil {
 		return 0, fmt.Errorf("nil ops repository")

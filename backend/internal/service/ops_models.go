@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"strings"
 	"time"
 )
@@ -189,6 +190,17 @@ type OpsUpstreamErrorSummary struct {
 	Groups      []*OpsUpstreamErrorSummaryGroup `json:"groups"`
 }
 
+// MarshalJSON keeps collection fields stable for API clients. Aggregators may
+// leave slices/maps nil when no rows are found, but the contract represents
+// those collections as empty arrays/objects rather than JSON null.
+func (s OpsUpstreamErrorSummary) MarshalJSON() ([]byte, error) {
+	type alias OpsUpstreamErrorSummary
+	if s.Groups == nil {
+		s.Groups = make([]*OpsUpstreamErrorSummaryGroup, 0)
+	}
+	return json.Marshal(alias(s))
+}
+
 // OpsUpstreamErrorSummaryGroup aggregates errors for one configured group.
 type OpsUpstreamErrorSummaryGroup struct {
 	GroupID      *int64                          `json:"group_id"`
@@ -200,6 +212,14 @@ type OpsUpstreamErrorSummaryGroup struct {
 	Models       []*OpsUpstreamErrorSummaryModel `json:"models"`
 }
 
+func (g OpsUpstreamErrorSummaryGroup) MarshalJSON() ([]byte, error) {
+	type alias OpsUpstreamErrorSummaryGroup
+	if g.Models == nil {
+		g.Models = make([]*OpsUpstreamErrorSummaryModel, 0)
+	}
+	return json.Marshal(alias(g))
+}
+
 // OpsUpstreamErrorSummaryModel aggregates errors for one requested model.
 type OpsUpstreamErrorSummaryModel struct {
 	Model       string                            `json:"model"`
@@ -207,6 +227,17 @@ type OpsUpstreamErrorSummaryModel struct {
 	LatestAt    *time.Time                        `json:"latest_at"`
 	StatusCodes map[int]int64                     `json:"status_codes"`
 	Accounts    []*OpsUpstreamErrorSummaryAccount `json:"accounts"`
+}
+
+func (m OpsUpstreamErrorSummaryModel) MarshalJSON() ([]byte, error) {
+	type alias OpsUpstreamErrorSummaryModel
+	if m.StatusCodes == nil {
+		m.StatusCodes = make(map[int]int64)
+	}
+	if m.Accounts == nil {
+		m.Accounts = make([]*OpsUpstreamErrorSummaryAccount, 0)
+	}
+	return json.Marshal(alias(m))
 }
 
 // OpsUpstreamErrorSummaryAccount aggregates errors for one upstream account.
@@ -217,6 +248,14 @@ type OpsUpstreamErrorSummaryAccount struct {
 	LatestAt         *time.Time                       `json:"latest_at"`
 	LatestStatusCode int                              `json:"latest_status_code"`
 	Reasons          []*OpsUpstreamErrorSummaryReason `json:"reasons"`
+}
+
+func (a OpsUpstreamErrorSummaryAccount) MarshalJSON() ([]byte, error) {
+	type alias OpsUpstreamErrorSummaryAccount
+	if a.Reasons == nil {
+		a.Reasons = make([]*OpsUpstreamErrorSummaryReason, 0)
+	}
+	return json.Marshal(alias(a))
 }
 
 // OpsUpstreamErrorSummaryReason is a sanitized error reason aggregate.
