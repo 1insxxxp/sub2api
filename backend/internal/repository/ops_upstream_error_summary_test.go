@@ -2,7 +2,7 @@ package repository
 
 import (
 	"context"
-	"regexp"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -14,7 +14,10 @@ import (
 
 type summaryQueryMatcher struct{ captured *string }
 
-func (m summaryQueryMatcher) Match(_ string, actual string) error {
+func (m summaryQueryMatcher) Match(expected string, actual string) error {
+	if !strings.Contains(actual, expected) {
+		return fmt.Errorf("query missing expected fragment %q", expected)
+	}
 	*m.captured = actual
 	return nil
 }
@@ -24,7 +27,8 @@ func TestGetUpstreamErrorSummaryAggregatesAndSortsStoredReasons(t *testing.T) {
 	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(summaryQueryMatcher{captured: &captured}))
 	require.NoError(t, err)
 	defer db.Close()
-	mock.ExpectQuery(regexp.QuoteMeta("ignored")).WillReturnRows(
+	start := time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC)
+	mock.ExpectQuery("FROM ops_error_logs e").WithArgs(start, "openai", int64(7), "upstream", "{429}", "%needle%").WillReturnRows(
 		sqlmock.NewRows([]string{"group_id", "group_name", "model", "account_id", "account_name", "status_code", "reason", "error_type", "count", "latest_at", "representative_error_id"}).
 			AddRow(int64(7), "production", "gpt-5", int64(11), "primary", 429, "rate limited", "upstream_error", int64(2), time.Date(2026, 9, 25, 10, 2, 0, 0, time.UTC), int64(102)).
 			AddRow(int64(7), "production", "gpt-5", int64(11), "primary", 500, "overloaded", "upstream_error", int64(1), time.Date(2026, 9, 25, 10, 1, 0, 0, time.UTC), int64(101)).
@@ -32,8 +36,7 @@ func TestGetUpstreamErrorSummaryAggregatesAndSortsStoredReasons(t *testing.T) {
 			AddRow(nil, "未分组", "gpt-5", nil, "未知账号", 502, "gateway", "provider", int64(4), time.Date(2026, 9, 25, 9, 0, 0, 0, time.UTC), int64(90)),
 	)
 	repo := &opsRepository{db: db}
-	start := time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC)
-	result, err := repo.GetUpstreamErrorSummary(context.Background(), &service.OpsErrorLogFilter{StartTime: &start, Platform: "openai", View: "all"})
+	result, err := repo.GetUpstreamErrorSummary(context.Background(), &service.OpsErrorLogFilter{StartTime: &start, Platform: "openai", GroupID: summaryPtrInt64(7), Phase: "upstream", IncludeRecoveredUpstream: true, StatusCodes: []int{429}, Query: "needle", View: "all"})
 	require.NoError(t, err)
 	require.Equal(t, int64(10), result.TotalErrors)
 	require.Equal(t, 2, result.GroupCount)
@@ -52,10 +55,16 @@ func TestGetUpstreamErrorSummaryAggregatesAndSortsStoredReasons(t *testing.T) {
 	// deliberately absent from the summary projection.
 	require.Contains(t, captured, "e.created_at >= $1")
 	require.Contains(t, captured, "e.platform = $2")
+	require.Contains(t, captured, "e.group_id = $3")
+	require.Contains(t, captured, "e.error_phase = $4")
+	require.Contains(t, captured, "upstream_status_code")
+	require.Contains(t, captured, "e.error_message ILIKE $6")
 	require.NotContains(t, captured, "error_body")
 	require.NotContains(t, captured, "request_path")
 	require.True(t, strings.Contains(captured, "upstream_error_message"))
 }
+
+func summaryPtrInt64(v int64) *int64 { return &v }
 
 func TestGetUpstreamErrorSummaryNilDBAndEmptyRows(t *testing.T) {
 	db, mock, err := sqlmock.New()

@@ -203,13 +203,15 @@ func (s OpsUpstreamErrorSummary) MarshalJSON() ([]byte, error) {
 
 // OpsUpstreamErrorSummaryGroup aggregates errors for one configured group.
 type OpsUpstreamErrorSummaryGroup struct {
-	GroupID      *int64                          `json:"group_id"`
-	GroupName    string                          `json:"group_name"`
-	ErrorCount   int64                           `json:"error_count"`
-	ModelCount   int                             `json:"model_count"`
-	AccountCount int                             `json:"account_count"`
-	LatestAt     *time.Time                      `json:"latest_at"`
-	Models       []*OpsUpstreamErrorSummaryModel `json:"models"`
+	GroupID         *int64                          `json:"group_id"`
+	GroupName       string                          `json:"group_name"`
+	ErrorCount      int64                           `json:"error_count"`
+	ModelCount      int                             `json:"model_count"`
+	AccountCount    int                             `json:"account_count"`
+	LatestAt        *time.Time                      `json:"latest_at"`
+	Models          []*OpsUpstreamErrorSummaryModel `json:"models"`
+	TotalModels     int                             `json:"total_models"`
+	ModelsTruncated bool                            `json:"models_truncated"`
 }
 
 func (g OpsUpstreamErrorSummaryGroup) MarshalJSON() ([]byte, error) {
@@ -222,11 +224,13 @@ func (g OpsUpstreamErrorSummaryGroup) MarshalJSON() ([]byte, error) {
 
 // OpsUpstreamErrorSummaryModel aggregates errors for one requested model.
 type OpsUpstreamErrorSummaryModel struct {
-	Model       string                            `json:"model"`
-	ErrorCount  int64                             `json:"error_count"`
-	LatestAt    *time.Time                        `json:"latest_at"`
-	StatusCodes map[int]int64                     `json:"status_codes"`
-	Accounts    []*OpsUpstreamErrorSummaryAccount `json:"accounts"`
+	Model             string                            `json:"model"`
+	ErrorCount        int64                             `json:"error_count"`
+	LatestAt          *time.Time                        `json:"latest_at"`
+	StatusCodes       map[int]int64                     `json:"status_codes"`
+	Accounts          []*OpsUpstreamErrorSummaryAccount `json:"accounts"`
+	TotalAccounts     int                               `json:"total_accounts"`
+	AccountsTruncated bool                              `json:"accounts_truncated"`
 }
 
 func (m OpsUpstreamErrorSummaryModel) MarshalJSON() ([]byte, error) {
@@ -248,6 +252,8 @@ type OpsUpstreamErrorSummaryAccount struct {
 	LatestAt         *time.Time                       `json:"latest_at"`
 	LatestStatusCode int                              `json:"latest_status_code"`
 	Reasons          []*OpsUpstreamErrorSummaryReason `json:"reasons"`
+	TotalReasons     int                              `json:"total_reasons"`
+	ReasonsTruncated bool                             `json:"reasons_truncated"`
 }
 
 func (a OpsUpstreamErrorSummaryAccount) MarshalJSON() ([]byte, error) {

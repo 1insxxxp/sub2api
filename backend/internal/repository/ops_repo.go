@@ -17,6 +17,12 @@ type opsRepository struct {
 	db *sql.DB
 }
 
+const (
+	maxSummaryModels   = 50
+	maxSummaryAccounts = 50
+	maxSummaryReasons  = 20
+)
+
 const insertOpsErrorLogSQL = `
 INSERT INTO ops_error_logs (
   request_id,
@@ -84,7 +90,7 @@ SELECT
   e.account_id,
   COALESCE(NULLIF(TRIM(a.name), ''), '未知账号'),
   COALESCE(e.upstream_status_code, e.status_code, 0),
-  COALESCE(NULLIF(TRIM(e.upstream_error_message), ''), NULLIF(TRIM(e.error_message), ''), '未知错误'),
+  LEFT(COALESCE(NULLIF(TRIM(e.upstream_error_message), ''), NULLIF(TRIM(e.error_message), ''), '未知错误'), 512),
   COALESCE(e.error_type, ''),
   COUNT(*)::bigint,
   MAX(e.created_at),
@@ -95,7 +101,7 @@ LEFT JOIN accounts a ON a.id = e.account_id
 ` + where + `
 GROUP BY e.group_id, g.name, COALESCE(NULLIF(TRIM(e.requested_model), ''), NULLIF(TRIM(e.model), ''), '未知模型'),
          e.account_id, a.name, COALESCE(e.upstream_status_code, e.status_code, 0),
-         COALESCE(NULLIF(TRIM(e.upstream_error_message), ''), NULLIF(TRIM(e.error_message), ''), '未知错误'),
+         LEFT(COALESCE(NULLIF(TRIM(e.upstream_error_message), ''), NULLIF(TRIM(e.error_message), ''), '未知错误'), 512),
          COALESCE(e.error_type, '')
 ORDER BY COUNT(*) DESC, MAX(e.created_at) DESC, e.group_id NULLS FIRST, e.account_id NULLS FIRST`
 
@@ -106,8 +112,9 @@ ORDER BY COUNT(*) DESC, MAX(e.created_at) DESC, e.group_id NULLS FIRST, e.accoun
 	defer rows.Close()
 
 	type groupState struct {
-		value  *service.OpsUpstreamErrorSummaryGroup
-		models map[string]*service.OpsUpstreamErrorSummaryModel
+		value    *service.OpsUpstreamErrorSummaryGroup
+		models   map[string]*service.OpsUpstreamErrorSummaryModel
+		accounts map[string]struct{}
 	}
 	groups := make(map[string]*groupState)
 	for rows.Next() {
@@ -130,7 +137,7 @@ ORDER BY COUNT(*) DESC, MAX(e.created_at) DESC, e.group_id NULLS FIRST, e.accoun
 				v := groupID.Int64
 				gid = &v
 			}
-			gs = &groupState{value: &service.OpsUpstreamErrorSummaryGroup{GroupID: gid, GroupName: groupName, Models: make([]*service.OpsUpstreamErrorSummaryModel, 0)}, models: make(map[string]*service.OpsUpstreamErrorSummaryModel)}
+			gs = &groupState{value: &service.OpsUpstreamErrorSummaryGroup{GroupID: gid, GroupName: groupName, Models: make([]*service.OpsUpstreamErrorSummaryModel, 0)}, models: make(map[string]*service.OpsUpstreamErrorSummaryModel), accounts: make(map[string]struct{})}
 			groups[groupKey] = gs
 		}
 		g := gs.value
@@ -160,6 +167,7 @@ ORDER BY COUNT(*) DESC, MAX(e.created_at) DESC, e.group_id NULLS FIRST, e.accoun
 			gModel.Accounts = append(gModel.Accounts, account)
 		}
 		account.ErrorCount += count
+		gs.accounts[accountKey] = struct{}{}
 		if account.LatestAt == nil || latest.After(*account.LatestAt) {
 			account.LatestAt = timePtr(latest)
 			account.LatestStatusCode = status
@@ -182,15 +190,30 @@ ORDER BY COUNT(*) DESC, MAX(e.created_at) DESC, e.group_id NULLS FIRST, e.accoun
 	result := &service.OpsUpstreamErrorSummary{Groups: make([]*service.OpsUpstreamErrorSummaryGroup, 0, len(groups))}
 	for _, gs := range groups {
 		g := gs.value
-		g.ModelCount = len(g.Models)
+		g.TotalModels = len(g.Models)
+		g.ModelCount = g.TotalModels
+		g.AccountCount = len(gs.accounts)
+		sortSummaryModels(g.Models)
+		if len(g.Models) > maxSummaryModels {
+			g.ModelsTruncated = true
+			g.Models = g.Models[:maxSummaryModels]
+		}
 		for _, m := range g.Models {
-			g.AccountCount += len(m.Accounts)
+			m.TotalAccounts = len(m.Accounts)
 			sortSummaryAccounts(m.Accounts)
+			if len(m.Accounts) > maxSummaryAccounts {
+				m.AccountsTruncated = true
+				m.Accounts = m.Accounts[:maxSummaryAccounts]
+			}
 			for _, a := range m.Accounts {
+				a.TotalReasons = len(a.Reasons)
 				sortSummaryReasons(a.Reasons)
+				if len(a.Reasons) > maxSummaryReasons {
+					a.ReasonsTruncated = true
+					a.Reasons = a.Reasons[:maxSummaryReasons]
+				}
 			}
 		}
-		sortSummaryModels(g.Models)
 		result.TotalErrors += g.ErrorCount
 		result.Groups = append(result.Groups, g)
 	}
@@ -263,7 +286,9 @@ func summaryBefore(c1 int64, t1 *time.Time, c2 int64, t2 *time.Time, n1, n2 stri
 func latestSummaryGroup(v []*service.OpsUpstreamErrorSummaryGroup) *time.Time {
 	var latest *time.Time
 	for _, g := range v {
-		latest = maxTimePtr(latest, *g.LatestAt)
+		if g != nil && g.LatestAt != nil {
+			latest = maxTimePtr(latest, *g.LatestAt)
+		}
 	}
 	return latest
 }
