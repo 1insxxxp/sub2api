@@ -15,12 +15,13 @@
         :wechat-mp-enabled="wechatOAuthMPEnabled"
       />
 
-      <div class="profile-account-grid grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.68fr)] sm:gap-6">
-        <div class="min-w-0 space-y-5 sm:space-y-6">
+      <div class="profile-account-grid space-y-5 sm:space-y-6">
+        <div class="profile-setting-row grid gap-5 lg:grid-cols-2 sm:gap-6">
           <ProfilePasswordForm />
+          <ProfileTotpCard />
         </div>
 
-        <div class="min-w-0 space-y-5 sm:space-y-6">
+        <div class="profile-setting-row grid gap-5 lg:grid-cols-2 sm:gap-6">
           <ProfileBalanceNotifyCard
             v-if="user && balanceLowNotifyEnabled"
             :enabled="user.balance_notify_enabled ?? true"
@@ -29,28 +30,17 @@
             :system-default-threshold="systemDefaultThreshold"
             :user-email="user.email"
           />
-
-          <ProfileTotpCard />
-
           <ProfilePasskeyCard :enabled="passkeyEnabled" />
+        </div>
 
+        <div class="profile-setting-row grid gap-5 lg:grid-cols-2 sm:gap-6">
           <ProfileDangerZoneCard />
-
-          <section
-            v-if="contactInfo"
-            class="brand-surface brand-rail profile-contact-card"
-          >
+          <section v-if="contactInfo" class="brand-surface brand-rail profile-contact-card">
             <div class="flex items-start gap-4 p-5 pl-7 sm:p-6 sm:pl-8">
-              <div class="brand-floating-icon profile-contact-icon">
-                <Icon name="chat" size="lg" />
-              </div>
+              <div class="brand-floating-icon profile-contact-icon"><Icon name="chat" size="lg" /></div>
               <div class="min-w-0 flex-1">
-                <h3 class="text-base font-semibold text-slate-950 dark:text-white">
-                  {{ t('common.contactSupport') }}
-                </h3>
-                <p class="mt-1 break-words text-sm font-medium text-slate-600 dark:text-slate-300">
-                  {{ contactInfo }}
-                </p>
+                <h3 class="text-base font-semibold text-slate-950 dark:text-white">{{ t('common.contactSupport') }}</h3>
+                <p class="mt-1 break-words text-sm font-medium text-slate-600 dark:text-slate-300">{{ contactInfo }}</p>
               </div>
             </div>
           </section>
@@ -67,6 +57,11 @@
 
 .profile-account-grid {
   align-items: start;
+}
+
+.profile-setting-row > :deep(*) {
+  min-width: 0;
+  height: 100%;
 }
 
 .profile-contact-card {
