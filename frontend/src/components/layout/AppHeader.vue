@@ -161,18 +161,19 @@
             />
           </Teleport>
           <Teleport to="body" :disabled="!isMobileCheckinPopover">
-          <div
-            id="daily-checkin-popover"
-            class="brand-floating-panel daily-checkin-popover pointer-events-none translate-y-1 overflow-hidden text-left opacity-0 transition-all duration-150"
-            :class="[
-              isMobileCheckinPopover
-                ? 'fixed inset-x-2 bottom-2 z-[100000020] mb-[env(safe-area-inset-bottom)] max-h-[calc(100dvh-1rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] rounded-2xl'
-                : 'absolute right-0 top-full z-50 mt-3 w-[25rem] max-w-[calc(100vw-1rem)]',
-              checkinPopoverOpen ? 'pointer-events-auto translate-y-0 opacity-100' : ''
-            ]"
-            role="dialog"
-            :aria-hidden="!checkinPopoverOpen"
-            data-test="daily-checkin-popover"
+            <Transition name="dropdown">
+              <div
+                v-show="checkinPopoverOpen"
+                id="daily-checkin-popover"
+                class="brand-floating-panel daily-checkin-popover overflow-hidden text-left"
+                :class="
+                  isMobileCheckinPopover
+                    ? 'fixed inset-x-2 bottom-2 z-[100000020] mb-[env(safe-area-inset-bottom)] max-h-[calc(100dvh-1rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] rounded-2xl'
+                    : 'absolute right-0 top-full z-50 mt-3 w-[25rem] max-w-[calc(100vw-1rem)]'
+                "
+                role="dialog"
+                :aria-hidden="!checkinPopoverOpen"
+                data-test="daily-checkin-popover"
           >
             <div class="brand-floating-header daily-checkin-popover-header px-6 py-5">
               <div class="flex items-start justify-between gap-3">
@@ -411,7 +412,8 @@
                 </div>
               </div>
             </div>
-          </div>
+              </div>
+            </Transition>
           </Teleport>
         </div>
 
