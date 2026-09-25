@@ -123,7 +123,6 @@
           :resume-state="resumeListState"
           @update:show="showErrorDetails = $event"
           @openErrorDetail="openError"
-          @openSummary="openUpstreamSummary"
         />
 
         <OpsUpstreamErrorSummaryModal

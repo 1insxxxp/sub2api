@@ -6,7 +6,6 @@ import Select from '@/components/common/Select.vue'
 import OpsErrorLogTable from './OpsErrorLogTable.vue'
 import { opsAPI, type OpsErrorLog } from '@/api/admin/ops'
 import { buildOpsErrorTimeParams } from '../utils/opsErrorParams'
-import type { OpsErrorListQueryParams } from '@/api/admin/ops'
 
 interface Props {
   show: boolean
@@ -23,7 +22,6 @@ const props = defineProps<Props>()
 const emit = defineEmits<{
   (e: 'update:show', value: boolean): void
   (e: 'openErrorDetail', errorId: number): void
-  (e: 'openSummary', filters: OpsErrorListQueryParams): void
 }>()
 
 const { t } = useI18n()
@@ -89,21 +87,6 @@ const phaseSelectOptions = computed(() => {
 
 function close() {
   emit('update:show', false)
-}
-
-function openSummary() {
-  if (props.errorType !== 'upstream') return
-  const params: OpsErrorListQueryParams = { page: page.value, page_size: pageSize.value, view: viewMode.value }
-  Object.assign(params, buildOpsErrorTimeParams(props.timeRange, props.customStartTime, props.customEndTime))
-  if (props.timeRange === 'custom' && props.customStartTime && props.customEndTime) { params.start_time = props.customStartTime; params.end_time = props.customEndTime; delete params.time_range }
-  if (props.platform) params.platform = props.platform
-  if (typeof props.groupId === 'number' && props.groupId > 0) params.group_id = props.groupId
-  if (q.value.trim()) params.q = q.value.trim()
-  if (statusCode.value === 'other') params.status_codes_other = '1'
-  else if (typeof statusCode.value === 'number') params.status_codes = String(statusCode.value)
-  if (phase.value.trim()) params.phase = phase.value.trim()
-  if (errorOwner.value.trim()) params.error_owner = errorOwner.value.trim()
-  emit('openSummary', params)
 }
 
 const sortBy = ref('created_at')
@@ -278,9 +261,6 @@ watch(
           </div>
 
           <div class="flex items-center justify-end gap-2">
-            <button v-if="errorType === 'upstream'" type="button" class="admin-inline-action !min-h-9 !min-w-0 !flex-row !rounded-lg !px-3 !py-1.5 !text-xs !font-semibold" @click="openSummary">
-              {{ t('admin.ops.errorDetails.summaryButton') }}
-            </button>
             <button type="button" class="admin-inline-action !min-h-9 !min-w-0 !flex-row !rounded-lg !px-3 !py-1.5 !text-xs !font-semibold" @click="resetFilters">
               {{ t('common.reset') }}
             </button>

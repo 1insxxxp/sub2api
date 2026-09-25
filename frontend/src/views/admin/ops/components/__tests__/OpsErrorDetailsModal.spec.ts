@@ -7,7 +7,9 @@ vi.mock('@/api/admin/ops', async (importOriginal) => { const actual = await impo
 const BaseDialog = { props: ['show'], template: '<div v-if="show"><slot /></div>' }
 const Table = { template: '<div />' }
 function mountModal(errorType: 'request' | 'upstream') { return mount(OpsErrorDetailsModal, { props: { show: true, timeRange: '1h', errorType }, global: { stubs: { BaseDialog, OpsErrorLogTable: Table, Select: { template: '<div />' } } } }) }
-describe('OpsErrorDetailsModal summary entry', () => {
-  it('shows and emits summary for upstream errors', async () => { const w = mountModal('upstream'); const b = w.findAll('button').find(x => x.text().includes('summaryButton')); expect(b).toBeTruthy(); await b!.trigger('click'); expect(w.emitted('openSummary')).toHaveLength(1) })
-  it('does not show summary entry for request errors', () => { const w = mountModal('request'); expect(w.findAll('button').some(x => x.text().includes('summaryButton'))).toBe(false) })
+describe('OpsErrorDetailsModal actions', () => {
+  it('keeps group locator out of the dense filter toolbar', () => {
+    const w = mountModal('upstream')
+    expect(w.findAll('button').some(x => x.text().includes('summaryButton'))).toBe(false)
+  })
 })
