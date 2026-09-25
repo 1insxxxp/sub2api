@@ -324,6 +324,11 @@ export default {
         summaryExpand: 'Expand',
         summaryCollapse: 'Collapse',
         summaryOpenError: 'Open error #{id}',
+        summaryPath: 'Trace path',
+        summaryPathHint: 'Group → model → upstream account → reason',
+        summaryErrorsShort: 'errors',
+        summaryModelsShort: 'models',
+        summaryAccountsShort: 'accounts',
         searchPlaceholder: 'Search request_id / client_request_id / message',
       },
       // Error Detail Modal

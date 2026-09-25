@@ -31,6 +31,7 @@ const props = defineProps<Props>()
 const emit = defineEmits<{
   (e: 'openRequestErrors'): void
   (e: 'openUpstreamErrors'): void
+  (e: 'openUpstreamSummary'): void
 }>()
 const { t } = useI18n()
 
@@ -183,6 +184,14 @@ const options = computed(() => {
           @click="emit('openUpstreamErrors')"
         >
           {{ t('admin.ops.errorDetails.upstreamErrors') }}
+        </button>
+        <button
+          type="button"
+          class="admin-inline-action !min-h-8 !min-w-0 !flex-row !rounded-lg !border-primary-200 !bg-primary-50 !px-2 !py-1 !text-[11px] !font-semibold !text-primary-700 hover:!bg-primary-100 disabled:opacity-50 dark:!border-primary-500/30 dark:!bg-primary-500/10 dark:!text-primary-300 dark:hover:!bg-primary-500/20"
+          :disabled="!hasUpstreamErrors"
+          @click="emit('openUpstreamSummary')"
+        >
+          {{ t('admin.ops.errorDetails.summaryButton') }}
         </button>
       </div>
     </div>

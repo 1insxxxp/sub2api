@@ -81,6 +81,7 @@
           :time-range="timeRange"
           @open-request-errors="openErrorDetails('request')"
           @open-upstream-errors="openErrorDetails('upstream')"
+          @open-upstream-summary="openUpstreamSummaryFromDashboard"
         />
       </div>
 
@@ -178,6 +179,7 @@ import OpsErrorDistributionChart from './components/OpsErrorDistributionChart.vu
 import OpsErrorDetailsModal from './components/OpsErrorDetailsModal.vue'
 import OpsUpstreamErrorSummaryModal from './components/OpsUpstreamErrorSummaryModal.vue'
 import type { OpsErrorListQueryParams } from '@/api/admin/ops'
+import { buildOpsErrorTimeParams } from './utils/opsErrorParams'
 import OpsErrorTrendChart from './components/OpsErrorTrendChart.vue'
 import OpsLatencyChart from './components/OpsLatencyChart.vue'
 import OpsThroughputTrendChart from './components/OpsThroughputTrendChart.vue'
@@ -530,6 +532,16 @@ function openUpstreamSummary(filters: OpsErrorListQueryParams) {
   showErrorModal.value = false
   showRequestDetails.value = false
   showUpstreamSummary.value = true
+}
+
+function openUpstreamSummaryFromDashboard() {
+  const filters: OpsErrorListQueryParams = {
+    ...buildOpsErrorTimeParams(timeRange.value, customStartTime.value, customEndTime.value),
+    view: 'errors'
+  }
+  if (platform.value) filters.platform = platform.value
+  if (typeof groupId.value === 'number' && groupId.value > 0) filters.group_id = groupId.value
+  openUpstreamSummary(filters)
 }
 
 function openSummaryError(id: number) {

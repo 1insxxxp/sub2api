@@ -324,6 +324,11 @@ export default {
         summaryExpand: '展开',
         summaryCollapse: '收起',
         summaryOpenError: '查看错误 #{id}',
+        summaryPath: '定位路径',
+        summaryPathHint: '分组 → 模型 → 上游账号 → 错误原因',
+        summaryErrorsShort: '条错误',
+        summaryModelsShort: '个模型',
+        summaryAccountsShort: '个账号',
         searchPlaceholder: '搜索 request_id / client_request_id / message'
       },
       // Error Detail Modal
