@@ -456,7 +456,7 @@
           <transition name="dropdown">
             <div
               v-if="dropdownOpen"
-              class="dropdown profile-menu right-0 z-[70] mt-3 w-[19rem] max-w-[calc(100vw-1.5rem)]"
+              class="profile-menu absolute right-0 z-[70] mt-3 w-[19rem] max-w-[calc(100vw-1.5rem)]"
               role="menu"
             >
               <!-- User Info -->
@@ -1500,6 +1500,13 @@ watch(
 .dropdown-leave-to {
   opacity: 0;
   transform: scale(0.98) translateY(-4px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dropdown-enter-active,
+  .dropdown-leave-active { transition: none; }
+  .dropdown-enter-from,
+  .dropdown-leave-to { transform: none; }
 }
 
 .checkin-progress-track {
