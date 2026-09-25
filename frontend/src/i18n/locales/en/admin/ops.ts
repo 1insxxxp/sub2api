@@ -329,6 +329,13 @@ export default {
         summaryErrorsShort: 'errors',
         summaryModelsShort: 'models',
         summaryAccountsShort: 'accounts',
+        summaryModel: 'Model',
+        summaryAccount: 'Upstream account',
+        summaryReason: 'Error reason',
+        summaryStatus: 'Status',
+        summaryCount: 'Count',
+        summaryLatestTime: 'Latest time',
+        summaryAction: 'Details',
         searchPlaceholder: 'Search request_id / client_request_id / message',
       },
       // Error Detail Modal

@@ -329,6 +329,13 @@ export default {
         summaryErrorsShort: '条错误',
         summaryModelsShort: '个模型',
         summaryAccountsShort: '个账号',
+        summaryModel: '模型',
+        summaryAccount: '上游账号',
+        summaryReason: '错误原因',
+        summaryStatus: '状态码',
+        summaryCount: '次数',
+        summaryLatestTime: '最新时间',
+        summaryAction: '查看明细',
         searchPlaceholder: '搜索 request_id / client_request_id / message'
       },
       // Error Detail Modal
