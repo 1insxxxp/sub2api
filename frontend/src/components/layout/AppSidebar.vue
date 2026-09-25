@@ -170,7 +170,7 @@
       <!-- Regular User View -->
       <template v-else-if="!appStore.backendModeEnabled || authStore.canAccessAdminWorkbench">
         <div class="sidebar-section">
-          <template v-for="item in userNavItems" :key="item.path">
+          <template v-for="item in visibleSidebarMenuItems" :key="item.path">
             <a
               v-if="item.externalUrl"
               :href="item.externalUrl"
@@ -205,6 +205,32 @@
 
     <!-- Bottom Section -->
     <div class="sidebar-footer-shell mt-auto border-t border-gray-100 p-3 dark:border-dark-800">
+      <div v-if="!isAdmin && !sidebarCollapsed" class="relative mb-2">
+        <button
+          type="button"
+          class="sidebar-link w-full"
+          :aria-expanded="sidebarMenuSettingsOpen"
+          @click="sidebarMenuSettingsOpen = !sidebarMenuSettingsOpen"
+        >
+          <CogIcon class="h-5 w-5 flex-shrink-0" />
+          <span class="sidebar-label">{{ t('nav.sidebarSettings') }}</span>
+        </button>
+        <div
+          v-if="sidebarMenuSettingsOpen"
+          class="absolute bottom-full left-0 z-20 mb-2 w-full min-w-56 rounded-xl border border-gray-200/80 bg-white/95 p-3 shadow-xl backdrop-blur dark:border-dark-700 dark:bg-dark-900/95"
+          @keydown.esc="sidebarMenuSettingsOpen = false"
+        >
+          <div class="mb-2 flex items-center justify-between gap-2">
+            <span class="text-xs font-semibold text-gray-700 dark:text-gray-200">{{ t('nav.sidebarSettings') }}</span>
+            <button type="button" class="text-[11px] text-primary-600 hover:underline dark:text-primary-400" @click="resetSidebarVisibility">{{ t('nav.sidebarSettingsReset') }}</button>
+          </div>
+          <label v-for="item in sidebarMenuItems" :key="item.path" class="flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-dark-800">
+            <input :checked="isSidebarItemVisible(item.path)" :disabled="isSidebarItemFixed(item.path)" type="checkbox" class="h-3.5 w-3.5 rounded border-gray-300 text-primary-600" @change="setSidebarItemVisibility(item.path, ($event.target as HTMLInputElement).checked)" />
+            <span class="min-w-0 flex-1 truncate">{{ item.label }}</span>
+            <span v-if="isSidebarItemFixed(item.path)" class="text-[10px] text-gray-400">{{ t('nav.sidebarSettingsRequired') }}</span>
+          </label>
+        </div>
+      </div>
       <!-- Theme Toggle -->
       <button
         @click="toggleTheme"
@@ -317,6 +343,10 @@ const isAdmin = computed(() => authStore.isAdmin)
 const canAccessAdminWorkbench = computed(() => authStore.canAccessAdminWorkbench)
 const sidebarNavRef = ref<HTMLElement | null>(null)
 const isDark = ref(document.documentElement.classList.contains('dark'))
+const sidebarMenuSettingsOpen = ref(false)
+const sidebarVisibility = ref<Record<string, boolean>>({})
+const sidebarVisibilityKey = computed(() => `passion-sidebar-visibility:${authStore.user?.id ?? 'guest'}`)
+const fixedSidebarPaths = new Set(['/dashboard', '/keys', '/profile'])
 
 const homePath = computed(() => (
   isAdmin.value ? '/admin/dashboard' : canAccessAdminWorkbench.value ? '/admin/workbench' : '/dashboard'
@@ -893,6 +923,43 @@ function finalizeNav(items: NavItem[]): NavItem[] {
 
 // User navigation items (for regular users)
 const userNavItems = computed((): NavItem[] => finalizeNav(buildSelfNavItems(true)))
+const sidebarMenuItems = computed((): NavItem[] => userNavItems.value)
+const visibleSidebarMenuItems = computed(() => sidebarMenuItems.value.filter(item => isSidebarItemVisible(item.path)))
+
+function isSidebarItemFixed(path: string): boolean {
+  return fixedSidebarPaths.has(path)
+}
+
+function isSidebarItemVisible(path: string): boolean {
+  return isSidebarItemFixed(path) || sidebarVisibility.value[path] !== false
+}
+
+function loadSidebarVisibility(): void {
+  try {
+    const raw = localStorage.getItem(sidebarVisibilityKey.value)
+    const parsed = raw ? JSON.parse(raw) : {}
+    sidebarVisibility.value = parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    sidebarVisibility.value = {}
+  }
+}
+
+function persistSidebarVisibility(): void {
+  try { localStorage.setItem(sidebarVisibilityKey.value, JSON.stringify(sidebarVisibility.value)) } catch { /* storage may be unavailable */ }
+}
+
+function setSidebarItemVisibility(path: string, visible: boolean): void {
+  if (isSidebarItemFixed(path)) return
+  sidebarVisibility.value = { ...sidebarVisibility.value, [path]: visible }
+  persistSidebarVisibility()
+}
+
+function resetSidebarVisibility(): void {
+  sidebarVisibility.value = {}
+  persistSidebarVisibility()
+}
+
+watch(sidebarVisibilityKey, loadSidebarVisibility, { immediate: true })
 
 // Personal navigation items (for admin's "My Account" section, without Dashboard).
 // Admins access 可用渠道 from this section just like regular users — there is no
