@@ -33,6 +33,7 @@
         @refresh="fetchData"
         @open-request-details="handleOpenRequestDetails"
         @open-error-details="openErrorDetails"
+        @open-upstream-summary="openUpstreamSummaryFromDashboard"
         @open-settings="showSettingsDialog = true"
         @open-alert-rules="showAlertRulesCard = true"
         @enter-fullscreen="enterFullscreen"
@@ -81,7 +82,6 @@
           :time-range="timeRange"
           @open-request-errors="openErrorDetails('request')"
           @open-upstream-errors="openErrorDetails('upstream')"
-          @open-upstream-summary="openUpstreamSummaryFromDashboard"
         />
       </div>
 

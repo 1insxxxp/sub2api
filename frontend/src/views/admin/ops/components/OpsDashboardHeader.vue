@@ -40,6 +40,7 @@ interface Emits {
   (e: 'refresh'): void
   (e: 'openRequestDetails', preset?: OpsRequestDetailsPreset): void
   (e: 'openErrorDetails', kind: 'request' | 'upstream'): void
+  (e: 'openUpstreamSummary'): void
   (e: 'openSettings'): void
   (e: 'openAlertRules'): void
   (e: 'enterFullscreen'): void
@@ -1411,9 +1412,14 @@ function handleToolbarRefresh() {
               <span class="text-[10px] font-bold uppercase text-gray-400">{{ t('admin.ops.upstreamErrors') }}</span>
               <HelpTooltip v-if="!props.fullscreen" :content="t('admin.ops.tooltips.upstreamErrors')" />
             </div>
-            <button v-if="!props.fullscreen" class="text-[10px] font-bold text-blue-500 hover:underline" type="button" @click="openErrorDetails('upstream')">
-              {{ t('admin.ops.requestDetails.details') }}
-            </button>
+            <div v-if="!props.fullscreen" class="flex items-center gap-2">
+              <button class="text-[10px] font-bold text-blue-500 hover:underline" type="button" @click="openErrorDetails('upstream')">
+                {{ t('admin.ops.requestDetails.details') }}
+              </button>
+              <button class="rounded-md bg-primary-50 px-1.5 py-0.5 text-[10px] font-bold text-primary-700 hover:bg-primary-100 dark:bg-primary-500/10 dark:text-primary-300 dark:hover:bg-primary-500/20" type="button" @click="emit('openUpstreamSummary')">
+                {{ t('admin.ops.errorDetails.summaryButton') }}
+              </button>
+            </div>
           </div>
           <div class="mt-2 text-3xl font-black" :class="getThresholdColorClass(getUpstreamErrorRateThresholdLevel(upstreamErrorRatePercent))">
             {{ upstreamErrorRatePercent == null ? '-' : `${upstreamErrorRatePercent.toFixed(2)}%` }}
