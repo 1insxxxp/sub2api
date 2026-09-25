@@ -161,7 +161,7 @@
             />
           </Teleport>
           <Teleport to="body" :disabled="!isMobileCheckinPopover">
-            <Transition :name="isMobileCheckinPopover ? 'checkin-sheet' : 'dropdown'">
+            <Transition name="checkin-popover">
               <div
                 v-show="checkinPopoverOpen"
                 id="daily-checkin-popover"
@@ -965,7 +965,7 @@ async function handleCheckin() {
 
 function handleCheckinButton() {
   if (checkinButtonDisabled.value) return
-  isMobileCheckinPopover.value = window.innerWidth < 640
+  isMobileCheckinPopover.value = isMobileCheckinViewport()
   checkinPopoverPinned.value = true
   window.dispatchEvent(new CustomEvent('app-header-floating-panel-open', { detail: 'checkin' }))
   if (checkinCanSubmit.value) {
@@ -974,8 +974,12 @@ function handleCheckinButton() {
 }
 
 function openCheckinPreview() {
-  if (checkinButtonDisabled.value || window.innerWidth < 640) return
+  if (checkinButtonDisabled.value || isMobileCheckinViewport()) return
   checkinPopoverPreview.value = true
+}
+
+function isMobileCheckinViewport() {
+  return window.innerWidth < 768
 }
 
 function closeCheckinPreview() {
@@ -1283,6 +1287,7 @@ watch(
   max-height: min(42rem, calc(100dvh - 5rem));
   flex-direction: column;
   isolation: isolate;
+  opacity: 1 !important;
 }
 
 .daily-checkin-popover-header {
@@ -1504,25 +1509,37 @@ watch(
   transform: scale(0.98) translateY(-4px);
 }
 
-.checkin-sheet-enter-active,
-.checkin-sheet-leave-active {
+.checkin-popover-enter-active,
+.checkin-popover-leave-active {
   transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.checkin-sheet-enter-from,
-.checkin-sheet-leave-to {
+.checkin-popover-enter-from,
+.checkin-popover-leave-to {
   transform: translateY(100%);
+}
+
+@media (min-width: 768px) {
+  .checkin-popover-enter-active,
+  .checkin-popover-leave-active {
+    transition-duration: 180ms;
+  }
+
+  .checkin-popover-enter-from,
+  .checkin-popover-leave-to {
+    transform: scale(0.985) translateY(-4px);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .dropdown-enter-active,
   .dropdown-leave-active,
-  .checkin-sheet-enter-active,
-  .checkin-sheet-leave-active { transition: none; }
+  .checkin-popover-enter-active,
+  .checkin-popover-leave-active { transition: none; }
   .dropdown-enter-from,
   .dropdown-leave-to,
-  .checkin-sheet-enter-from,
-  .checkin-sheet-leave-to { transform: none; }
+  .checkin-popover-enter-from,
+  .checkin-popover-leave-to { transform: none; }
 }
 
 .checkin-progress-track {
