@@ -122,6 +122,19 @@
           :resume-state="resumeListState"
           @update:show="showErrorDetails = $event"
           @openErrorDetail="openError"
+          @openSummary="openUpstreamSummary"
+        />
+
+        <OpsUpstreamErrorSummaryModal
+          :show="showUpstreamSummary"
+          :time-range="timeRange"
+          :custom-start-time="customStartTime"
+          :custom-end-time="customEndTime"
+          :platform="platform"
+          :group-id="groupId"
+          :filters="upstreamSummaryFilters"
+          @close="showUpstreamSummary = false"
+          @openErrorDetail="openSummaryError"
         />
 
         <OpsErrorDetailModal v-model:show="showErrorModal" :error-id="selectedErrorId" :error-type="errorDetailsType" :back-to-list="detailReturnTarget !== null" @back="handleBackToList" />
@@ -163,6 +176,8 @@ import OpsConcurrencyCard from './components/OpsConcurrencyCard.vue'
 import OpsErrorDetailModal from './components/OpsErrorDetailModal.vue'
 import OpsErrorDistributionChart from './components/OpsErrorDistributionChart.vue'
 import OpsErrorDetailsModal from './components/OpsErrorDetailsModal.vue'
+import OpsUpstreamErrorSummaryModal from './components/OpsUpstreamErrorSummaryModal.vue'
+import type { OpsErrorListQueryParams } from '@/api/admin/ops'
 import OpsErrorTrendChart from './components/OpsErrorTrendChart.vue'
 import OpsLatencyChart from './components/OpsLatencyChart.vue'
 import OpsThroughputTrendChart from './components/OpsThroughputTrendChart.vue'
@@ -392,6 +407,8 @@ const selectedErrorId = ref<number | null>(null)
 const showErrorModal = ref(false)
 
 const showErrorDetails = ref(false)
+const showUpstreamSummary = ref(false)
+const upstreamSummaryFilters = ref<OpsErrorListQueryParams>({})
 const errorDetailsType = ref<'request' | 'upstream'>('request')
 
 const showRequestDetails = ref(false)
@@ -501,10 +518,27 @@ function handleOpenRequestDetails(preset?: OpsRequestDetailsPreset) {
 
 function openErrorDetails(kind: 'request' | 'upstream') {
   errorDetailsType.value = kind
-  // Ensure only one modal visible at a time.
+  showUpstreamSummary.value = false
   showRequestDetails.value = false
   showErrorModal.value = false
   showErrorDetails.value = true
+}
+
+function openUpstreamSummary(filters: OpsErrorListQueryParams) {
+  upstreamSummaryFilters.value = { ...filters }
+  showErrorDetails.value = false
+  showErrorModal.value = false
+  showRequestDetails.value = false
+  showUpstreamSummary.value = true
+}
+
+function openSummaryError(id: number) {
+  showUpstreamSummary.value = false
+  errorDetailsType.value = 'upstream'
+  detailReturnTarget.value = 'errorList'
+  selectedErrorId.value = id
+  showErrorDetails.value = false
+  showErrorModal.value = true
 }
 
 function onTimeRangeChange(v: string | number | boolean | null) {
@@ -559,6 +593,7 @@ function openError(id: number) {
   detailReturnTarget.value = showRequestDetails.value ? 'requestList' : showErrorDetails.value ? 'errorList' : null
   // Ensure only one modal visible at a time.
   showErrorDetails.value = false
+  showUpstreamSummary.value = false
   showRequestDetails.value = false
   showErrorModal.value = true
 }

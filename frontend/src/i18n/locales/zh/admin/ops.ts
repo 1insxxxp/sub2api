@@ -310,6 +310,20 @@ export default {
           internal: '内部'
         },
         total: '总计：',
+        summaryButton: '分组定位',
+        summaryTitle: '上游错误分组定位',
+        summaryLoading: '正在加载分组摘要…',
+        summaryError: '分组摘要加载失败。',
+        summaryRetry: '重试',
+        summaryEmpty: '当前筛选条件下暂无上游错误。',
+        summaryTotalErrors: '错误数',
+        summaryGroups: '分组数',
+        summaryLatest: '最新时间',
+        summaryTruncated: '结果已截断，仅显示部分分组。',
+        summaryNestedTruncated: '已截断（共 {count} 项）',
+        summaryExpand: '展开',
+        summaryCollapse: '收起',
+        summaryOpenError: '查看错误 #{id}',
         searchPlaceholder: '搜索 request_id / client_request_id / message'
       },
       // Error Detail Modal
