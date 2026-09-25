@@ -22,17 +22,23 @@ function mountModal(show = true) { return mount(OpsUpstreamErrorSummaryModal, { 
 beforeEach(() => { getUpstreamErrorSummary.mockReset(); getUpstreamErrorSummary.mockResolvedValue(summary) })
 
 describe('OpsUpstreamErrorSummaryModal', () => {
-  it('loads four levels with group expanded and status/truncation data', async () => {
+  it('loads four levels expanded with status/truncation data', async () => {
     const wrapper = mountModal(); await nextTick(); await nextTick()
     expect(getUpstreamErrorSummary).toHaveBeenCalled()
     expect(wrapper.text()).toContain('Group A'); expect(wrapper.text()).toContain('model-long'); expect(wrapper.text()).toContain('502 ×2')
-    const groupButton = wrapper.findAll('button').find(b => b.attributes('aria-expanded') === 'true')
-    expect(groupButton).toBeTruthy(); expect(groupButton!.attributes('aria-expanded')).toBe('true'); expect(groupButton!.attributes('aria-controls')).toBeTruthy()
-    await groupButton!.trigger('click'); expect(wrapper.text()).not.toContain('model-long')
-    await groupButton!.trigger('click');
-    const modelButton = wrapper.findAll('button').find(b => b.text().includes('model-long'))!; await modelButton.trigger('click')
-    const accountButton = wrapper.findAll('button').find(b => b.text().includes('Account A'))!; expect(accountButton).toBeTruthy(); expect(accountButton.attributes('aria-expanded')).toBe('false'); expect(accountButton.attributes('aria-controls')).toBeTruthy(); await accountButton.trigger('click')
     expect(wrapper.text()).toContain('Account A'); expect(wrapper.text()).toContain('upstream down'); expect(wrapper.text()).toContain('summaryNestedTruncated')
+    const groupButton = wrapper.findAll('button').find(b => b.text().includes('Group A'))!
+    expect(groupButton).toBeTruthy(); expect(groupButton.attributes('aria-expanded')).toBe('true'); expect(groupButton.attributes('aria-controls')).toBeTruthy()
+    const modelButton = wrapper.findAll('button').find(b => b.text().includes('model-long'))!
+    expect(modelButton).toBeTruthy(); expect(modelButton.attributes('aria-expanded')).toBe('true'); expect(modelButton.attributes('aria-controls')).toBeTruthy()
+    const accountButton = wrapper.findAll('button').find(b => b.text().includes('Account A'))!
+    expect(accountButton).toBeTruthy(); expect(accountButton.attributes('aria-expanded')).toBe('true'); expect(accountButton.attributes('aria-controls')).toBeTruthy()
+    await groupButton.trigger('click'); expect(wrapper.text()).not.toContain('model-long')
+    await groupButton.trigger('click');
+    await modelButton.trigger('click'); expect(wrapper.text()).not.toContain('Account A')
+    await modelButton.trigger('click');
+    await accountButton.trigger('click'); expect(wrapper.text()).not.toContain('upstream down')
+    await accountButton.trigger('click'); expect(wrapper.text()).toContain('upstream down')
     await wrapper.get('button.font-mono').trigger('click'); expect(wrapper.emitted('openErrorDetail')).toEqual([[77]])
   })
   it('shows error and retries, and supports empty state', async () => {
