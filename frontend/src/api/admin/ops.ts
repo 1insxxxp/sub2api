@@ -970,6 +970,62 @@ export interface OpsErrorDetail extends OpsErrorLog {
 
 export type OpsErrorLogsResponse = PaginatedResponse<OpsErrorLog>
 
+/**
+ * Server-side grouped view of upstream errors.
+ *
+ * The nested collections are returned as empty arrays by the API, but remain
+ * optional here so clients can safely consume responses from older servers.
+ */
+export interface OpsUpstreamErrorSummary {
+  total_errors: number
+  group_count: number
+  latest_at?: string | null
+  groups?: OpsUpstreamErrorSummaryGroup[] | null
+  groups_truncated?: boolean
+}
+
+export interface OpsUpstreamErrorSummaryGroup {
+  group_id?: number | null
+  group_name: string
+  error_count: number
+  model_count: number
+  account_count: number
+  latest_at?: string | null
+  models?: OpsUpstreamErrorSummaryModel[] | null
+  total_models?: number
+  models_truncated?: boolean
+}
+
+export interface OpsUpstreamErrorSummaryModel {
+  model: string
+  error_count: number
+  latest_at?: string | null
+  status_codes?: Record<string, number> | null
+  accounts?: OpsUpstreamErrorSummaryAccount[] | null
+  total_accounts?: number
+  accounts_truncated?: boolean
+}
+
+export interface OpsUpstreamErrorSummaryAccount {
+  account_id?: number | null
+  account_name: string
+  error_count: number
+  latest_at?: string | null
+  latest_status_code: number
+  reasons?: OpsUpstreamErrorSummaryReason[] | null
+  total_reasons?: number
+  reasons_truncated?: boolean
+}
+
+export interface OpsUpstreamErrorSummaryReason {
+  message: string
+  error_type: string
+  status_code: number
+  count: number
+  latest_at?: string | null
+  representative_error_id: number
+}
+
 export async function getDashboardOverview(
   params: {
   time_range?: '5m' | '30m' | '1h' | '6h' | '24h'
@@ -1122,6 +1178,10 @@ export type OpsErrorListQueryParams = {
   sort_order?: 'asc' | 'desc'
 }
 
+// Accept the shared list-query shape so callers can pass the current table
+// filters unchanged; getUpstreamErrorSummary strips its pagination fields.
+export type OpsUpstreamErrorSummaryParams = OpsErrorListQueryParams
+
 // Legacy unified endpoints
 export async function listErrorLogs(params: OpsErrorListQueryParams): Promise<OpsErrorLogsResponse> {
   const { data } = await apiClient.get<OpsErrorLogsResponse>('/admin/ops/errors', { params })
@@ -1145,6 +1205,14 @@ export async function listRequestErrors(params: OpsErrorListQueryParams): Promis
 
 export async function listUpstreamErrors(params: OpsErrorListQueryParams): Promise<OpsErrorLogsResponse> {
   const { data } = await apiClient.get<OpsErrorLogsResponse>('/admin/ops/upstream-errors', { params })
+  return data
+}
+
+export async function getUpstreamErrorSummary(
+  params: OpsUpstreamErrorSummaryParams = {}
+): Promise<OpsUpstreamErrorSummary> {
+  const { page: _page, page_size: _pageSize, ...filters } = params
+  const { data } = await apiClient.get<OpsUpstreamErrorSummary>('/admin/ops/upstream-errors/summary', { params: filters })
   return data
 }
 
@@ -1337,6 +1405,7 @@ export const opsAPI = {
   // New split endpoints
   listRequestErrors,
   listUpstreamErrors,
+  getUpstreamErrorSummary,
   getRequestErrorDetail,
   getUpstreamErrorDetail,
   updateRequestErrorResolved,
