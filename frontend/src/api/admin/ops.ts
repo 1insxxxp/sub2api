@@ -29,7 +29,7 @@ export interface OpsDashboardOverview {
   start_time: string
   end_time: string
   platform: string
-  group_id: number | null
+  group_id?: number | null
 
   health_score?: number
 
@@ -127,7 +127,7 @@ export interface OpsRequestDetail {
 
   user_id?: number | null
   api_key_id?: number | null
-  account_id: number | null
+  account_id?: number | null
   group_id?: number | null
 
   stream?: boolean
@@ -986,7 +986,7 @@ export interface OpsUpstreamErrorSummary {
 }
 
 export interface OpsUpstreamErrorSummaryGroup {
-  group_id?: number | null
+  group_id: number | null
   group_name: string
   error_count: number
   model_count: number
@@ -1008,7 +1008,7 @@ export interface OpsUpstreamErrorSummaryModel {
 }
 
 export interface OpsUpstreamErrorSummaryAccount {
-  account_id?: number | null
+  account_id: number | null
   account_name: string
   error_count: number
   latest_at: string | null
