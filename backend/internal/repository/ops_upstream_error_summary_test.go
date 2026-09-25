@@ -26,7 +26,7 @@ func TestGetUpstreamErrorSummaryAggregatesAndSortsStoredReasons(t *testing.T) {
 	captured := ""
 	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(summaryQueryMatcher{captured: &captured}))
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	start := time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC)
 	prefix := strings.Repeat("x", 512)
 	mock.ExpectQuery("FROM ops_error_logs e").WithArgs(start, "openai", int64(7), "upstream", "{429}", "%needle%").WillReturnRows(
@@ -83,7 +83,7 @@ func TestGetUpstreamErrorSummaryAggregatesAndSortsStoredReasons(t *testing.T) {
 func TestGetUpstreamErrorSummarySortsEqualGroupNamesByID(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	latest := time.Date(2026, 9, 25, 12, 0, 0, 0, time.UTC)
 	rows := sqlmock.NewRows([]string{"group_id", "group_name", "model", "account_id", "account_name", "status_code", "reason", "error_type", "count", "latest_at", "representative_error_id"}).
 		AddRow(int64(2), "same-name", "model", int64(2), "same-account", 500, "reason", "upstream_error", int64(1), latest, int64(2)).
@@ -101,7 +101,7 @@ func TestGetUpstreamErrorSummarySortsEqualGroupNamesByID(t *testing.T) {
 func TestGetUpstreamErrorSummaryTruncatesTopLevelGroupsAfterSorting(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	rows := sqlmock.NewRows([]string{"group_id", "group_name", "model", "account_id", "account_name", "status_code", "reason", "error_type", "count", "latest_at", "representative_error_id"})
 	base := time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC)
 	for i := 1; i <= 101; i++ {
@@ -123,7 +123,7 @@ func summaryPtrInt64(v int64) *int64 { return &v }
 func TestGetUpstreamErrorSummaryNilDBAndEmptyRows(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	mock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"group_id", "group_name", "model", "account_id", "account_name", "status_code", "reason", "error_type", "count", "latest_at", "representative_error_id"}))
 	result, err := (&opsRepository{db: db}).GetUpstreamErrorSummary(context.Background(), &service.OpsErrorLogFilter{})
 	require.NoError(t, err)

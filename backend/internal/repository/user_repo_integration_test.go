@@ -502,11 +502,13 @@ func (s *UserRepoSuite) TestCreditGiftBalanceDoesNotIncreaseTotalRecharged() {
 
 func (s *UserRepoSuite) TestCreditGiftBalanceOffsetsExistingOverdraft() {
 	user := s.mustCreateUser(&service.User{
-		Email:          "gift-recharge-overdraft@test.com",
-		Balance:        -0.05,
-		GiftBalance:    0,
-		TotalRecharged: 3,
+		Email:       "gift-recharge-overdraft@test.com",
+		Balance:     -0.05,
+		GiftBalance: 0,
 	})
+	s.Require().NoError(s.client.User.UpdateOneID(user.ID).
+		SetTotalRecharged(3).
+		Exec(s.ctx))
 
 	s.Require().NoError(s.repo.CreditGiftBalance(s.ctx, user.ID, 10))
 

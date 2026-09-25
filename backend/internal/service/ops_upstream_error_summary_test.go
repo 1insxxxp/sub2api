@@ -41,16 +41,41 @@ func TestOpsUpstreamErrorSummaryContract(t *testing.T) {
 	if !ok || len(groups) != 1 {
 		t.Fatalf("groups = %#v, want one group", got["groups"])
 	}
-	group := groups[0].(map[string]any)
+	group, ok := groups[0].(map[string]any)
+	if !ok {
+		t.Fatalf("group = %#v", groups[0])
+	}
 	if group["error_count"] != float64(9) || group["model_count"] != float64(1) || group["account_count"] != float64(2) {
 		t.Fatalf("group counts = %#v", group)
 	}
-	model := group["models"].([]any)[0].(map[string]any)
-	if model["status_codes"].(map[string]any)["429"] != float64(6) {
+	models, ok := group["models"].([]any)
+	if !ok || len(models) == 0 {
+		t.Fatalf("models = %#v", group["models"])
+	}
+	model, ok := models[0].(map[string]any)
+	if !ok {
+		t.Fatalf("model = %#v", models[0])
+	}
+	statusCodes, ok := model["status_codes"].(map[string]any)
+	if !ok || statusCodes["429"] != float64(6) {
 		t.Fatalf("status code counts = %#v", model["status_codes"])
 	}
-	account := model["accounts"].([]any)[0].(map[string]any)
-	reason := account["reasons"].([]any)[0].(map[string]any)
+	accounts, ok := model["accounts"].([]any)
+	if !ok || len(accounts) == 0 {
+		t.Fatalf("accounts = %#v", model["accounts"])
+	}
+	account, ok := accounts[0].(map[string]any)
+	if !ok {
+		t.Fatalf("account = %#v", accounts[0])
+	}
+	reasons, ok := account["reasons"].([]any)
+	if !ok || len(reasons) == 0 {
+		t.Fatalf("reasons = %#v", account["reasons"])
+	}
+	reason, ok := reasons[0].(map[string]any)
+	if !ok {
+		t.Fatalf("reason = %#v", reasons[0])
+	}
 	if reason["representative_error_id"] != float64(99) || reason["message"] != "upstream overloaded" {
 		t.Fatalf("reason = %#v", reason)
 	}

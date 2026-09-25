@@ -527,14 +527,14 @@ func parseOpsUpstreamErrorFilter(c *gin.Context, paginated, includeSummaryFilter
 	if v := strings.TrimSpace(c.Query("group_id")); v != "" {
 		id, err := strconv.ParseInt(v, 10, 64)
 		if err != nil || id <= 0 {
-			return nil, fmt.Errorf("Invalid group_id")
+			return nil, fmt.Errorf("invalid group_id")
 		}
 		filter.GroupID = &id
 	}
 	if v := strings.TrimSpace(c.Query("account_id")); v != "" {
 		id, err := strconv.ParseInt(v, 10, 64)
 		if err != nil || id <= 0 {
-			return nil, fmt.Errorf("Invalid account_id")
+			return nil, fmt.Errorf("invalid account_id")
 		}
 		filter.AccountID = &id
 	}
@@ -547,7 +547,7 @@ func parseOpsUpstreamErrorFilter(c *gin.Context, paginated, includeSummaryFilter
 			b := false
 			filter.Resolved = &b
 		default:
-			return nil, fmt.Errorf("Invalid resolved")
+			return nil, fmt.Errorf("invalid resolved")
 		}
 	}
 	if statusCodesStr := strings.TrimSpace(c.Query("status_codes")); statusCodesStr != "" {

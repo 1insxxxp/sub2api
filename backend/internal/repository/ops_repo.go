@@ -113,7 +113,7 @@ ORDER BY COUNT(*) DESC, MAX(e.created_at) DESC, e.group_id NULLS FIRST, e.accoun
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	type groupState struct {
 		value    *service.OpsUpstreamErrorSummaryGroup
