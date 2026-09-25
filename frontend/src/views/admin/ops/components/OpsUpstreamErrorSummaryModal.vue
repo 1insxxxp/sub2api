@@ -57,7 +57,7 @@ async function load() {
 function close() { emit('close') }
 function openDetail(id:number) { emit('openErrorDetail', id) }
 function formatDate(value:string|null|undefined) { if (!value) return '—'; const d = new Date(value); return Number.isNaN(d.getTime()) ? value : d.toLocaleString() }
-watch(() => [props.show, props.timeRange, props.customStartTime, props.customEndTime, props.platform, props.groupId, props.filters] as const, () => { if (props.show) void load() }, { deep: true })
+watch(() => [props.show, props.timeRange, props.customStartTime, props.customEndTime, props.platform, props.groupId, props.filters] as const, () => { if (props.show) void load() }, { deep: true, immediate: true })
 </script>
 <template>
   <BaseDialog :show="show" :title="t('admin.ops.errorDetails.summaryTitle')" width="extra-wide" appearance="neutral" @close="close">
