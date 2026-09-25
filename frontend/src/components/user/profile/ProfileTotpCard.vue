@@ -90,18 +90,22 @@
     </div>
 
     <!-- Setup Modal -->
-    <TotpSetupModal
-      v-if="showSetupModal"
-      @close="showSetupModal = false"
-      @success="handleSetupSuccess"
-    />
+    <Transition name="overlay">
+      <TotpSetupModal
+        v-if="showSetupModal"
+        @close="showSetupModal = false"
+        @success="handleSetupSuccess"
+      />
+    </Transition>
 
     <!-- Disable Dialog -->
-    <TotpDisableDialog
-      v-if="showDisableDialog"
-      @close="showDisableDialog = false"
-      @success="handleDisableSuccess"
-    />
+    <Transition name="overlay">
+      <TotpDisableDialog
+        v-if="showDisableDialog"
+        @close="showDisableDialog = false"
+        @success="handleDisableSuccess"
+      />
+    </Transition>
   </div>
 </template>
 

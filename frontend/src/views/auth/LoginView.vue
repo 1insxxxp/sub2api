@@ -215,14 +215,16 @@
   </AuthLayout>
 
   <!-- 2FA Modal -->
-  <TotpLoginModal
-    v-if="show2FAModal"
-    ref="totpModalRef"
-    :temp-token="totpTempToken"
-    :user-email-masked="totpUserEmailMasked"
-    @verify="handle2FAVerify"
-    @cancel="handle2FACancel"
-  />
+  <Transition name="overlay">
+    <TotpLoginModal
+      v-if="show2FAModal"
+      ref="totpModalRef"
+      :temp-token="totpTempToken"
+      :user-email-masked="totpUserEmailMasked"
+      @verify="handle2FAVerify"
+      @cancel="handle2FACancel"
+    />
+  </Transition>
 </template>
 
 <script setup lang="ts">
