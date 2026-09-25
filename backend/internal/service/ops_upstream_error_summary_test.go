@@ -197,12 +197,28 @@ func TestOpsUpstreamErrorSummaryNestedEmptyCollectionsAreNotNull(t *testing.T) {
 	if err := json.Unmarshal(payload, &got); err != nil {
 		t.Fatal(err)
 	}
-	group := got["groups"].([]any)[0].(map[string]any)
-	model := group["models"].([]any)[0].(map[string]any)
-	if group["models"] == nil || model["status_codes"] == nil || model["accounts"] == nil {
+	groups, ok := got["groups"].([]any)
+	if !ok || len(groups) == 0 {
+		t.Fatalf("groups missing: %s", payload)
+	}
+	group, ok := groups[0].(map[string]any)
+	if !ok {
+		t.Fatalf("group missing: %s", payload)
+	}
+	models, ok := group["models"].([]any)
+	if !ok || len(models) == 0 {
+		t.Fatalf("models missing: %s", payload)
+	}
+	model, ok := models[0].(map[string]any)
+	if !ok {
+		t.Fatalf("model missing: %s", payload)
+	}
+	accounts, accountsOK := model["accounts"].([]any)
+	statusCodes, statusCodesOK := model["status_codes"].(map[string]any)
+	if !accountsOK || !statusCodesOK || group["models"] == nil || model["status_codes"] == nil || model["accounts"] == nil {
 		t.Fatalf("nested collection serialized as null: %s", payload)
 	}
-	if len(model["accounts"].([]any)) != 0 || len(model["status_codes"].(map[string]any)) != 0 {
+	if len(accounts) != 0 || len(statusCodes) != 0 {
 		t.Fatalf("nested collections not empty: %s", payload)
 	}
 }
