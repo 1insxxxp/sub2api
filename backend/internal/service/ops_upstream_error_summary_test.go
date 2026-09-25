@@ -140,20 +140,49 @@ func TestOpsUpstreamErrorSummaryContractMultipleGroupsModelsAccountsAndReasons(t
 	if got["total_errors"] != float64(14) || got["group_count"] != float64(2) {
 		t.Fatalf("summary totals = %#v", got)
 	}
-	groups := got["groups"].([]any)
-	if len(groups) != 2 || groups[0].(map[string]any)["group_name"] != "production" || groups[1].(map[string]any)["group_id"] != float64(8) {
+	groups, ok := got["groups"].([]any)
+	if !ok || len(groups) != 2 {
+		t.Fatalf("groups = %#v", got["groups"])
+	}
+	groupJSON0, ok := groups[0].(map[string]any)
+	if !ok {
+		t.Fatalf("group[0] = %#v", groups[0])
+	}
+	groupJSON1, ok := groups[1].(map[string]any)
+	if !ok {
+		t.Fatalf("group[1] = %#v", groups[1])
+	}
+	if groupJSON0["group_name"] != "production" || groupJSON1["group_id"] != float64(8) {
 		t.Fatalf("groups = %#v", groups)
 	}
-	models := groups[0].(map[string]any)["models"].([]any)
-	model := models[0].(map[string]any)
-	if model["status_codes"].(map[string]any)["500"] != float64(3) || len(model["accounts"].([]any)) != 2 {
+	models, ok := groupJSON0["models"].([]any)
+	if !ok || len(models) == 0 {
+		t.Fatalf("models = %#v", groupJSON0["models"])
+	}
+	model, ok := models[0].(map[string]any)
+	if !ok {
+		t.Fatalf("model = %#v", models[0])
+	}
+	statusCodes, ok := model["status_codes"].(map[string]any)
+	if !ok || statusCodes["500"] != float64(3) {
 		t.Fatalf("model = %#v", model)
 	}
-	accounts := model["accounts"].([]any)
-	if len(accounts[1].(map[string]any)["reasons"].([]any)) != 2 {
+	accounts, ok := model["accounts"].([]any)
+	if !ok || len(accounts) != 2 {
+		t.Fatalf("accounts = %#v", model["accounts"])
+	}
+	backupAccount, ok := accounts[1].(map[string]any)
+	if !ok {
+		t.Fatalf("account[1] = %#v", accounts[1])
+	}
+	reasons, ok := backupAccount["reasons"].([]any)
+	if !ok || len(reasons) != 2 {
 		t.Fatalf("account reasons = %#v", accounts[1])
 	}
-	reason := accounts[1].(map[string]any)["reasons"].([]any)[1].(map[string]any)
+	reason, ok := reasons[1].(map[string]any)
+	if !ok {
+		t.Fatalf("reason[1] = %#v", reasons[1])
+	}
 	if reason["error_type"] != "network_error" || reason["status_code"] != float64(502) || reason["representative_error_id"] != float64(103) {
 		t.Fatalf("reason = %#v", reason)
 	}

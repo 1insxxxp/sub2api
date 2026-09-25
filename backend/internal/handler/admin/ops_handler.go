@@ -560,7 +560,7 @@ func parseOpsUpstreamErrorFilter(c *gin.Context, paginated, includeSummaryFilter
 			}
 			n, err := strconv.Atoi(p)
 			if err != nil || n < 0 {
-				return nil, fmt.Errorf("Invalid status_codes")
+				return nil, fmt.Errorf("invalid status_codes")
 			}
 			out = append(out, n)
 		}
@@ -573,7 +573,7 @@ func parseOpsUpstreamErrorFilter(c *gin.Context, paginated, includeSummaryFilter
 				filter.StatusCodesOther = true
 			case "0", "false", "no":
 			default:
-				return nil, fmt.Errorf("Invalid status_codes_other")
+				return nil, fmt.Errorf("invalid status_codes_other")
 			}
 		}
 	}
