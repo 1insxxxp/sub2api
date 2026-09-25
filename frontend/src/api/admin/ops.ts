@@ -973,15 +973,16 @@ export type OpsErrorLogsResponse = PaginatedResponse<OpsErrorLog>
 /**
  * Server-side grouped view of upstream errors.
  *
- * The nested collections are returned as empty arrays by the API, but remain
- * optional here so clients can safely consume responses from older servers.
+ * The server normalizes nested collections to empty arrays and always emits
+ * aggregate totals/truncation flags, while nullable IDs/timestamps remain
+ * nullable for ungrouped or empty results.
  */
 export interface OpsUpstreamErrorSummary {
   total_errors: number
   group_count: number
-  latest_at?: string | null
-  groups?: OpsUpstreamErrorSummaryGroup[] | null
-  groups_truncated?: boolean
+  latest_at: string | null
+  groups: OpsUpstreamErrorSummaryGroup[]
+  groups_truncated: boolean
 }
 
 export interface OpsUpstreamErrorSummaryGroup {
@@ -990,31 +991,31 @@ export interface OpsUpstreamErrorSummaryGroup {
   error_count: number
   model_count: number
   account_count: number
-  latest_at?: string | null
-  models?: OpsUpstreamErrorSummaryModel[] | null
-  total_models?: number
-  models_truncated?: boolean
+  latest_at: string | null
+  models: OpsUpstreamErrorSummaryModel[]
+  total_models: number
+  models_truncated: boolean
 }
 
 export interface OpsUpstreamErrorSummaryModel {
   model: string
   error_count: number
-  latest_at?: string | null
-  status_codes?: Record<string, number> | null
-  accounts?: OpsUpstreamErrorSummaryAccount[] | null
-  total_accounts?: number
-  accounts_truncated?: boolean
+  latest_at: string | null
+  status_codes: Record<string, number>
+  accounts: OpsUpstreamErrorSummaryAccount[]
+  total_accounts: number
+  accounts_truncated: boolean
 }
 
 export interface OpsUpstreamErrorSummaryAccount {
   account_id?: number | null
   account_name: string
   error_count: number
-  latest_at?: string | null
+  latest_at: string | null
   latest_status_code: number
-  reasons?: OpsUpstreamErrorSummaryReason[] | null
-  total_reasons?: number
-  reasons_truncated?: boolean
+  reasons: OpsUpstreamErrorSummaryReason[]
+  total_reasons: number
+  reasons_truncated: boolean
 }
 
 export interface OpsUpstreamErrorSummaryReason {
@@ -1022,7 +1023,7 @@ export interface OpsUpstreamErrorSummaryReason {
   error_type: string
   status_code: number
   count: number
-  latest_at?: string | null
+  latest_at: string | null
   representative_error_id: number
 }
 
