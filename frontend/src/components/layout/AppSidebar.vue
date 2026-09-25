@@ -135,7 +135,7 @@
             </span>
           </div>
 
-          <template v-for="item in personalNavItems" :key="item.path">
+          <template v-for="item in visiblePersonalSidebarMenuItems" :key="item.path">
             <a
               v-if="item.externalUrl"
               :href="item.externalUrl"
@@ -205,7 +205,7 @@
 
     <!-- Bottom Section -->
     <div class="sidebar-footer-shell mt-auto border-t border-gray-100 p-3 dark:border-dark-800">
-      <div v-if="!isAdmin && !sidebarCollapsed" class="relative mb-2">
+      <div v-if="!sidebarCollapsed" class="relative mb-2">
         <button
           type="button"
           class="sidebar-link w-full"
@@ -923,9 +923,6 @@ function finalizeNav(items: NavItem[]): NavItem[] {
 
 // User navigation items (for regular users)
 const userNavItems = computed((): NavItem[] => finalizeNav(buildSelfNavItems(true)))
-const sidebarMenuItems = computed((): NavItem[] => userNavItems.value)
-const visibleSidebarMenuItems = computed(() => sidebarMenuItems.value.filter(item => isSidebarItemVisible(item.path)))
-
 function isSidebarItemFixed(path: string): boolean {
   return fixedSidebarPaths.has(path)
 }
@@ -965,6 +962,9 @@ watch(sidebarVisibilityKey, loadSidebarVisibility, { immediate: true })
 // Admins access 可用渠道 from this section just like regular users — there is no
 // separate admin entry, since the page is purely a user-facing view.
 const personalNavItems = computed((): NavItem[] => finalizeNav(buildSelfNavItems(false)))
+const sidebarMenuItems = computed((): NavItem[] => isAdmin.value ? personalNavItems.value : userNavItems.value)
+const visibleSidebarMenuItems = computed(() => sidebarMenuItems.value.filter(item => isSidebarItemVisible(item.path)))
+const visiblePersonalSidebarMenuItems = computed(() => personalNavItems.value.filter(item => isSidebarItemVisible(item.path)))
 
 // Custom menu items filtered by visibility
 const customMenuItemsForUser = computed(() => {
