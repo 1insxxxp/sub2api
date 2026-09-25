@@ -451,7 +451,7 @@ func (h *OpsHandler) ListUpstreamErrors(c *gin.Context) {
 		return
 	}
 
-	filter, err := parseOpsUpstreamErrorFilter(c, true)
+	filter, err := parseOpsUpstreamErrorFilter(c, true, false)
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -477,7 +477,7 @@ func (h *OpsHandler) SummaryUpstreamErrors(c *gin.Context) {
 		return
 	}
 
-	filter, err := parseOpsUpstreamErrorFilter(c, false)
+	filter, err := parseOpsUpstreamErrorFilter(c, false, true)
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -492,7 +492,7 @@ func (h *OpsHandler) SummaryUpstreamErrors(c *gin.Context) {
 
 // parseOpsUpstreamErrorFilter centralizes the provider-health filter semantics
 // shared by the paginated list and grouped summary endpoints.
-func parseOpsUpstreamErrorFilter(c *gin.Context, paginated bool) (*service.OpsErrorLogFilter, error) {
+func parseOpsUpstreamErrorFilter(c *gin.Context, paginated, includeSummaryFilters bool) (*service.OpsErrorLogFilter, error) {
 	filter := &service.OpsErrorLogFilter{}
 	if paginated {
 		filter.Page, filter.PageSize = response.ParsePagination(c)
@@ -515,10 +515,12 @@ func parseOpsUpstreamErrorFilter(c *gin.Context, paginated bool) (*service.OpsEr
 	filter.ErrorPhasesAny = []string{"upstream", "account_auth"}
 	filter.IncludeRecoveredUpstream = true
 	filter.Owner = "provider"
-	filter.Phase = strings.TrimSpace(c.Query("phase"))
-	filter.Model = strings.TrimSpace(c.Query("model"))
 	filter.Source = strings.TrimSpace(c.Query("error_source"))
 	filter.Query = strings.TrimSpace(c.Query("q"))
+	if includeSummaryFilters {
+		filter.Phase = strings.TrimSpace(c.Query("phase"))
+		filter.Model = strings.TrimSpace(c.Query("model"))
+	}
 	if platform := strings.TrimSpace(c.Query("platform")); platform != "" {
 		filter.Platform = platform
 	}
@@ -564,13 +566,15 @@ func parseOpsUpstreamErrorFilter(c *gin.Context, paginated bool) (*service.OpsEr
 		}
 		filter.StatusCodes = out
 	}
-	if v := strings.TrimSpace(c.Query("status_codes_other")); v != "" {
-		switch strings.ToLower(v) {
-		case "1", "true", "yes":
-			filter.StatusCodesOther = true
-		case "0", "false", "no":
-		default:
-			return nil, fmt.Errorf("Invalid status_codes_other")
+	if includeSummaryFilters {
+		if v := strings.TrimSpace(c.Query("status_codes_other")); v != "" {
+			switch strings.ToLower(v) {
+			case "1", "true", "yes":
+				filter.StatusCodesOther = true
+			case "0", "false", "no":
+			default:
+				return nil, fmt.Errorf("Invalid status_codes_other")
+			}
 		}
 	}
 	applyOpsErrorSortParams(c, filter)

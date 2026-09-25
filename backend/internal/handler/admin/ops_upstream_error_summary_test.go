@@ -14,8 +14,9 @@ import (
 
 type upstreamSummaryCaptureRepo struct {
 	service.OpsRepository
-	filter *service.OpsErrorLogFilter
-	result *service.OpsUpstreamErrorSummary
+	filter     *service.OpsErrorLogFilter
+	listFilter *service.OpsErrorLogFilter
+	result     *service.OpsUpstreamErrorSummary
 }
 
 func (r *upstreamSummaryCaptureRepo) GetUpstreamErrorSummary(_ context.Context, filter *service.OpsErrorLogFilter) (*service.OpsUpstreamErrorSummary, error) {
@@ -24,6 +25,11 @@ func (r *upstreamSummaryCaptureRepo) GetUpstreamErrorSummary(_ context.Context, 
 		return r.result, nil
 	}
 	return &service.OpsUpstreamErrorSummary{Groups: []*service.OpsUpstreamErrorSummaryGroup{}}, nil
+}
+
+func (r *upstreamSummaryCaptureRepo) ListErrorLogs(_ context.Context, filter *service.OpsErrorLogFilter) (*service.OpsErrorLogList, error) {
+	r.listFilter = filter
+	return &service.OpsErrorLogList{Errors: []*service.OpsErrorLog{}, Page: filter.Page, PageSize: filter.PageSize}, nil
 }
 
 func newUpstreamSummaryTestRouter(h *OpsHandler) *gin.Engine {
@@ -110,5 +116,23 @@ func TestOpsUpstreamErrorSummary_MonitoringDisabled(t *testing.T) {
 	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/admin/ops/upstream-errors/summary", nil))
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("status=%d, want 404", w.Code)
+	}
+}
+
+func TestOpsUpstreamErrorSummary_ListKeepsLegacyIgnoredFilters(t *testing.T) {
+	repo := &upstreamSummaryCaptureRepo{}
+	svc := service.NewOpsService(repo, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	r := newUpstreamSummaryTestRouter(NewOpsHandler(svc))
+	r.GET("/admin/ops/upstream-errors", NewOpsHandler(svc).ListUpstreamErrors)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/admin/ops/upstream-errors?phase=gateway&model=gpt-5&status_codes_other=unexpected", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d, want 200: %s", w.Code, w.Body.String())
+	}
+	if repo.listFilter == nil {
+		t.Fatal("list repository was not called")
+	}
+	if repo.listFilter.Phase != "" || repo.listFilter.Model != "" || repo.listFilter.StatusCodesOther {
+		t.Fatalf("legacy list unexpectedly applied summary-only filters: %+v", repo.listFilter)
 	}
 }
