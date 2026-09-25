@@ -451,17 +451,59 @@ func (h *OpsHandler) ListUpstreamErrors(c *gin.Context) {
 		return
 	}
 
-	page, pageSize := response.ParsePagination(c)
-	if pageSize > 500 {
-		pageSize = 500
-	}
-	startTime, endTime, err := parseOpsTimeRange(c, "1h")
+	filter, err := parseOpsUpstreamErrorFilter(c, true)
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
 	}
 
-	filter := &service.OpsErrorLogFilter{Page: page, PageSize: pageSize}
+	result, err := h.opsService.GetErrorLogs(c.Request.Context(), filter)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Paginated(c, result.Errors, int64(result.Total), result.Page, result.PageSize)
+}
+
+// SummaryUpstreamErrors returns the grouped provider-error view without pagination.
+// GET /api/v1/admin/ops/upstream-errors/summary
+func (h *OpsHandler) SummaryUpstreamErrors(c *gin.Context) {
+	if h.opsService == nil {
+		response.Error(c, http.StatusServiceUnavailable, "Ops service not available")
+		return
+	}
+	if err := h.opsService.RequireMonitoringEnabled(c.Request.Context()); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	filter, err := parseOpsUpstreamErrorFilter(c, false)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	summary, err := h.opsService.GetUpstreamErrorSummary(c.Request.Context(), filter)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, summary)
+}
+
+// parseOpsUpstreamErrorFilter centralizes the provider-health filter semantics
+// shared by the paginated list and grouped summary endpoints.
+func parseOpsUpstreamErrorFilter(c *gin.Context, paginated bool) (*service.OpsErrorLogFilter, error) {
+	filter := &service.OpsErrorLogFilter{}
+	if paginated {
+		filter.Page, filter.PageSize = response.ParsePagination(c)
+		if filter.PageSize > 500 {
+			filter.PageSize = 500
+		}
+	}
+	startTime, endTime, err := parseOpsTimeRange(c, "1h")
+	if err != nil {
+		return nil, err
+	}
 	if !startTime.IsZero() {
 		filter.StartTime = &startTime
 	}
@@ -471,32 +513,29 @@ func (h *OpsHandler) ListUpstreamErrors(c *gin.Context) {
 
 	filter.View = parseOpsViewParam(c)
 	filter.ErrorPhasesAny = []string{"upstream", "account_auth"}
-	// Provider-health list includes recovered inference and credential rows.
 	filter.IncludeRecoveredUpstream = true
 	filter.Owner = "provider"
+	filter.Phase = strings.TrimSpace(c.Query("phase"))
+	filter.Model = strings.TrimSpace(c.Query("model"))
 	filter.Source = strings.TrimSpace(c.Query("error_source"))
 	filter.Query = strings.TrimSpace(c.Query("q"))
-
 	if platform := strings.TrimSpace(c.Query("platform")); platform != "" {
 		filter.Platform = platform
 	}
 	if v := strings.TrimSpace(c.Query("group_id")); v != "" {
 		id, err := strconv.ParseInt(v, 10, 64)
 		if err != nil || id <= 0 {
-			response.BadRequest(c, "Invalid group_id")
-			return
+			return nil, fmt.Errorf("Invalid group_id")
 		}
 		filter.GroupID = &id
 	}
 	if v := strings.TrimSpace(c.Query("account_id")); v != "" {
 		id, err := strconv.ParseInt(v, 10, 64)
 		if err != nil || id <= 0 {
-			response.BadRequest(c, "Invalid account_id")
-			return
+			return nil, fmt.Errorf("Invalid account_id")
 		}
 		filter.AccountID = &id
 	}
-
 	if v := strings.TrimSpace(c.Query("resolved")); v != "" {
 		switch strings.ToLower(v) {
 		case "1", "true", "yes":
@@ -506,8 +545,7 @@ func (h *OpsHandler) ListUpstreamErrors(c *gin.Context) {
 			b := false
 			filter.Resolved = &b
 		default:
-			response.BadRequest(c, "Invalid resolved")
-			return
+			return nil, fmt.Errorf("Invalid resolved")
 		}
 	}
 	if statusCodesStr := strings.TrimSpace(c.Query("status_codes")); statusCodesStr != "" {
@@ -520,22 +558,23 @@ func (h *OpsHandler) ListUpstreamErrors(c *gin.Context) {
 			}
 			n, err := strconv.Atoi(p)
 			if err != nil || n < 0 {
-				response.BadRequest(c, "Invalid status_codes")
-				return
+				return nil, fmt.Errorf("Invalid status_codes")
 			}
 			out = append(out, n)
 		}
 		filter.StatusCodes = out
 	}
-
-	applyOpsErrorSortParams(c, filter)
-
-	result, err := h.opsService.GetErrorLogs(c.Request.Context(), filter)
-	if err != nil {
-		response.ErrorFrom(c, err)
-		return
+	if v := strings.TrimSpace(c.Query("status_codes_other")); v != "" {
+		switch strings.ToLower(v) {
+		case "1", "true", "yes":
+			filter.StatusCodesOther = true
+		case "0", "false", "no":
+		default:
+			return nil, fmt.Errorf("Invalid status_codes_other")
+		}
 	}
-	response.Paginated(c, result.Errors, int64(result.Total), result.Page, result.PageSize)
+	applyOpsErrorSortParams(c, filter)
+	return filter, nil
 }
 
 // GetUpstreamError returns upstream error detail.
