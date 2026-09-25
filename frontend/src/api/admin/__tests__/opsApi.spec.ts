@@ -102,6 +102,8 @@ describe('admin ops API', () => {
     const response = await opsAPI.getUpstreamErrorSummary({})
     expect(response.groups).toEqual([])
     expect(response.groups_truncated).toBe(false)
+    expect(summary.groups[0]).toHaveProperty('group_id', null)
+    expect(summary.groups[0].models[0].accounts[0]).toHaveProperty('account_id', null)
     expect(summary.groups[0].models[0].accounts[0].reasons[0]).toMatchObject({
       count: 3,
       representative_error_id: 99,
