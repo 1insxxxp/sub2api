@@ -419,7 +419,7 @@ const requestDetailsPreset = ref<OpsRequestDetailsPreset>({
 })
 
 // 记录单条错误详情来自哪个列表，便于"返回列表"时重新打开对应弹窗并保留状态。
-type DetailReturnTarget = 'errorList' | 'requestList' | null
+type DetailReturnTarget = 'errorList' | 'requestList' | 'summaryList' | null
 const detailReturnTarget = ref<DetailReturnTarget>(null)
 
 // 从详情返回时，列表弹窗应保留上一次的筛选/分页状态而非重置。
@@ -535,7 +535,7 @@ function openUpstreamSummary(filters: OpsErrorListQueryParams) {
 function openSummaryError(id: number) {
   showUpstreamSummary.value = false
   errorDetailsType.value = 'upstream'
-  detailReturnTarget.value = 'errorList'
+  detailReturnTarget.value = 'summaryList'
   selectedErrorId.value = id
   showErrorDetails.value = false
   showErrorModal.value = true
@@ -609,7 +609,13 @@ function handleBackToList() {
   } else if (target === 'errorList') {
     showErrorModal.value = false
     showRequestDetails.value = false
+    showUpstreamSummary.value = false
     showErrorDetails.value = true
+  } else if (target === 'summaryList') {
+    showErrorModal.value = false
+    showRequestDetails.value = false
+    showErrorDetails.value = false
+    showUpstreamSummary.value = true
   }
   detailReturnTarget.value = null
   // 子组件 watch 在本次 show 变化中消费 resumeState 后复位，保证下次手动打开仍会重置筛选。
