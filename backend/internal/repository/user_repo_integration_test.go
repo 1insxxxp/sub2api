@@ -500,6 +500,24 @@ func (s *UserRepoSuite) TestCreditGiftBalanceDoesNotIncreaseTotalRecharged() {
 	s.Require().LessOrEqual(got.GiftBalance, got.Balance)
 }
 
+func (s *UserRepoSuite) TestCreditGiftBalanceOffsetsExistingOverdraft() {
+	user := s.mustCreateUser(&service.User{
+		Email:          "gift-recharge-overdraft@test.com",
+		Balance:        -0.05,
+		GiftBalance:    0,
+		TotalRecharged: 3,
+	})
+
+	s.Require().NoError(s.repo.CreditGiftBalance(s.ctx, user.ID, 10))
+
+	got, err := s.repo.GetByID(s.ctx, user.ID)
+	s.Require().NoError(err)
+	s.Require().InDelta(9.95, got.Balance, 1e-8)
+	s.Require().InDelta(9.95, got.GiftBalance, 1e-8)
+	s.Require().Equal(3.0, got.TotalRecharged)
+	s.Require().LessOrEqual(got.GiftBalance, got.Balance)
+}
+
 func (s *UserRepoSuite) TestCreditGiftBalanceRejectsUnpersistableAmounts() {
 	for i, amount := range []float64{0, -1, math.NaN(), math.Inf(1), 0.000000001, 1_000_000_000_000} {
 		user := s.mustCreateUser(&service.User{

@@ -918,8 +918,8 @@ func (r *userRepository) UpdateBalance(ctx context.Context, id int64, amount flo
 }
 
 // CreditGiftBalance atomically credits spendable and gift balances without
-// changing total_recharged. The conditional update refuses pre-existing wallet
-// states where gift funds are not a subset of the available balance.
+// changing total_recharged. Existing overdraft is applied before the gift
+// balance is recorded, so the wallet invariant remains gift_balance <= balance.
 func (r *userRepository) CreditGiftBalance(ctx context.Context, userID int64, amount float64) error {
 	quantized := service.QuantizeUsageBillingAmount(amount)
 	if amount <= 0 || amount >= 1_000_000_000_000 || math.IsNaN(amount) || math.IsInf(amount, 0) || quantized != amount {
@@ -929,10 +929,10 @@ func (r *userRepository) CreditGiftBalance(ctx context.Context, userID int64, am
 	const updateSQL = `
 		UPDATE users
 		SET balance = balance + $1,
-			gift_balance = gift_balance + $1,
+			gift_balance = LEAST(gift_balance + $1, GREATEST(balance + $1, 0)),
 			updated_at = NOW()
 		WHERE id = $2 AND deleted_at IS NULL
-			AND gift_balance <= balance
+			AND gift_balance <= GREATEST(balance, 0)
 	`
 	client := clientFromContext(ctx, r.client)
 	result, err := client.ExecContext(ctx, updateSQL, amount, userID)

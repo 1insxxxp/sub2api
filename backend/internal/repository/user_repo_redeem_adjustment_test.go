@@ -86,6 +86,16 @@ func TestApplyRedeemBalanceAdjustment_UsesAtomicFloor(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestCreditGiftBalanceAllowsOverdraftAndCapsGiftCreditToAvailableBalance(t *testing.T) {
+	repo, mock := newRedeemAdjustmentRepoMock(t)
+	mock.ExpectExec(`UPDATE users SET balance = balance \+ \$1, gift_balance = LEAST\(gift_balance \+ \$1, GREATEST\(balance \+ \$1, 0\)\), updated_at = NOW\(\) WHERE id = \$2 AND deleted_at IS NULL AND gift_balance <= GREATEST\(balance, 0\)`).
+		WithArgs(10.0, int64(42)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	require.NoError(t, repo.CreditGiftBalance(context.Background(), 42, 10))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestApplyRedeemConcurrencyAdjustment_UsesAtomicFloor(t *testing.T) {
 	repo, mock := newRedeemAdjustmentRepoMock(t)
 	mock.ExpectExec(`UPDATE users SET concurrency = GREATEST\(concurrency \+ \$1, 0\), updated_at = NOW\(\) WHERE id = \$2 AND deleted_at IS NULL`).
