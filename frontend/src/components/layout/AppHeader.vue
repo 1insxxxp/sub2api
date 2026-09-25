@@ -161,7 +161,7 @@
             />
           </Teleport>
           <Teleport to="body" :disabled="!isMobileCheckinPopover">
-            <Transition name="checkin-popover">
+            <Transition :name="isMobileCheckinPopover ? 'checkin-sheet' : 'dropdown'">
               <div
                 v-show="checkinPopoverOpen"
                 id="daily-checkin-popover"
@@ -1282,6 +1282,7 @@ watch(
   display: flex;
   max-height: min(42rem, calc(100dvh - 5rem));
   flex-direction: column;
+  isolation: isolate;
 }
 
 .daily-checkin-popover-header {
@@ -1312,7 +1313,6 @@ watch(
     max-width: none;
     max-height: min(38rem, calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 5.5rem));
     margin-top: 0;
-    transform: translateY(0.5rem);
     border-radius: 1.25rem;
     box-shadow:
       0 24px 64px rgba(15, 23, 42, 0.26),
@@ -1504,25 +1504,25 @@ watch(
   transform: scale(0.98) translateY(-4px);
 }
 
-.checkin-popover-enter-active,
-.checkin-popover-leave-active {
-  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+.checkin-sheet-enter-active,
+.checkin-sheet-leave-active {
+  transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.checkin-popover-enter-from,
-.checkin-popover-leave-to {
-  transform: scale(0.985) translateY(0.5rem);
+.checkin-sheet-enter-from,
+.checkin-sheet-leave-to {
+  transform: translateY(100%);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .dropdown-enter-active,
   .dropdown-leave-active,
-  .checkin-popover-enter-active,
-  .checkin-popover-leave-active { transition: none; }
+  .checkin-sheet-enter-active,
+  .checkin-sheet-leave-active { transition: none; }
   .dropdown-enter-from,
   .dropdown-leave-to,
-  .checkin-popover-enter-from,
-  .checkin-popover-leave-to { transform: none; }
+  .checkin-sheet-enter-from,
+  .checkin-sheet-leave-to { transform: none; }
 }
 
 .checkin-progress-track {
