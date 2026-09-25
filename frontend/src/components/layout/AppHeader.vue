@@ -161,7 +161,7 @@
             />
           </Teleport>
           <Teleport to="body" :disabled="!isMobileCheckinPopover">
-            <Transition name="dropdown">
+            <Transition name="checkin-popover">
               <div
                 v-show="checkinPopoverOpen"
                 id="daily-checkin-popover"
@@ -1504,11 +1504,25 @@ watch(
   transform: scale(0.98) translateY(-4px);
 }
 
+.checkin-popover-enter-active,
+.checkin-popover-leave-active {
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.checkin-popover-enter-from,
+.checkin-popover-leave-to {
+  transform: scale(0.985) translateY(0.5rem);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .dropdown-enter-active,
-  .dropdown-leave-active { transition: none; }
+  .dropdown-leave-active,
+  .checkin-popover-enter-active,
+  .checkin-popover-leave-active { transition: none; }
   .dropdown-enter-from,
-  .dropdown-leave-to { transform: none; }
+  .dropdown-leave-to,
+  .checkin-popover-enter-from,
+  .checkin-popover-leave-to { transform: none; }
 }
 
 .checkin-progress-track {
