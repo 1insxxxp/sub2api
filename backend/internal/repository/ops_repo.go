@@ -21,6 +21,10 @@ const (
 	maxSummaryModels   = 50
 	maxSummaryAccounts = 50
 	maxSummaryReasons  = 20
+	// maxSummaryGroups bounds the returned JSON hierarchy. The SQL aggregation
+	// still examines every matching stored reason so distinct full messages are
+	// never merged merely because their response text has the same prefix.
+	maxSummaryGroups = 100
 )
 
 const insertOpsErrorLogSQL = `
@@ -90,7 +94,7 @@ SELECT
   e.account_id,
   COALESCE(NULLIF(TRIM(a.name), ''), '未知账号'),
   COALESCE(e.upstream_status_code, e.status_code, 0),
-  LEFT(COALESCE(NULLIF(TRIM(e.upstream_error_message), ''), NULLIF(TRIM(e.error_message), ''), '未知错误'), 512),
+	COALESCE(NULLIF(TRIM(e.upstream_error_message), ''), NULLIF(TRIM(e.error_message), ''), '未知错误'),
   COALESCE(e.error_type, ''),
   COUNT(*)::bigint,
   MAX(e.created_at),
@@ -101,7 +105,7 @@ LEFT JOIN accounts a ON a.id = e.account_id
 ` + where + `
 GROUP BY e.group_id, g.name, COALESCE(NULLIF(TRIM(e.requested_model), ''), NULLIF(TRIM(e.model), ''), '未知模型'),
          e.account_id, a.name, COALESCE(e.upstream_status_code, e.status_code, 0),
-         LEFT(COALESCE(NULLIF(TRIM(e.upstream_error_message), ''), NULLIF(TRIM(e.error_message), ''), '未知错误'), 512),
+		 COALESCE(NULLIF(TRIM(e.upstream_error_message), ''), NULLIF(TRIM(e.error_message), ''), '未知错误'),
          COALESCE(e.error_type, '')
 ORDER BY COUNT(*) DESC, MAX(e.created_at) DESC, e.group_id NULLS FIRST, e.account_id NULLS FIRST`
 
@@ -117,6 +121,7 @@ ORDER BY COUNT(*) DESC, MAX(e.created_at) DESC, e.group_id NULLS FIRST, e.accoun
 		accounts map[string]struct{}
 	}
 	groups := make(map[string]*groupState)
+	reasonIndexes := make(map[*service.OpsUpstreamErrorSummaryAccount]map[string]*service.OpsUpstreamErrorSummaryReason)
 	for rows.Next() {
 		var groupID, accountID sql.NullInt64
 		var groupName, model, accountName, reason, errorType string
@@ -165,6 +170,7 @@ ORDER BY COUNT(*) DESC, MAX(e.created_at) DESC, e.group_id NULLS FIRST, e.accoun
 			}
 			account = &service.OpsUpstreamErrorSummaryAccount{AccountID: aid, AccountName: accountName, Reasons: make([]*service.OpsUpstreamErrorSummaryReason, 0)}
 			gModel.Accounts = append(gModel.Accounts, account)
+			reasonIndexes[account] = make(map[string]*service.OpsUpstreamErrorSummaryReason)
 		}
 		account.ErrorCount += count
 		gs.accounts[accountKey] = struct{}{}
@@ -173,10 +179,11 @@ ORDER BY COUNT(*) DESC, MAX(e.created_at) DESC, e.group_id NULLS FIRST, e.accoun
 			account.LatestStatusCode = status
 		}
 		reasonKey := errorType + "\x00" + fmt.Sprintf("%d", status) + "\x00" + reason
-		r := findSummaryReason(account.Reasons, reasonKey)
+		r := reasonIndexes[account][reasonKey]
 		if r == nil {
-			r = &service.OpsUpstreamErrorSummaryReason{Message: reason, ErrorType: errorType, StatusCode: status, RepresentativeErrorID: representativeID}
+			r = &service.OpsUpstreamErrorSummaryReason{Message: truncateSummaryReason(reason), ErrorType: errorType, StatusCode: status, RepresentativeErrorID: representativeID}
 			account.Reasons = append(account.Reasons, r)
+			reasonIndexes[account][reasonKey] = r
 		}
 		r.Count += count
 		r.LatestAt = maxTimePtr(r.LatestAt, latest)
@@ -222,10 +229,21 @@ ORDER BY COUNT(*) DESC, MAX(e.created_at) DESC, e.group_id NULLS FIRST, e.accoun
 	if result.TotalErrors > 0 {
 		result.LatestAt = latestSummaryGroup(result.Groups)
 	}
+	if len(result.Groups) > maxSummaryGroups {
+		result.GroupsTruncated = true
+		result.Groups = result.Groups[:maxSummaryGroups]
+	}
 	return result, nil
 }
 
 func timePtr(t time.Time) *time.Time { v := t; return &v }
+func truncateSummaryReason(s string) string {
+	r := []rune(s)
+	if len(r) > 512 {
+		return string(r[:512])
+	}
+	return s
+}
 func maxTimePtr(current *time.Time, candidate time.Time) *time.Time {
 	if current == nil || candidate.After(*current) {
 		return timePtr(candidate)
@@ -240,35 +258,33 @@ func findSummaryAccount(accounts []*service.OpsUpstreamErrorSummaryAccount, key 
 	}
 	return nil
 }
-func findSummaryReason(reasons []*service.OpsUpstreamErrorSummaryReason, key string) *service.OpsUpstreamErrorSummaryReason {
-	for _, r := range reasons {
-		if r.ErrorType+"\x00"+fmt.Sprintf("%d", r.StatusCode)+"\x00"+r.Message == key {
-			return r
-		}
-	}
-	return nil
-}
 func sortSummaryGroups(v []*service.OpsUpstreamErrorSummaryGroup) {
 	sort.SliceStable(v, func(i, j int) bool {
-		return summaryBefore(v[i].ErrorCount, v[i].LatestAt, v[j].ErrorCount, v[j].LatestAt, v[i].GroupName, v[j].GroupName)
+		return summaryBefore(v[i].ErrorCount, v[i].LatestAt, v[j].ErrorCount, v[j].LatestAt, v[i].GroupName, summaryIDTieBreak(v[i].GroupID), v[j].GroupName, summaryIDTieBreak(v[j].GroupID))
 	})
 }
 func sortSummaryModels(v []*service.OpsUpstreamErrorSummaryModel) {
 	sort.SliceStable(v, func(i, j int) bool {
-		return summaryBefore(v[i].ErrorCount, v[i].LatestAt, v[j].ErrorCount, v[j].LatestAt, v[i].Model, v[j].Model)
+		return summaryBefore(v[i].ErrorCount, v[i].LatestAt, v[j].ErrorCount, v[j].LatestAt, v[i].Model, "", v[j].Model, "")
 	})
 }
 func sortSummaryAccounts(v []*service.OpsUpstreamErrorSummaryAccount) {
 	sort.SliceStable(v, func(i, j int) bool {
-		return summaryBefore(v[i].ErrorCount, v[i].LatestAt, v[j].ErrorCount, v[j].LatestAt, v[i].AccountName, v[j].AccountName)
+		return summaryBefore(v[i].ErrorCount, v[i].LatestAt, v[j].ErrorCount, v[j].LatestAt, v[i].AccountName, summaryIDTieBreak(v[i].AccountID), v[j].AccountName, summaryIDTieBreak(v[j].AccountID))
 	})
 }
 func sortSummaryReasons(v []*service.OpsUpstreamErrorSummaryReason) {
 	sort.SliceStable(v, func(i, j int) bool {
-		return summaryBefore(v[i].Count, v[i].LatestAt, v[j].Count, v[j].LatestAt, v[i].Message, v[j].Message)
+		return summaryBefore(v[i].Count, v[i].LatestAt, v[j].Count, v[j].LatestAt, v[i].Message, fmt.Sprintf("%020d", v[i].RepresentativeErrorID), v[j].Message, fmt.Sprintf("%020d", v[j].RepresentativeErrorID))
 	})
 }
-func summaryBefore(c1 int64, t1 *time.Time, c2 int64, t2 *time.Time, n1, n2 string) bool {
+func summaryIDTieBreak(id *int64) string {
+	if id == nil {
+		return ""
+	}
+	return fmt.Sprintf("%020d", *id)
+}
+func summaryBefore(c1 int64, t1 *time.Time, c2 int64, t2 *time.Time, n1, tie1, n2, tie2 string) bool {
 	if c1 != c2 {
 		return c1 > c2
 	}
@@ -281,7 +297,10 @@ func summaryBefore(c1 int64, t1 *time.Time, c2 int64, t2 *time.Time, n1, n2 stri
 	if t1 == nil && t2 != nil {
 		return false
 	}
-	return n1 < n2
+	if n1 != n2 {
+		return n1 < n2
+	}
+	return tie1 < tie2
 }
 func latestSummaryGroup(v []*service.OpsUpstreamErrorSummaryGroup) *time.Time {
 	var latest *time.Time

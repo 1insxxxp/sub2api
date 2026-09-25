@@ -183,11 +183,14 @@ type OpsErrorLogList struct {
 
 // OpsUpstreamErrorSummary is the grouped view of upstream errors used by the
 // operations dashboard. The repository returns groups ordered by error count.
+// Groups is capped to bound the response; GroupCount, TotalErrors, and LatestAt
+// still describe all matching groups.
 type OpsUpstreamErrorSummary struct {
-	TotalErrors int64                           `json:"total_errors"`
-	GroupCount  int                             `json:"group_count"`
-	LatestAt    *time.Time                      `json:"latest_at"`
-	Groups      []*OpsUpstreamErrorSummaryGroup `json:"groups"`
+	TotalErrors     int64                           `json:"total_errors"`
+	GroupCount      int                             `json:"group_count"`
+	LatestAt        *time.Time                      `json:"latest_at"`
+	Groups          []*OpsUpstreamErrorSummaryGroup `json:"groups"`
+	GroupsTruncated bool                            `json:"groups_truncated"`
 }
 
 // MarshalJSON keeps collection fields stable for API clients. Aggregators may
