@@ -1,18 +1,21 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/common/BaseDialog.vue'
+import Pagination from '@/components/common/Pagination.vue'
 import { opsAPI, type OpsErrorListQueryParams, type OpsSLAErrorSummary, type OpsUpstreamErrorSummaryGroup } from '@/api/admin/ops'
 import { buildOpsErrorTimeParams } from '../utils/opsErrorParams'
 
 interface Props { show: boolean; timeRange: string; customStartTime?: string | null; customEndTime?: string | null; platform?: string; groupId?: number | null; filters?: OpsErrorListQueryParams }
 interface SummaryRow { id: number; model: string; account: string; errorType: string; message: string; statusCode: number; count: number; latestAt: string | null }
+const GROUP_PAGE_SIZE = 10
 const props = defineProps<Props>()
 const emit = defineEmits<{ (e: 'close'): void; (e: 'openErrorDetail', id: number): void }>()
 const { t } = useI18n()
 const loading = ref(false)
 const error = ref(false)
 const summary = ref<OpsSLAErrorSummary | null>(null)
+const groupPages = reactive<Record<string, number>>({})
 function buildParams(): OpsErrorListQueryParams {
   const params: OpsErrorListQueryParams = { ...(props.filters || {}) }
   Object.assign(params, buildOpsErrorTimeParams(props.timeRange, props.customStartTime, props.customEndTime))
@@ -25,10 +28,31 @@ function buildParams(): OpsErrorListQueryParams {
 async function load() {
   if (!props.show) return
   loading.value = true; error.value = false
-  try { summary.value = await opsAPI.getSLAErrorSummary(buildParams()) } catch (err) { console.error('[OpsSlaErrorSummaryModal] Failed to load summary', err); error.value = true; summary.value = null } finally { loading.value = false }
+  try { summary.value = await opsAPI.getSLAErrorSummary(buildParams()); resetGroupPages() } catch (err) { console.error('[OpsSlaErrorSummaryModal] Failed to load summary', err); error.value = true; summary.value = null; resetGroupPages() } finally { loading.value = false }
 }
+function resetGroupPages() { Object.keys(groupPages).forEach(key => delete groupPages[key]) }
 function formatDate(value: string | null | undefined) { if (!value) return '—'; const date = new Date(value); return Number.isNaN(date.getTime()) ? value : date.toLocaleString() }
-function rowsForGroup(group: OpsUpstreamErrorSummaryGroup): SummaryRow[] { return (group.models || []).flatMap(model => (model.accounts || []).flatMap(account => (account.reasons || []).map(reason => ({ id: reason.representative_error_id, model: model.model, account: account.account_name, errorType: reason.error_type, message: reason.message, statusCode: reason.status_code, count: reason.count, latestAt: reason.latest_at })))) }
+function rowsForGroup(group: OpsUpstreamErrorSummaryGroup): SummaryRow[] {
+  return (group.models || []).flatMap(model => (model.accounts || []).flatMap(account => (account.reasons || []).map(reason => ({ id: reason.representative_error_id, model: model.model, account: account.account_name, errorType: reason.error_type, message: reason.message, statusCode: reason.status_code, count: reason.count, latestAt: reason.latest_at })))).sort((a, b) => {
+    const aTime = a.latestAt ? Date.parse(a.latestAt) : 0
+    const bTime = b.latestAt ? Date.parse(b.latestAt) : 0
+    return bTime - aTime || b.id - a.id
+  })
+}
+function groupKey(group: OpsUpstreamErrorSummaryGroup, index: number) { return `${group.group_id ?? 'none'}-${index}` }
+function totalPagesForGroup(group: OpsUpstreamErrorSummaryGroup) { return Math.max(1, Math.ceil(rowsForGroup(group).length / GROUP_PAGE_SIZE)) }
+function pageForGroup(group: OpsUpstreamErrorSummaryGroup, index: number) {
+  const totalPages = totalPagesForGroup(group)
+  return Math.min(Math.max(groupPages[groupKey(group, index)] ?? 1, 1), totalPages)
+}
+function pagedRowsForGroup(group: OpsUpstreamErrorSummaryGroup, index: number) {
+  const rows = rowsForGroup(group)
+  const page = pageForGroup(group, index)
+  return rows.slice((page - 1) * GROUP_PAGE_SIZE, page * GROUP_PAGE_SIZE)
+}
+function setGroupPage(group: OpsUpstreamErrorSummaryGroup, index: number, page: number) {
+  groupPages[groupKey(group, index)] = Math.min(Math.max(page, 1), totalPagesForGroup(group))
+}
 function statusClass(statusCode: number) { if (statusCode >= 500) return 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300'; if (statusCode >= 400) return 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300'; return 'bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-gray-300' }
 watch(() => [props.show, props.timeRange, props.customStartTime, props.customEndTime, props.platform, props.groupId, props.filters] as const, () => { if (props.show) void load() }, { deep: true, immediate: true })
 </script>
@@ -50,7 +74,7 @@ watch(() => [props.show, props.timeRange, props.customStartTime, props.customEnd
         <div class="space-y-3">
           <section v-for="(group, gi) in summary.groups" :key="`${group.group_id ?? 'none'}-${gi}`" class="admin-list-surface overflow-hidden rounded-lg" :data-testid="`ops-sla-summary-group-${gi}`">
             <header class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-gray-200/70 px-3 py-2.5 dark:border-dark-700"><div class="min-w-0 flex-1"><div class="break-words text-sm font-bold text-gray-900 dark:text-white">{{ group.group_name }}</div><div class="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-gray-500 dark:text-gray-400"><span class="rounded-md bg-rose-50 px-1.5 py-0.5 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">{{ group.error_count }} {{ t('admin.ops.errorDetails.slaSummaryErrorsShort') }}</span><span class="rounded-md bg-gray-100 px-1.5 py-0.5 dark:bg-dark-700">{{ group.model_count }} {{ t('admin.ops.errorDetails.slaSummaryModelsShort') }}</span><span class="rounded-md bg-gray-100 px-1.5 py-0.5 dark:bg-dark-700">{{ group.account_count }} {{ t('admin.ops.errorDetails.slaSummaryAccountsShort') }}</span></div></div><time class="text-[10px] text-gray-400">{{ formatDate(group.latest_at) }}</time></header>
-            <div class="overflow-x-auto"><table class="min-w-[760px] w-full text-xs" :data-testid="`ops-sla-summary-table-${gi}`"><thead class="bg-gray-50/80 text-left text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:bg-dark-900/40 dark:text-gray-400"><tr><th class="px-3 py-2">{{ t('admin.ops.errorDetails.slaSummaryModel') }}</th><th class="px-3 py-2">{{ t('admin.ops.errorDetails.slaSummaryAccount') }}</th><th class="w-[34%] px-3 py-2">{{ t('admin.ops.errorDetails.slaSummaryReason') }}</th><th class="px-3 py-2">{{ t('admin.ops.errorDetails.slaSummaryStatus') }}</th><th class="px-3 py-2">{{ t('admin.ops.errorDetails.slaSummaryCount') }}</th><th class="px-3 py-2">{{ t('admin.ops.errorDetails.slaSummaryLatestTime') }}</th><th class="px-3 py-2 text-right">{{ t('admin.ops.errorDetails.slaSummaryAction') }}</th></tr></thead><tbody class="divide-y divide-gray-200/70 dark:divide-dark-700"><tr v-for="row in rowsForGroup(group)" :key="`${row.id}-${row.model}-${row.account}`" class="align-top hover:bg-primary-50/30 dark:hover:bg-primary-500/5" :data-testid="`ops-sla-summary-row-${row.id}`"><td class="max-w-[180px] break-words px-3 py-2.5 font-medium text-gray-800 dark:text-gray-100">{{ row.model }}</td><td class="max-w-[180px] break-words px-3 py-2.5 text-gray-700 dark:text-gray-200">{{ row.account }}</td><td class="max-w-[360px] px-3 py-2.5"><span class="block max-w-[360px] truncate font-medium text-gray-700 dark:text-gray-200" :title="row.message">{{ row.message || t('common.noData') }}</span><span class="mt-1 inline-flex rounded-md bg-gray-100 px-1.5 py-0.5 font-mono text-[10px] text-gray-500 dark:bg-dark-700 dark:text-gray-300">{{ row.errorType }}</span></td><td class="whitespace-nowrap px-3 py-2.5"><span class="rounded-md px-1.5 py-0.5 font-mono text-[10px]" :class="statusClass(row.statusCode)">{{ row.statusCode }}</span></td><td class="whitespace-nowrap px-3 py-2.5 font-semibold text-gray-700 dark:text-gray-200">×{{ row.count }}</td><td class="whitespace-nowrap px-3 py-2.5 text-gray-500 dark:text-gray-400">{{ formatDate(row.latestAt) }}</td><td class="whitespace-nowrap px-3 py-2.5 text-right"><button type="button" class="font-medium text-primary-600 hover:underline dark:text-primary-400" @click="emit('openErrorDetail', row.id)">{{ t('admin.ops.errorDetails.slaSummaryAction') }}</button></td></tr><tr v-if="!rowsForGroup(group).length"><td colspan="7" class="px-3 py-6 text-center text-gray-500">{{ t('common.noData') }}</td></tr></tbody></table></div>
+            <div class="overflow-x-auto"><table class="min-w-[760px] w-full text-xs" :data-testid="`ops-sla-summary-table-${gi}`"><thead class="bg-gray-50/80 text-left text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:bg-dark-900/40 dark:text-gray-400"><tr><th class="px-3 py-2">{{ t('admin.ops.errorDetails.slaSummaryModel') }}</th><th class="px-3 py-2">{{ t('admin.ops.errorDetails.slaSummaryAccount') }}</th><th class="w-[34%] px-3 py-2">{{ t('admin.ops.errorDetails.slaSummaryReason') }}</th><th class="px-3 py-2">{{ t('admin.ops.errorDetails.slaSummaryStatus') }}</th><th class="px-3 py-2">{{ t('admin.ops.errorDetails.slaSummaryCount') }}</th><th class="px-3 py-2">{{ t('admin.ops.errorDetails.slaSummaryLatestTime') }}</th><th class="px-3 py-2 text-right">{{ t('admin.ops.errorDetails.slaSummaryAction') }}</th></tr></thead><tbody class="divide-y divide-gray-200/70 dark:divide-dark-700"><tr v-for="row in pagedRowsForGroup(group, gi)" :key="`${row.id}-${row.model}-${row.account}`" class="align-top hover:bg-primary-50/30 dark:hover:bg-primary-500/5" :data-testid="`ops-sla-summary-row-${row.id}`"><td class="max-w-[180px] break-words px-3 py-2.5 font-medium text-gray-800 dark:text-gray-100">{{ row.model }}</td><td class="max-w-[180px] break-words px-3 py-2.5 text-gray-700 dark:text-gray-200">{{ row.account }}</td><td class="max-w-[360px] px-3 py-2.5"><span class="block max-w-[360px] truncate font-medium text-gray-700 dark:text-gray-200" :title="row.message">{{ row.message || t('common.noData') }}</span><span class="mt-1 inline-flex rounded-md bg-gray-100 px-1.5 py-0.5 font-mono text-[10px] text-gray-500 dark:bg-dark-700 dark:text-gray-300">{{ row.errorType }}</span></td><td class="whitespace-nowrap px-3 py-2.5"><span class="rounded-md px-1.5 py-0.5 font-mono text-[10px]" :class="statusClass(row.statusCode)">{{ row.statusCode }}</span></td><td class="whitespace-nowrap px-3 py-2.5 font-semibold text-gray-700 dark:text-gray-200">×{{ row.count }}</td><td class="whitespace-nowrap px-3 py-2.5 text-gray-500 dark:text-gray-400">{{ formatDate(row.latestAt) }}</td><td class="whitespace-nowrap px-3 py-2.5 text-right"><button type="button" class="font-medium text-primary-600 hover:underline dark:text-primary-400" @click="emit('openErrorDetail', row.id)">{{ t('admin.ops.errorDetails.slaSummaryAction') }}</button></td></tr><tr v-if="!rowsForGroup(group).length"><td colspan="7" class="px-3 py-6 text-center text-gray-500">{{ t('common.noData') }}</td></tr></tbody></table></div><div v-if="totalPagesForGroup(group) > 1" :data-testid="`ops-sla-summary-pagination-${gi}`" class="border-t border-gray-200/70 dark:border-dark-700"><Pagination :total="rowsForGroup(group).length" :page="pageForGroup(group, gi)" :page-size="GROUP_PAGE_SIZE" :show-page-size-selector="false" variant="compact" @update:page="setGroupPage(group, gi, $event)" /></div>
             <div v-if="group.models_truncated" class="border-t border-gray-200/70 px-3 py-2 text-xs text-gray-500 dark:border-dark-700">{{ t('admin.ops.errorDetails.slaSummaryNestedTruncated', { count: group.total_models }) }}</div>
           </section>
         </div>

@@ -19,6 +19,22 @@ const summary = {
         reasons: [{ message: 'upstream down', error_type: 'upstream', status_code: 502, count: 2, latest_at: '2026-09-25T01:00:00Z', representative_error_id: 77 }] }] }] }]
 }
 function mountModal(show = true) { return mount(OpsUpstreamErrorSummaryModal, { props: { show, timeRange: '1h' }, global: { stubs: { BaseDialog: BaseDialogStub } } }) }
+function summaryWithRows(rowCount: number) {
+  const group = summary.groups[0]
+  const model = group.models[0]
+  const account = model.accounts[0]
+  const reasons = Array.from({ length: rowCount }, (_, index) => ({
+    ...account.reasons[0],
+    message: `upstream down ${index}`,
+    representative_error_id: 100 + index,
+    latest_at: new Date(Date.UTC(2026, 8, 25, 1, index, 0)).toISOString()
+  }))
+  return {
+    ...summary,
+    total_errors: rowCount,
+    groups: [{ ...group, error_count: rowCount, models: [{ ...model, error_count: rowCount, accounts: [{ ...account, error_count: rowCount, total_reasons: rowCount, reasons }] }] }]
+  }
+}
 beforeEach(() => { getUpstreamErrorSummary.mockReset(); getUpstreamErrorSummary.mockResolvedValue(summary) })
 
 describe('OpsUpstreamErrorSummaryModal', () => {
@@ -37,5 +53,15 @@ describe('OpsUpstreamErrorSummaryModal', () => {
     const wrapper = mountModal(); await nextTick(); await nextTick(); expect(wrapper.text()).toContain('summaryError')
     getUpstreamErrorSummary.mockResolvedValueOnce({ ...summary, total_errors: 0, groups: [] })
     await wrapper.get('button').trigger('click'); await nextTick(); await nextTick(); expect(wrapper.text()).toContain('summaryEmpty')
+  })
+  it('paginates each group with ten latest rows by default', async () => {
+    getUpstreamErrorSummary.mockResolvedValueOnce(summaryWithRows(11))
+    const wrapper = mountModal(); await nextTick(); await nextTick()
+    expect(wrapper.findAll('[data-testid^="ops-summary-row-"]').length).toBe(10)
+    expect(wrapper.find('[data-testid="ops-summary-row-110"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="ops-summary-row-100"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="ops-summary-pagination-0"]').exists()).toBe(true)
+    await wrapper.findAll('button[aria-label="pagination.next"]')[0].trigger('click'); await nextTick()
+    expect(wrapper.find('[data-testid="ops-summary-row-100"]').exists()).toBe(true)
   })
 })
