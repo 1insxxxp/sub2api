@@ -456,6 +456,53 @@ describe('PaymentView recharge rate preview', () => {
     expect(rows[2].text()).toContain('¥80.00')
     expect(rows[2].text()).toContain('$320.00')
   })
+
+  it('uses the active promotion for every preview and shows its compact activity banner', async () => {
+    routeState.path = '/purchase'
+    routeState.query = {}
+    getCheckoutInfo.mockReset().mockResolvedValue(checkoutInfoFixture({
+      balance_recharge_multiplier: 1,
+      balance_recharge_tiers: [
+        { amount: 10, multiplier: 2 }, { amount: 18, multiplier: 3 }, { amount: 80, multiplier: 4 },
+      ],
+      balance_recharge_promotion: {
+        active: true,
+        name: '周年活动',
+        multiplier: 6,
+        end_at: '2099-09-26T12:00:00.000Z',
+      },
+    }))
+    const wrapper = shallowMount(PaymentView, { global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Teleport: true, Transition: false } } })
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="recharge-promotion-banner"]').text()).toContain('周年活动')
+    expect(wrapper.get('[data-testid="recharge-promotion-banner"]').text()).toContain('×6')
+    const rows = wrapper.findAll('[data-testid="recharge-rule-row"]')
+    expect(rows[0].text()).toContain('$60.00')
+    expect(rows[0].text()).toContain('payment.rechargeOfferBase $10.00')
+    expect(rows[0].text()).toContain('payment.rechargeOfferBonus $50.00')
+    expect(rows[1].text()).toContain('$108.00')
+  })
+
+  it('stops advertising an expired promotion and keeps the normal tier preview', async () => {
+    routeState.path = '/purchase'
+    routeState.query = {}
+    getCheckoutInfo.mockReset().mockResolvedValue(checkoutInfoFixture({
+      balance_recharge_multiplier: 1,
+      balance_recharge_tiers: [{ amount: 10, multiplier: 2 }],
+      balance_recharge_promotion: {
+        active: true,
+        name: 'Expired activity',
+        multiplier: 6,
+        end_at: '2020-01-01T00:00:00.000Z',
+      },
+    }))
+    const wrapper = shallowMount(PaymentView, { global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Teleport: true, Transition: false } } })
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="recharge-promotion-banner"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="recharge-rule-row"]').text()).toContain('$20.00')
+  })
   it('uses the selected payment method currency in the offer overview', async () => {
     routeState.path = '/purchase'
     routeState.query = {}
@@ -486,6 +533,33 @@ describe('PaymentView recharge rate preview', () => {
     expect(overview.text()).toContain('$10.00')
     expect(overview.text()).toContain('$5.00')
     expect(wrapper.text()).not.toContain('payment.rechargeRatePreview')
+  })
+
+  it('refreshes checkout before submit and asks for retry when the promotion rate changed', async () => {
+    routeState.path = '/purchase'
+    routeState.query = {}
+    const initial = checkoutInfoFixture({
+      balance_recharge_multiplier: 1,
+      balance_recharge_promotion: { active: true, multiplier: 6, end_at: '2099-09-26T12:00:00.000Z' },
+    })
+    const refreshed = checkoutInfoFixture({
+      balance_recharge_multiplier: 1,
+      balance_recharge_promotion: { active: true, multiplier: 2, end_at: '2099-09-26T12:00:00.000Z' },
+    })
+    getCheckoutInfo.mockReset().mockResolvedValueOnce(initial).mockResolvedValueOnce(refreshed)
+    createOrder.mockReset()
+    const wrapper = shallowMount(PaymentView, { global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Teleport: true, Transition: false } } })
+    await flushPromises()
+    wrapper.getComponent(AmountInput).vm.$emit('update:modelValue', 10)
+    await flushPromises()
+    const submit = wrapper.findAll('button').find(button => button.text().includes('payment.createOrder'))
+    expect(submit).toBeDefined()
+    await submit!.trigger('click')
+    await flushPromises()
+
+    expect(getCheckoutInfo).toHaveBeenCalledTimes(2)
+    expect(createOrder).not.toHaveBeenCalled()
+    expect(showWarning).toHaveBeenCalledWith('payment.rechargeRateChanged')
   })
 })
 

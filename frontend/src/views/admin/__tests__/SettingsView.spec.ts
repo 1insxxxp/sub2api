@@ -15,6 +15,15 @@ import SettingsView from "../SettingsView.vue";
 const currentDir = dirname(fileURLToPath(import.meta.url));
 const settingsViewSource = readFileSync(resolve(currentDir, "../SettingsView.vue"), "utf8");
 
+describe("admin SettingsView recharge promotion", () => {
+  it("mounts the promotion editor beneath recharge tiers and submits its config", () => {
+    expect(settingsViewSource).toContain("<RechargePromotionEditor");
+    expect(settingsViewSource).toContain("form.payment_balance_recharge_promotion");
+    expect(settingsViewSource).toContain("payment_balance_recharge_promotion: {");
+    expect(settingsViewSource).toContain("validateRechargePromotion");
+  });
+});
+
 describe("admin SettingsView custom menu open mode", () => {
   it("edits and defaults each custom menu open mode", () => {
     expect(settingsViewSource).toContain('v-model="item.open_mode"');

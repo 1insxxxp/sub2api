@@ -45,6 +45,26 @@
               <p class="mt-1 text-base font-semibold text-gray-900 dark:text-white">{{ user?.username || '' }}</p>
               <p class="mt-0.5 text-sm font-medium text-green-600 dark:text-green-400">{{ t('payment.currentBalance') }}: {{ user?.balance?.toFixed(2) || '0.00' }}</p>
             </div>
+            <div
+              v-if="rechargePromotion"
+              data-testid="recharge-promotion-banner"
+              class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl border border-primary-100 bg-primary-50/70 px-4 py-3 text-sm dark:border-primary-500/20 dark:bg-primary-500/10"
+            >
+              <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                <span class="rounded-full bg-primary-100 px-2 py-0.5 text-xs font-semibold text-primary-700 dark:bg-primary-500/20 dark:text-primary-300">
+                  {{ t('payment.rechargePromotionBadge') }}
+                </span>
+                <span class="font-semibold text-gray-900 dark:text-white">
+                  {{ rechargePromotion.name || t('payment.rechargePromotionDefaultName') }}
+                </span>
+                <span class="font-semibold tabular-nums text-primary-600 dark:text-primary-400">
+                  ×{{ formatRechargeMultiplier(rechargePromotion.multiplier || 1) }}
+                </span>
+              </div>
+              <span class="text-xs text-gray-500 dark:text-gray-400">
+                {{ t('payment.rechargePromotionEndsAt', { date: formatRechargePromotionEndAt(rechargePromotion.end_at) }) }}
+              </span>
+            </div>
             <div v-if="enabledMethods.length === 0" class="card py-16 text-center">
               <p class="text-gray-500 dark:text-gray-400">{{ t('payment.notAvailable') }}</p>
             </div>
@@ -297,7 +317,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
@@ -312,10 +332,10 @@ import { paymentAPI } from '@/api/payment'
 import { extractApiErrorMessage, extractI18nErrorMessage } from '@/utils/apiError'
 import { isMobileDevice } from '@/utils/device'
 import { hasPeakRate, formatPeakRateWindow, serverTimezoneLabel, type PeakRateFields } from '@/utils/peak-rate'
-import type { SubscriptionPlan, CheckoutInfoResponse, CreateOrderResult, OrderType } from '@/types/payment'
+import type { SubscriptionPlan, CheckoutInfoResponse, CreateOrderResult, OrderType, BalanceRechargePromotion } from '@/types/payment'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import AmountInput from '@/components/payment/AmountInput.vue'
-import { resolveRechargeMultiplier } from '@/components/payment/rechargeTiers'
+import { resolveRechargeMultiplier, validRechargePromotion } from '@/components/payment/rechargeTiers'
 import PaymentMethodSelector from '@/components/payment/PaymentMethodSelector.vue'
 import { METHOD_ORDER, getPaymentPopupFeatures, isBuiltInAlipayMethod, isBuiltInWxpayMethod } from '@/components/payment/providerConfig'
 import {
@@ -550,6 +570,68 @@ const checkout = ref<CheckoutInfoResponse>({
   methods: {}, global_min: 0, global_max: 0,
   plans: [], balance_disabled: false, balance_recharge_multiplier: 1, subscription_usd_to_cny_rate: 0, recharge_fee_rate: 0, help_text: '', help_image_url: '', stripe_publishable_key: '',
 })
+const checkoutNow = ref(Date.now())
+let promotionExpiryTimer: ReturnType<typeof setTimeout> | null = null
+let checkoutRefreshInFlight: Promise<void> | null = null
+
+function clearPromotionExpiryTimer() {
+  if (promotionExpiryTimer !== null) {
+    clearTimeout(promotionExpiryTimer)
+    promotionExpiryTimer = null
+  }
+}
+
+function schedulePromotionExpiryRefresh() {
+  clearPromotionExpiryTimer()
+  const promotion = checkout.value.balance_recharge_promotion
+  if (!promotion) return
+  const now = Date.now()
+  const startTimestamp = promotion.start_at ? Date.parse(promotion.start_at) : Number.NaN
+  const endTimestamp = promotion.end_at ? Date.parse(promotion.end_at) : Number.NaN
+  const target = Number.isFinite(startTimestamp) && startTimestamp > now
+    ? startTimestamp
+    : endTimestamp
+  if (!Number.isFinite(target) || target <= now) return
+  const delay = Math.max(0, target - now) + 50
+  promotionExpiryTimer = setTimeout(() => {
+    checkoutNow.value = Date.now()
+    if (Date.now() < target) {
+      schedulePromotionExpiryRefresh()
+    } else {
+      void refreshCheckoutInfo()
+    }
+  }, Math.min(delay, 2_147_483_647))
+}
+
+async function refreshCheckoutInfo(): Promise<void> {
+  if (checkoutRefreshInFlight) return checkoutRefreshInFlight
+  checkoutRefreshInFlight = paymentAPI.getCheckoutInfo()
+    .then((res) => {
+      checkout.value = res.data
+      checkoutNow.value = Date.now()
+      schedulePromotionExpiryRefresh()
+    })
+    .catch(() => {})
+    .finally(() => {
+      checkoutRefreshInFlight = null
+    })
+  return checkoutRefreshInFlight
+}
+
+function handleCheckoutVisibilityChange() {
+  if (typeof document === 'undefined' || document.visibilityState !== 'visible') return
+  checkoutNow.value = Date.now()
+  const promotion = checkout.value.balance_recharge_promotion
+  if (promotion && (!validRechargePromotion(promotion, checkoutNow.value) ||
+    (promotion.start_at && Date.parse(promotion.start_at) > checkoutNow.value))) {
+    void refreshCheckoutInfo()
+  }
+}
+
+const rechargePromotion = computed<BalanceRechargePromotion | null>(() => {
+  const promotion = checkout.value.balance_recharge_promotion
+  return validRechargePromotion(promotion, checkoutNow.value) ? promotion ?? null : null
+})
 
 const renderedHelpText = computed(() => DOMPurify.sanitize(
   marked.parse(checkout.value.help_text || '', { async: false, gfm: true, breaks: false }),
@@ -578,7 +660,13 @@ watch(tabs, (available) => {
 const visibleMethods = computed(() => getVisibleMethods(checkout.value.methods))
 const enabledMethods = computed(() => Object.keys(visibleMethods.value))
 const validAmount = computed(() => amount.value ?? 0)
-const balanceRechargeMultiplier = computed(() => resolveRechargeMultiplier(validAmount.value, checkout.value.balance_recharge_tiers, checkout.value.balance_recharge_multiplier))
+const balanceRechargeMultiplier = computed(() => resolveRechargeMultiplier(
+  validAmount.value,
+  checkout.value.balance_recharge_tiers,
+  checkout.value.balance_recharge_multiplier,
+  checkout.value.balance_recharge_promotion,
+  checkoutNow.value,
+))
 // 订阅 CNY 换算汇率（1 USD = X CNY）。0 = 未配置，订阅保持 price 直付（与后端 opt-in 条件严格镜像）。
 const subscriptionUsdToCnyRate = computed(() => {
   const rate = checkout.value.subscription_usd_to_cny_rate
@@ -597,6 +685,8 @@ const rechargeOverview = computed(() => quickRechargeAmounts.value
       rechargeAmount,
       checkout.value.balance_recharge_tiers,
       checkout.value.balance_recharge_multiplier,
+      checkout.value.balance_recharge_promotion,
+      checkoutNow.value,
     )) * 100) / 100
     // A tier multiplier is the total credited multiplier, while the base
     // multiplier is the normal amount users would receive.  The bonus should
@@ -693,6 +783,25 @@ function formatSelectedPaymentAmount(value: number): string {
 
 function formatCreditedAmount(value: number): string {
   return formatPaymentAmount(value, 'USD', localeCode.value)
+}
+
+function formatRechargeMultiplier(value: number): string {
+  if (!Number.isFinite(value)) return '1'
+  return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(4)))
+}
+
+function formatRechargePromotionEndAt(endAt?: string): string {
+  if (!endAt) return t('payment.rechargePromotionOngoing')
+  const timestamp = Date.parse(endAt)
+  if (!Number.isFinite(timestamp)) return t('payment.rechargePromotionOngoing')
+  try {
+    return new Intl.DateTimeFormat(localeCode.value || undefined, {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(timestamp)
+  } catch {
+    return new Date(timestamp).toLocaleString()
+  }
 }
 
 function formatSelectedSubscriptionPaymentAmount(value: number): string {
@@ -849,6 +958,15 @@ function closeRenewalModal() {
 
 async function handleSubmitRecharge() {
   if (!canSubmit.value || submitting.value) return
+  const previewMultiplier = balanceRechargeMultiplier.value
+  await refreshCheckoutInfo()
+  const refreshedMultiplier = balanceRechargeMultiplier.value
+  if (Math.abs(refreshedMultiplier - previewMultiplier) > 0.0000001) {
+    errorMessage.value = t('payment.rechargeRateChanged')
+    errorHintMessage.value = ''
+    appStore.showWarning(errorMessage.value)
+    return
+  }
   await createOrder(validAmount.value, 'balance')
 }
 
@@ -1190,9 +1308,14 @@ async function resumeWechatPaymentFromQuery() {
 }
 
 onMounted(async () => {
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', handleCheckoutVisibilityChange)
+  }
   try {
     const res = await paymentAPI.getCheckoutInfo()
     checkout.value = res.data
+    checkoutNow.value = Date.now()
+    schedulePromotionExpiryRefresh()
     if (enabledMethods.value.length) {
       const order: readonly string[] = METHOD_ORDER
       const sorted = [...enabledMethods.value].sort((a, b) => {
@@ -1248,6 +1371,13 @@ onMounted(async () => {
   // Fetch active subscriptions (uses cache, non-blocking); skipped when the subscription feature is off
   if (subscriptionEnabled.value) {
     subscriptionStore.fetchActiveSubscriptions().catch(() => {})
+  }
+})
+
+onUnmounted(() => {
+  clearPromotionExpiryTimer()
+  if (typeof document !== 'undefined') {
+    document.removeEventListener('visibilitychange', handleCheckoutVisibilityChange)
   }
 })
 </script>

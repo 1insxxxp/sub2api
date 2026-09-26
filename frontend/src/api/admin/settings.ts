@@ -17,6 +17,16 @@ export interface DefaultSubscriptionSetting {
   validity_days: number;
 }
 
+/** One global balance-recharge promotion replacing the regular multiplier during its schedule. */
+export interface BalanceRechargePromotionSettings {
+  enabled: boolean
+  name?: string
+  start_at?: string
+  end_at?: string
+  multiplier: number
+  blacklist_user_ids?: number[]
+}
+
 // ── 平台限额类型 ──────────────────────────────────────────────────
 export type PlatformType = "anthropic" | "openai" | "gemini" | "antigravity" | "grok"
 export type QuotaWindowType = "daily" | "weekly" | "monthly"
@@ -690,6 +700,7 @@ export interface SystemSettings {
   payment_balance_disabled: boolean;
   payment_balance_recharge_multiplier: number;
   payment_balance_recharge_tiers?: BalanceRechargeTier[];
+  payment_balance_recharge_promotion?: BalanceRechargePromotionSettings;
   payment_subscription_usd_to_cny_rate: number;
   payment_recharge_fee_rate: number;
   payment_load_balance_strategy: string;
@@ -1026,6 +1037,7 @@ export interface UpdateSettingsRequest {
   payment_balance_disabled?: boolean;
   payment_balance_recharge_multiplier?: number;
   payment_balance_recharge_tiers?: BalanceRechargeTier[];
+  payment_balance_recharge_promotion?: BalanceRechargePromotionSettings;
   payment_subscription_usd_to_cny_rate?: number;
   payment_recharge_fee_rate?: number;
   payment_load_balance_strategy?: string;

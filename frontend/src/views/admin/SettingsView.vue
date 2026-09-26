@@ -8763,6 +8763,9 @@
                   :model-value="form.payment_balance_recharge_tiers || []"
                   @update:model-value="form.payment_balance_recharge_tiers = $event"
                 />
+                <RechargePromotionEditor
+                  v-model="form.payment_balance_recharge_promotion"
+                />
                 <!-- Row 3: Pending orders + load balance + cancel rate limit (all in one row) -->
                 <div class="flex flex-wrap items-end gap-4">
                   <div class="w-28">
@@ -9572,6 +9575,7 @@ import type {
   WebSearchEmulationConfig,
   WebSearchProviderConfig,
   WebSearchTestResult,
+  BalanceRechargePromotionSettings,
 } from "@/api/admin/settings";
 import type {
   AdminGroup,
@@ -9595,6 +9599,8 @@ import ConfirmDialog from "@/components/common/ConfirmDialog.vue";
 import PaymentProviderList from "@/components/payment/PaymentProviderList.vue";
 import PaymentProviderDialog from "@/components/payment/PaymentProviderDialog.vue";
 import RechargeTiersEditor from '@/components/payment/RechargeTiersEditor.vue';
+import RechargePromotionEditor from '@/components/payment/RechargePromotionEditor.vue';
+import { validateRechargePromotion } from '@/components/payment/rechargePromotion';
 import { validRechargeTiers } from '@/components/payment/rechargeTiers';
 import GroupBadge from "@/components/common/GroupBadge.vue";
 import GroupOptionItem from "@/components/common/GroupOptionItem.vue";
@@ -10328,6 +10334,7 @@ type SettingsForm = Omit<
   // 系统全局平台限额 map；form 内始终归一化为全 4 平台对象（模板非空绑定依赖此不变量）
   default_platform_quotas: DefaultPlatformQuotasMap;
   account_scheduling_thresholds: ReturnType<typeof normalizeAccountSchedulingThresholdsMap>;
+  payment_balance_recharge_promotion: BalanceRechargePromotionSettings;
 };
 
 const schedulingThresholdPlatforms = SCHEDULING_THRESHOLD_PLATFORMS;
@@ -10396,6 +10403,7 @@ const form = reactive<SettingsForm>({
   payment_balance_disabled: false,
   payment_balance_recharge_multiplier: 1,
   payment_balance_recharge_tiers: [],
+  payment_balance_recharge_promotion: { enabled: false, multiplier: 1, blacklist_user_ids: [] },
   payment_subscription_usd_to_cny_rate: 0,
   payment_recharge_fee_rate: 0,
   payment_enabled_types: [],
@@ -11689,6 +11697,19 @@ async function loadSettings() {
   try {
     const settings = await adminAPI.settings.getSettings();
     form.payment_balance_recharge_tiers = settings.payment_balance_recharge_tiers || [];
+    const loadedPromotion = settings.payment_balance_recharge_promotion;
+    form.payment_balance_recharge_promotion = {
+      enabled: loadedPromotion?.enabled === true,
+      name: loadedPromotion?.name || undefined,
+      start_at: loadedPromotion?.start_at || undefined,
+      end_at: loadedPromotion?.end_at || undefined,
+      multiplier: loadedPromotion?.enabled && Number(loadedPromotion.multiplier) > 0
+        ? Number(loadedPromotion.multiplier)
+        : 1,
+      blacklist_user_ids: Array.isArray(loadedPromotion?.blacklist_user_ids)
+        ? loadedPromotion.blacklist_user_ids.filter((id) => Number.isInteger(id) && id > 0)
+        : [],
+    };
     availableChannelsPriceMultiplierMaxLoaded.value =
       Object.prototype.hasOwnProperty.call(
         settings,
@@ -12030,6 +12051,11 @@ async function saveSettings() {
   try {
     if (!validRechargeTiers(form.payment_balance_recharge_tiers || [])) {
       appStore.showError(t('admin.settings.payment.invalidRechargeTiers'));
+      return;
+    }
+    const rechargePromotionError = validateRechargePromotion(form.payment_balance_recharge_promotion);
+    if (rechargePromotionError) {
+      appStore.showError(t(`admin.settings.payment.rechargePromotion.invalid${rechargePromotionError === 'range' ? 'Range' : 'Multiplier'}`));
       return;
     }
     if (!validateAffiliateTierSettings()) {
@@ -12467,6 +12493,14 @@ async function saveSettings() {
       payment_balance_recharge_multiplier:
         Number(form.payment_balance_recharge_multiplier) || 1,
       payment_balance_recharge_tiers: form.payment_balance_recharge_tiers || [],
+      payment_balance_recharge_promotion: {
+        enabled: form.payment_balance_recharge_promotion.enabled,
+        name: form.payment_balance_recharge_promotion.name?.trim() || undefined,
+        start_at: form.payment_balance_recharge_promotion.start_at || undefined,
+        end_at: form.payment_balance_recharge_promotion.end_at || undefined,
+        multiplier: Number(form.payment_balance_recharge_promotion.multiplier) || 0,
+        blacklist_user_ids: Array.from(new Set((form.payment_balance_recharge_promotion.blacklist_user_ids || []).filter((id) => Number.isInteger(id) && id > 0))),
+      },
       payment_subscription_usd_to_cny_rate:
         Number(form.payment_subscription_usd_to_cny_rate) || 0,
       payment_recharge_fee_rate: Number(form.payment_recharge_fee_rate) || 0,

@@ -30,6 +30,15 @@ export interface BalanceRechargeTier {
 	multiplier: number
 }
 
+/** A temporary user-facing recharge multiplier returned by checkout-info. */
+export interface BalanceRechargePromotion {
+  active: boolean
+  name?: string
+  start_at?: string
+  end_at?: string
+  multiplier?: number
+}
+
 export interface PaymentConfig {
   payment_enabled: boolean
   min_amount: number
@@ -75,6 +84,7 @@ export interface CheckoutInfoResponse {
   balance_disabled: boolean
   balance_recharge_multiplier: number
   balance_recharge_tiers?: BalanceRechargeTier[]
+  balance_recharge_promotion?: BalanceRechargePromotion
   /** Subscription CNY conversion rate (1 USD = X CNY); 0 = disabled, plan price is charged as-is */
   subscription_usd_to_cny_rate: number
   recharge_fee_rate: number

@@ -38,6 +38,10 @@ func (h *PaymentHandler) GetPaymentConfig(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
+	// The promotion blacklist is an admin-only setting. The user-facing
+	// checkout-info endpoint exposes only the current user's eligible
+	// promotion, so keep the public config response free of blacklist data.
+	cfg.BalanceRechargePromotion = nil
 	response.Success(c, cfg)
 }
 
@@ -145,15 +149,18 @@ func (h *PaymentHandler) GetCheckoutInfo(c *gin.Context) {
 	}
 
 	now := time.Now()
-	effective := service.ResolveBalanceRechargeMultiplier(1, cfg.BalanceRechargeTiers, cfg.BalanceRechargeMultiplier, cfg.BalanceRechargePromotion, subject.UserID, now)
 	activity := safeBalanceRechargePromotionInfo(cfg.BalanceRechargePromotion, subject.UserID, now)
 	response.Success(c, checkoutInfoResponse{
-		Methods:                       limitsResp.Methods,
-		GlobalMin:                     limitsResp.GlobalMin,
-		GlobalMax:                     limitsResp.GlobalMax,
-		Plans:                         planList,
-		BalanceDisabled:               cfg.BalanceDisabled,
-		BalanceRechargeMultiplier:     effective,
+		Methods:         limitsResp.Methods,
+		GlobalMin:       limitsResp.GlobalMin,
+		GlobalMax:       limitsResp.GlobalMax,
+		Plans:           planList,
+		BalanceDisabled: cfg.BalanceDisabled,
+		// Keep the configured/base multiplier separate from the eligible
+		// promotion multiplier. The client uses both values to show the
+		// normal credit and the activity bonus, while order creation applies
+		// the authoritative promotion server-side.
+		BalanceRechargeMultiplier:     cfg.BalanceRechargeMultiplier,
 		BalanceRechargeTiers:          cfg.BalanceRechargeTiers,
 		SubscriptionUSDToCNYRate:      cfg.SubscriptionUSDToCNYRate,
 		RechargeFeeRate:               cfg.RechargeFeeRate,
@@ -169,15 +176,27 @@ func (h *PaymentHandler) GetCheckoutInfo(c *gin.Context) {
 type safeBalanceRechargePromotion struct {
 	Active     bool    `json:"active"`
 	Name       string  `json:"name,omitempty"`
+	StartAt    string  `json:"start_at,omitempty"`
 	EndAt      string  `json:"end_at,omitempty"`
 	Multiplier float64 `json:"multiplier,omitempty"`
 }
 
 func safeBalanceRechargePromotionInfo(p *service.BalanceRechargePromotion, userID int64, now time.Time) *safeBalanceRechargePromotion {
-	if p == nil || !p.AppliesTo(userID, now) {
+	if p == nil || !p.Enabled || p.IsBlacklisted(userID) || userID <= 0 {
 		return nil
 	}
-	return &safeBalanceRechargePromotion{Active: true, Name: p.Name, EndAt: p.EndAt, Multiplier: p.Multiplier}
+	start, startErr := time.Parse(time.RFC3339, strings.TrimSpace(p.StartAt))
+	end, endErr := time.Parse(time.RFC3339, strings.TrimSpace(p.EndAt))
+	if startErr != nil || endErr != nil || !start.Before(end) || !now.Before(end) {
+		return nil
+	}
+	return &safeBalanceRechargePromotion{
+		Active:     !now.Before(start),
+		Name:       p.Name,
+		StartAt:    p.StartAt,
+		EndAt:      p.EndAt,
+		Multiplier: p.Multiplier,
+	}
 }
 
 type checkoutInfoResponse struct {
