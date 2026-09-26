@@ -41,6 +41,7 @@ interface Emits {
   (e: 'openRequestDetails', preset?: OpsRequestDetailsPreset): void
   (e: 'openErrorDetails', kind: 'request' | 'upstream'): void
   (e: 'openUpstreamSummary'): void
+  (e: 'openSlaSummary'): void
   (e: 'openSettings'): void
   (e: 'openAlertRules'): void
   (e: 'enterFullscreen'): void
@@ -1254,14 +1255,22 @@ function handleToolbarRefresh() {
               <HelpTooltip v-if="!props.fullscreen" :content="t('admin.ops.tooltips.sla')" />
               <span class="h-1.5 w-1.5 rounded-full" :class="getSLAThresholdLevel(slaPercent) === 'critical' ? 'bg-red-500' : getSLAThresholdLevel(slaPercent) === 'warning' ? 'bg-yellow-500' : 'bg-green-500'"></span>
             </div>
-            <button
-              v-if="!props.fullscreen"
-              class="text-[10px] font-bold text-blue-500 hover:underline"
-              type="button"
-              @click="openDetails({ title: t('admin.ops.requestDetails.title'), kind: 'error' })"
-            >
-              {{ t('admin.ops.requestDetails.details') }}
-            </button>
+            <div v-if="!props.fullscreen" class="flex items-center gap-2">
+              <button
+                class="text-[10px] font-bold text-blue-500 hover:underline"
+                type="button"
+                @click="openDetails({ title: t('admin.ops.requestDetails.title'), kind: 'error' })"
+              >
+                {{ t('admin.ops.requestDetails.details') }}
+              </button>
+              <button
+                class="rounded-md bg-primary-50 px-1.5 py-0.5 text-[10px] font-bold text-primary-700 hover:bg-primary-100 dark:bg-primary-500/10 dark:text-primary-300 dark:hover:bg-primary-500/20"
+                type="button"
+                @click="emit('openSlaSummary')"
+              >
+                {{ t('admin.ops.errorDetails.slaSummaryButton') }}
+              </button>
+            </div>
           </div>
           <div class="mt-2 text-3xl font-black" :class="getThresholdColorClass(getSLAThresholdLevel(slaPercent))">
             {{ slaPercent == null ? '-' : `${slaPercent.toFixed(3)}%` }}

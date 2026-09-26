@@ -34,6 +34,7 @@
         @open-request-details="handleOpenRequestDetails"
         @open-error-details="openErrorDetails"
         @open-upstream-summary="openUpstreamSummaryFromDashboard"
+        @open-sla-summary="openSlaSummaryFromDashboard"
         @open-settings="showSettingsDialog = true"
         @open-alert-rules="showAlertRulesCard = true"
         @enter-fullscreen="enterFullscreen"
@@ -137,6 +138,18 @@
           @openErrorDetail="openSummaryError"
         />
 
+        <OpsSlaErrorSummaryModal
+          :show="showSlaSummary"
+          :time-range="timeRange"
+          :custom-start-time="customStartTime"
+          :custom-end-time="customEndTime"
+          :platform="platform"
+          :group-id="groupId"
+          :filters="slaSummaryFilters"
+          @close="showSlaSummary = false"
+          @openErrorDetail="openSlaSummaryError"
+        />
+
         <OpsErrorDetailModal v-model:show="showErrorModal" :error-id="selectedErrorId" :error-type="errorDetailsType" :back-to-list="detailReturnTarget !== null" @back="handleBackToList" />
 
         <OpsRequestDetailsModal
@@ -177,6 +190,7 @@ import OpsErrorDetailModal from './components/OpsErrorDetailModal.vue'
 import OpsErrorDistributionChart from './components/OpsErrorDistributionChart.vue'
 import OpsErrorDetailsModal from './components/OpsErrorDetailsModal.vue'
 import OpsUpstreamErrorSummaryModal from './components/OpsUpstreamErrorSummaryModal.vue'
+import OpsSlaErrorSummaryModal from './components/OpsSlaErrorSummaryModal.vue'
 import type { OpsErrorListQueryParams } from '@/api/admin/ops'
 import { buildOpsErrorTimeParams } from './utils/opsErrorParams'
 import OpsErrorTrendChart from './components/OpsErrorTrendChart.vue'
@@ -410,6 +424,8 @@ const showErrorModal = ref(false)
 const showErrorDetails = ref(false)
 const showUpstreamSummary = ref(false)
 const upstreamSummaryFilters = ref<OpsErrorListQueryParams>({})
+const showSlaSummary = ref(false)
+const slaSummaryFilters = ref<OpsErrorListQueryParams>({})
 const errorDetailsType = ref<'request' | 'upstream'>('request')
 
 const showRequestDetails = ref(false)
@@ -420,7 +436,7 @@ const requestDetailsPreset = ref<OpsRequestDetailsPreset>({
 })
 
 // 记录单条错误详情来自哪个列表，便于"返回列表"时重新打开对应弹窗并保留状态。
-type DetailReturnTarget = 'errorList' | 'requestList' | 'summaryList' | null
+type DetailReturnTarget = 'errorList' | 'requestList' | 'summaryList' | 'slaSummaryList' | null
 const detailReturnTarget = ref<DetailReturnTarget>(null)
 
 // 从详情返回时，列表弹窗应保留上一次的筛选/分页状态而非重置。
@@ -514,12 +530,15 @@ function handleOpenRequestDetails(preset?: OpsRequestDetailsPreset) {
   // Ensure only one modal visible at a time.
   showErrorDetails.value = false
   showErrorModal.value = false
+  showUpstreamSummary.value = false
+  showSlaSummary.value = false
   showRequestDetails.value = true
 }
 
 function openErrorDetails(kind: 'request' | 'upstream') {
   errorDetailsType.value = kind
   showUpstreamSummary.value = false
+  showSlaSummary.value = false
   showRequestDetails.value = false
   showErrorModal.value = false
   showErrorDetails.value = true
@@ -530,7 +549,17 @@ function openUpstreamSummary(filters: OpsErrorListQueryParams) {
   showErrorDetails.value = false
   showErrorModal.value = false
   showRequestDetails.value = false
+  showSlaSummary.value = false
   showUpstreamSummary.value = true
+}
+
+function openSlaSummary(filters: OpsErrorListQueryParams) {
+  slaSummaryFilters.value = { ...filters }
+  showErrorDetails.value = false
+  showErrorModal.value = false
+  showRequestDetails.value = false
+  showUpstreamSummary.value = false
+  showSlaSummary.value = true
 }
 
 function openUpstreamSummaryFromDashboard() {
@@ -543,10 +572,32 @@ function openUpstreamSummaryFromDashboard() {
   openUpstreamSummary(filters)
 }
 
+function openSlaSummaryFromDashboard() {
+  const filters: OpsErrorListQueryParams = {
+    ...buildOpsErrorTimeParams(timeRange.value, customStartTime.value, customEndTime.value),
+    view: 'errors'
+  }
+  if (platform.value) filters.platform = platform.value
+  if (typeof groupId.value === 'number' && groupId.value > 0) filters.group_id = groupId.value
+  openSlaSummary(filters)
+}
+
 function openSummaryError(id: number) {
   showUpstreamSummary.value = false
+  showSlaSummary.value = false
   errorDetailsType.value = 'upstream'
   detailReturnTarget.value = 'summaryList'
+  selectedErrorId.value = id
+  showErrorDetails.value = false
+  showErrorModal.value = true
+}
+
+function openSlaSummaryError(id: number) {
+  showSlaSummary.value = false
+  showUpstreamSummary.value = false
+  showRequestDetails.value = false
+  errorDetailsType.value = 'request'
+  detailReturnTarget.value = 'slaSummaryList'
   selectedErrorId.value = id
   showErrorDetails.value = false
   showErrorModal.value = true
@@ -605,6 +656,7 @@ function openError(id: number) {
   // Ensure only one modal visible at a time.
   showErrorDetails.value = false
   showUpstreamSummary.value = false
+  showSlaSummary.value = false
   showRequestDetails.value = false
   showErrorModal.value = true
 }
@@ -627,6 +679,12 @@ function handleBackToList() {
     showRequestDetails.value = false
     showErrorDetails.value = false
     showUpstreamSummary.value = true
+  } else if (target === 'slaSummaryList') {
+    showErrorModal.value = false
+    showRequestDetails.value = false
+    showErrorDetails.value = false
+    showUpstreamSummary.value = false
+    showSlaSummary.value = true
   }
   detailReturnTarget.value = null
   // 子组件 watch 在本次 show 变化中消费 resumeState 后复位，保证下次手动打开仍会重置筛选。
