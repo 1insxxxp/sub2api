@@ -55,6 +55,7 @@ func TestGetSLAErrorSummaryAggregatesFinalFailuresAndUsesSLAExclusions(t *testin
 	// always exclude business-limited rows even when the caller asks for all rows.
 	require.Contains(t, captured, "COALESCE(e.status_code, 0) >= 400")
 	require.Contains(t, captured, "COALESCE(e.is_business_limited,false) = false")
+	require.Contains(t, captured, "COALESCE(e.is_count_tokens, false) = false")
 	require.NotContains(t, captured, "IncludeRecoveredUpstream")
 	require.Contains(t, captured, "e.created_at >= $1")
 	require.Contains(t, captured, "e.platform = $2")

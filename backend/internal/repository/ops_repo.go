@@ -94,6 +94,11 @@ func (r *opsRepository) getErrorSummary(ctx context.Context, filter *service.Ops
 	if filter == nil {
 		filter = &service.OpsErrorLogFilter{}
 	}
+	// SLA summaries must exclude count-token probe rows even for direct
+	// service/repository callers that bypass the HTTP filter parser.
+	if slaOnly {
+		filter.ExcludeCountTokens = true
+	}
 	where, args := buildOpsErrorLogsWhere(filter)
 	statusExpr := "COALESCE(e.upstream_status_code, e.status_code, 0)"
 	reasonExpr := "COALESCE(NULLIF(TRIM(e.upstream_error_message), ''), NULLIF(TRIM(e.error_message), ''), '未知错误')"
