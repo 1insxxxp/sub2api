@@ -70,10 +70,10 @@ function accountGroupsForGroup(group: OpsUpstreamErrorSummaryGroup, index: numbe
   }
   return Array.from(groups.values()).sort((a, b) => (b.latestAt ? Date.parse(b.latestAt) : 0) - (a.latestAt ? Date.parse(a.latestAt) : 0))
 }
-function isAccountCollapsed(group: OpsUpstreamErrorSummaryGroup, index: number, accountGroup: AccountGroup) { return collapsedAccounts[accountKey(group, index, accountGroup.accountId, accountGroup.account)] === true }
+function isAccountCollapsed(group: OpsUpstreamErrorSummaryGroup, index: number, accountGroup: AccountGroup) { return collapsedAccounts[accountKey(group, index, accountGroup.accountId, accountGroup.account)] !== false }
 function toggleAccount(group: OpsUpstreamErrorSummaryGroup, index: number, accountGroup: AccountGroup) {
   const key = accountKey(group, index, accountGroup.accountId, accountGroup.account)
-  collapsedAccounts[key] = !collapsedAccounts[key]
+  collapsedAccounts[key] = isAccountCollapsed(group, index, accountGroup) ? false : true
 }
 function statusClass(statusCode: number) { if (statusCode >= 500) return 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300'; if (statusCode >= 400) return 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300'; return 'bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-gray-300' }
 watch(() => [props.show, props.timeRange, props.customStartTime, props.customEndTime, props.platform, props.groupId, props.filters] as const, () => { if (props.show) void load() }, { deep: true, immediate: true })
@@ -114,7 +114,7 @@ watch(() => [props.show, props.timeRange, props.customStartTime, props.customEnd
                 </div>
               </section>
               <div v-if="!rowsForGroup(group).length" class="px-3 py-6 text-center text-gray-500">{{ t('common.noData') }}</div>
-            </div><div v-if="totalPagesForGroup(group) > 1" :data-testid="`ops-sla-summary-pagination-${gi}`" class="border-t border-gray-200/70 dark:border-dark-700"><Pagination :total="rowsForGroup(group).length" :page="pageForGroup(group, gi)" :page-size="GROUP_PAGE_SIZE" :show-page-size-selector="false" variant="compact" @update:page="setGroupPage(group, gi, $event)" /></div>
+            </div><div v-if="totalPagesForGroup(group) > 1" :data-testid="`ops-sla-summary-pagination-${gi}`" class="ops-sla-summary-pagination border-t border-gray-200/70 bg-gray-50/50 px-3 py-2.5 dark:border-dark-700 dark:bg-dark-900/20"><Pagination :total="rowsForGroup(group).length" :page="pageForGroup(group, gi)" :page-size="GROUP_PAGE_SIZE" :show-page-size-selector="false" variant="compact" @update:page="setGroupPage(group, gi, $event)" /></div>
             <div v-if="group.models_truncated" class="border-t border-gray-200/70 px-3 py-2 text-xs text-gray-500 dark:border-dark-700">{{ t('admin.ops.errorDetails.slaSummaryNestedTruncated', { count: group.total_models }) }}</div>
           </section>
         </div>

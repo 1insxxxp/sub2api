@@ -583,8 +583,6 @@ function openSlaSummaryFromDashboard() {
 }
 
 function openSummaryError(id: number) {
-  showUpstreamSummary.value = false
-  showSlaSummary.value = false
   errorDetailsType.value = 'upstream'
   detailReturnTarget.value = 'summaryList'
   selectedErrorId.value = id
@@ -593,8 +591,6 @@ function openSummaryError(id: number) {
 }
 
 function openSlaSummaryError(id: number) {
-  showSlaSummary.value = false
-  showUpstreamSummary.value = false
   showRequestDetails.value = false
   errorDetailsType.value = 'request'
   detailReturnTarget.value = 'slaSummaryList'
