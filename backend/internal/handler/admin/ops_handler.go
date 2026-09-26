@@ -358,6 +358,7 @@ func parseOpsSLAErrorSummaryFilter(c *gin.Context) (*service.OpsErrorLogFilter, 
 	filter := &service.OpsErrorLogFilter{
 		View:                     opsListViewErrors,
 		IncludeRecoveredUpstream: false,
+		ExcludeCountTokens:       true,
 	}
 
 	startTime, endTime, err := parseOpsTimeRange(c, "1h")

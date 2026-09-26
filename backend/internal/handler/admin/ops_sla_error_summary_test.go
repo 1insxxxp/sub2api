@@ -51,6 +51,7 @@ func TestOpsSLAErrorSummary_PassesFiltersAndForcesFinalSemantics(t *testing.T) {
 	require.Equal(t, "needle", repo.filter.Query)
 	require.Equal(t, "errors", repo.filter.View)
 	require.False(t, repo.filter.IncludeRecoveredUpstream)
+	require.True(t, repo.filter.ExcludeCountTokens)
 	require.Empty(t, repo.filter.Owner)
 	require.Empty(t, repo.filter.ErrorPhasesAny)
 	require.NotNil(t, repo.filter.GroupID)

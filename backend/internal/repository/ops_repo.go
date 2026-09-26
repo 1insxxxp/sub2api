@@ -103,6 +103,10 @@ func (r *opsRepository) getErrorSummary(ctx context.Context, filter *service.Ops
 		// only the final status is authoritative, and business-limited requests
 		// never count towards the SLA denominator or error rate.
 		where += " AND COALESCE(e.status_code, 0) >= 400 AND COALESCE(e.is_business_limited,false) = false"
+		// Status filters in the shared predicate describe provider health and use
+		// upstream_status_code first. SLA filters must match the final client-visible
+		// status instead.
+		where = strings.ReplaceAll(where, "COALESCE(e.upstream_status_code, e.status_code, 0)", "COALESCE(e.status_code, 0)")
 		statusExpr = "COALESCE(e.status_code, 0)"
 		reasonExpr = "COALESCE(NULLIF(TRIM(e.error_message), ''), NULLIF(TRIM(e.upstream_error_message), ''), '未知错误')"
 	}

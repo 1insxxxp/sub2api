@@ -116,3 +116,36 @@ func TestGetSLAErrorSummaryTruncatesTopLevelGroupsAfterSorting(t *testing.T) {
 	require.Equal(t, "group-101", result.Groups[0].GroupName)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
+
+func TestGetSLAErrorSummaryUsesFinalStatusCodeFilters(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		filter     service.OpsErrorLogFilter
+		wantClause string
+	}{{
+		name:       "selected statuses",
+		filter:     service.OpsErrorLogFilter{StatusCodes: []int{503}},
+		wantClause: "COALESCE(e.status_code, 0) = ANY($1)",
+	}, {
+		name:       "other statuses",
+		filter:     service.OpsErrorLogFilter{StatusCodesOther: true},
+		wantClause: "NOT (COALESCE(e.status_code, 0) = ANY($1))",
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			captured := ""
+			db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(summaryQueryMatcher{captured: &captured}))
+			require.NoError(t, err)
+			defer func() { _ = db.Close() }()
+			mock.ExpectQuery("FROM ops_error_logs e").WithArgs(sqlmock.AnyArg()).WillReturnRows(sqlmock.NewRows([]string{
+				"group_id", "group_name", "model", "account_id", "account_name", "status_code", "reason", "error_type", "count", "latest_at", "representative_error_id",
+			}))
+			result, err := (&opsRepository{db: db}).GetSLAErrorSummary(context.Background(), &tc.filter)
+			require.NoError(t, err)
+			require.Empty(t, result.Groups)
+			require.Contains(t, captured, tc.wantClause)
+			require.NotContains(t, captured, "COALESCE(e.upstream_status_code, e.status_code, 0) = ANY")
+			require.NotContains(t, captured, "NOT (COALESCE(e.upstream_status_code, e.status_code, 0) = ANY")
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
