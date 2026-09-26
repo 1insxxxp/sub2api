@@ -76,6 +76,18 @@ func NewOpsRepository(db *sql.DB) service.OpsRepository {
 }
 
 func (r *opsRepository) GetUpstreamErrorSummary(ctx context.Context, filter *service.OpsErrorLogFilter) (*service.OpsUpstreamErrorSummary, error) {
+	return r.getErrorSummary(ctx, filter, false)
+}
+
+// GetSLAErrorSummary returns a grouped view of final request failures that
+// are counted by the SLA metric. Unlike the provider-health summary, this
+// method always applies the final status and business-limit predicates, even
+// when the supplied filter opts into recovered provider rows or all views.
+func (r *opsRepository) GetSLAErrorSummary(ctx context.Context, filter *service.OpsErrorLogFilter) (*service.OpsSLAErrorSummary, error) {
+	return r.getErrorSummary(ctx, filter, true)
+}
+
+func (r *opsRepository) getErrorSummary(ctx context.Context, filter *service.OpsErrorLogFilter, slaOnly bool) (*service.OpsUpstreamErrorSummary, error) {
 	if r == nil || r.db == nil {
 		return nil, fmt.Errorf("nil ops repository")
 	}
@@ -83,6 +95,17 @@ func (r *opsRepository) GetUpstreamErrorSummary(ctx context.Context, filter *ser
 		filter = &service.OpsErrorLogFilter{}
 	}
 	where, args := buildOpsErrorLogsWhere(filter)
+	statusExpr := "COALESCE(e.upstream_status_code, e.status_code, 0)"
+	reasonExpr := "COALESCE(NULLIF(TRIM(e.upstream_error_message), ''), NULLIF(TRIM(e.error_message), ''), '未知错误')"
+	if slaOnly {
+		// The shared list predicate intentionally allows recovered provider rows
+		// and cyber-policy stream rows in some views. SLA aggregation is stricter:
+		// only the final status is authoritative, and business-limited requests
+		// never count towards the SLA denominator or error rate.
+		where += " AND COALESCE(e.status_code, 0) >= 400 AND COALESCE(e.is_business_limited,false) = false"
+		statusExpr = "COALESCE(e.status_code, 0)"
+		reasonExpr = "COALESCE(NULLIF(TRIM(e.error_message), ''), NULLIF(TRIM(e.upstream_error_message), ''), '未知错误')"
+	}
 	// Keep this query's source rows and predicates aligned with ListErrorLogs.
 	// Only fields already persisted in ops_error_logs are selected; in particular,
 	// no request body, URL, or account credentials are read for the reason text.
@@ -93,8 +116,8 @@ SELECT
   COALESCE(NULLIF(TRIM(e.requested_model), ''), NULLIF(TRIM(e.model), ''), '未知模型'),
   e.account_id,
   COALESCE(NULLIF(TRIM(a.name), ''), '未知账号'),
-  COALESCE(e.upstream_status_code, e.status_code, 0),
-	COALESCE(NULLIF(TRIM(e.upstream_error_message), ''), NULLIF(TRIM(e.error_message), ''), '未知错误'),
+  ` + statusExpr + `,
+	` + reasonExpr + `,
   COALESCE(e.error_type, ''),
   COUNT(*)::bigint,
   MAX(e.created_at),
@@ -104,8 +127,8 @@ LEFT JOIN groups g ON g.id = e.group_id
 LEFT JOIN accounts a ON a.id = e.account_id
 ` + where + `
 GROUP BY e.group_id, g.name, COALESCE(NULLIF(TRIM(e.requested_model), ''), NULLIF(TRIM(e.model), ''), '未知模型'),
-         e.account_id, a.name, COALESCE(e.upstream_status_code, e.status_code, 0),
-		 COALESCE(NULLIF(TRIM(e.upstream_error_message), ''), NULLIF(TRIM(e.error_message), ''), '未知错误'),
+         e.account_id, a.name, ` + statusExpr + `,
+		 ` + reasonExpr + `,
          COALESCE(e.error_type, '')
 ORDER BY COUNT(*) DESC, MAX(e.created_at) DESC, e.group_id NULLS FIRST, e.account_id NULLS FIRST`
 
