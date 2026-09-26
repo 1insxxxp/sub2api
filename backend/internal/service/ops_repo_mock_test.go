@@ -15,6 +15,7 @@ type opsRepoMock struct {
 	DeleteSystemLogsFn            func(ctx context.Context, filter *OpsSystemLogCleanupFilter) (int64, error)
 	InsertSystemLogCleanupAuditFn func(ctx context.Context, input *OpsSystemLogCleanupAudit) error
 	GetUpstreamErrorSummaryFn     func(ctx context.Context, filter *OpsErrorLogFilter) (*OpsUpstreamErrorSummary, error)
+	GetSLAErrorSummaryFn          func(ctx context.Context, filter *OpsErrorLogFilter) (*OpsSLAErrorSummary, error)
 }
 
 func (m *opsRepoMock) InsertErrorLog(ctx context.Context, input *OpsInsertErrorLogInput) (int64, error) {
@@ -115,6 +116,13 @@ func (m *opsRepoMock) GetUpstreamErrorSummary(ctx context.Context, filter *OpsEr
 		return m.GetUpstreamErrorSummaryFn(ctx, filter)
 	}
 	return &OpsUpstreamErrorSummary{Groups: []*OpsUpstreamErrorSummaryGroup{}}, nil
+}
+
+func (m *opsRepoMock) GetSLAErrorSummary(ctx context.Context, filter *OpsErrorLogFilter) (*OpsSLAErrorSummary, error) {
+	if m.GetSLAErrorSummaryFn != nil {
+		return m.GetSLAErrorSummaryFn(ctx, filter)
+	}
+	return &OpsSLAErrorSummary{Groups: []*OpsUpstreamErrorSummaryGroup{}}, nil
 }
 
 func (m *opsRepoMock) InsertSystemMetrics(ctx context.Context, input *OpsInsertSystemMetricsInput) error {

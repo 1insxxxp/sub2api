@@ -193,6 +193,14 @@ type OpsUpstreamErrorSummary struct {
 	GroupsTruncated bool                            `json:"groups_truncated"`
 }
 
+// OpsSLAErrorSummary is the grouped view of final requests that count towards
+// the SLA error rate. It intentionally reuses the upstream summary contract so
+// the dashboard can render both drill-down panels with the same table layout.
+// Repository implementations must apply SLA semantics when populating it:
+// only final failed requests are included; recovered upstream attempts and
+// business-limited requests remain excluded.
+type OpsSLAErrorSummary = OpsUpstreamErrorSummary
+
 // MarshalJSON keeps collection fields stable for API clients. Aggregators may
 // leave slices/maps nil when no rows are found, but the contract represents
 // those collections as empty arrays/objects rather than JSON null.

@@ -30,6 +30,7 @@ type OpsRepository interface {
 	GetErrorDistribution(ctx context.Context, filter *OpsDashboardFilter) (*OpsErrorDistributionResponse, error)
 	GetOpenAITokenStats(ctx context.Context, filter *OpsOpenAITokenStatsFilter) (*OpsOpenAITokenStatsResponse, error)
 	GetUpstreamErrorSummary(ctx context.Context, filter *OpsErrorLogFilter) (*OpsUpstreamErrorSummary, error)
+	GetSLAErrorSummary(ctx context.Context, filter *OpsErrorLogFilter) (*OpsSLAErrorSummary, error)
 
 	InsertSystemMetrics(ctx context.Context, input *OpsInsertSystemMetricsInput) error
 	GetLatestSystemMetrics(ctx context.Context, windowMinutes int) (*OpsSystemMetricsSnapshot, error)

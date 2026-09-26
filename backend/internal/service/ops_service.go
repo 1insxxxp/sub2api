@@ -712,6 +712,19 @@ func (s *OpsService) GetUpstreamErrorSummary(ctx context.Context, filter *OpsErr
 	return s.opsRepo.GetUpstreamErrorSummary(ctx, filter)
 }
 
+// GetSLAErrorSummary returns the grouped view of final failures counted by
+// the SLA metric. Repository errors are intentionally passed through so the
+// admin handler can preserve its existing error mapping and response format.
+func (s *OpsService) GetSLAErrorSummary(ctx context.Context, filter *OpsErrorLogFilter) (*OpsSLAErrorSummary, error) {
+	if err := s.RequireMonitoringEnabled(ctx); err != nil {
+		return nil, err
+	}
+	if s.opsRepo == nil {
+		return &OpsSLAErrorSummary{Groups: make([]*OpsUpstreamErrorSummaryGroup, 0)}, nil
+	}
+	return s.opsRepo.GetSLAErrorSummary(ctx, filter)
+}
+
 // ListUserErrorRequests 返回某个用户自己的错误请求（精简脱敏）。
 // 强制：仅当前用户、View=all（含业务限流/余额类）、排除 count_tokens 噪声。
 func (s *OpsService) ListUserErrorRequests(ctx context.Context, userID int64, filter *OpsErrorLogFilter) (*UserErrorRequestList, error) {
