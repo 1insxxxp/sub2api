@@ -8,7 +8,7 @@ vi.mock('@/api/client', () => ({
   apiClient: { get },
 }))
 
-import { opsAPI, type OpsUpstreamErrorSummary } from '@/api/admin/ops'
+import { opsAPI, type OpsSLAErrorSummary, type OpsUpstreamErrorSummary } from '@/api/admin/ops'
 
 describe('admin ops API', () => {
   beforeEach(() => {
@@ -126,6 +126,57 @@ describe('admin ops API', () => {
         status_codes: '429,500',
         status_codes_other: 'true',
         model: 'gpt-5',
+        category: 'upstream',
+      },
+    })
+  })
+
+  it('loads the SLA grouped summary with filters and without pagination', async () => {
+    const summary: OpsSLAErrorSummary = {
+      total_errors: 2,
+      group_count: 1,
+      latest_at: '2026-09-25T06:00:00Z',
+      groups: [],
+      groups_truncated: false,
+    }
+    get.mockReset()
+    get.mockResolvedValueOnce({ data: summary })
+
+    const params = {
+      time_range: '1h',
+      platform: 'anthropic',
+      group_id: 7,
+      account_id: 9,
+      q: 'timeout',
+      phase: 'gateway',
+      error_owner: 'platform',
+      error_source: 'gateway',
+      view: 'all' as const,
+      resolved: 'false',
+      status_codes: '500,503',
+      status_codes_other: 'true',
+      model: 'claude-sonnet',
+      category: 'upstream',
+      page: 3,
+      page_size: 25,
+    }
+
+    await expect(opsAPI.getSLAErrorSummary(params)).resolves.toEqual(summary)
+    expect(get).toHaveBeenCalledWith('/admin/ops/request-errors/summary', {
+      params: {
+        time_range: '1h',
+        platform: 'anthropic',
+        group_id: 7,
+        account_id: 9,
+        q: 'timeout',
+        phase: 'gateway',
+        error_owner: 'platform',
+        error_source: 'gateway',
+        view: 'all',
+        resolved: 'false',
+        status_codes: '500,503',
+        status_codes_other: 'true',
+        model: 'claude-sonnet',
         category: 'upstream',
       },
     })

@@ -1027,6 +1027,8 @@ export interface OpsUpstreamErrorSummaryReason {
   representative_error_id: number
 }
 
+export type OpsSLAErrorSummary = OpsUpstreamErrorSummary
+
 export async function getDashboardOverview(
   params: {
   time_range?: '5m' | '30m' | '1h' | '6h' | '24h'
@@ -1214,6 +1216,14 @@ export async function getUpstreamErrorSummary(
 ): Promise<OpsUpstreamErrorSummary> {
   const { page: _page, page_size: _pageSize, ...filters } = params
   const { data } = await apiClient.get<OpsUpstreamErrorSummary>('/admin/ops/upstream-errors/summary', { params: filters })
+  return data
+}
+
+export async function getSLAErrorSummary(
+  params: OpsUpstreamErrorSummaryParams = {}
+): Promise<OpsSLAErrorSummary> {
+  const { page: _page, page_size: _pageSize, ...filters } = params
+  const { data } = await apiClient.get<OpsSLAErrorSummary>('/admin/ops/request-errors/summary', { params: filters })
   return data
 }
 
@@ -1407,6 +1417,7 @@ export const opsAPI = {
   listRequestErrors,
   listUpstreamErrors,
   getUpstreamErrorSummary,
+  getSLAErrorSummary,
   getRequestErrorDetail,
   getUpstreamErrorDetail,
   updateRequestErrorResolved,
