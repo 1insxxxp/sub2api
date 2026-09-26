@@ -95,6 +95,10 @@ func (h *PaymentHandler) GetPlans(c *gin.Context) {
 // GET /api/v1/payment/checkout-info
 func (h *PaymentHandler) GetCheckoutInfo(c *gin.Context) {
 	ctx := c.Request.Context()
+	subject, ok := requireAuth(c)
+	if !ok {
+		return
+	}
 
 	// Fetch limits (methods + global range)
 	limitsResp, err := h.configService.GetAvailableMethodLimits(ctx)
@@ -140,13 +144,16 @@ func (h *PaymentHandler) GetCheckoutInfo(c *gin.Context) {
 		})
 	}
 
+	now := time.Now()
+	effective := service.ResolveBalanceRechargeMultiplier(1, cfg.BalanceRechargeTiers, cfg.BalanceRechargeMultiplier, cfg.BalanceRechargePromotion, subject.UserID, now)
+	activity := safeBalanceRechargePromotionInfo(cfg.BalanceRechargePromotion, subject.UserID, now)
 	response.Success(c, checkoutInfoResponse{
 		Methods:                       limitsResp.Methods,
 		GlobalMin:                     limitsResp.GlobalMin,
 		GlobalMax:                     limitsResp.GlobalMax,
 		Plans:                         planList,
 		BalanceDisabled:               cfg.BalanceDisabled,
-		BalanceRechargeMultiplier:     cfg.BalanceRechargeMultiplier,
+		BalanceRechargeMultiplier:     effective,
 		BalanceRechargeTiers:          cfg.BalanceRechargeTiers,
 		SubscriptionUSDToCNYRate:      cfg.SubscriptionUSDToCNYRate,
 		RechargeFeeRate:               cfg.RechargeFeeRate,
@@ -155,7 +162,22 @@ func (h *PaymentHandler) GetCheckoutInfo(c *gin.Context) {
 		StripePublishableKey:          cfg.StripePublishableKey,
 		AlipayForceQRCode:             cfg.AlipayForceQRCode,
 		AlipayMobilePrecreateDeepLink: alipayMobilePrecreateDeepLink,
+		BalanceRechargePromotion:      activity,
 	})
+}
+
+type safeBalanceRechargePromotion struct {
+	Active     bool    `json:"active"`
+	Name       string  `json:"name,omitempty"`
+	EndAt      string  `json:"end_at,omitempty"`
+	Multiplier float64 `json:"multiplier,omitempty"`
+}
+
+func safeBalanceRechargePromotionInfo(p *service.BalanceRechargePromotion, userID int64, now time.Time) *safeBalanceRechargePromotion {
+	if p == nil || !p.AppliesTo(userID, now) {
+		return nil
+	}
+	return &safeBalanceRechargePromotion{Active: true, Name: p.Name, EndAt: p.EndAt, Multiplier: p.Multiplier}
 }
 
 type checkoutInfoResponse struct {
@@ -173,6 +195,7 @@ type checkoutInfoResponse struct {
 	StripePublishableKey          string                          `json:"stripe_publishable_key"`
 	AlipayForceQRCode             bool                            `json:"alipay_force_qrcode"`
 	AlipayMobilePrecreateDeepLink bool                            `json:"alipay_mobile_precreate_deep_link"`
+	BalanceRechargePromotion      *safeBalanceRechargePromotion   `json:"balance_recharge_promotion,omitempty"`
 }
 
 type checkoutPlan struct {

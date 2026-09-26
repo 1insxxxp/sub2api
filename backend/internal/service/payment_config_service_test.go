@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -553,4 +554,42 @@ func TestUpdatePaymentConfig_PersistsExplicitEmptyAndFalseValues(t *testing.T) {
 
 func paymentConfigStrPtr(value string) *string {
 	return &value
+}
+
+func TestBalanceRechargePromotionConfigRoundTripAndValidation(t *testing.T) {
+	repo := &paymentConfigSettingRepoStub{values: map[string]string{}}
+	svc := &PaymentConfigService{settingRepo: repo}
+	promotion := &BalanceRechargePromotion{
+		Enabled:          true,
+		Name:             "Autumn bonus",
+		StartAt:          "2026-10-01T00:00:00Z",
+		EndAt:            "2026-11-01T00:00:00Z",
+		Multiplier:       2.5,
+		BlacklistUserIDs: []int64{7, 9},
+	}
+	if err := svc.UpdatePaymentConfig(context.Background(), UpdatePaymentConfigRequest{BalanceRechargePromotion: promotion}); err != nil {
+		t.Fatalf("UpdatePaymentConfig returned error: %v", err)
+	}
+	if _, ok := repo.updates[SettingBalanceRechargePromotion]; !ok {
+		t.Fatalf("promotion setting was not written: %v", repo.updates)
+	}
+	cfg := svc.parsePaymentConfig(repo.values)
+	if cfg.BalanceRechargePromotion == nil || cfg.BalanceRechargePromotion.Multiplier != promotion.Multiplier {
+		t.Fatalf("promotion did not round-trip: %+v", cfg.BalanceRechargePromotion)
+	}
+	if got := cfg.BalanceRechargePromotion.BlacklistUserIDs; len(got) != 2 || got[0] != 7 || got[1] != 9 {
+		t.Fatalf("blacklist did not round-trip: %v", got)
+	}
+	invalid := *promotion
+	invalid.EndAt = invalid.StartAt
+	if err := svc.UpdatePaymentConfig(context.Background(), UpdatePaymentConfigRequest{BalanceRechargePromotion: &invalid}); err == nil {
+		t.Fatal("invalid promotion was accepted")
+	}
+	if got := repo.values[SettingBalanceRechargePromotion]; got == "" {
+		t.Fatal("invalid update cleared the saved promotion")
+	}
+	var stored BalanceRechargePromotion
+	if err := json.Unmarshal([]byte(repo.values[SettingBalanceRechargePromotion]), &stored); err != nil {
+		t.Fatalf("stored promotion is invalid JSON: %v", err)
+	}
 }

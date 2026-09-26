@@ -135,3 +135,8 @@ func resolveBalanceRechargeMultiplier(amount float64, tiers []BalanceRechargeTie
 	}
 	return normal
 }
+
+// ResolveBalanceRechargeMultiplier returns the effective multiplier for a user.
+func ResolveBalanceRechargeMultiplier(amount float64, tiers []BalanceRechargeTier, fallback float64, promotion *BalanceRechargePromotion, userID int64, now time.Time) float64 {
+	return resolveBalanceRechargeMultiplier(amount, tiers, fallback, promotion, userID, now)
+}

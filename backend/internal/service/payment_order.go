@@ -63,7 +63,7 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 		orderAmount = plan.Price
 		limitAmount = plan.Price
 	} else if req.OrderType == payment.OrderTypeBalance {
-		orderAmount = calculateCreditedBalance(req.Amount, selectBalanceRechargeMultiplier(req.Amount, cfg.BalanceRechargeTiers, cfg.BalanceRechargeMultiplier))
+		orderAmount = resolvePaymentOrderBalanceAmount(req.Amount, cfg, user.ID, time.Now())
 	}
 	feeRate := cfg.RechargeFeeRate
 	methodCurrency := payment.DefaultPaymentCurrency
@@ -116,6 +116,25 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 		return nil, err
 	}
 	return resp, nil
+}
+
+// resolvePaymentOrderBalanceAmount applies the authoritative balance recharge
+// multiplier for an authenticated user. Promotion eligibility only changes the
+// credited order amount; callers continue using the original request amount
+// for payment limits, fees, and provider selection.
+func resolvePaymentOrderBalanceAmount(amount float64, cfg *PaymentConfig, userID int64, now time.Time) float64 {
+	if cfg == nil {
+		return calculateCreditedBalance(amount, 1)
+	}
+	multiplier := resolveBalanceRechargeMultiplier(
+		amount,
+		cfg.BalanceRechargeTiers,
+		cfg.BalanceRechargeMultiplier,
+		cfg.BalanceRechargePromotion,
+		userID,
+		now,
+	)
+	return calculateCreditedBalance(amount, multiplier)
 }
 
 func (s *PaymentService) validateOrderInput(ctx context.Context, req CreateOrderRequest, cfg *PaymentConfig) (*dbent.SubscriptionPlan, error) {
