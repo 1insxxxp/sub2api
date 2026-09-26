@@ -324,6 +324,95 @@ func (h *OpsHandler) ListRequestErrors(c *gin.Context) {
 	response.Paginated(c, result.Errors, int64(result.Total), result.Page, result.PageSize)
 }
 
+// SummaryRequestErrors returns the grouped view of final failures counted by
+// the SLA metric. Recovered upstream attempts and business-limited requests
+// are deliberately excluded by the service/repository semantics.
+// GET /api/v1/admin/ops/request-errors/summary
+func (h *OpsHandler) SummaryRequestErrors(c *gin.Context) {
+	if h.opsService == nil {
+		response.Error(c, http.StatusServiceUnavailable, "Ops service not available")
+		return
+	}
+	if err := h.opsService.RequireMonitoringEnabled(c.Request.Context()); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	filter, err := parseOpsSLAErrorSummaryFilter(c)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	summary, err := h.opsService.GetSLAErrorSummary(c.Request.Context(), filter)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, summary)
+}
+
+// parseOpsSLAErrorSummaryFilter keeps the endpoint's filters aligned with the
+// request-error list while forcing final-SLA semantics. In particular, the
+// provider recovery opt-in is never copied from query parameters.
+func parseOpsSLAErrorSummaryFilter(c *gin.Context) (*service.OpsErrorLogFilter, error) {
+	filter := &service.OpsErrorLogFilter{
+		View:                     opsListViewErrors,
+		IncludeRecoveredUpstream: false,
+	}
+
+	startTime, endTime, err := parseOpsTimeRange(c, "1h")
+	if err != nil {
+		return nil, err
+	}
+	if !startTime.IsZero() {
+		filter.StartTime = &startTime
+	}
+	if !endTime.IsZero() {
+		filter.EndTime = &endTime
+	}
+
+	filter.Platform = strings.TrimSpace(c.Query("platform"))
+	filter.Model = strings.TrimSpace(c.Query("model"))
+	filter.Query = strings.TrimSpace(c.Query("q"))
+
+	if v := strings.TrimSpace(c.Query("group_id")); v != "" {
+		id, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || id <= 0 {
+			return nil, fmt.Errorf("invalid group_id")
+		}
+		filter.GroupID = &id
+	}
+
+	if statusCodesStr := strings.TrimSpace(c.Query("status_codes")); statusCodesStr != "" {
+		parts := strings.Split(statusCodesStr, ",")
+		out := make([]int, 0, len(parts))
+		for _, part := range parts {
+			p := strings.TrimSpace(part)
+			if p == "" {
+				continue
+			}
+			n, err := strconv.Atoi(p)
+			if err != nil || n < 0 {
+				return nil, fmt.Errorf("invalid status_codes")
+			}
+			out = append(out, n)
+		}
+		filter.StatusCodes = out
+	}
+	if v := strings.TrimSpace(c.Query("status_codes_other")); v != "" {
+		switch strings.ToLower(v) {
+		case "1", "true", "yes":
+			filter.StatusCodesOther = true
+		case "0", "false", "no":
+		default:
+			return nil, fmt.Errorf("invalid status_codes_other")
+		}
+	}
+
+	applyOpsErrorSortParams(c, filter)
+	return filter, nil
+}
+
 // GetRequestError returns request error detail.
 // GET /api/v1/admin/ops/request-errors/:id
 func (h *OpsHandler) GetRequestError(c *gin.Context) {
