@@ -130,6 +130,15 @@ func (s *PublicGroupSyncService) Snapshot(ctx context.Context) ([]PublicGroupSyn
 					if !isImageModelName(name) {
 						continue
 					}
+					// Keep image models subject to the same schedulable-account and
+					// group allowlist filtering as token models. Without this gate,
+					// removing an image model from a group's model list would be
+					// undone by the account mapping fallback below.
+					if availableModels != nil {
+						if _, ok := availableModels[account.Platform][name]; !ok {
+							continue
+						}
+					}
 					key := account.Platform + "\x00" + name
 					if _, exists := models[key]; exists {
 						continue

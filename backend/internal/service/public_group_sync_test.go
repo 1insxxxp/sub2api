@@ -293,17 +293,22 @@ func TestPublicGroupSyncSnapshotIncludesImageModelsFromGroupAccounts(t *testing.
 		Status:               StatusActive,
 		AllowImageGeneration: true,
 		ImagePrice1K:         &imagePrice,
+		ModelAllowlist:       GroupModelAllowlist{Enabled: true, Models: []string{"gpt-image-2"}},
 	}}}
 	channels := &mockChannelRepository{listAllFn: func(context.Context) ([]Channel, error) {
 		return nil, nil
 	}}
-	accounts := &stubAccountRepositoryForPublicGroupSync{accounts: []Account{{
+	account := Account{
 		Platform: "openai",
 		Credentials: map[string]any{"model_mapping": map[string]any{
 			"gpt-image-2":       "gpt-image-2",
 			"claude-sonnet-4-6": "claude-sonnet-4-6",
 		}},
-	}}}
+	}
+	accounts := &stubAccountRepositoryForPublicGroupSync{
+		accounts:           []Account{account},
+		schedulableByGroup: map[int64][]Account{7: {account}},
+	}
 
 	snapshot, err := NewPublicGroupSyncService(groups, channels, accounts, nil).Snapshot(context.Background())
 	require.NoError(t, err)
@@ -313,11 +318,38 @@ func TestPublicGroupSyncSnapshotIncludesImageModelsFromGroupAccounts(t *testing.
 	require.Equal(t, string(BillingModeImage), snapshot[0].ModelPricing["gpt-image-2"].BillingMode)
 	require.Equal(t, imagePrice, *snapshot[0].ModelPricing["gpt-image-2"].PerRequestPrice)
 
-	accounts.schedulableByGroup = map[int64][]Account{7: accounts.accounts}
 	snapshot, err = NewPublicGroupSyncService(groups, channels, accounts, nil).Snapshot(context.Background())
 	require.NoError(t, err)
 	require.Equal(t, string(BillingModeImage), snapshot[0].ModelPricing["gpt-image-2"].BillingMode)
 	require.Equal(t, imagePrice, *snapshot[0].ModelPricing["gpt-image-2"].PerRequestPrice)
+}
+
+func TestPublicGroupSyncSnapshotFiltersImageModelsByGroupAllowlist(t *testing.T) {
+	imagePrice := 0.375
+	groups := &stubGroupRepoForAvailable{activeGroups: []Group{{
+		ID:                   8,
+		Name:                 "image-group-filtered",
+		Platform:             PlatformOpenAI,
+		Status:               StatusActive,
+		AllowImageGeneration: true,
+		ImagePrice1K:         &imagePrice,
+		ModelAllowlist:       GroupModelAllowlist{Enabled: true, Models: []string{"gpt-image-2.5"}},
+	}}}
+	channels := &mockChannelRepository{listAllFn: func(context.Context) ([]Channel, error) { return nil, nil }}
+	account := Account{Platform: PlatformOpenAI, Credentials: map[string]any{"model_mapping": map[string]any{
+		"gpt-image-2.5":       "gpt-image-2.5",
+		"gpt-image-2.5-flare": "gpt-image-2.5-flare",
+	}}}
+	accounts := &stubAccountRepositoryForPublicGroupSync{
+		accounts:           []Account{account},
+		schedulableByGroup: map[int64][]Account{8: {account}},
+	}
+
+	snapshot, err := NewPublicGroupSyncService(groups, channels, accounts, nil).Snapshot(context.Background())
+	require.NoError(t, err)
+	require.Len(t, snapshot, 1)
+	require.Equal(t, []string{"gpt-image-2.5"}, snapshot[0].Models)
+	require.NotContains(t, snapshot[0].Models, "gpt-image-2.5-flare")
 }
 
 func TestPublicGroupSyncSnapshotScopesModelsToGroupPlatform(t *testing.T) {
