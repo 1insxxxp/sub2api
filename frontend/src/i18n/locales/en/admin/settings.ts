@@ -782,7 +782,7 @@ export default {
           startAt: 'Starts at',
           endAt: 'Ends at',
           multiplier: 'Promotion multiplier',
-          multiplierHint: 'Must be positive while the campaign is enabled.',
+          multiplierHint: 'Optional: unmatched tiers use this multiplier. Leave it blank when using per-tier activity prices only.',
           priceTiers: 'Activity tier prices',
           priceTiersHint: 'The credited balance stays unchanged. Enter the customer price during the campaign; leave blank to keep the regular price.',
           creditedAmount: 'credited balance',

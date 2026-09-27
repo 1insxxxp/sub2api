@@ -777,7 +777,7 @@ export default {
           startAt: '开始时间',
           endAt: '结束时间',
           multiplier: '活动倍率',
-          multiplierHint: '启用活动时必须大于 0。',
+          multiplierHint: '可选：未单独设置活动价格的档位使用此倍率；只配置活动价格时可以留空。',
           priceTiers: '活动档位价格',
           priceTiersHint: '额度保持不变，只填写活动期间用户实际支付的价格；留空表示该档位不参加特价。',
           creditedAmount: '到账额度',

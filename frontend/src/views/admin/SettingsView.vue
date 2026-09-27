@@ -10404,7 +10404,7 @@ const form = reactive<SettingsForm>({
   payment_balance_disabled: false,
   payment_balance_recharge_multiplier: 1,
   payment_balance_recharge_tiers: [],
-  payment_balance_recharge_promotion: { enabled: false, multiplier: 1, blacklist_user_ids: [], price_tiers: [] },
+  payment_balance_recharge_promotion: { enabled: false, multiplier: 0, blacklist_user_ids: [], price_tiers: [] },
   payment_subscription_usd_to_cny_rate: 0,
   payment_recharge_fee_rate: 0,
   payment_enabled_types: [],
@@ -11704,9 +11704,9 @@ async function loadSettings() {
       name: loadedPromotion?.name || undefined,
       start_at: loadedPromotion?.start_at || undefined,
       end_at: loadedPromotion?.end_at || undefined,
-      multiplier: loadedPromotion?.enabled && Number(loadedPromotion.multiplier) > 0
-        ? Number(loadedPromotion.multiplier)
-        : 1,
+      multiplier: Number(loadedPromotion?.multiplier) > 0
+        ? Number(loadedPromotion?.multiplier)
+        : 0,
       price_tiers: Array.isArray(loadedPromotion?.price_tiers)
         ? loadedPromotion.price_tiers
           .filter((tier) => Number.isFinite(Number(tier.credited_amount)) && Number(tier.credited_amount) > 0 && Number.isFinite(Number(tier.price)) && Number(tier.price) > 0)
