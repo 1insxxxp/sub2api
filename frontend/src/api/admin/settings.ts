@@ -17,6 +17,11 @@ export interface DefaultSubscriptionSetting {
   validity_days: number;
 }
 
+export interface BalanceRechargePromotionPriceTier {
+  credited_amount: number
+  price: number
+}
+
 /** One global balance-recharge promotion replacing the regular multiplier during its schedule. */
 export interface BalanceRechargePromotionSettings {
   enabled: boolean
@@ -25,6 +30,7 @@ export interface BalanceRechargePromotionSettings {
   end_at?: string
   multiplier: number
   blacklist_user_ids?: number[]
+  price_tiers?: BalanceRechargePromotionPriceTier[]
 }
 
 // ── 平台限额类型 ──────────────────────────────────────────────────

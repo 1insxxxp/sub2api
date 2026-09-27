@@ -21,6 +21,8 @@ describe("admin SettingsView recharge promotion", () => {
     expect(settingsViewSource).toContain("form.payment_balance_recharge_promotion");
     expect(settingsViewSource).toContain("payment_balance_recharge_promotion: {");
     expect(settingsViewSource).toContain("validateRechargePromotion");
+    expect(settingsViewSource).toContain(":tiers=\"form.payment_balance_recharge_tiers || []\"");
+    expect(settingsViewSource).toContain("price_tiers");
   });
 });
 

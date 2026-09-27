@@ -8765,6 +8765,7 @@
                 />
                 <RechargePromotionEditor
                   v-model="form.payment_balance_recharge_promotion"
+                  :tiers="form.payment_balance_recharge_tiers || []"
                 />
                 <!-- Row 3: Pending orders + load balance + cancel rate limit (all in one row) -->
                 <div class="flex flex-wrap items-end gap-4">
@@ -10403,7 +10404,7 @@ const form = reactive<SettingsForm>({
   payment_balance_disabled: false,
   payment_balance_recharge_multiplier: 1,
   payment_balance_recharge_tiers: [],
-  payment_balance_recharge_promotion: { enabled: false, multiplier: 1, blacklist_user_ids: [] },
+  payment_balance_recharge_promotion: { enabled: false, multiplier: 1, blacklist_user_ids: [], price_tiers: [] },
   payment_subscription_usd_to_cny_rate: 0,
   payment_recharge_fee_rate: 0,
   payment_enabled_types: [],
@@ -11706,6 +11707,11 @@ async function loadSettings() {
       multiplier: loadedPromotion?.enabled && Number(loadedPromotion.multiplier) > 0
         ? Number(loadedPromotion.multiplier)
         : 1,
+      price_tiers: Array.isArray(loadedPromotion?.price_tiers)
+        ? loadedPromotion.price_tiers
+          .filter((tier) => Number.isFinite(Number(tier.credited_amount)) && Number(tier.credited_amount) > 0 && Number.isFinite(Number(tier.price)) && Number(tier.price) > 0)
+          .map((tier) => ({ credited_amount: Number(tier.credited_amount), price: Number(tier.price) }))
+        : [],
       blacklist_user_ids: Array.isArray(loadedPromotion?.blacklist_user_ids)
         ? loadedPromotion.blacklist_user_ids.filter((id) => Number.isInteger(id) && id > 0)
         : [],
@@ -12053,9 +12059,10 @@ async function saveSettings() {
       appStore.showError(t('admin.settings.payment.invalidRechargeTiers'));
       return;
     }
-    const rechargePromotionError = validateRechargePromotion(form.payment_balance_recharge_promotion);
+    const rechargePromotionError = validateRechargePromotion(form.payment_balance_recharge_promotion, form.payment_balance_recharge_tiers || []);
     if (rechargePromotionError) {
-      appStore.showError(t(`admin.settings.payment.rechargePromotion.invalid${rechargePromotionError === 'range' ? 'Range' : 'Multiplier'}`));
+      const suffix = rechargePromotionError === 'range' ? 'Range' : rechargePromotionError === 'priceTiers' ? 'PriceTiers' : 'Multiplier';
+      appStore.showError(t(`admin.settings.payment.rechargePromotion.invalid${suffix}`));
       return;
     }
     if (!validateAffiliateTierSettings()) {
@@ -12499,6 +12506,9 @@ async function saveSettings() {
         start_at: form.payment_balance_recharge_promotion.start_at || undefined,
         end_at: form.payment_balance_recharge_promotion.end_at || undefined,
         multiplier: Number(form.payment_balance_recharge_promotion.multiplier) || 0,
+        price_tiers: (form.payment_balance_recharge_promotion.price_tiers || [])
+          .filter((tier) => Number.isFinite(Number(tier.credited_amount)) && Number(tier.credited_amount) > 0 && Number.isFinite(Number(tier.price)) && Number(tier.price) > 0)
+          .map((tier) => ({ credited_amount: Number(tier.credited_amount), price: Number(tier.price) })),
         blacklist_user_ids: Array.from(new Set((form.payment_balance_recharge_promotion.blacklist_user_ids || []).filter((id) => Number.isInteger(id) && id > 0))),
       },
       payment_subscription_usd_to_cny_rate:

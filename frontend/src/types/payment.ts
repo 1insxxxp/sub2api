@@ -30,6 +30,11 @@ export interface BalanceRechargeTier {
 	multiplier: number
 }
 
+export interface BalanceRechargePromotionPriceTier {
+  credited_amount: number
+  price: number
+}
+
 /** A temporary user-facing recharge multiplier returned by checkout-info. */
 export interface BalanceRechargePromotion {
   active: boolean
@@ -37,6 +42,7 @@ export interface BalanceRechargePromotion {
   start_at?: string
   end_at?: string
   multiplier?: number
+  price_tiers?: BalanceRechargePromotionPriceTier[]
 }
 
 export interface PaymentConfig {

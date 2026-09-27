@@ -29,6 +29,23 @@
         <span class="mt-1 block text-gray-400">{{ t('admin.settings.payment.rechargePromotion.multiplierHint') }}</span>
       </label>
 
+      <div v-if="priceTierRows.length" class="space-y-2">
+        <div>
+          <label class="input-label mb-0">{{ t('admin.settings.payment.rechargePromotion.priceTiers') }}</label>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.settings.payment.rechargePromotion.priceTiersHint') }}</p>
+        </div>
+        <div v-for="row in priceTierRows" :key="row.creditedAmount" class="grid grid-cols-[minmax(0,1fr)_10rem] items-center gap-3 rounded-lg border border-gray-100 bg-white/60 px-3 py-2 dark:border-dark-600 dark:bg-white/[0.03]">
+          <div class="min-w-0 text-xs text-gray-600 dark:text-gray-300">
+            <span class="font-medium">¥{{ row.baseAmount.toFixed(2) }}</span>
+            <span class="mx-1 text-gray-400">→</span>
+            <span class="font-semibold text-primary-600 dark:text-primary-400">${{ row.creditedAmount.toFixed(2) }}</span>
+            <span class="ml-2 text-gray-400">{{ t('admin.settings.payment.rechargePromotion.creditedAmount') }}</span>
+          </div>
+          <label class="sr-only">{{ t('admin.settings.payment.rechargePromotion.activityPrice') }}</label>
+          <input class="input input-sm w-full" type="number" min="0" step="0.01" :value="row.price ?? ''" :placeholder="t('admin.settings.payment.rechargePromotion.activityPricePlaceholder')" @input="updatePrice(row.creditedAmount, ($event.target as HTMLInputElement).value)" />
+        </div>
+      </div>
+
       <div>
         <label class="input-label">{{ t('admin.settings.payment.rechargePromotion.blacklist') }}</label>
         <p class="mb-2 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.settings.payment.rechargePromotion.blacklistHint') }}</p>
@@ -65,9 +82,10 @@ import Icon from '@/components/icons/Icon.vue'
 import { adminAPI } from '@/api/admin'
 import type { SimpleUser } from '@/api/admin/usage'
 import type { BalanceRechargePromotionSettings } from '@/api/admin/settings'
+import type { BalanceRechargeTier } from '@/types/payment'
 import { localDateTimeToRFC3339, rfc3339ToLocalDateTime, validateRechargePromotion } from './rechargePromotion'
 
-const props = defineProps<{ modelValue: BalanceRechargePromotionSettings }>()
+const props = withDefaults(defineProps<{ modelValue: BalanceRechargePromotionSettings; tiers?: BalanceRechargeTier[] }>(), { tiers: () => [] })
 const emit = defineEmits<{ 'update:modelValue': [value: BalanceRechargePromotionSettings] }>()
 const { t } = useI18n()
 const containerRef = ref<HTMLElement | null>(null)
@@ -83,14 +101,29 @@ const selectedUserIds = computed(() => Array.from(new Set((props.modelValue.blac
 const availableResults = computed(() => searchResults.value.filter((user) => !selectedUserIds.value.includes(user.id)))
 const startDateTime = computed(() => rfc3339ToLocalDateTime(props.modelValue.start_at))
 const endDateTime = computed(() => rfc3339ToLocalDateTime(props.modelValue.end_at))
-const validationError = computed(() => validateRechargePromotion(props.modelValue))
-const validationMessage = computed(() => validationError.value === 'range' ? t('admin.settings.payment.rechargePromotion.invalidRange') : t('admin.settings.payment.rechargePromotion.invalidMultiplier'))
+const validationError = computed(() => validateRechargePromotion(props.modelValue, props.tiers))
+const priceTierRows = computed(() => props.tiers.map((tier) => {
+  const creditedAmount = Math.round(tier.amount * tier.multiplier * 100) / 100
+  const configured = props.modelValue.price_tiers?.find((item) => Math.abs(item.credited_amount - creditedAmount) < 0.0000001)
+  return { baseAmount: tier.amount, creditedAmount, price: configured?.price }
+}))
+const validationMessage = computed(() => {
+  if (validationError.value === 'range') return t('admin.settings.payment.rechargePromotion.invalidRange')
+  if (validationError.value === 'priceTiers') return t('admin.settings.payment.rechargePromotion.invalidPriceTiers')
+  return t('admin.settings.payment.rechargePromotion.invalidMultiplier')
+})
 
 function updateField<K extends keyof BalanceRechargePromotionSettings>(field: K, value: BalanceRechargePromotionSettings[K]) {
   emit('update:modelValue', { ...props.modelValue, [field]: value })
 }
 function updateDate(field: 'start_at' | 'end_at', value: string) {
   updateField(field, localDateTimeToRFC3339(value))
+}
+function updatePrice(creditedAmount: number, rawValue: string) {
+  const price = Number(rawValue)
+  const next = (props.modelValue.price_tiers || []).filter((item) => Math.abs(item.credited_amount - creditedAmount) >= 0.0000001)
+  if (Number.isFinite(price) && price > 0) next.push({ credited_amount: creditedAmount, price })
+  updateField('price_tiers', next.length ? next : undefined)
 }
 function selectedUserLabel(id: number) { return selectedUsers.value[id]?.email || t('admin.settings.payment.rechargePromotion.userFallback', { id }) }
 function clearSearch() { if (searchTimer) clearTimeout(searchTimer); searchTimer = null; searchSequence += 1 }
