@@ -174,11 +174,12 @@ func (h *PaymentHandler) GetCheckoutInfo(c *gin.Context) {
 }
 
 type safeBalanceRechargePromotion struct {
-	Active     bool    `json:"active"`
-	Name       string  `json:"name,omitempty"`
-	StartAt    string  `json:"start_at,omitempty"`
-	EndAt      string  `json:"end_at,omitempty"`
-	Multiplier float64 `json:"multiplier,omitempty"`
+	Active     bool                                        `json:"active"`
+	Name       string                                      `json:"name,omitempty"`
+	StartAt    string                                      `json:"start_at,omitempty"`
+	EndAt      string                                      `json:"end_at,omitempty"`
+	Multiplier float64                                     `json:"multiplier,omitempty"`
+	PriceTiers []service.BalanceRechargePromotionPriceTier `json:"price_tiers,omitempty"`
 }
 
 func safeBalanceRechargePromotionInfo(p *service.BalanceRechargePromotion, userID int64, now time.Time) *safeBalanceRechargePromotion {
@@ -196,6 +197,7 @@ func safeBalanceRechargePromotionInfo(p *service.BalanceRechargePromotion, userI
 		StartAt:    p.StartAt,
 		EndAt:      p.EndAt,
 		Multiplier: p.Multiplier,
+		PriceTiers: p.PriceTiers,
 	}
 }
 

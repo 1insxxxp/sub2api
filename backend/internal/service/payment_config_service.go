@@ -274,6 +274,9 @@ func (s *PaymentConfigService) parsePaymentConfig(vals map[string]string) *Payme
 		AlipayForceQRCode:             vals[SettingAlipayForceQRCode] == "true",
 		AlipayMobilePrecreateDeepLink: vals[SettingAlipayMobilePrecreateDeepLink] == "true",
 	}
+	if validateBalanceRechargePromotionAgainstTiers(cfg.BalanceRechargePromotion, cfg.BalanceRechargeTiers) != nil {
+		cfg.BalanceRechargePromotion = defaultBalanceRechargePromotion()
+	}
 	cfg.AlipayMobilePrecreateDeepLink = pcEnvBoolOverride(
 		SettingAlipayMobilePrecreateDeepLink,
 		cfg.AlipayMobilePrecreateDeepLink,
@@ -343,6 +346,23 @@ func (s *PaymentConfigService) UpdatePaymentConfig(ctx context.Context, req Upda
 	}
 	if req.BalanceRechargePromotion != nil {
 		if err := validateBalanceRechargePromotion(*req.BalanceRechargePromotion); err != nil {
+			return err
+		}
+	}
+	if req.BalanceRechargeTiers != nil || req.BalanceRechargePromotion != nil {
+		values, err := s.settingRepo.GetMultiple(ctx, []string{SettingBalanceRechargeTiers, SettingBalanceRechargePromotion})
+		if err != nil {
+			return fmt.Errorf("get recharge settings for validation: %w", err)
+		}
+		tiers := parseBalanceRechargeTiers(values[SettingBalanceRechargeTiers])
+		promotion := parseBalanceRechargePromotion(values[SettingBalanceRechargePromotion])
+		if req.BalanceRechargeTiers != nil {
+			tiers = *req.BalanceRechargeTiers
+		}
+		if req.BalanceRechargePromotion != nil {
+			promotion = req.BalanceRechargePromotion
+		}
+		if err := validateBalanceRechargePromotionAgainstTiers(promotion, tiers); err != nil {
 			return err
 		}
 	}

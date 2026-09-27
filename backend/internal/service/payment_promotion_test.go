@@ -126,7 +126,7 @@ func TestResolveBalanceRechargeMultiplierUsesPromotionOrFallback(t *testing.T) {
 	if got := resolveBalanceRechargeMultiplier(10, tiers, 1, active, 8, now); got != 1.5 {
 		t.Fatalf("blacklisted user got multiplier %.2f, want tier multiplier 1.5", got)
 	}
-	if got := resolveBalanceRechargeMultiplier(20, tiers, 1, active, 3, now.Add(24*time.Hour)); got != 1 {
+	if got := resolveBalanceRechargeMultiplier(20, tiers, 1, active, 3, now.Add(5*24*time.Hour)); got != 1 {
 		t.Fatalf("inactive promotion got multiplier %.2f, want global fallback 1", got)
 	}
 	if got := resolveBalanceRechargeMultiplier(10, tiers, 1, nil, 3, now); got != 1.5 {

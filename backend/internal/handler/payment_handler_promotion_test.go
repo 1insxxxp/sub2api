@@ -1,11 +1,27 @@
 package handler
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/stretchr/testify/require"
 )
+
+func TestSafeRechargePriceTiers(t *testing.T) {
+	var p service.BalanceRechargePromotion
+	require.NoError(t, json.Unmarshal([]byte(`{"enabled":true,"start_at":"2026-10-01T00:00:00Z","end_at":"2026-11-01T00:00:00Z","price_tiers":[{"credited_amount":50,"price":8}],"blacklist_user_ids":[8]}`), &p))
+	now := time.Date(2026, 10, 15, 0, 0, 0, 0, time.UTC)
+	info := safeBalanceRechargePromotionInfo(&p, 7, now)
+	require.NotNil(t, info)
+	raw, err := json.Marshal(info)
+	require.NoError(t, err)
+	require.Contains(t, string(raw), `"price_tiers":[{"credited_amount":50,"price":8}]`)
+	require.NotContains(t, string(raw), "blacklist")
+	require.Nil(t, safeBalanceRechargePromotionInfo(&p, 8, now))
+	require.Nil(t, safeBalanceRechargePromotionInfo(&p, 7, now.AddDate(0, 1, 0)))
+}
 
 func TestSafeBalanceRechargePromotionInfoOmitsBlacklistedUsers(t *testing.T) {
 	promotion := &service.BalanceRechargePromotion{

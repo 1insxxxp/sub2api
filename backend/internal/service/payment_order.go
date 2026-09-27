@@ -40,7 +40,8 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 	if !cfg.Enabled {
 		return nil, infraerrors.Forbidden("PAYMENT_DISABLED", "payment system is disabled")
 	}
-	plan, err := s.validateOrderInput(ctx, req, cfg)
+	pricingTime := time.Now()
+	plan, err := s.validateOrderInput(ctx, req, cfg, pricingTime)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +64,7 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 		orderAmount = plan.Price
 		limitAmount = plan.Price
 	} else if req.OrderType == payment.OrderTypeBalance {
-		orderAmount = resolvePaymentOrderBalanceAmount(req.Amount, cfg, user.ID, time.Now())
+		orderAmount = resolvePaymentOrderBalanceAmount(req.Amount, cfg, user.ID, pricingTime)
 	}
 	feeRate := cfg.RechargeFeeRate
 	methodCurrency := payment.DefaultPaymentCurrency
@@ -126,6 +127,9 @@ func resolvePaymentOrderBalanceAmount(amount float64, cfg *PaymentConfig, userID
 	if cfg == nil {
 		return calculateCreditedBalance(amount, 1)
 	}
+	if tier := findBalanceRechargePromotionPriceTier(amount, cfg.BalanceRechargeTiers, cfg.BalanceRechargePromotion, userID, now); tier != nil {
+		return tier.CreditedAmount
+	}
 	multiplier := resolveBalanceRechargeMultiplier(
 		amount,
 		cfg.BalanceRechargeTiers,
@@ -137,7 +141,7 @@ func resolvePaymentOrderBalanceAmount(amount float64, cfg *PaymentConfig, userID
 	return calculateCreditedBalance(amount, multiplier)
 }
 
-func (s *PaymentService) validateOrderInput(ctx context.Context, req CreateOrderRequest, cfg *PaymentConfig) (*dbent.SubscriptionPlan, error) {
+func (s *PaymentService) validateOrderInput(ctx context.Context, req CreateOrderRequest, cfg *PaymentConfig, now time.Time) (*dbent.SubscriptionPlan, error) {
 	if req.OrderType == payment.OrderTypeBalance && cfg.BalanceDisabled {
 		return nil, infraerrors.Forbidden("BALANCE_PAYMENT_DISABLED", "balance recharge has been disabled")
 	}
@@ -151,7 +155,7 @@ func (s *PaymentService) validateOrderInput(ctx context.Context, req CreateOrder
 		return nil, infraerrors.BadRequest("INVALID_AMOUNT", "amount out of range").
 			WithMetadata(map[string]string{"min": fmt.Sprintf("%.2f", cfg.MinAmount), "max": fmt.Sprintf("%.2f", cfg.MaxAmount)})
 	}
-	if !isPresetBalanceRechargeAmount(req.Amount, cfg.BalanceRechargeTiers) {
+	if !isPresetBalanceRechargeAmount(req.Amount, cfg.BalanceRechargeTiers) && findBalanceRechargePromotionPriceTier(req.Amount, cfg.BalanceRechargeTiers, cfg.BalanceRechargePromotion, req.UserID, now) == nil {
 		return nil, infraerrors.BadRequest("INVALID_AMOUNT", "amount must match a configured quick recharge amount")
 	}
 	return nil, nil
