@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   localDateTimeToRFC3339,
+  pruneRechargePromotionPriceTiers,
   rfc3339ToLocalDateTime,
   validateRechargePromotion,
 } from '../rechargePromotion'
@@ -49,5 +50,20 @@ describe('RechargePromotionEditor helpers', () => {
       start_at: '2026-10-01T00:00:00+08:00',
       end_at: '2026-10-08T00:00:00+08:00',
     })).toBe('priceTiers')
+  })
+
+  it('removes activity prices for recharge tiers that no longer exist', () => {
+    const tiers: BalanceRechargeTier[] = [{ amount: 10, multiplier: 5 }]
+    const promotion = {
+      enabled: true,
+      price_tiers: [
+        { credited_amount: 50, price: 9 },
+        { credited_amount: 100, price: 16 },
+      ],
+    }
+
+    expect(pruneRechargePromotionPriceTiers(promotion, tiers).price_tiers).toEqual([
+      { credited_amount: 50, price: 9 },
+    ])
   })
 })

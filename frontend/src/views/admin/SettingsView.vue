@@ -9601,7 +9601,7 @@ import PaymentProviderList from "@/components/payment/PaymentProviderList.vue";
 import PaymentProviderDialog from "@/components/payment/PaymentProviderDialog.vue";
 import RechargeTiersEditor from '@/components/payment/RechargeTiersEditor.vue';
 import RechargePromotionEditor from '@/components/payment/RechargePromotionEditor.vue';
-import { validateRechargePromotion } from '@/components/payment/rechargePromotion';
+import { pruneRechargePromotionPriceTiers, validateRechargePromotion } from '@/components/payment/rechargePromotion';
 import { validRechargeTiers } from '@/components/payment/rechargeTiers';
 import GroupBadge from "@/components/common/GroupBadge.vue";
 import GroupOptionItem from "@/components/common/GroupOptionItem.vue";
@@ -11699,7 +11699,7 @@ async function loadSettings() {
     const settings = await adminAPI.settings.getSettings();
     form.payment_balance_recharge_tiers = settings.payment_balance_recharge_tiers || [];
     const loadedPromotion = settings.payment_balance_recharge_promotion;
-    form.payment_balance_recharge_promotion = {
+    form.payment_balance_recharge_promotion = pruneRechargePromotionPriceTiers({
       enabled: loadedPromotion?.enabled === true,
       name: loadedPromotion?.name || undefined,
       start_at: loadedPromotion?.start_at || undefined,
@@ -11712,7 +11712,7 @@ async function loadSettings() {
       blacklist_user_ids: Array.isArray(loadedPromotion?.blacklist_user_ids)
         ? loadedPromotion.blacklist_user_ids.filter((id) => Number.isInteger(id) && id > 0)
         : [],
-    };
+    }, form.payment_balance_recharge_tiers);
     availableChannelsPriceMultiplierMaxLoaded.value =
       Object.prototype.hasOwnProperty.call(
         settings,
@@ -12056,6 +12056,10 @@ async function saveSettings() {
       appStore.showError(t('admin.settings.payment.invalidRechargeTiers'));
       return;
     }
+    form.payment_balance_recharge_promotion = pruneRechargePromotionPriceTiers(
+      form.payment_balance_recharge_promotion,
+      form.payment_balance_recharge_tiers || [],
+    );
     const rechargePromotionError = validateRechargePromotion(form.payment_balance_recharge_promotion, form.payment_balance_recharge_tiers || []);
     if (rechargePromotionError) {
       const suffix = rechargePromotionError === 'range' ? 'Range' : 'PriceTiers';

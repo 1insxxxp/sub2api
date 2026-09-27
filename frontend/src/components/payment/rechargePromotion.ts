@@ -1,6 +1,23 @@
 import type { BalanceRechargePromotionSettings } from '@/api/admin/settings'
 import type { BalanceRechargeTier } from '@/types/payment'
 
+function creditedAmountForTier(tier: BalanceRechargeTier): number {
+  return Math.round(tier.amount * tier.multiplier * 100) / 100
+}
+
+export function pruneRechargePromotionPriceTiers(
+  promotion: BalanceRechargePromotionSettings,
+  tiers: BalanceRechargeTier[] = [],
+): BalanceRechargePromotionSettings {
+  const validCredits = new Set(tiers.map(creditedAmountForTier))
+  return {
+    ...promotion,
+    price_tiers: (promotion.price_tiers || []).filter((priceTier) => (
+      validCredits.has(Math.round(Number(priceTier.credited_amount) * 100) / 100)
+    )),
+  }
+}
+
 export function localDateTimeToRFC3339(value: string): string | undefined {
   if (!value) return undefined
   const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value)
@@ -40,9 +57,9 @@ export function validateRechargePromotion(
       if (seenCredits.has(credit) || seenPrices.has(price)) return 'priceTiers'
       seenCredits.add(credit)
       seenPrices.add(price)
-      const matches = tiers.filter((tier) => Math.abs(tier.amount * tier.multiplier - credit) < 0.0000001)
+      const matches = tiers.filter((tier) => Math.abs(creditedAmountForTier(tier) - credit) < 0.0000001)
       if (matches.length !== 1) return 'priceTiers'
-      if (tiers.some((tier) => Math.abs(tier.amount - price) < 0.0000001 && Math.abs(tier.amount * tier.multiplier - credit) >= 0.0000001)) return 'priceTiers'
+      if (tiers.some((tier) => Math.abs(tier.amount - price) < 0.0000001 && Math.abs(creditedAmountForTier(tier) - credit) >= 0.0000001)) return 'priceTiers'
     }
   }
   if (priceTiers.length === 0) return 'priceTiers'
