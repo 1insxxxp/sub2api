@@ -57,9 +57,6 @@
                 <span class="font-semibold text-gray-900 dark:text-white">
                   {{ rechargePromotion.name || t('payment.rechargePromotionDefaultName') }}
                 </span>
-                <span class="font-semibold tabular-nums text-primary-600 dark:text-primary-400">
-                  ×{{ formatRechargeMultiplier(rechargePromotion.multiplier || 1) }}
-                </span>
               </div>
               <span class="text-xs text-gray-500 dark:text-gray-400">
                 {{ t('payment.rechargePromotionEndsAt', { date: formatRechargePromotionEndAt(rechargePromotion.end_at) }) }}
@@ -335,7 +332,7 @@ import { hasPeakRate, formatPeakRateWindow, serverTimezoneLabel, type PeakRateFi
 import type { SubscriptionPlan, CheckoutInfoResponse, CreateOrderResult, OrderType, BalanceRechargePromotion } from '@/types/payment'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import AmountInput from '@/components/payment/AmountInput.vue'
-import { resolveRechargeMultiplier, validRechargePromotion } from '@/components/payment/rechargeTiers'
+import { resolveRechargeMultiplier, resolveRechargePaymentAmount, validRechargePromotion } from '@/components/payment/rechargeTiers'
 import PaymentMethodSelector from '@/components/payment/PaymentMethodSelector.vue'
 import { METHOD_ORDER, getPaymentPopupFeatures, isBuiltInAlipayMethod, isBuiltInWxpayMethod } from '@/components/payment/providerConfig'
 import {
@@ -674,15 +671,29 @@ const subscriptionUsdToCnyRate = computed(() => {
 })
 const creditedAmount = computed(() => Math.round((validAmount.value * balanceRechargeMultiplier.value) * 100) / 100)
 const defaultRechargeAmounts = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000]
-const quickRechargeAmounts = computed(() => checkout.value.balance_recharge_tiers
-  ? checkout.value.balance_recharge_tiers.map(tier => tier.amount)
-  : defaultRechargeAmounts)
-const rechargeOverview = computed(() => quickRechargeAmounts.value
-  .filter((rechargeAmount) => (globalMinAmount.value <= 0 || rechargeAmount >= globalMinAmount.value)
-    && (globalMaxAmount.value <= 0 || rechargeAmount <= globalMaxAmount.value))
-  .map((rechargeAmount) => {
-    const credited = Math.round((rechargeAmount * resolveRechargeMultiplier(
-      rechargeAmount,
+const rechargeTierOptions = computed(() => {
+  const baseMultiplier = Number.isFinite(checkout.value.balance_recharge_multiplier)
+    && checkout.value.balance_recharge_multiplier > 0
+    ? checkout.value.balance_recharge_multiplier
+    : 1
+  if (checkout.value.balance_recharge_tiers) {
+    return checkout.value.balance_recharge_tiers.map((tier) => ({
+      amount: resolveRechargePaymentAmount(tier, checkout.value.balance_recharge_promotion, checkoutNow.value),
+      baseCredited: Math.round(tier.amount * baseMultiplier * 100) / 100,
+    }))
+  }
+  return defaultRechargeAmounts.map((amount) => ({
+    amount,
+    baseCredited: Math.round(amount * baseMultiplier * 100) / 100,
+  }))
+})
+const quickRechargeAmounts = computed(() => rechargeTierOptions.value.map((option) => option.amount))
+const rechargeOverview = computed(() => rechargeTierOptions.value
+  .filter((option) => (globalMinAmount.value <= 0 || option.amount >= globalMinAmount.value)
+    && (globalMaxAmount.value <= 0 || option.amount <= globalMaxAmount.value))
+  .map((option) => {
+    const credited = Math.round((option.amount * resolveRechargeMultiplier(
+      option.amount,
       checkout.value.balance_recharge_tiers,
       checkout.value.balance_recharge_multiplier,
       checkout.value.balance_recharge_promotion,
@@ -692,16 +703,11 @@ const rechargeOverview = computed(() => quickRechargeAmounts.value
     // multiplier is the normal amount users would receive.  The bonus should
     // only show the tier uplift over that base credit, not the difference
     // between credited balance and the cash payment amount.
-    const baseMultiplier = Number.isFinite(checkout.value.balance_recharge_multiplier)
-      && checkout.value.balance_recharge_multiplier > 0
-      ? checkout.value.balance_recharge_multiplier
-      : 1
-    const baseCredited = Math.round((rechargeAmount * baseMultiplier) * 100) / 100
     return {
-      amount: rechargeAmount,
-      baseCredited,
+      amount: option.amount,
+      baseCredited: option.baseCredited,
       credited,
-      bonus: Math.max(0, Math.round((credited - baseCredited) * 100) / 100),
+      bonus: Math.max(0, Math.round((credited - option.baseCredited) * 100) / 100),
     }
   }))
 
@@ -783,11 +789,6 @@ function formatSelectedPaymentAmount(value: number): string {
 
 function formatCreditedAmount(value: number): string {
   return formatPaymentAmount(value, 'USD', localeCode.value)
-}
-
-function formatRechargeMultiplier(value: number): string {
-  if (!Number.isFinite(value)) return '1'
-  return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(4)))
 }
 
 function formatRechargePromotionEndAt(endAt?: string): string {

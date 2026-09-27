@@ -476,12 +476,34 @@ describe('PaymentView recharge rate preview', () => {
     await flushPromises()
 
     expect(wrapper.get('[data-testid="recharge-promotion-banner"]').text()).toContain('周年活动')
-    expect(wrapper.get('[data-testid="recharge-promotion-banner"]').text()).toContain('×6')
+    expect(wrapper.get('[data-testid="recharge-promotion-banner"]').text()).not.toContain('×6')
     const rows = wrapper.findAll('[data-testid="recharge-rule-row"]')
     expect(rows[0].text()).toContain('$60.00')
     expect(rows[0].text()).toContain('payment.rechargeOfferBase $10.00')
     expect(rows[0].text()).toContain('payment.rechargeOfferBonus $50.00')
     expect(rows[1].text()).toContain('$108.00')
+  })
+
+  it('shows an activity price while keeping the credited balance unchanged', async () => {
+    routeState.path = '/purchase'
+    routeState.query = {}
+    getCheckoutInfo.mockReset().mockResolvedValue(checkoutInfoFixture({
+      balance_recharge_multiplier: 1,
+      balance_recharge_tiers: [{ amount: 10, multiplier: 5 }],
+      balance_recharge_promotion: {
+        active: true,
+        name: '固定额度特价',
+        price_tiers: [{ credited_amount: 50, price: 8 }],
+        end_at: '2099-09-26T12:00:00.000Z',
+      },
+    }))
+    const wrapper = shallowMount(PaymentView, { global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Teleport: true, Transition: false } } })
+    await flushPromises()
+
+    expect(wrapper.getComponent(AmountInput).props('amounts')).toEqual([8])
+    const row = wrapper.get('[data-testid="recharge-rule-row"]')
+    expect(row.text()).toContain('¥8.00')
+    expect(row.text()).toContain('$50.00')
   })
 
   it('stops advertising an expired promotion and keeps the normal tier preview', async () => {
