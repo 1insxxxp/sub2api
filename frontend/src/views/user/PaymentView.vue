@@ -677,10 +677,20 @@ const rechargeTierOptions = computed(() => {
     ? checkout.value.balance_recharge_multiplier
     : 1
   if (checkout.value.balance_recharge_tiers) {
-    return checkout.value.balance_recharge_tiers.map((tier) => ({
-      amount: resolveRechargePaymentAmount(tier, checkout.value.balance_recharge_promotion, checkoutNow.value),
-      baseCredited: Math.round(tier.amount * baseMultiplier * 100) / 100,
-    }))
+    return checkout.value.balance_recharge_tiers.map((tier) => {
+      const amount = resolveRechargePaymentAmount(
+        tier,
+        checkout.value.balance_recharge_promotion,
+        checkoutNow.value,
+      )
+      const activityPriceChanged = Math.abs(amount - tier.amount) >= 0.0000001
+      return {
+        amount,
+        baseCredited: Math.round(
+          (activityPriceChanged ? tier.amount * tier.multiplier : tier.amount * baseMultiplier) * 100,
+        ) / 100,
+      }
+    })
   }
   return defaultRechargeAmounts.map((amount) => ({
     amount,

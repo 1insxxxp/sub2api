@@ -504,6 +504,7 @@ describe('PaymentView recharge rate preview', () => {
     const row = wrapper.get('[data-testid="recharge-rule-row"]')
     expect(row.text()).toContain('¥8.00')
     expect(row.text()).toContain('$50.00')
+    expect(row.text()).not.toContain('payment.rechargeOfferBase')
   })
 
   it('stops advertising an expired promotion and keeps the normal tier preview', async () => {
