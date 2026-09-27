@@ -22,22 +22,21 @@ describe('recharge tiers', () => {
     expect(validRechargeTiers(tiers)).toBe(true)
   })
 
-  it('uses an active unexpired promotion instead of the matching tier', () => {
+  it('uses an active per-tier activity price instead of the matching tier price', () => {
     const promotion: BalanceRechargePromotion = {
       active: true,
-      multiplier: 6,
+      price_tiers: [{ credited_amount: 54, price: 8 }],
       end_at: '2026-09-26T12:00:00.000Z',
     }
 
-    expect(resolveRechargeMultiplier(18, tiers, 5, promotion, Date.parse('2026-09-26T11:00:00.000Z'))).toBe(6)
+    expect(resolveRechargeMultiplier(8, tiers, 5, promotion, Date.parse('2026-09-26T11:00:00.000Z'))).toBe(6.75)
   })
 
   it.each([
-    { active: false, multiplier: 6, end_at: '2026-09-26T12:00:00.000Z' },
-    { active: true, multiplier: 6, end_at: '2026-09-26T10:00:00.000Z' },
-    { active: true, multiplier: 0, end_at: '2026-09-26T12:00:00.000Z' },
-    { active: true, multiplier: Number.NaN, end_at: '2026-09-26T12:00:00.000Z' },
-    { active: true, multiplier: 6, end_at: 'invalid' },
+    { active: false, price_tiers: [{ credited_amount: 54, price: 8 }], end_at: '2026-09-26T12:00:00.000Z' },
+    { active: true, price_tiers: [{ credited_amount: 54, price: 8 }], end_at: '2026-09-26T10:00:00.000Z' },
+    { active: true, price_tiers: [], end_at: '2026-09-26T12:00:00.000Z' },
+    { active: true, price_tiers: [{ credited_amount: 54, price: 8 }], end_at: 'invalid' },
   ] as BalanceRechargePromotion[])('falls back to normal rules for an invalid or expired promotion (%o)', (promotion) => {
     expect(resolveRechargeMultiplier(18, tiers, 5, promotion, Date.parse('2026-09-26T11:00:00.000Z'))).toBe(3)
   })

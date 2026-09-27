@@ -457,7 +457,7 @@ describe('PaymentView recharge rate preview', () => {
     expect(rows[2].text()).toContain('$320.00')
   })
 
-  it('uses the active promotion for every preview and shows its compact activity banner', async () => {
+  it('uses active per-tier activity prices and shows its compact activity banner', async () => {
     routeState.path = '/purchase'
     routeState.query = {}
     getCheckoutInfo.mockReset().mockResolvedValue(checkoutInfoFixture({
@@ -468,7 +468,7 @@ describe('PaymentView recharge rate preview', () => {
       balance_recharge_promotion: {
         active: true,
         name: '周年活动',
-        multiplier: 6,
+        price_tiers: [{ credited_amount: 20, price: 5 }],
         end_at: '2099-09-26T12:00:00.000Z',
       },
     }))
@@ -476,12 +476,11 @@ describe('PaymentView recharge rate preview', () => {
     await flushPromises()
 
     expect(wrapper.get('[data-testid="recharge-promotion-banner"]').text()).toContain('周年活动')
-    expect(wrapper.get('[data-testid="recharge-promotion-banner"]').text()).not.toContain('×6')
     const rows = wrapper.findAll('[data-testid="recharge-rule-row"]')
-    expect(rows[0].text()).toContain('$60.00')
-    expect(rows[0].text()).toContain('payment.rechargeOfferBase $10.00')
-    expect(rows[0].text()).toContain('payment.rechargeOfferBonus $50.00')
-    expect(rows[1].text()).toContain('$108.00')
+    expect(rows[0].text()).toContain('¥5.00')
+    expect(rows[0].text()).toContain('$20.00')
+    expect(rows[0].text()).not.toContain('payment.rechargeOfferBase')
+    expect(rows[1].text()).toContain('$54.00')
   })
 
   it('shows an activity price while keeping the credited balance unchanged', async () => {
@@ -516,7 +515,7 @@ describe('PaymentView recharge rate preview', () => {
       balance_recharge_promotion: {
         active: true,
         name: 'Expired activity',
-        multiplier: 6,
+        price_tiers: [{ credited_amount: 20, price: 5 }],
         end_at: '2020-01-01T00:00:00.000Z',
       },
     }))
@@ -563,17 +562,19 @@ describe('PaymentView recharge rate preview', () => {
     routeState.query = {}
     const initial = checkoutInfoFixture({
       balance_recharge_multiplier: 1,
-      balance_recharge_promotion: { active: true, multiplier: 6, end_at: '2099-09-26T12:00:00.000Z' },
+      balance_recharge_tiers: [{ amount: 10, multiplier: 1 }],
+      balance_recharge_promotion: { active: true, price_tiers: [{ credited_amount: 10, price: 8 }], end_at: '2099-09-26T12:00:00.000Z' },
     })
     const refreshed = checkoutInfoFixture({
       balance_recharge_multiplier: 1,
-      balance_recharge_promotion: { active: true, multiplier: 2, end_at: '2099-09-26T12:00:00.000Z' },
+      balance_recharge_tiers: [{ amount: 10, multiplier: 1 }],
+      balance_recharge_promotion: { active: true, price_tiers: [{ credited_amount: 10, price: 9 }], end_at: '2099-09-26T12:00:00.000Z' },
     })
     getCheckoutInfo.mockReset().mockResolvedValueOnce(initial).mockResolvedValueOnce(refreshed)
     createOrder.mockReset()
     const wrapper = shallowMount(PaymentView, { global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Teleport: true, Transition: false } } })
     await flushPromises()
-    wrapper.getComponent(AmountInput).vm.$emit('update:modelValue', 10)
+    wrapper.getComponent(AmountInput).vm.$emit('update:modelValue', 8)
     await flushPromises()
     const submit = wrapper.findAll('button').find(button => button.text().includes('payment.createOrder'))
     expect(submit).toBeDefined()

@@ -38,9 +38,8 @@ func TestRechargePriceTiersParseAndResolve(t *testing.T) {
 	for _, date := range []time.Time{now.AddDate(0, -1, 0), now.AddDate(0, 1, 0)} {
 		require.Equal(t, 8.0, resolvePaymentOrderBalanceAmount(8, cfg, 7, date))
 	}
-	p.Multiplier = 6
-	require.Equal(t, 50.0, resolvePaymentOrderBalanceAmount(8, cfg, 7, now), "price tier wins over legacy multiplier")
-	require.Equal(t, 108.0, resolvePaymentOrderBalanceAmount(18, cfg, 7, now), "legacy multiplier still applies to other amounts")
+	require.Equal(t, 50.0, resolvePaymentOrderBalanceAmount(8, cfg, 7, now), "price tier determines the credited amount")
+	require.Equal(t, 90.0, resolvePaymentOrderBalanceAmount(18, cfg, 7, now), "unconfigured tiers keep their normal credit")
 }
 
 func TestRechargePriceTiersConfigValidation(t *testing.T) {

@@ -23,12 +23,6 @@
           <input class="input mt-1 w-full" type="datetime-local" :value="endDateTime" @input="updateDate('end_at', ($event.target as HTMLInputElement).value)" />
         </label>
       </div>
-      <label class="block max-w-xs text-xs text-gray-600 dark:text-gray-300">
-        {{ t('admin.settings.payment.rechargePromotion.multiplier') }}
-        <input class="input mt-1 w-full" type="number" min="0" step="0.01" :value="modelValue.multiplier || ''" @input="updateField('multiplier', Number(($event.target as HTMLInputElement).value))" />
-        <span class="mt-1 block text-gray-400">{{ t('admin.settings.payment.rechargePromotion.multiplierHint') }}</span>
-      </label>
-
       <div v-if="priceTierRows.length" class="space-y-2">
         <div>
           <label class="input-label mb-0">{{ t('admin.settings.payment.rechargePromotion.priceTiers') }}</label>
@@ -109,8 +103,7 @@ const priceTierRows = computed(() => props.tiers.map((tier) => {
 }))
 const validationMessage = computed(() => {
   if (validationError.value === 'range') return t('admin.settings.payment.rechargePromotion.invalidRange')
-  if (validationError.value === 'priceTiers') return t('admin.settings.payment.rechargePromotion.invalidPriceTiers')
-  return t('admin.settings.payment.rechargePromotion.invalidMultiplier')
+  return t('admin.settings.payment.rechargePromotion.invalidPriceTiers')
 })
 
 function updateField<K extends keyof BalanceRechargePromotionSettings>(field: K, value: BalanceRechargePromotionSettings[K]) {

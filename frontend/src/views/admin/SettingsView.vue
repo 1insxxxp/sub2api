@@ -10404,7 +10404,7 @@ const form = reactive<SettingsForm>({
   payment_balance_disabled: false,
   payment_balance_recharge_multiplier: 1,
   payment_balance_recharge_tiers: [],
-  payment_balance_recharge_promotion: { enabled: false, multiplier: 0, blacklist_user_ids: [], price_tiers: [] },
+  payment_balance_recharge_promotion: { enabled: false, blacklist_user_ids: [], price_tiers: [] },
   payment_subscription_usd_to_cny_rate: 0,
   payment_recharge_fee_rate: 0,
   payment_enabled_types: [],
@@ -11704,9 +11704,6 @@ async function loadSettings() {
       name: loadedPromotion?.name || undefined,
       start_at: loadedPromotion?.start_at || undefined,
       end_at: loadedPromotion?.end_at || undefined,
-      multiplier: Number(loadedPromotion?.multiplier) > 0
-        ? Number(loadedPromotion?.multiplier)
-        : 0,
       price_tiers: Array.isArray(loadedPromotion?.price_tiers)
         ? loadedPromotion.price_tiers
           .filter((tier) => Number.isFinite(Number(tier.credited_amount)) && Number(tier.credited_amount) > 0 && Number.isFinite(Number(tier.price)) && Number(tier.price) > 0)
@@ -12061,7 +12058,7 @@ async function saveSettings() {
     }
     const rechargePromotionError = validateRechargePromotion(form.payment_balance_recharge_promotion, form.payment_balance_recharge_tiers || []);
     if (rechargePromotionError) {
-      const suffix = rechargePromotionError === 'range' ? 'Range' : rechargePromotionError === 'priceTiers' ? 'PriceTiers' : 'Multiplier';
+      const suffix = rechargePromotionError === 'range' ? 'Range' : 'PriceTiers';
       appStore.showError(t(`admin.settings.payment.rechargePromotion.invalid${suffix}`));
       return;
     }
@@ -12505,7 +12502,6 @@ async function saveSettings() {
         name: form.payment_balance_recharge_promotion.name?.trim() || undefined,
         start_at: form.payment_balance_recharge_promotion.start_at || undefined,
         end_at: form.payment_balance_recharge_promotion.end_at || undefined,
-        multiplier: Number(form.payment_balance_recharge_promotion.multiplier) || 0,
         price_tiers: (form.payment_balance_recharge_promotion.price_tiers || [])
           .filter((tier) => Number.isFinite(Number(tier.credited_amount)) && Number(tier.credited_amount) > 0 && Number.isFinite(Number(tier.price)) && Number(tier.price) > 0)
           .map((tier) => ({ credited_amount: Number(tier.credited_amount), price: Number(tier.price) })),

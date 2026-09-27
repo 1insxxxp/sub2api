@@ -11,11 +11,10 @@ export function validRechargeTiers(tiers: BalanceRechargeTier[]): boolean {
 
 export function validRechargePromotion(promotion: BalanceRechargePromotion | undefined | null, now = Date.now()): boolean {
   if (!promotion?.active) return false
-  const hasMultiplier = Number.isFinite(promotion.multiplier) && (promotion.multiplier ?? 0) > 0
   const hasPriceTiers = Array.isArray(promotion.price_tiers) && promotion.price_tiers.length > 0 && promotion.price_tiers.every((tier) => (
     Number.isFinite(tier.credited_amount) && tier.credited_amount > 0 && Number.isFinite(tier.price) && tier.price > 0
   ))
-  if (!hasMultiplier && !hasPriceTiers) return false
+  if (!hasPriceTiers) return false
   if (promotion.start_at) {
     const startAt = Date.parse(promotion.start_at)
     if (!Number.isFinite(startAt) || startAt > now) return false
@@ -46,7 +45,6 @@ export function resolveRechargeMultiplier(
   if (validRechargePromotion(promotion, now)) {
     const priceTier = promotion!.price_tiers?.find((tier) => Math.abs(tier.price - amount) < 0.0000001)
     if (priceTier) return priceTier.credited_amount / amount
-    if (Number.isFinite(promotion!.multiplier) && (promotion!.multiplier ?? 0) > 0) return promotion!.multiplier as number
   }
   const fixed = Number.isFinite(fallback) && fallback > 0 ? fallback : 1
   if (!tiers || !validRechargeTiers(tiers)) return fixed

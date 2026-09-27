@@ -35,13 +35,12 @@ export interface BalanceRechargePromotionPriceTier {
   price: number
 }
 
-/** A temporary user-facing recharge multiplier returned by checkout-info. */
+/** A temporary user-facing recharge price campaign returned by checkout-info. */
 export interface BalanceRechargePromotion {
   active: boolean
   name?: string
   start_at?: string
   end_at?: string
-  multiplier?: number
   price_tiers?: BalanceRechargePromotionPriceTier[]
 }
 

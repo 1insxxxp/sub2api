@@ -26,9 +26,8 @@ export function rfc3339ToLocalDateTime(value?: string): string {
 export function validateRechargePromotion(
   value: BalanceRechargePromotionSettings,
   tiers: BalanceRechargeTier[] = [],
-): 'multiplier' | 'priceTiers' | 'range' | undefined {
+): 'priceTiers' | 'range' | undefined {
   if (!value.enabled) return undefined
-  const multiplierValid = Number.isFinite(Number(value.multiplier)) && Number(value.multiplier) > 0
   const priceTiers = Array.isArray(value.price_tiers) ? value.price_tiers : []
   if (priceTiers.length > 0) {
     if (tiers.length === 0) return 'priceTiers'
@@ -46,7 +45,7 @@ export function validateRechargePromotion(
       if (tiers.some((tier) => Math.abs(tier.amount - price) < 0.0000001 && Math.abs(tier.amount * tier.multiplier - credit) >= 0.0000001)) return 'priceTiers'
     }
   }
-  if (!multiplierValid && priceTiers.length === 0) return 'multiplier'
+  if (priceTiers.length === 0) return 'priceTiers'
   if (!value.start_at || !value.end_at) return 'range'
   const start = Date.parse(value.start_at)
   const end = Date.parse(value.end_at)

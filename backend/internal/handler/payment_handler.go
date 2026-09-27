@@ -151,15 +151,11 @@ func (h *PaymentHandler) GetCheckoutInfo(c *gin.Context) {
 	now := time.Now()
 	activity := safeBalanceRechargePromotionInfo(cfg.BalanceRechargePromotion, subject.UserID, now)
 	response.Success(c, checkoutInfoResponse{
-		Methods:         limitsResp.Methods,
-		GlobalMin:       limitsResp.GlobalMin,
-		GlobalMax:       limitsResp.GlobalMax,
-		Plans:           planList,
-		BalanceDisabled: cfg.BalanceDisabled,
-		// Keep the configured/base multiplier separate from the eligible
-		// promotion multiplier. The client uses both values to show the
-		// normal credit and the activity bonus, while order creation applies
-		// the authoritative promotion server-side.
+		Methods:                       limitsResp.Methods,
+		GlobalMin:                     limitsResp.GlobalMin,
+		GlobalMax:                     limitsResp.GlobalMax,
+		Plans:                         planList,
+		BalanceDisabled:               cfg.BalanceDisabled,
 		BalanceRechargeMultiplier:     cfg.BalanceRechargeMultiplier,
 		BalanceRechargeTiers:          cfg.BalanceRechargeTiers,
 		SubscriptionUSDToCNYRate:      cfg.SubscriptionUSDToCNYRate,
@@ -178,12 +174,11 @@ type safeBalanceRechargePromotion struct {
 	Name       string                                      `json:"name,omitempty"`
 	StartAt    string                                      `json:"start_at,omitempty"`
 	EndAt      string                                      `json:"end_at,omitempty"`
-	Multiplier float64                                     `json:"multiplier,omitempty"`
 	PriceTiers []service.BalanceRechargePromotionPriceTier `json:"price_tiers,omitempty"`
 }
 
 func safeBalanceRechargePromotionInfo(p *service.BalanceRechargePromotion, userID int64, now time.Time) *safeBalanceRechargePromotion {
-	if p == nil || !p.Enabled || p.IsBlacklisted(userID) || userID <= 0 {
+	if p == nil || !p.Enabled || len(p.PriceTiers) == 0 || p.IsBlacklisted(userID) || userID <= 0 {
 		return nil
 	}
 	start, startErr := time.Parse(time.RFC3339, strings.TrimSpace(p.StartAt))
@@ -196,7 +191,6 @@ func safeBalanceRechargePromotionInfo(p *service.BalanceRechargePromotion, userI
 		Name:       p.Name,
 		StartAt:    p.StartAt,
 		EndAt:      p.EndAt,
-		Multiplier: p.Multiplier,
 		PriceTiers: p.PriceTiers,
 	}
 }

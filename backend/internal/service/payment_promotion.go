@@ -13,11 +13,14 @@ import (
 // activity. StartAt is inclusive and EndAt is exclusive. A malformed or
 // missing setting is treated as the zero (disabled) promotion by the parser.
 type BalanceRechargePromotion struct {
-	Enabled          bool                                `json:"enabled"`
-	Name             string                              `json:"name,omitempty"`
-	StartAt          string                              `json:"start_at,omitempty"`
-	EndAt            string                              `json:"end_at,omitempty"`
-	Multiplier       float64                             `json:"multiplier"`
+	Enabled bool   `json:"enabled"`
+	Name    string `json:"name,omitempty"`
+	StartAt string `json:"start_at,omitempty"`
+	EndAt   string `json:"end_at,omitempty"`
+	// Multiplier is retained only so older stored JSON can be decoded safely.
+	// Activity behavior is price-tier-only; this field is ignored and legacy
+	// multiplier-only promotions are treated as invalid when enabled.
+	Multiplier       float64                             `json:"multiplier,omitempty"`
 	BlacklistUserIDs []int64                             `json:"blacklist_user_ids,omitempty"`
 	PriceTiers       []BalanceRechargePromotionPriceTier `json:"price_tiers,omitempty"`
 }
@@ -50,12 +53,9 @@ func parseBalanceRechargePromotion(raw string) *BalanceRechargePromotion {
 }
 
 // validateBalanceRechargePromotion validates the user-managed promotion
-// value. A disabled promotion may use the zero-value window and multiplier so
-// old installations and a freshly cleared setting remain valid.
+// value. A disabled promotion may use the zero-value window so a freshly
+// cleared setting remains valid.
 func validateBalanceRechargePromotion(promotion BalanceRechargePromotion) error {
-	if math.IsNaN(promotion.Multiplier) || math.IsInf(promotion.Multiplier, 0) || promotion.Multiplier < 0 {
-		return infraerrors.BadRequest("INVALID_BALANCE_RECHARGE_PROMOTION", "promotion multiplier must be a non-negative finite number")
-	}
 	if len(promotion.PriceTiers) > 50 {
 		return infraerrors.BadRequest("INVALID_BALANCE_RECHARGE_PROMOTION", "at most 50 promotion price tiers are allowed")
 	}
@@ -72,8 +72,8 @@ func validateBalanceRechargePromotion(promotion BalanceRechargePromotion) error 
 		}
 	}
 	if promotion.Enabled {
-		if promotion.Multiplier <= 0 && len(promotion.PriceTiers) == 0 {
-			return infraerrors.BadRequest("INVALID_BALANCE_RECHARGE_PROMOTION", "promotion requires a positive multiplier or price tiers")
+		if len(promotion.PriceTiers) == 0 {
+			return infraerrors.BadRequest("INVALID_BALANCE_RECHARGE_PROMOTION", "promotion requires price tiers")
 		}
 		if strings.TrimSpace(promotion.StartAt) == "" || strings.TrimSpace(promotion.EndAt) == "" {
 			return infraerrors.BadRequest("INVALID_BALANCE_RECHARGE_PROMOTION", "promotion start_at and end_at are required")
@@ -195,9 +195,6 @@ func resolveBalanceRechargeMultiplier(amount float64, tiers []BalanceRechargeTie
 	normal := selectBalanceRechargeMultiplier(amount, tiers, fallback)
 	if tier := findBalanceRechargePromotionPriceTier(amount, tiers, promotion, userID, now); tier != nil {
 		return tier.CreditedAmount / amount
-	}
-	if promotion != nil && promotion.Multiplier > 0 && promotion.AppliesTo(userID, now) && validateBalanceRechargePromotionAgainstTiers(promotion, tiers) == nil {
-		return normalizeBalanceRechargeMultiplier(promotion.Multiplier)
 	}
 	return normal
 }

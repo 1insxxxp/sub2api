@@ -22,13 +22,12 @@ export interface BalanceRechargePromotionPriceTier {
   price: number
 }
 
-/** One global balance-recharge promotion replacing the regular multiplier during its schedule. */
+/** One global balance-recharge promotion with per-tier activity prices. */
 export interface BalanceRechargePromotionSettings {
   enabled: boolean
   name?: string
   start_at?: string
   end_at?: string
-  multiplier: number
   blacklist_user_ids?: number[]
   price_tiers?: BalanceRechargePromotionPriceTier[]
 }

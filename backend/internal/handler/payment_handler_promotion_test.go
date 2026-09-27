@@ -29,12 +29,12 @@ func TestSafeBalanceRechargePromotionInfoOmitsBlacklistedUsers(t *testing.T) {
 		Name:             "Autumn bonus",
 		StartAt:          "2026-10-01T00:00:00Z",
 		EndAt:            "2026-11-01T00:00:00Z",
-		Multiplier:       2.5,
+		PriceTiers:       []service.BalanceRechargePromotionPriceTier{{CreditedAmount: 15, Price: 10}},
 		BlacklistUserIDs: []int64{8},
 	}
 	now := time.Date(2026, 10, 15, 12, 0, 0, 0, time.UTC)
 	info := safeBalanceRechargePromotionInfo(promotion, 7, now)
-	if info == nil || !info.Active || info.Name != promotion.Name || info.StartAt != promotion.StartAt || info.EndAt != promotion.EndAt || info.Multiplier != promotion.Multiplier {
+	if info == nil || !info.Active || info.Name != promotion.Name || info.StartAt != promotion.StartAt || info.EndAt != promotion.EndAt || len(info.PriceTiers) != 1 {
 		t.Fatalf("safe promotion info = %+v", info)
 	}
 	upcoming := safeBalanceRechargePromotionInfo(promotion, 7, time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC))

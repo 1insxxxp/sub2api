@@ -16,9 +16,9 @@ func TestParseBalanceRechargePromotionDefaults(t *testing.T) {
 		}
 	}
 
-	raw := `{"enabled":true,"name":"Double balance","start_at":"2026-10-01T00:00:00Z","end_at":"2026-10-08T00:00:00Z","multiplier":2.5,"blacklist_user_ids":[3,8]}`
+	raw := `{"enabled":true,"name":"Autumn price","start_at":"2026-10-01T00:00:00Z","end_at":"2026-10-08T00:00:00Z","price_tiers":[{"credited_amount":50,"price":8}],"blacklist_user_ids":[3,8]}`
 	got := parseBalanceRechargePromotion(raw)
-	if got == nil || !got.Enabled || got.Name != "Double balance" || got.Multiplier != 2.5 {
+	if got == nil || !got.Enabled || got.Name != "Autumn price" || len(got.PriceTiers) != 1 || got.PriceTiers[0].Price != 8 {
 		t.Fatalf("valid promotion did not parse: %+v", got)
 	}
 	if got.StartAt != "2026-10-01T00:00:00Z" || got.EndAt != "2026-10-08T00:00:00Z" {
@@ -34,7 +34,7 @@ func TestValidateBalanceRechargePromotion(t *testing.T) {
 		Enabled:          true,
 		StartAt:          "2026-10-01T00:00:00Z",
 		EndAt:            "2026-10-08T00:00:00Z",
-		Multiplier:       2,
+		PriceTiers:       []BalanceRechargePromotionPriceTier{{CreditedAmount: 50, Price: 8}},
 		BlacklistUserIDs: []int64{3, 8},
 	}
 	if err := validateBalanceRechargePromotion(valid); err != nil {
@@ -45,7 +45,7 @@ func TestValidateBalanceRechargePromotion(t *testing.T) {
 		name string
 		edit func(*BalanceRechargePromotion)
 	}{
-		{"non-positive multiplier", func(p *BalanceRechargePromotion) { p.Multiplier = 0 }},
+		{"missing price tiers", func(p *BalanceRechargePromotion) { p.PriceTiers = nil }},
 		{"invalid start timestamp", func(p *BalanceRechargePromotion) { p.StartAt = "2026-10-01" }},
 		{"invalid end timestamp", func(p *BalanceRechargePromotion) { p.EndAt = "not-a-time" }},
 		{"equal timestamps", func(p *BalanceRechargePromotion) { p.EndAt = p.StartAt }},
@@ -71,7 +71,7 @@ func TestBalanceRechargePromotionActiveWindowIsStartInclusiveEndExclusive(t *tes
 		Enabled:    true,
 		StartAt:    "2026-10-01T00:00:00Z",
 		EndAt:      "2026-10-08T00:00:00Z",
-		Multiplier: 2,
+		PriceTiers: []BalanceRechargePromotionPriceTier{{CreditedAmount: 50, Price: 8}},
 	}
 	for _, tt := range []struct {
 		name string
@@ -110,18 +110,18 @@ func TestBalanceRechargePromotionBlacklist(t *testing.T) {
 	}
 }
 
-func TestResolveBalanceRechargeMultiplierUsesPromotionOrFallback(t *testing.T) {
+func TestResolveBalanceRechargeMultiplierUsesPriceTierOrFallback(t *testing.T) {
 	now := time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC)
 	active := &BalanceRechargePromotion{
 		Enabled:          true,
 		StartAt:          "2026-10-01T00:00:00Z",
 		EndAt:            "2026-10-08T00:00:00Z",
-		Multiplier:       2.5,
+		PriceTiers:       []BalanceRechargePromotionPriceTier{{CreditedAmount: 15, Price: 10}},
 		BlacklistUserIDs: []int64{8},
 	}
 	tiers := []BalanceRechargeTier{{Amount: 10, Multiplier: 1.5}}
-	if got := resolveBalanceRechargeMultiplier(10, tiers, 1, active, 3, now); got != 2.5 {
-		t.Fatalf("eligible user got multiplier %.2f, want 2.5", got)
+	if got := resolveBalanceRechargeMultiplier(10, tiers, 1, active, 3, now); got != 1.5 {
+		t.Fatalf("eligible user got multiplier %.2f, want 1.5", got)
 	}
 	if got := resolveBalanceRechargeMultiplier(10, tiers, 1, active, 8, now); got != 1.5 {
 		t.Fatalf("blacklisted user got multiplier %.2f, want tier multiplier 1.5", got)

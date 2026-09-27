@@ -564,17 +564,18 @@ func TestBalanceRechargePromotionConfigRoundTripAndValidation(t *testing.T) {
 		Name:             "Autumn bonus",
 		StartAt:          "2026-10-01T00:00:00Z",
 		EndAt:            "2026-11-01T00:00:00Z",
-		Multiplier:       2.5,
+		PriceTiers:       []BalanceRechargePromotionPriceTier{{CreditedAmount: 50, Price: 8}},
 		BlacklistUserIDs: []int64{7, 9},
 	}
-	if err := svc.UpdatePaymentConfig(context.Background(), UpdatePaymentConfigRequest{BalanceRechargePromotion: promotion}); err != nil {
+	tiers := []BalanceRechargeTier{{Amount: 10, Multiplier: 5}}
+	if err := svc.UpdatePaymentConfig(context.Background(), UpdatePaymentConfigRequest{BalanceRechargeTiers: &tiers, BalanceRechargePromotion: promotion}); err != nil {
 		t.Fatalf("UpdatePaymentConfig returned error: %v", err)
 	}
 	if _, ok := repo.updates[SettingBalanceRechargePromotion]; !ok {
 		t.Fatalf("promotion setting was not written: %v", repo.updates)
 	}
 	cfg := svc.parsePaymentConfig(repo.values)
-	if cfg.BalanceRechargePromotion == nil || cfg.BalanceRechargePromotion.Multiplier != promotion.Multiplier {
+	if cfg.BalanceRechargePromotion == nil || len(cfg.BalanceRechargePromotion.PriceTiers) != 1 || cfg.BalanceRechargePromotion.PriceTiers[0].Price != 8 {
 		t.Fatalf("promotion did not round-trip: %+v", cfg.BalanceRechargePromotion)
 	}
 	if got := cfg.BalanceRechargePromotion.BlacklistUserIDs; len(got) != 2 || got[0] != 7 || got[1] != 9 {
