@@ -561,6 +561,12 @@ gateway:
   # Allow failover on selected 400 errors (default: off)
   # 允许在特定 400 错误时进行故障转移（默认：关闭）
   failover_on_400: false
+  # Maximum account switches for the general gateway (default: 10)
+  # 通用网关最多切换账号次数（默认：10）
+  max_account_switches: 10
+  # Gemini uses 9 switches by default, allowing up to 10 distinct accounts.
+  # Gemini 默认切换 9 次，即单次请求最多尝试 10 个不同账号。
+  max_account_switches_gemini: 9
   # Scheduling configuration
   # 调度配置
   scheduling:

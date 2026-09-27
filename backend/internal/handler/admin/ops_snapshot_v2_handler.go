@@ -13,7 +13,9 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-var opsDashboardSnapshotV2Cache = newSnapshotCache(30 * time.Second)
+// Keep this below the shortest supported dashboard polling interval (15s), so
+// an enabled 15-second refresh does not render the same cached snapshot.
+var opsDashboardSnapshotV2Cache = newSnapshotCache(10 * time.Second)
 
 type opsDashboardSnapshotV2Response struct {
 	GeneratedAt string `json:"generated_at"`
@@ -35,6 +37,9 @@ type opsDashboardSnapshotV2CacheKey struct {
 // GetDashboardSnapshotV2 returns ops dashboard core snapshot in one request.
 // GET /api/v1/admin/ops/dashboard/snapshot-v2
 func (h *OpsHandler) GetDashboardSnapshotV2(c *gin.Context) {
+	c.Header("Cache-Control", "no-store, max-age=0")
+	c.Header("Pragma", "no-cache")
+
 	if h.opsService == nil {
 		response.Error(c, http.StatusServiceUnavailable, "Ops service not available")
 		return

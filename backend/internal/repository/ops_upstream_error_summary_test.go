@@ -30,13 +30,13 @@ func TestGetUpstreamErrorSummaryAggregatesAndSortsStoredReasons(t *testing.T) {
 	start := time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC)
 	prefix := strings.Repeat("x", 512)
 	mock.ExpectQuery("FROM ops_error_logs e").WithArgs(start, "openai", int64(7), "upstream", "{429}", "%needle%").WillReturnRows(
-		sqlmock.NewRows([]string{"group_id", "group_name", "model", "account_id", "account_name", "status_code", "reason", "error_type", "count", "latest_at", "representative_error_id"}).
-			AddRow(int64(7), "production", "gpt-5", int64(11), "primary", 429, "rate limited", "upstream_error", int64(2), time.Date(2026, 9, 25, 10, 2, 0, 0, time.UTC), int64(102)).
-			AddRow(int64(7), "production", "gpt-5", int64(11), "primary", 500, "overloaded", "upstream_error", int64(1), time.Date(2026, 9, 25, 10, 1, 0, 0, time.UTC), int64(101)).
-			AddRow(int64(7), "production", "claude", int64(12), "backup", 503, "overloaded", "upstream_error", int64(3), time.Date(2026, 9, 25, 10, 3, 0, 0, time.UTC), int64(103)).
-			AddRow(int64(7), "production", "gpt-5", int64(11), "primary", 500, prefix+"A", "upstream_error", int64(1), time.Date(2026, 9, 25, 10, 4, 0, 0, time.UTC), int64(104)).
-			AddRow(int64(7), "production", "gpt-5", int64(11), "primary", 500, prefix+"B", "upstream_error", int64(1), time.Date(2026, 9, 25, 10, 5, 0, 0, time.UTC), int64(105)).
-			AddRow(nil, "未分组", "gpt-5", nil, "未知账号", 502, "gateway", "provider", int64(4), time.Date(2026, 9, 25, 9, 0, 0, 0, time.UTC), int64(90)),
+		sqlmock.NewRows([]string{"group_id", "group_name", "model", "account_id", "account_name", "user_id", "user_email", "status_code", "reason", "error_type", "count", "latest_at", "representative_error_id"}).
+			AddRow(int64(7), "production", "gpt-5", int64(11), "primary", int64(42), "customer@example.com", 429, "rate limited", "upstream_error", int64(2), time.Date(2026, 9, 25, 10, 2, 0, 0, time.UTC), int64(102)).
+			AddRow(int64(7), "production", "gpt-5", int64(11), "primary", int64(42), "customer@example.com", 500, "overloaded", "upstream_error", int64(1), time.Date(2026, 9, 25, 10, 1, 0, 0, time.UTC), int64(101)).
+			AddRow(int64(7), "production", "claude", int64(12), "backup", int64(42), "customer@example.com", 503, "overloaded", "upstream_error", int64(3), time.Date(2026, 9, 25, 10, 3, 0, 0, time.UTC), int64(103)).
+			AddRow(int64(7), "production", "gpt-5", int64(11), "primary", int64(42), "customer@example.com", 500, prefix+"A", "upstream_error", int64(1), time.Date(2026, 9, 25, 10, 4, 0, 0, time.UTC), int64(104)).
+			AddRow(int64(7), "production", "gpt-5", int64(11), "primary", int64(42), "customer@example.com", 500, prefix+"B", "upstream_error", int64(1), time.Date(2026, 9, 25, 10, 5, 0, 0, time.UTC), int64(105)).
+			AddRow(nil, "未分组", "gpt-5", nil, "未知账号", nil, "未知用户", 502, "gateway", "provider", int64(4), time.Date(2026, 9, 25, 9, 0, 0, 0, time.UTC), int64(90)),
 	)
 	repo := &opsRepository{db: db}
 	result, err := repo.GetUpstreamErrorSummary(context.Background(), &service.OpsErrorLogFilter{StartTime: &start, Platform: "openai", GroupID: summaryPtrInt64(7), Phase: "upstream", IncludeRecoveredUpstream: true, StatusCodes: []int{429}, Query: "needle", View: "all"})
@@ -85,9 +85,9 @@ func TestGetUpstreamErrorSummarySortsEqualGroupNamesByID(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
 	latest := time.Date(2026, 9, 25, 12, 0, 0, 0, time.UTC)
-	rows := sqlmock.NewRows([]string{"group_id", "group_name", "model", "account_id", "account_name", "status_code", "reason", "error_type", "count", "latest_at", "representative_error_id"}).
-		AddRow(int64(2), "same-name", "model", int64(2), "same-account", 500, "reason", "upstream_error", int64(1), latest, int64(2)).
-		AddRow(int64(1), "same-name", "model", int64(1), "same-account", 500, "reason", "upstream_error", int64(1), latest, int64(1))
+	rows := sqlmock.NewRows([]string{"group_id", "group_name", "model", "account_id", "account_name", "user_id", "user_email", "status_code", "reason", "error_type", "count", "latest_at", "representative_error_id"}).
+		AddRow(int64(2), "same-name", "model", int64(2), "same-account", int64(42), "customer@example.com", 500, "reason", "upstream_error", int64(1), latest, int64(2)).
+		AddRow(int64(1), "same-name", "model", int64(1), "same-account", int64(42), "customer@example.com", 500, "reason", "upstream_error", int64(1), latest, int64(1))
 	mock.ExpectQuery("SELECT").WillReturnRows(rows)
 
 	result, err := (&opsRepository{db: db}).GetUpstreamErrorSummary(context.Background(), &service.OpsErrorLogFilter{})
@@ -102,10 +102,10 @@ func TestGetUpstreamErrorSummaryTruncatesTopLevelGroupsAfterSorting(t *testing.T
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
-	rows := sqlmock.NewRows([]string{"group_id", "group_name", "model", "account_id", "account_name", "status_code", "reason", "error_type", "count", "latest_at", "representative_error_id"})
+	rows := sqlmock.NewRows([]string{"group_id", "group_name", "model", "account_id", "account_name", "user_id", "user_email", "status_code", "reason", "error_type", "count", "latest_at", "representative_error_id"})
 	base := time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC)
 	for i := 1; i <= 101; i++ {
-		rows.AddRow(int64(i), fmt.Sprintf("group-%d", i), "model", int64(i), "account", 500, "reason", "upstream_error", int64(1), base.Add(time.Duration(i)*time.Minute), int64(i))
+		rows.AddRow(int64(i), fmt.Sprintf("group-%d", i), "model", int64(i), "account", int64(42), "customer@example.com", 500, "reason", "upstream_error", int64(1), base.Add(time.Duration(i)*time.Minute), int64(i))
 	}
 	mock.ExpectQuery("SELECT").WillReturnRows(rows)
 	result, err := (&opsRepository{db: db}).GetUpstreamErrorSummary(context.Background(), &service.OpsErrorLogFilter{})
@@ -124,7 +124,7 @@ func TestGetUpstreamErrorSummaryNilDBAndEmptyRows(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
-	mock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"group_id", "group_name", "model", "account_id", "account_name", "status_code", "reason", "error_type", "count", "latest_at", "representative_error_id"}))
+	mock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"group_id", "group_name", "model", "account_id", "account_name", "user_id", "user_email", "status_code", "reason", "error_type", "count", "latest_at", "representative_error_id"}))
 	result, err := (&opsRepository{db: db}).GetUpstreamErrorSummary(context.Background(), &service.OpsErrorLogFilter{})
 	require.NoError(t, err)
 	require.Empty(t, result.Groups)

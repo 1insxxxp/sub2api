@@ -96,7 +96,10 @@
       </div>
 
       <!-- Alert Events -->
-      <OpsAlertEventsCard v-if="opsEnabled && showAlertEvents && !(loading && !hasLoadedOnce)" />
+      <OpsAlertEventsCard
+        v-if="opsEnabled && showAlertEvents && !(loading && !hasLoadedOnce)"
+        :refresh-token="dashboardRefreshToken"
+      />
 
       <!-- System Logs -->
       <OpsSystemLogTable

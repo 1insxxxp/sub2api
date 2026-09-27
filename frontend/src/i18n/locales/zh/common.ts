@@ -88,7 +88,7 @@ export default {
     autoRefresh: {
       title: '自动刷新',
       enable: '启用自动刷新',
-      countdown: '自动刷新: {seconds}s',
+      countdown: '自动刷新：{seconds}s',
       seconds: '{n} 秒',
     },
     view: '查看',

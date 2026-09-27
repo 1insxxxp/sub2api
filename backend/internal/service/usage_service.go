@@ -345,6 +345,22 @@ func (s *UsageService) GetUserUsageTrendByUserID(ctx context.Context, userID int
 	return trend, nil
 }
 
+// GetUserActivityHeatmap returns daily usage summaries for the dashboard.
+func (s *UsageService) GetUserActivityHeatmap(ctx context.Context, startTime, endTime time.Time, filters usagestats.UsageLogFilters) ([]usagestats.ActivityHeatmapDay, error) {
+	type activityHeatmapRepo interface {
+		GetUserActivityHeatmap(context.Context, time.Time, time.Time, usagestats.UsageLogFilters) ([]usagestats.ActivityHeatmapDay, error)
+	}
+	repo, ok := s.usageRepo.(activityHeatmapRepo)
+	if !ok {
+		return nil, fmt.Errorf("activity heatmap repository is not configured")
+	}
+	days, err := repo.GetUserActivityHeatmap(ctx, startTime, endTime, filters)
+	if err != nil {
+		return nil, fmt.Errorf("get user activity heatmap: %w", err)
+	}
+	return days, nil
+}
+
 // GetUsageTrendWithFilters returns trend data using the shared usage filter shape.
 func (s *UsageService) GetUsageTrendWithFilters(ctx context.Context, startTime, endTime time.Time, granularity string, filters usagestats.UsageLogFilters) ([]usagestats.TrendDataPoint, error) {
 	type usageTrendWithFiltersRepo interface {

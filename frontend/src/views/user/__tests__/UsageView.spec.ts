@@ -32,6 +32,10 @@ const {
   showInfo: vi.fn(),
 }))
 
+const routeState = vi.hoisted(() => ({
+  query: {} as Record<string, string | string[]>,
+}))
+
 const messages: Record<string, string> = {
   'admin.dashboard.timeRange': 'Time range',
   'admin.dashboard.granularity': 'Granularity',
@@ -104,6 +108,10 @@ vi.mock('@/stores/app', () => ({
   }),
 }))
 
+vi.mock('vue-router', () => ({
+  useRoute: () => routeState,
+}))
+
 vi.mock('vue-i18n', async () => {
   const actual = await vi.importActual<typeof import('vue-i18n')>('vue-i18n')
   return {
@@ -172,6 +180,7 @@ function mountUsageView() {
 
 describe('user UsageView', () => {
   beforeEach(() => {
+    routeState.query = {}
     query.mockReset()
     getStats.mockReset()
     getDashboardModels.mockReset()
@@ -231,6 +240,24 @@ describe('user UsageView', () => {
     expect(list).toHaveBeenCalledTimes(1)
     expect(list).toHaveBeenCalledWith(1, 100)
     expect(getAvailable).toHaveBeenCalled()
+  })
+
+  it('uses the date range from a dashboard day link', async () => {
+    routeState.query = {
+      start_date: '2026-07-19',
+      end_date: '2026-07-19',
+    }
+
+    mountUsageView()
+    await flushPromises()
+
+    expect(query).toHaveBeenCalledWith(
+      expect.objectContaining({
+        start_date: '2026-07-19',
+        end_date: '2026-07-19',
+      }),
+      expect.anything(),
+    )
   })
 
   it('includes API keys after the first page in both record filters and queries by the selected key', async () => {

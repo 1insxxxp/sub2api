@@ -407,6 +407,8 @@ export default {
     rechargePromotionDefaultName: 'Recharge promotion',
     rechargePromotionEndsAt: 'Ends {date}',
     rechargePromotionOngoing: 'While available',
+    rechargePromotionOriginalPrice: 'Regular price',
+    rechargePromotionSave: 'Save {amount}',
     rechargeRateChanged: 'The recharge promotion rate changed. Please review the updated credit and try again.',
     refundReason: 'Refund Reason',
     refundReasonPlaceholder: 'Please describe your refund reason',

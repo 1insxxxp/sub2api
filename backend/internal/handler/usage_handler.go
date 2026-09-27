@@ -501,6 +501,27 @@ func (h *UsageHandler) DashboardTrend(c *gin.Context) {
 	})
 }
 
+// DashboardActivity returns daily activity summaries for the customer dashboard.
+// GET /api/v1/usage/dashboard/activity
+func (h *UsageHandler) DashboardActivity(c *gin.Context) {
+	parsed, ok := h.parseUserUsageFilters(c, true)
+	if !ok {
+		return
+	}
+
+	days, err := h.usageService.GetUserActivityHeatmap(c.Request.Context(), parsed.StartTime, parsed.EndTime, parsed.Filters)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	response.Success(c, gin.H{
+		"days":       days,
+		"start_date": parsed.StartTime.Format("2006-01-02"),
+		"end_date":   parsed.EndTime.Add(-24 * time.Hour).Format("2006-01-02"),
+	})
+}
+
 // DashboardModels handles getting user model usage statistics
 // GET /api/v1/usage/dashboard/models
 func (h *UsageHandler) DashboardModels(c *gin.Context) {

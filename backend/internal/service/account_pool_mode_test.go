@@ -115,3 +115,25 @@ func TestGetPoolModeRetryCount(t *testing.T) {
 		})
 	}
 }
+
+func TestDefaultPoolModeRetryCountByPlatform(t *testing.T) {
+	require.Equal(t, 3, defaultPoolModeRetryCount)
+	require.Equal(t, 2, defaultGeminiPoolModeRetryCount)
+
+	openAI := &Account{
+		Type:     AccountTypeAPIKey,
+		Platform: PlatformOpenAI,
+		Credentials: map[string]any{
+			"pool_mode": true,
+		},
+	}
+	gemini := &Account{
+		Type:     AccountTypeAPIKey,
+		Platform: PlatformGemini,
+		Credentials: map[string]any{
+			"pool_mode": true,
+		},
+	}
+	require.Equal(t, 3, openAI.GetPoolModeRetryCount())
+	require.Equal(t, 2, gemini.GetPoolModeRetryCount())
+}

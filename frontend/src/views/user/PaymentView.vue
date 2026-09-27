@@ -89,8 +89,20 @@
                   >
                     <div class="shrink-0">
                       <p class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{{ t('payment.rechargeOfferAmount') }}</p>
-                      <p class="text-sm font-semibold tabular-nums text-gray-900 dark:text-white whitespace-nowrap">
+                      <div v-if="item.savings > 0" class="flex items-baseline gap-1.5 whitespace-nowrap">
+                        <span class="text-xs font-normal tabular-nums text-gray-400 line-through dark:text-dark-500">
+                          <span class="sr-only">{{ t('payment.rechargePromotionOriginalPrice') }}</span>
+                          {{ formatSelectedPaymentAmount(item.originalAmount) }}
+                        </span>
+                        <span class="text-sm font-semibold tabular-nums text-primary-600 dark:text-primary-400">
+                          {{ formatSelectedPaymentAmount(item.amount) }}
+                        </span>
+                      </div>
+                      <p v-else class="text-sm font-semibold tabular-nums text-gray-900 dark:text-white whitespace-nowrap">
                         {{ formatSelectedPaymentAmount(item.amount) }}
+                      </p>
+                      <p v-if="item.savings > 0" data-testid="recharge-promotion-savings" class="mt-0.5 text-xs font-medium tabular-nums text-green-600 dark:text-green-400 whitespace-nowrap">
+                        {{ t('payment.rechargePromotionSave', { amount: formatSelectedPaymentAmount(item.savings) }) }}
                       </p>
                     </div>
                     <div class="min-w-0 shrink-0 text-right">
@@ -109,6 +121,7 @@
               <AmountInput
                 v-model="amount"
                 :amounts="quickRechargeAmounts"
+                :amount-display="quickRechargeAmountDisplay"
                 :allow-custom="false"
                 :min="globalMinAmount"
                 :max="globalMaxAmount"
@@ -686,6 +699,8 @@ const rechargeTierOptions = computed(() => {
       const activityPriceChanged = Math.abs(amount - tier.amount) >= 0.0000001
       return {
         amount,
+        originalAmount: tier.amount,
+        savings: Math.max(0, Math.round((tier.amount - amount) * 100) / 100),
         baseCredited: Math.round(
           (activityPriceChanged ? tier.amount * tier.multiplier : tier.amount * baseMultiplier) * 100,
         ) / 100,
@@ -694,10 +709,21 @@ const rechargeTierOptions = computed(() => {
   }
   return defaultRechargeAmounts.map((amount) => ({
     amount,
+    originalAmount: amount,
+    savings: 0,
     baseCredited: Math.round(amount * baseMultiplier * 100) / 100,
   }))
 })
 const quickRechargeAmounts = computed(() => rechargeTierOptions.value.map((option) => option.amount))
+const quickRechargeAmountDisplay = computed(() => Object.fromEntries(
+  rechargeTierOptions.value
+    .filter((option) => option.savings > 0)
+    .map((option) => [option.amount, {
+      original: formatSelectedPaymentAmount(option.originalAmount),
+      current: formatSelectedPaymentAmount(option.amount),
+      savings: t('payment.rechargePromotionSave', { amount: formatSelectedPaymentAmount(option.savings) }),
+    }]),
+))
 const rechargeOverview = computed(() => rechargeTierOptions.value
   .filter((option) => (globalMinAmount.value <= 0 || option.amount >= globalMinAmount.value)
     && (globalMaxAmount.value <= 0 || option.amount <= globalMaxAmount.value))
@@ -715,6 +741,8 @@ const rechargeOverview = computed(() => rechargeTierOptions.value
     // between credited balance and the cash payment amount.
     return {
       amount: option.amount,
+      originalAmount: option.originalAmount,
+      savings: option.savings,
       baseCredited: option.baseCredited,
       credited,
       bonus: Math.max(0, Math.round((credited - option.baseCredited) * 100) / 100),

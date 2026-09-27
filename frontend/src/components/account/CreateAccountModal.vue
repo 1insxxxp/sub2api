@@ -1682,7 +1682,7 @@
             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
               {{
                 t('admin.accounts.poolModeRetryCountHint', {
-                  default: DEFAULT_POOL_MODE_RETRY_COUNT,
+                  default: defaultPoolModeRetryCountForPlatform(form.platform),
                   max: MAX_POOL_MODE_RETRY_COUNT
                 })
               }}
@@ -2089,7 +2089,7 @@
             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
               {{
                 t('admin.accounts.poolModeRetryCountHint', {
-                  default: DEFAULT_POOL_MODE_RETRY_COUNT,
+                  default: defaultPoolModeRetryCountForPlatform(form.platform),
                   max: MAX_POOL_MODE_RETRY_COUNT
                 })
               }}
@@ -4364,11 +4364,15 @@ const modelRestrictionMode = ref<'whitelist' | 'mapping'>('whitelist')
 const allowedModels = ref<string[]>([])
 const upstreamModelsPreviewed = ref(false)
 const DEFAULT_POOL_MODE_RETRY_COUNT = 3
+const DEFAULT_GEMINI_POOL_MODE_RETRY_COUNT = 2
 const MAX_POOL_MODE_RETRY_COUNT = 10
 const DEFAULT_POOL_MODE_RETRY_STATUS_CODES = [401, 403, 429]
 const poolModeEnabled = ref(false)
 const poolModeRetryCount = ref(DEFAULT_POOL_MODE_RETRY_COUNT)
 const poolModeRetryStatusCodesInput = ref('')
+
+const defaultPoolModeRetryCountForPlatform = (platform: AccountPlatform) =>
+  platform === 'gemini' ? DEFAULT_GEMINI_POOL_MODE_RETRY_COUNT : DEFAULT_POOL_MODE_RETRY_COUNT
 
 function parsePoolModeRetryStatusCodes(input: string): number[] {
   if (!input || !input.trim()) return []
@@ -4838,6 +4842,7 @@ watch(
 watch(
   () => form.platform,
   (newPlatform) => {
+    poolModeRetryCount.value = defaultPoolModeRetryCountForPlatform(newPlatform)
     // Reset base URL based on platform
     if (isCNProviderPlatform(newPlatform) || newPlatform === 'opencode_go') {
       const mode = newPlatform === 'opencode_go' ? openCodeAccountMode.value : accountMode.value
@@ -5343,7 +5348,7 @@ const resetForm = () => {
     antigravityModelMappings.value = [...mappings]
   })
   poolModeEnabled.value = false
-  poolModeRetryCount.value = DEFAULT_POOL_MODE_RETRY_COUNT
+  poolModeRetryCount.value = defaultPoolModeRetryCountForPlatform(form.platform)
   poolModeRetryStatusCodesInput.value = ''
   customErrorCodesEnabled.value = false
   selectedErrorCodes.value = []
@@ -5566,7 +5571,7 @@ const handleMixedChannelCancel = () => {
 
 const normalizePoolModeRetryCount = (value: number) => {
   if (!Number.isFinite(value)) {
-    return DEFAULT_POOL_MODE_RETRY_COUNT
+    return defaultPoolModeRetryCountForPlatform(form.platform)
   }
   const normalized = Math.trunc(value)
   if (normalized < 0) {

@@ -85,6 +85,21 @@ export interface ModelStatsResponse {
   end_date: string
 }
 
+export interface UserActivityHeatmapDay {
+  date: string
+  success_requests: number
+  failed_requests: number
+  input_tokens: number
+  output_tokens: number
+  total_tokens: number
+  billed_cost: number
+  model_count: number
+}
+
+export interface UserActivityHeatmapResponse {
+  days: UserActivityHeatmapDay[]
+}
+
 export interface ApiKeyDailyUsagePoint {
   date: string
   requests: number
@@ -297,6 +312,15 @@ export async function getDashboardModels(params?: {
   return data
 }
 
+export async function getDashboardActivity(params?: {
+  start_date?: string
+  end_date?: string
+  timezone?: string
+}): Promise<UserActivityHeatmapResponse> {
+  const { data } = await apiClient.get<UserActivityHeatmapResponse>('/usage/dashboard/activity', { params })
+  return data
+}
+
 /**
  * Get daily usage details for one API key owned by the current user.
  * @param apiKeyId - API key ID
@@ -408,6 +432,7 @@ export const usageAPI = {
   getDashboardStats,
   getDashboardTrend,
   getDashboardModels,
+  getDashboardActivity,
   getMyApiKeyDailyUsage,
   getDashboardSnapshotV2,
   getDashboardApiKeysUsage,

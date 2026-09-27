@@ -439,14 +439,21 @@ func registerOpsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		ops.POST("/system-logs/cleanup", h.Admin.Ops.CleanupSystemLogs)
 		ops.GET("/system-logs/health", h.Admin.Ops.GetSystemLogIngestionHealth)
 
-		// Dashboard (vNext - raw path for MVP)
-		ops.GET("/dashboard/snapshot-v2", h.Admin.Ops.GetDashboardSnapshotV2)
-		ops.GET("/dashboard/overview", h.Admin.Ops.GetDashboardOverview)
-		ops.GET("/dashboard/throughput-trend", h.Admin.Ops.GetDashboardThroughputTrend)
-		ops.GET("/dashboard/latency-histogram", h.Admin.Ops.GetDashboardLatencyHistogram)
-		ops.GET("/dashboard/error-trend", h.Admin.Ops.GetDashboardErrorTrend)
-		ops.GET("/dashboard/error-distribution", h.Admin.Ops.GetDashboardErrorDistribution)
-		ops.GET("/dashboard/openai-token-stats", h.Admin.Ops.GetDashboardOpenAITokenStats)
+		// Dashboard (vNext - raw path for MVP). These responses are polled by the
+		// admin UI and must not be served from an intermediary/browser cache.
+		dashboard := ops.Group("/dashboard")
+		dashboard.Use(func(c *gin.Context) {
+			c.Header("Cache-Control", "no-store, max-age=0")
+			c.Header("Pragma", "no-cache")
+			c.Next()
+		})
+		dashboard.GET("/snapshot-v2", h.Admin.Ops.GetDashboardSnapshotV2)
+		dashboard.GET("/overview", h.Admin.Ops.GetDashboardOverview)
+		dashboard.GET("/throughput-trend", h.Admin.Ops.GetDashboardThroughputTrend)
+		dashboard.GET("/latency-histogram", h.Admin.Ops.GetDashboardLatencyHistogram)
+		dashboard.GET("/error-trend", h.Admin.Ops.GetDashboardErrorTrend)
+		dashboard.GET("/error-distribution", h.Admin.Ops.GetDashboardErrorDistribution)
+		dashboard.GET("/openai-token-stats", h.Admin.Ops.GetDashboardOpenAITokenStats)
 	}
 }
 

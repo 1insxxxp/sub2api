@@ -1025,6 +1025,8 @@ export interface OpsUpstreamErrorSummaryReason {
   count: number
   latest_at: string | null
   representative_error_id: number
+  user_id?: number | null
+  user_email?: string
 }
 
 export type OpsSLAErrorSummary = OpsUpstreamErrorSummary

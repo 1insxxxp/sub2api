@@ -4,7 +4,7 @@
 
 **Goal:** Make Gemini pool-mode accounts retry twice on the same account and allow up to ten distinct Gemini account attempts per request.
 
-**Architecture:** Reuse the existing bounded failover loop. Set the Gemini switch default to 9 because the first selected account plus 9 switches equals 10 distinct accounts. Lower only the fallback default for `pool_mode_retry_count`; explicit account credential values remain authoritative.
+**Architecture:** Reuse the existing bounded failover loop. Set the Gemini switch default to 9 because the first selected account plus 9 switches equals 10 distinct accounts. Lower only the Gemini fallback default for `pool_mode_retry_count`; keep other platform defaults at 3 and explicit account credential values authoritative.
 
 **Tech Stack:** Go backend, Viper configuration, Vue 3 account modals, Go unit tests, Vitest component tests.
 
@@ -18,7 +18,7 @@
 
 **Step 1: Write the failing assertions**
 
-- Assert an API-key pool account without an explicit retry count resolves to `2`.
+- Assert a Gemini API-key pool account without an explicit retry count resolves to `2`, while another platform still resolves to `3`.
 - Assert loaded gateway configuration resolves `max_account_switches_gemini` to `9`.
 
 **Step 2: Run focused tests and verify they fail**
@@ -35,7 +35,7 @@ Expected: failures show the current defaults `3`.
 
 **Step 1: Change the minimal defaults**
 
-- Set `defaultPoolModeRetryCount` to `2`.
+- Add a Gemini-specific default of `2` while keeping the general default at `3`.
 - Set `gateway.max_account_switches_gemini` default to `9`.
 
 **Step 2: Run focused tests**
@@ -52,7 +52,7 @@ Expected: pass, including explicit retry-count and existing failover-limit tests
 
 **Step 1: Update the shared form defaults**
 
-- Change both `DEFAULT_POOL_MODE_RETRY_COUNT` constants from `3` to `2`.
+- Keep the general `DEFAULT_POOL_MODE_RETRY_COUNT` at `3` and use a Gemini-specific default of `2`.
 - Keep the maximum at `10` and preserve explicit saved values.
 
 **Step 2: Run focused frontend tests and type checks**

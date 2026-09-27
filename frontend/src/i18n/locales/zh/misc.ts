@@ -431,6 +431,8 @@ export default {
     rechargePromotionDefaultName: '充值优惠',
     rechargePromotionEndsAt: '截止 {date}',
     rechargePromotionOngoing: '活动进行中',
+    rechargePromotionOriginalPrice: '原价',
+    rechargePromotionSave: '省 {amount}',
     rechargeRateChanged: '充值活动倍率已变化，请查看更新后的到账金额后重试。',
     refundReason: '退款原因',
     refundReasonPlaceholder: '请描述您的退款原因',

@@ -506,6 +506,35 @@ describe('PaymentView recharge rate preview', () => {
     expect(row.text()).not.toContain('payment.rechargeOfferBase')
   })
 
+  it('shows the regular price, activity price, and savings in the offer and quick amount button', async () => {
+    routeState.path = '/purchase'
+    routeState.query = {}
+    getCheckoutInfo.mockReset().mockResolvedValue(checkoutInfoFixture({
+      balance_recharge_multiplier: 1,
+      balance_recharge_tiers: [{ amount: 10, multiplier: 5 }],
+      balance_recharge_promotion: {
+        active: true,
+        name: '固定额度特价',
+        price_tiers: [{ credited_amount: 50, price: 8 }],
+        end_at: '2099-09-26T12:00:00.000Z',
+      },
+    }))
+    const wrapper = shallowMount(PaymentView, { global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Teleport: true, Transition: false } } })
+    await flushPromises()
+
+    const row = wrapper.get('[data-testid="recharge-rule-row"]')
+    expect(row.text()).toContain('¥10.00')
+    expect(row.text()).toContain('¥8.00')
+    expect(row.text()).toContain('payment.rechargePromotionSave')
+    expect(wrapper.getComponent(AmountInput).props('amountDisplay')).toEqual({
+      8: {
+        original: '¥10.00',
+        current: '¥8.00',
+        savings: 'payment.rechargePromotionSave',
+      },
+    })
+  })
+
   it('stops advertising an expired promotion and keeps the normal tier preview', async () => {
     routeState.path = '/purchase'
     routeState.query = {}

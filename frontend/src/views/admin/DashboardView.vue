@@ -233,6 +233,16 @@
                       :aria-pressed="granularity === option.value"
                       @click="granularity = option.value; loadChartData()">{{ option.label }}</button>
                   </div>
+                  <AutoRefreshButton
+                    data-test="dashboard-auto-refresh"
+                    variant="admin"
+                    :enabled="autoRefreshEnabled"
+                    :interval-seconds="autoRefreshIntervalSeconds"
+                    :countdown="autoRefreshCountdown"
+                    :intervals="autoRefresh.intervals"
+                    @update:enabled="autoRefresh.setEnabled"
+                    @update:interval="autoRefresh.setInterval"
+                  />
                   <button type="button" data-test="dashboard-refresh" @click="loadDashboardStats" :disabled="chartsLoading"
                     class="btn btn-secondary btn-icon" :title="t('common.refresh')" :aria-label="t('common.refresh')">
                     <Icon name="refresh" size="sm" :class="{ 'animate-spin': chartsLoading }" />
@@ -315,6 +325,7 @@ import type {
 } from '@/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import AutoRefreshButton from '@/components/common/AutoRefreshButton.vue'
 import Icon from '@/components/icons/Icon.vue'
 import DateRangePicker from '@/components/common/DateRangePicker.vue'
 import ModelDistributionChart from '@/components/charts/ModelDistributionChart.vue'
@@ -322,6 +333,7 @@ import TokenUsageTrend from '@/components/charts/TokenUsageTrend.vue'
 import { formatTokenCount } from '@/utils/format'
 import { getLatestHourlyBuckets } from '@/utils/hourlyBuckets'
 import { useBatchImageAccess } from '@/composables/useBatchImageAccess'
+import { useAutoRefresh } from '@/composables/useAutoRefresh'
 
 import {
   Chart as ChartJS,
@@ -735,6 +747,21 @@ const loadDashboardStats = async () => {
   ])
 }
 
+const autoRefresh = useAutoRefresh({
+  storageKey: 'admin-dashboard-auto-refresh',
+  intervals: [5, 10, 15, 30] as const,
+  defaultInterval: 30,
+  onRefresh: loadDashboardStats,
+  shouldPause: () => (
+    (typeof document !== 'undefined' && document.hidden) ||
+    loading.value ||
+    chartsLoading.value
+  )
+})
+const autoRefreshEnabled = autoRefresh.enabled
+const autoRefreshIntervalSeconds = autoRefresh.intervalSeconds
+const autoRefreshCountdown = autoRefresh.countdown
+
 const loadChartData = async () => {
   const range = createDashboardRangeParams()
   await Promise.all([
@@ -744,9 +771,10 @@ const loadChartData = async () => {
   ])
 }
 
-onMounted(() => {
+onMounted(async () => {
   void refreshBatchImageAccess()
-  loadDashboardStats()
+  await loadDashboardStats()
+  if (autoRefresh.enabled.value) autoRefresh.start()
 })
 </script>
 

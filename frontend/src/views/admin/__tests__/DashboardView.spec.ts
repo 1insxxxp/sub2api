@@ -201,6 +201,64 @@ describe('admin DashboardView', () => {
     expect(wrapper.text()).not.toContain('admin.dashboard.recentUsage')
   })
 
+  it('uses the shared auto-refresh menu and reloads at the selected interval', async () => {
+    vi.useFakeTimers()
+    localStorage.removeItem('admin-dashboard-auto-refresh')
+
+    const wrapper = mount(DashboardView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          LoadingSpinner: true,
+          Icon: true,
+          DateRangePicker: true,
+          Select: true,
+          ModelDistributionChart: true,
+          TokenUsageTrend: true,
+          Line: true
+        }
+      }
+    })
+
+    await flushPromises()
+    const initialSnapshotCalls = getSnapshotV2.mock.calls.length
+    const autoRefresh = wrapper.get('[data-test="dashboard-auto-refresh"]')
+    const autoRefreshButton = autoRefresh.get('button')
+
+    expect(autoRefreshButton.text()).toContain('common.autoRefresh.title')
+    expect(autoRefreshButton.classes()).toContain('dashboard-auto-refresh-action')
+
+    await autoRefreshButton.trigger('click')
+    expect(autoRefresh.get('[data-test="auto-refresh-menu"]').exists()).toBe(true)
+    expect(autoRefresh.get('[data-test="auto-refresh-menu"]').classes()).toContain('admin-action-menu')
+    expect(autoRefresh.findAll('[data-test="auto-refresh-interval"]')).toHaveLength(4)
+    expect(autoRefresh.findAll('[data-test="auto-refresh-interval"]')
+      .map(option => option.attributes('data-interval')))
+      .toEqual(['5', '10', '15', '30'])
+
+    await autoRefresh.findAll('[data-test="auto-refresh-interval"]')[1].trigger('click')
+    expect(JSON.parse(localStorage.getItem('admin-dashboard-auto-refresh')!).interval_seconds).toBe(10)
+    await autoRefresh.get('[data-test="auto-refresh-toggle"]').trigger('click')
+    expect(autoRefreshButton.text()).toContain('common.autoRefresh.countdown')
+    await autoRefreshButton.trigger('click')
+
+    await vi.advanceTimersByTimeAsync(9_000)
+    expect(getSnapshotV2).toHaveBeenCalledTimes(initialSnapshotCalls)
+
+    await vi.advanceTimersByTimeAsync(1_000)
+    await flushPromises()
+    expect(getSnapshotV2).toHaveBeenCalledTimes(initialSnapshotCalls + 1)
+
+    await autoRefreshButton.trigger('click')
+    await autoRefresh.get('[data-test="auto-refresh-toggle"]').trigger('click')
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(getSnapshotV2).toHaveBeenCalledTimes(initialSnapshotCalls + 1)
+
+    wrapper.unmount()
+    localStorage.removeItem('admin-dashboard-auto-refresh')
+    vi.useRealTimers()
+  })
+
   it('keeps metric icons neutral with a separate vendor accent and exposes narrow layout hooks', async () => {
     const wrapper = mount(DashboardView, {
       global: {

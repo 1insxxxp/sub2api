@@ -22,11 +22,11 @@ func TestGetSLAErrorSummaryAggregatesFinalFailuresAndUsesSLAExclusions(t *testin
 	// The filter deliberately opts into recovered upstream rows and uses view=all.
 	// SLA aggregation must still force final status >= 400 and exclude business limits.
 	mock.ExpectQuery("FROM ops_error_logs e").WithArgs(start, "openai", int64(7), "upstream", "%needle%").WillReturnRows(
-		sqlmock.NewRows([]string{"group_id", "group_name", "model", "account_id", "account_name", "status_code", "reason", "error_type", "count", "latest_at", "representative_error_id"}).
-			AddRow(int64(7), "production", "gpt-5", int64(11), "primary", 503, "upstream request failed", "upstream_error", int64(3), latest, int64(103)).
-			AddRow(int64(7), "production", "gpt-5", int64(11), "primary", 400, "invalid request", "client_error", int64(1), latest.Add(-time.Minute), int64(102)).
-			AddRow(int64(7), "production", "claude", int64(12), "backup", 500, "provider failed", "upstream_error", int64(2), latest.Add(-2*time.Minute), int64(101)).
-			AddRow(nil, "未分组", "gpt-5", nil, "未知账号", 502, "gateway failed", "gateway_error", int64(1), latest.Add(-3*time.Minute), int64(100)),
+		sqlmock.NewRows([]string{"group_id", "group_name", "model", "account_id", "account_name", "user_id", "user_email", "status_code", "reason", "error_type", "count", "latest_at", "representative_error_id"}).
+			AddRow(int64(7), "production", "gpt-5", int64(11), "primary", int64(42), "customer@example.com", 503, "upstream request failed", "upstream_error", int64(3), latest, int64(103)).
+			AddRow(int64(7), "production", "gpt-5", int64(11), "primary", int64(42), "customer@example.com", 400, "invalid request", "client_error", int64(1), latest.Add(-time.Minute), int64(102)).
+			AddRow(int64(7), "production", "claude", int64(12), "backup", int64(42), "customer@example.com", 500, "provider failed", "upstream_error", int64(2), latest.Add(-2*time.Minute), int64(101)).
+			AddRow(nil, "未分组", "gpt-5", nil, "未知账号", nil, "未知用户", 502, "gateway failed", "gateway_error", int64(1), latest.Add(-3*time.Minute), int64(100)),
 	)
 
 	result, err := (&opsRepository{db: db}).GetSLAErrorSummary(context.Background(), &service.OpsErrorLogFilter{
@@ -65,16 +65,39 @@ func TestGetSLAErrorSummaryAggregatesFinalFailuresAndUsesSLAExclusions(t *testin
 	require.NotContains(t, captured, "upstream_status_code, e.status_code, 0) = ANY")
 }
 
+func TestGetSLAErrorSummaryKeepsSameReasonSeparatePerUser(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	latest := time.Date(2026, 9, 26, 10, 0, 0, 0, time.UTC)
+	mock.ExpectQuery("FROM ops_error_logs e").WillReturnRows(
+		sqlmock.NewRows([]string{"group_id", "group_name", "model", "account_id", "account_name", "user_id", "user_email", "status_code", "reason", "error_type", "count", "latest_at", "representative_error_id"}).
+			AddRow(int64(7), "production", "gpt-5", int64(11), "primary", int64(42), "first@example.com", 400, "invalid request", "client_error", int64(2), latest, int64(102)).
+			AddRow(int64(7), "production", "gpt-5", int64(11), "primary", int64(43), "second@example.com", 400, "invalid request", "client_error", int64(1), latest.Add(-time.Minute), int64(101)),
+	)
+
+	result, err := (&opsRepository{db: db}).GetSLAErrorSummary(context.Background(), &service.OpsErrorLogFilter{})
+	require.NoError(t, err)
+	require.Len(t, result.Groups, 1)
+	require.Len(t, result.Groups[0].Models[0].Accounts[0].Reasons, 2)
+	first, second := result.Groups[0].Models[0].Accounts[0].Reasons[0], result.Groups[0].Models[0].Accounts[0].Reasons[1]
+	require.Equal(t, "first@example.com", first.UserEmail)
+	require.Equal(t, int64(2), first.Count)
+	require.Equal(t, "second@example.com", second.UserEmail)
+	require.Equal(t, int64(1), second.Count)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestGetSLAErrorSummarySortsGroupsModelsAccountsReasonsAndKeepsEmptyRowsNormalized(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
 	base := time.Date(2026, 9, 26, 12, 0, 0, 0, time.UTC)
-	rows := sqlmock.NewRows([]string{"group_id", "group_name", "model", "account_id", "account_name", "status_code", "reason", "error_type", "count", "latest_at", "representative_error_id"}).
-		AddRow(int64(2), "same-name", "z-model", int64(20), "same-account", 500, "z reason", "upstream_error", int64(1), base, int64(20)).
-		AddRow(int64(1), "same-name", "a-model", int64(10), "same-account", 502, "b reason", "gateway_error", int64(1), base, int64(10)).
-		AddRow(int64(1), "same-name", "a-model", int64(10), "same-account", 500, "a reason", "gateway_error", int64(2), base.Add(-time.Minute), int64(9)).
-		AddRow(int64(1), "same-name", "a-model", int64(10), "same-account", 500, "a reason", "gateway_error", int64(1), base.Add(2*time.Minute), int64(11))
+	rows := sqlmock.NewRows([]string{"group_id", "group_name", "model", "account_id", "account_name", "user_id", "user_email", "status_code", "reason", "error_type", "count", "latest_at", "representative_error_id"}).
+		AddRow(int64(2), "same-name", "z-model", int64(20), "same-account", int64(42), "customer@example.com", 500, "z reason", "upstream_error", int64(1), base, int64(20)).
+		AddRow(int64(1), "same-name", "a-model", int64(10), "same-account", int64(42), "customer@example.com", 502, "b reason", "gateway_error", int64(1), base, int64(10)).
+		AddRow(int64(1), "same-name", "a-model", int64(10), "same-account", int64(42), "customer@example.com", 500, "a reason", "gateway_error", int64(2), base.Add(-time.Minute), int64(9)).
+		AddRow(int64(1), "same-name", "a-model", int64(10), "same-account", int64(42), "customer@example.com", 500, "a reason", "gateway_error", int64(1), base.Add(2*time.Minute), int64(11))
 	mock.ExpectQuery("SELECT").WillReturnRows(rows)
 
 	result, err := (&opsRepository{db: db}).GetSLAErrorSummary(context.Background(), &service.OpsErrorLogFilter{})
@@ -91,7 +114,7 @@ func TestGetSLAErrorSummarySortsGroupsModelsAccountsReasonsAndKeepsEmptyRowsNorm
 	emptyDB, emptyMock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer func() { _ = emptyDB.Close() }()
-	emptyMock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"group_id", "group_name", "model", "account_id", "account_name", "status_code", "reason", "error_type", "count", "latest_at", "representative_error_id"}))
+	emptyMock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"group_id", "group_name", "model", "account_id", "account_name", "user_id", "user_email", "status_code", "reason", "error_type", "count", "latest_at", "representative_error_id"}))
 	empty, err := (&opsRepository{db: emptyDB}).GetSLAErrorSummary(context.Background(), nil)
 	require.NoError(t, err)
 	require.NotNil(t, empty.Groups)
@@ -103,10 +126,10 @@ func TestGetSLAErrorSummaryTruncatesTopLevelGroupsAfterSorting(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
-	rows := sqlmock.NewRows([]string{"group_id", "group_name", "model", "account_id", "account_name", "status_code", "reason", "error_type", "count", "latest_at", "representative_error_id"})
+	rows := sqlmock.NewRows([]string{"group_id", "group_name", "model", "account_id", "account_name", "user_id", "user_email", "status_code", "reason", "error_type", "count", "latest_at", "representative_error_id"})
 	base := time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC)
 	for i := 1; i <= maxSummaryGroups+1; i++ {
-		rows.AddRow(int64(i), fmt.Sprintf("group-%d", i), "model", int64(i), "account", 500, "reason", "gateway_error", int64(1), base.Add(time.Duration(i)*time.Minute), int64(i))
+		rows.AddRow(int64(i), fmt.Sprintf("group-%d", i), "model", int64(i), "account", int64(42), "customer@example.com", 500, "reason", "gateway_error", int64(1), base.Add(time.Duration(i)*time.Minute), int64(i))
 	}
 	mock.ExpectQuery("SELECT").WillReturnRows(rows)
 	result, err := (&opsRepository{db: db}).GetSLAErrorSummary(context.Background(), &service.OpsErrorLogFilter{})
@@ -138,7 +161,7 @@ func TestGetSLAErrorSummaryUsesFinalStatusCodeFilters(t *testing.T) {
 			require.NoError(t, err)
 			defer func() { _ = db.Close() }()
 			mock.ExpectQuery("FROM ops_error_logs e").WithArgs(sqlmock.AnyArg()).WillReturnRows(sqlmock.NewRows([]string{
-				"group_id", "group_name", "model", "account_id", "account_name", "status_code", "reason", "error_type", "count", "latest_at", "representative_error_id",
+				"group_id", "group_name", "model", "account_id", "account_name", "user_id", "user_email", "status_code", "reason", "error_type", "count", "latest_at", "representative_error_id",
 			}))
 			result, err := (&opsRepository{db: db}).GetSLAErrorSummary(context.Background(), &tc.filter)
 			require.NoError(t, err)

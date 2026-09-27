@@ -263,27 +263,39 @@ func upstreamModelMismatchCondition(column string, mismatch bool) string {
 }
 
 func appendUsageLogCompensationWhereCondition(conditions []string, args []any, filter string) ([]string, []any) {
+	return appendUsageLogCompensationWhereConditionWithAlias(conditions, args, filter, "")
+}
+
+func appendUsageLogCompensationWhereConditionWithAlias(conditions []string, args []any, filter string, alias string) ([]string, []any) {
 	if strings.TrimSpace(filter) != usagestats.UsageCompensationFilterEmptyResponse {
 		return conditions, args
+	}
+	prefix := ""
+	if alias != "" {
+		prefix = alias + "."
+	}
+	table := "usage_logs"
+	if alias != "" {
+		table = alias
 	}
 	limitPos := len(args) + 1
 	conditions = append(conditions, fmt.Sprintf(`(
 		EXISTS (
 			SELECT 1 FROM empty_response_claims erc
-			WHERE erc.usage_log_id = usage_logs.id
+			WHERE erc.usage_log_id = %[1]s.id
 		)
 		OR (
-			actual_cost > 0
-			AND COALESCE(compensated_cost, 0) <= 0
-			AND output_tokens <= $%d
-			AND group_id IS NOT NULL
+			%[2]sactual_cost > 0
+			AND COALESCE(%[2]scompensated_cost, 0) <= 0
+			AND %[2]soutput_tokens <= $%[3]d
+			AND %[2]sgroup_id IS NOT NULL
 			AND EXISTS (
 				SELECT 1 FROM groups g
-				WHERE g.id = usage_logs.group_id
+				WHERE g.id = %[1]s.group_id
 					AND g.empty_response_compensation_enabled = TRUE
 			)
 		)
-	)`, limitPos))
+	)`, table, prefix, limitPos))
 	args = append(args, service.EmptyResponseClaimLowOutputTokenLimit)
 	return conditions, args
 }

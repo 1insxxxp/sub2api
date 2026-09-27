@@ -97,6 +97,20 @@ type TrendDataPoint struct {
 	NetActualCost       float64 `json:"net_actual_cost"`
 }
 
+// ActivityHeatmapDay contains the daily usage summary shown on the user dashboard.
+// Failed requests are kept separate so they can be explained without affecting
+// the successful-usage intensity displayed by the heatmap.
+type ActivityHeatmapDay struct {
+	Date            string  `json:"date"`
+	SuccessRequests int64   `json:"success_requests"`
+	FailedRequests  int64   `json:"failed_requests"`
+	InputTokens     int64   `json:"input_tokens"`
+	OutputTokens    int64   `json:"output_tokens"`
+	TotalTokens     int64   `json:"total_tokens"`
+	BilledCost      float64 `json:"billed_cost"`
+	ModelCount      int64   `json:"model_count"`
+}
+
 // ModelStat represents usage statistics for a single model
 type ModelStat struct {
 	Model               string  `json:"model"`

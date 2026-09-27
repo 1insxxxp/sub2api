@@ -506,6 +506,25 @@ func TestUsageLogRepositoryGetUsageTrendWithFiltersRequestTypePriority(t *testin
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestUsageLogRepositoryGetUserActivityHeatmapQualifiesUsageLogFilters(t *testing.T) {
+	db, mock := newSQLMock(t)
+	repo := &usageLogRepository{sql: db}
+
+	start := time.Date(2026, 9, 1, 0, 0, 0, 0, time.FixedZone("CST", 8*60*60))
+	end := start.Add(24 * time.Hour)
+
+	mock.ExpectQuery(`(?s)WITH classified AS.*WHERE usage_logs\.created_at >= \$1 AND usage_logs\.created_at < \$2 AND usage_logs\.user_id = \$3`).
+		WithArgs(start, end, int64(42)).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"date", "success_requests", "failed_requests", "input_tokens", "output_tokens",
+			"total_tokens", "billed_cost", "model_count",
+		}))
+
+	_, err := repo.GetUserActivityHeatmap(context.Background(), start, end, usagestats.UsageLogFilters{UserID: 42})
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestUsageLogRepositoryGetUsageTrendWithUsageFiltersRequestedModelSource(t *testing.T) {
 	db, mock := newSQLMock(t)
 	repo := &usageLogRepository{sql: db}

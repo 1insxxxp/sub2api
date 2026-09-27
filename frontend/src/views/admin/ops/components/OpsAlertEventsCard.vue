@@ -12,6 +12,9 @@ import { formatDateTime } from '../utils/opsFormatters'
 
 const { t } = useI18n()
 const appStore = useAppStore()
+const props = withDefaults(defineProps<{ refreshToken?: number }>(), {
+  refreshToken: 0
+})
 
 // 与 DataTable 一致：< 768px 切换为卡片视图，避免宽表在移动端被截断。
 const isDesktopViewport = useMediaQuery('(min-width: 768px)')
@@ -316,13 +319,19 @@ async function manualResolve() {
 }
 
 onMounted(() => {
-  loadFirstPage()
+  void loadFirstPage()
 })
 
 watch([timeRange, severity, status, emailSent], () => {
   events.value = []
   hasMore.value = true
-  loadFirstPage()
+  void loadFirstPage()
+})
+
+watch(() => props.refreshToken, () => {
+  events.value = []
+  hasMore.value = true
+  void loadFirstPage()
 })
 
 watch(historyRange, () => {

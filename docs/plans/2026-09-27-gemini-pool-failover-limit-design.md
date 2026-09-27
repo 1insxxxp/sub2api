@@ -6,7 +6,8 @@ Make Gemini requests retry a pool account at most two additional times and allow
 
 ## Scope
 
-- Change the default pool-mode same-account retry budget from 3 to 2 retries.
+- Change the default Gemini pool-mode same-account retry budget from 3 to 2 retries.
+- Keep the default retry budget for other platforms at 3 retries.
 - Change the default Gemini account-switch budget from 3 switches to 9 switches, which permits up to 10 distinct account selections.
 - Keep explicit per-account `pool_mode_retry_count` values unchanged.
 - Keep existing failover eligibility, request cancellation, streaming-write protection, cooldown, and model/error policy behavior unchanged.
@@ -20,4 +21,4 @@ The current failover state counts account switches, not distinct accounts. There
 - Backend tests cover the new default pool retry value and preserve explicit values.
 - Configuration tests cover the Gemini default switch value of 9.
 - Existing failover-loop tests continue to verify that the switch limit is enforced.
-- Frontend account creation/edit defaults and hints display the new retry default of 2.
+- Frontend Gemini account creation/edit defaults and hints display 2; other platform defaults remain 3.

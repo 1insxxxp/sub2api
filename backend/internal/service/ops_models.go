@@ -283,4 +283,6 @@ type OpsUpstreamErrorSummaryReason struct {
 	Count                 int64      `json:"count"`
 	LatestAt              *time.Time `json:"latest_at"`
 	RepresentativeErrorID int64      `json:"representative_error_id"`
+	UserID                *int64     `json:"user_id,omitempty"`
+	UserEmail             string     `json:"user_email,omitempty"`
 }

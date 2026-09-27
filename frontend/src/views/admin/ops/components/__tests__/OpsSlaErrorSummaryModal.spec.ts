@@ -15,7 +15,7 @@ const summary = {
   groups: [{ group_id: 1, group_name: 'Group A', error_count: 2, model_count: 1, account_count: 1, latest_at: '2026-09-25T01:00:00Z', total_models: 1, models_truncated: false,
     models: [{ model: 'model-long', error_count: 2, latest_at: '2026-09-25T01:00:00Z', status_codes: { '503': 2 }, total_accounts: 1, accounts_truncated: false,
       accounts: [{ account_id: 2, account_name: 'Account A', error_count: 2, latest_at: '2026-09-25T01:00:00Z', latest_status_code: 503, total_reasons: 1, reasons_truncated: false,
-        reasons: [{ message: 'request failed', error_type: 'request', status_code: 503, count: 2, latest_at: '2026-09-25T01:00:00Z', representative_error_id: 88 }] }] }] }]
+        reasons: [{ message: 'request failed', error_type: 'request', status_code: 503, count: 2, latest_at: '2026-09-25T01:00:00Z', representative_error_id: 88, user_id: 42, user_email: 'customer@example.com' }] }] }] }]
 }
 function mountModal(show = true) { return mount(OpsSlaErrorSummaryModal, { props: { show, timeRange: '1h' }, global: { stubs: { BaseDialog: BaseDialogStub } } }) }
 function summaryWithRows(rowCount: number) {
@@ -40,12 +40,13 @@ describe('OpsSlaErrorSummaryModal', () => {
     const wrapper = mountModal(); await nextTick(); await nextTick()
     expect(getSLAErrorSummary).toHaveBeenCalled()
     expect(wrapper.text()).toContain('Group A')
+    expect(wrapper.text()).not.toContain('slaSummaryPath')
     expect(wrapper.find('[data-testid=ops-sla-summary-table-0]').exists()).toBe(true)
     const accountToggle = wrapper.find('button[aria-expanded="false"]')
     expect(accountToggle.text()).toContain('Account A')
     expect(wrapper.find('[data-testid=ops-sla-summary-row-88]').exists()).toBe(false)
     await accountToggle.trigger('click')
-    expect(wrapper.text()).toContain('model-long'); expect(wrapper.text()).toContain('request failed')
+    expect(wrapper.text()).toContain('model-long'); expect(wrapper.text()).toContain('request failed'); expect(wrapper.text()).toContain('customer@example.com')
     expect(wrapper.find('[data-testid=ops-sla-summary-row-88]').exists()).toBe(true)
     await wrapper.find('button[aria-expanded="true"]').trigger('click')
     expect(wrapper.find('[data-testid=ops-sla-summary-row-88]').exists()).toBe(false)

@@ -125,6 +125,8 @@ SELECT
   COALESCE(NULLIF(TRIM(e.requested_model), ''), NULLIF(TRIM(e.model), ''), '未知模型'),
   e.account_id,
   COALESCE(NULLIF(TRIM(a.name), ''), '未知账号'),
+  e.user_id,
+  COALESCE(NULLIF(TRIM(u.email), ''), '未知用户'),
   ` + statusExpr + `,
 	` + reasonExpr + `,
   COALESCE(e.error_type, ''),
@@ -134,9 +136,10 @@ SELECT
 FROM ops_error_logs e
 LEFT JOIN groups g ON g.id = e.group_id
 LEFT JOIN accounts a ON a.id = e.account_id
+LEFT JOIN users u ON u.id = e.user_id
 ` + where + `
 GROUP BY e.group_id, g.name, COALESCE(NULLIF(TRIM(e.requested_model), ''), NULLIF(TRIM(e.model), ''), '未知模型'),
-         e.account_id, a.name, ` + statusExpr + `,
+         e.account_id, a.name, e.user_id, u.email, ` + statusExpr + `,
 		 ` + reasonExpr + `,
          COALESCE(e.error_type, '')
 ORDER BY COUNT(*) DESC, MAX(e.created_at) DESC, e.group_id NULLS FIRST, e.account_id NULLS FIRST`
@@ -155,12 +158,12 @@ ORDER BY COUNT(*) DESC, MAX(e.created_at) DESC, e.group_id NULLS FIRST, e.accoun
 	groups := make(map[string]*groupState)
 	reasonIndexes := make(map[*service.OpsUpstreamErrorSummaryAccount]map[string]*service.OpsUpstreamErrorSummaryReason)
 	for rows.Next() {
-		var groupID, accountID sql.NullInt64
-		var groupName, model, accountName, reason, errorType string
+		var groupID, accountID, userID sql.NullInt64
+		var groupName, model, accountName, userEmail, reason, errorType string
 		var status int
 		var count, representativeID int64
 		var latest time.Time
-		if err := rows.Scan(&groupID, &groupName, &model, &accountID, &accountName, &status, &reason, &errorType, &count, &latest, &representativeID); err != nil {
+		if err := rows.Scan(&groupID, &groupName, &model, &accountID, &accountName, &userID, &userEmail, &status, &reason, &errorType, &count, &latest, &representativeID); err != nil {
 			return nil, err
 		}
 		groupKey := "nil"
@@ -210,10 +213,15 @@ ORDER BY COUNT(*) DESC, MAX(e.created_at) DESC, e.group_id NULLS FIRST, e.accoun
 			account.LatestAt = timePtr(latest)
 			account.LatestStatusCode = status
 		}
-		reasonKey := errorType + "\x00" + fmt.Sprintf("%d", status) + "\x00" + reason
+		reasonKey := errorType + "\x00" + fmt.Sprintf("%d", status) + "\x00" + reason + "\x00" + fmt.Sprintf("%d", userID.Int64)
 		r := reasonIndexes[account][reasonKey]
 		if r == nil {
-			r = &service.OpsUpstreamErrorSummaryReason{Message: truncateSummaryReason(reason), ErrorType: errorType, StatusCode: status, RepresentativeErrorID: representativeID}
+			var uid *int64
+			if userID.Valid {
+				v := userID.Int64
+				uid = &v
+			}
+			r = &service.OpsUpstreamErrorSummaryReason{Message: truncateSummaryReason(reason), ErrorType: errorType, StatusCode: status, RepresentativeErrorID: representativeID, UserID: uid, UserEmail: userEmail}
 			account.Reasons = append(account.Reasons, r)
 			reasonIndexes[account][reasonKey] = r
 		}

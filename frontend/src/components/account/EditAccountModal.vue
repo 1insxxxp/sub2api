@@ -495,7 +495,7 @@
             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
               {{
                 t('admin.accounts.poolModeRetryCountHint', {
-                  default: DEFAULT_POOL_MODE_RETRY_COUNT,
+                  default: defaultPoolModeRetryCountForPlatform(account.platform),
                   max: MAX_POOL_MODE_RETRY_COUNT
                 })
               }}
@@ -1332,7 +1332,7 @@
             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
               {{
                 t('admin.accounts.poolModeRetryCountHint', {
-                  default: DEFAULT_POOL_MODE_RETRY_COUNT,
+                  default: defaultPoolModeRetryCountForPlatform(account.platform),
                   max: MAX_POOL_MODE_RETRY_COUNT
                 })
               }}
@@ -3604,12 +3604,16 @@ const openAICompactModelMappings = ref<ModelMapping[]>([])
 const modelRestrictionMode = ref<'whitelist' | 'mapping'>('whitelist')
 const allowedModels = ref<string[]>([])
 const DEFAULT_POOL_MODE_RETRY_COUNT = 3
+const DEFAULT_GEMINI_POOL_MODE_RETRY_COUNT = 2
 const MAX_POOL_MODE_RETRY_COUNT = 10
 const DEFAULT_POOL_MODE_RETRY_STATUS_CODES = [401, 403, 429]
 const GROK_CLIENT_TOOL_CACHE_EXTRA_KEY = 'grok_client_tool_cache_enabled'
 const poolModeEnabled = ref(false)
 const poolModeRetryCount = ref(DEFAULT_POOL_MODE_RETRY_COUNT)
 const poolModeRetryStatusCodesInput = ref('')
+
+const defaultPoolModeRetryCountForPlatform = (platform?: string) =>
+  platform === 'gemini' ? DEFAULT_GEMINI_POOL_MODE_RETRY_COUNT : DEFAULT_POOL_MODE_RETRY_COUNT
 
 function parsePoolModeRetryStatusCodes(input: string): number[] {
   if (!input || !input.trim()) return []
@@ -4155,7 +4159,7 @@ const expiresAtInput = computed({
 // Watchers
 const normalizePoolModeRetryCount = (value: number) => {
   if (!Number.isFinite(value)) {
-    return DEFAULT_POOL_MODE_RETRY_COUNT
+    return defaultPoolModeRetryCountForPlatform(props.account?.platform)
   }
   const normalized = Math.trunc(value)
   if (normalized < 0) {
@@ -4558,7 +4562,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     // Load pool mode
     poolModeEnabled.value = credentials.pool_mode === true
     poolModeRetryCount.value = normalizePoolModeRetryCount(
-      Number(credentials.pool_mode_retry_count ?? DEFAULT_POOL_MODE_RETRY_COUNT)
+      Number(credentials.pool_mode_retry_count ?? defaultPoolModeRetryCountForPlatform(newAccount.platform))
     )
     poolModeRetryStatusCodesInput.value = formatPoolModeRetryStatusCodes(credentials.pool_mode_retry_status_codes)
 
@@ -4588,7 +4592,9 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     // Load pool mode for bedrock
     poolModeEnabled.value = bedrockCreds.pool_mode === true
     const retryCount = bedrockCreds.pool_mode_retry_count
-    poolModeRetryCount.value = (typeof retryCount === 'number' && retryCount >= 0) ? retryCount : DEFAULT_POOL_MODE_RETRY_COUNT
+    poolModeRetryCount.value = (typeof retryCount === 'number' && retryCount >= 0)
+      ? retryCount
+      : defaultPoolModeRetryCountForPlatform(newAccount.platform)
     poolModeRetryStatusCodesInput.value = formatPoolModeRetryStatusCodes(bedrockCreds.pool_mode_retry_status_codes)
 
     // Load quota limits for bedrock
@@ -4633,7 +4639,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
       allowedModels.value = []
     }
     poolModeEnabled.value = false
-    poolModeRetryCount.value = DEFAULT_POOL_MODE_RETRY_COUNT
+    poolModeRetryCount.value = defaultPoolModeRetryCountForPlatform(newAccount.platform)
     poolModeRetryStatusCodesInput.value = ''
     customErrorCodesEnabled.value = false
     selectedErrorCodes.value = []

@@ -265,6 +265,131 @@ func (r *usageLogRepository) GetUserUsageTrendByUserID(ctx context.Context, user
 	return results, nil
 }
 
+// GetUserActivityHeatmap returns one row per calendar day for the customer dashboard.
+// Response evidence takes precedence over billing amount so a successful free
+// request is not counted as a failure. Older rows without response evidence use
+// the usage-log output/cost fallback used by the existing usage aggregates.
+func (r *usageLogRepository) GetUserActivityHeatmap(ctx context.Context, startTime, endTime time.Time, filters usagestats.UsageLogFilters) (results []usagestats.ActivityHeatmapDay, err error) {
+	const usageTable = "usage_logs"
+
+	conditions := []string{usageTable + ".created_at >= $1", usageTable + ".created_at < $2"}
+	args := []any{startTime, endTime}
+	if filters.UserID > 0 {
+		conditions = append(conditions, fmt.Sprintf("%s.user_id = $%d", usageTable, len(args)+1))
+		args = append(args, filters.UserID)
+	}
+	if filters.APIKeyID > 0 {
+		conditions = append(conditions, fmt.Sprintf("%s.api_key_id = $%d", usageTable, len(args)+1))
+		args = append(args, filters.APIKeyID)
+	}
+	if filters.GroupID > 0 {
+		conditions = append(conditions, fmt.Sprintf("%s.group_id = $%d", usageTable, len(args)+1))
+		args = append(args, filters.GroupID)
+	}
+	if strings.TrimSpace(filters.Model) != "" {
+		modelExpression := usageTable + "." + rawUsageLogModelColumn
+		if strings.TrimSpace(filters.ModelFilterSource) != "" {
+			modelExpression = resolveModelDimensionExpressionWithAlias(filters.ModelFilterSource, usageTable)
+		}
+		conditions = append(conditions, fmt.Sprintf("%s = $%d", modelExpression, len(args)+1))
+		args = append(args, filters.Model)
+	}
+	if filters.RequestType != nil {
+		condition, conditionArgs := buildRequestTypeFilterConditionWithAlias(len(args)+1, *filters.RequestType, usageTable)
+		conditions = append(conditions, condition)
+		args = append(args, conditionArgs...)
+	} else if filters.Stream != nil {
+		conditions = append(conditions, fmt.Sprintf("%s.stream = $%d", usageTable, len(args)+1))
+		args = append(args, *filters.Stream)
+	}
+	conditions, args = appendNativeCompactionV2WhereCondition(conditions, args, filters.NativeCompactionV2, usageTable)
+	if filters.BillingType != nil {
+		conditions = append(conditions, fmt.Sprintf("%s.billing_type = $%d", usageTable, len(args)+1))
+		args = append(args, int16(*filters.BillingType))
+	}
+	conditions, args = appendUsageLogBillingModeWhereConditionWithAlias(conditions, args, filters.BillingMode, usageTable)
+	if filters.UpstreamModelMismatch != nil {
+		conditions = append(conditions, upstreamModelMismatchCondition(usageTable+".upstream_model_mismatch", *filters.UpstreamModelMismatch))
+	}
+	conditions, args = appendUsageLogCompensationWhereConditionWithAlias(conditions, args, filters.CompensationFilter, usageTable)
+
+	query := `
+		WITH classified AS (
+			SELECT
+				usage_logs.*,
+				CASE
+					WHEN outcome.disconnect_source = 'client' THEN 'unknown'
+					WHEN outcome.id IS NOT NULL AND outcome.stream_completed
+						AND outcome.http_status < 400 AND outcome.upstream_status < 400
+						AND COALESCE(outcome.disconnect_source, 'none') NOT IN ('upstream', 'server')
+						AND (outcome.has_text OR outcome.has_tool_call OR outcome.has_reasoning OR outcome.has_media) THEN 'success'
+					WHEN outcome.id IS NOT NULL AND (
+						outcome.http_status >= 400 OR outcome.upstream_status >= 400
+						OR outcome.upstream_error_kind NOT IN ('', 'none')
+						OR outcome.disconnect_source IN ('upstream', 'server')) THEN 'failure'
+					WHEN usage_logs.request_type = 4 THEN 'failure'
+					WHEN outcome.id IS NOT NULL AND usage_logs.stream AND NOT outcome.stream_completed THEN 'unknown'
+					WHEN outcome.id IS NOT NULL AND (outcome.has_text OR outcome.has_tool_call OR outcome.has_reasoning OR outcome.has_media) THEN 'success'
+					WHEN outcome.id IS NOT NULL THEN 'empty'
+					WHEN usage_logs.actual_cost > 0
+						OR usage_logs.output_tokens > 0
+						OR usage_logs.image_output_tokens > 0
+						OR usage_logs.image_count > 0
+						OR claim.reason_code = 'effective_output' THEN 'success'
+					ELSE 'failure'
+				END AS activity_outcome
+			FROM usage_logs
+			LEFT JOIN usage_response_outcomes outcome ON outcome.usage_log_id = usage_logs.id
+			LEFT JOIN empty_response_claims claim ON claim.usage_log_id = usage_logs.id
+			WHERE ` + strings.Join(conditions, " AND ") + `
+		)
+		SELECT
+			TO_CHAR(created_at AT TIME ZONE 'Asia/Shanghai', 'YYYY-MM-DD') AS date,
+			COUNT(*) FILTER (WHERE activity_outcome = 'success') AS success_requests,
+			COUNT(*) FILTER (WHERE activity_outcome = 'failure') AS failed_requests,
+			COALESCE(SUM(input_tokens) FILTER (WHERE activity_outcome = 'success'), 0) AS input_tokens,
+			COALESCE(SUM(output_tokens) FILTER (WHERE activity_outcome = 'success'), 0) AS output_tokens,
+			COALESCE(SUM(input_tokens + output_tokens + cache_creation_tokens + cache_read_tokens) FILTER (WHERE activity_outcome = 'success'), 0) AS total_tokens,
+			COALESCE(SUM(actual_cost) FILTER (WHERE activity_outcome = 'success'), 0) AS billed_cost,
+			COUNT(DISTINCT COALESCE(NULLIF(requested_model, ''), NULLIF(model, ''))) FILTER (WHERE activity_outcome = 'success') AS model_count
+		FROM classified
+		GROUP BY date
+		ORDER BY date ASC`
+
+	rows, err := r.sql.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil && err == nil {
+			err = closeErr
+			results = nil
+		}
+	}()
+
+	results = make([]usagestats.ActivityHeatmapDay, 0)
+	for rows.Next() {
+		var item usagestats.ActivityHeatmapDay
+		if err := rows.Scan(
+			&item.Date,
+			&item.SuccessRequests,
+			&item.FailedRequests,
+			&item.InputTokens,
+			&item.OutputTokens,
+			&item.TotalTokens,
+			&item.BilledCost,
+			&item.ModelCount,
+		); err != nil {
+			return nil, err
+		}
+		results = append(results, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return results, nil
+}
+
 // GetUserModelStats 获取指定用户的模型统计
 func (r *usageLogRepository) GetUserModelStats(ctx context.Context, userID int64, startTime, endTime time.Time) (results []ModelStat, err error) {
 	return r.getModelStatsWithFiltersBySource(ctx, startTime, endTime, userID, 0, 0, 0, "", nil, nil, nil, usagestats.ModelSourceRequested, "", nil, nil)

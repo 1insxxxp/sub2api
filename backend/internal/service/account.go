@@ -1102,21 +1102,26 @@ func (a *Account) IsPoolMode() bool {
 }
 
 const (
-	defaultPoolModeRetryCount = 3
-	maxPoolModeRetryCount     = 10
+	defaultPoolModeRetryCount       = 3
+	defaultGeminiPoolModeRetryCount = 2
+	maxPoolModeRetryCount           = 10
 )
 
 // GetPoolModeRetryCount 返回池模式同账号重试次数。
-// 未配置或配置非法时回退为默认值 3；小于 0 按 0 处理；过大则截断到 10。
+// 未配置或配置非法时，Gemini 回退为 2，其他平台回退为 3；小于 0 按 0 处理；过大则截断到 10。
 func (a *Account) GetPoolModeRetryCount() int {
+	defaultRetryCount := defaultPoolModeRetryCount
+	if a != nil && a.Platform == PlatformGemini {
+		defaultRetryCount = defaultGeminiPoolModeRetryCount
+	}
 	if a == nil || !a.IsPoolMode() || a.Credentials == nil {
-		return defaultPoolModeRetryCount
+		return defaultRetryCount
 	}
 	raw, ok := a.Credentials["pool_mode_retry_count"]
 	if !ok || raw == nil {
-		return defaultPoolModeRetryCount
+		return defaultRetryCount
 	}
-	count := parsePoolModeRetryCount(raw)
+	count := parsePoolModeRetryCount(raw, defaultRetryCount)
 	if count < 0 {
 		return 0
 	}
@@ -1126,7 +1131,7 @@ func (a *Account) GetPoolModeRetryCount() int {
 	return count
 }
 
-func parsePoolModeRetryCount(value any) int {
+func parsePoolModeRetryCount(value any, fallback int) int {
 	switch v := value.(type) {
 	case int:
 		return v
@@ -1143,7 +1148,7 @@ func parsePoolModeRetryCount(value any) int {
 			return i
 		}
 	}
-	return defaultPoolModeRetryCount
+	return fallback
 }
 
 // defaultPoolModeRetryableStatusCodes 池模式下默认触发同账号重试的状态码。

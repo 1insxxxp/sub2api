@@ -34,4 +34,22 @@ describe('recharge amount input', () => {
     expect(wrapper.emitted('update:modelValue')).toEqual([[null], [null], [0.5], [0.5], [null]])
     expect((input.element as HTMLInputElement).value).toBe('')
   })
+
+  it('shows regular, current, and savings amounts when display metadata is provided', () => {
+    const wrapper = mount(AmountInput, {
+      props: {
+        modelValue: 8,
+        amounts: [8],
+        amountDisplay: {
+          8: { original: '¥10.00', current: '¥8.00', savings: '省 ¥2.00' },
+        },
+      },
+    })
+
+    const button = wrapper.get('button')
+    expect(button.text()).toContain('¥10.00')
+    expect(button.text()).toContain('¥8.00')
+    expect(button.text()).toContain('省 ¥2.00')
+    expect(button.attributes('aria-label')).toContain('¥10.00')
+  })
 })
