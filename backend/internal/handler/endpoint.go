@@ -24,6 +24,7 @@ const (
 	EndpointResponsesInputTokens = "/v1/responses/input_tokens"
 	EndpointImagesGenerations    = "/v1/images/generations"
 	EndpointImagesEdits          = "/v1/images/edits"
+	EndpointNovelAIImages        = "/ai/generate-image"
 	EndpointImageTasks           = "/v1/images/tasks"
 	EndpointVideosGenerations    = "/v1/videos/generations"
 	EndpointVideosEdits          = "/v1/videos/edits"
@@ -92,6 +93,8 @@ func NormalizeInboundEndpoint(path string) string {
 		return EndpointAlphaSearch
 	case strings.Contains(path, EndpointChatCompletions):
 		return EndpointChatCompletions
+	case strings.Contains(path, EndpointNovelAIImages) || strings.Contains(path, "/v1/ai/generate-image"):
+		return EndpointNovelAIImages
 	case strings.Contains(path, EndpointMessages):
 		return EndpointMessages
 	case strings.Contains(path, EndpointImagesGenerations) || strings.Contains(path, "/images/generations"):
@@ -200,7 +203,7 @@ func DeriveUpstreamEndpoint(inbound, rawRequestPath, platform string) string {
 
 	switch platform {
 	case service.PlatformOpenAI, service.PlatformGrok:
-		if inbound == EndpointEmbeddings || inbound == EndpointAlphaSearch || inbound == EndpointResponsesInputTokens || inbound == EndpointImagesGenerations || inbound == EndpointImagesEdits || inbound == EndpointVideosGenerations || inbound == EndpointVideosEdits || inbound == EndpointVideosExtensions || inbound == EndpointVideos {
+		if inbound == EndpointEmbeddings || inbound == EndpointAlphaSearch || inbound == EndpointResponsesInputTokens || inbound == EndpointImagesGenerations || inbound == EndpointImagesEdits || inbound == EndpointNovelAIImages || inbound == EndpointVideosGenerations || inbound == EndpointVideosEdits || inbound == EndpointVideosExtensions || inbound == EndpointVideos {
 			return inbound
 		}
 		// OpenAI forwards everything to the Responses API.

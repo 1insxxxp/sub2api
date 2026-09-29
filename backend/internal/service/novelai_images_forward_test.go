@@ -82,3 +82,31 @@ func TestForwardNovelAIUsesNativeEndpointAndPreservesBody(t *testing.T) {
 	require.NoError(t, readErr)
 	require.JSONEq(t, string(body), string(forwarded))
 }
+
+func TestForwardNovelAIReturnsFailoverForRetryableUpstream(t *testing.T) {
+	body := []byte(`{"input":"1girl","model":"nai-diffusion-5-full","parameters":{}}`)
+	c, _ := newOpenAIImagesTestContext(t, body)
+	upstream := &httpUpstreamRecorder{resp: &http.Response{
+		StatusCode: http.StatusServiceUnavailable,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(strings.NewReader(`{"error":{"message":"temporarily unavailable"}}`)),
+	}}
+	svc := newOpenAIImagesTestService(upstream)
+	account := &Account{
+		ID:       32,
+		Platform: PlatformOpenAI,
+		Type:     AccountTypeAPIKey,
+		Credentials: map[string]any{
+			"api_key":        "ynai-test",
+			"base_url":       "https://nai.example.test",
+			"image_protocol": "novelai",
+		},
+	}
+	parsed, err := ParseNovelAIImageRequest(body)
+	require.NoError(t, err)
+
+	_, err = svc.ForwardNovelAI(context.Background(), c, account, parsed, "")
+	var failoverErr *UpstreamFailoverError
+	require.ErrorAs(t, err, &failoverErr)
+	require.Equal(t, http.StatusServiceUnavailable, failoverErr.StatusCode)
+}

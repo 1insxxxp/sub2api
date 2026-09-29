@@ -745,6 +745,10 @@ export default {
       openai: {
         baseUrlHint: '留空使用官方 OpenAI API',
         apiKeyHint: '您的 OpenAI API Key',
+        imageProtocol: '生图协议',
+        imageProtocolOpenAI: 'OpenAI Images',
+        imageProtocolNovelAI: 'NovelAI 原生协议',
+        imageProtocolDesc: '选择 NovelAI 原生协议后，/ai/generate-image 请求会原样转发到该账号的 Base URL。',
         oauthPassthrough: '自动透传（仅替换认证）',
         oauthPassthroughDesc:
           '开启后，该 OpenAI 账号将自动透传请求与响应，仅替换认证并保留计费/并发/审计及必要安全过滤；如遇兼容性问题可随时关闭回滚。',

@@ -2,11 +2,14 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
 )
+
+type novelAIImageRequestContextKey struct{}
 
 // NovelAIImageRequest is the client-facing native NovelAI image request.
 // RawBody and Parameters intentionally retain fields that this gateway does
@@ -57,9 +60,9 @@ func ParseNovelAIImageRequest(body []byte) (*NovelAIImageRequest, error) {
 			action = "generate"
 		}
 	}
-	if action != "generate" {
-		return nil, fmt.Errorf("unsupported action %q; only generate is supported", action)
-	}
+	// NovelAI uses the same endpoint for several generation modes (for example
+	// img2img and inpainting). Keep the action opaque so newer native modes and
+	// their parameter sets pass through unchanged.
 
 	parameters := json.RawMessage(`{}`)
 	if raw, ok := payload["parameters"]; ok {
@@ -137,4 +140,37 @@ func (r *NovelAIImageRequest) Size() string {
 		return ""
 	}
 	return fmt.Sprintf("%dx%d", r.Width, r.Height)
+}
+
+// WithNovelAIImageRequest carries the native request through the shared image
+// scheduling handler while its routing view uses an OpenAI-shaped body.
+func WithNovelAIImageRequest(ctx context.Context, request *NovelAIImageRequest) context.Context {
+	return context.WithValue(ctx, novelAIImageRequestContextKey{}, request)
+}
+
+func NovelAIImageRequestFromContext(ctx context.Context) (*NovelAIImageRequest, bool) {
+	if ctx == nil {
+		return nil, false
+	}
+	request, ok := ctx.Value(novelAIImageRequestContextKey{}).(*NovelAIImageRequest)
+	return request, ok && request != nil
+}
+
+// BuildOpenAIImageRoutingBody creates the small routing view consumed by the
+// existing image scheduler. The native body remains available in context and
+// is what the NovelAI forwarder sends upstream.
+func BuildOpenAIImageRoutingBody(request *NovelAIImageRequest) ([]byte, error) {
+	if request == nil {
+		return nil, fmt.Errorf("NovelAI request is required")
+	}
+	payload := map[string]any{
+		"model":           request.Model,
+		"prompt":          request.Input,
+		"n":               request.Samples,
+		"response_format": "b64_json",
+	}
+	if size := request.Size(); size != "" {
+		payload["size"] = size
+	}
+	return json.Marshal(payload)
 }

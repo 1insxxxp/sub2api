@@ -1402,6 +1402,14 @@
             {{ t('admin.accounts.cnProviders.apiProtocol.responsesFallbackDesc') }}
           </p>
         </div>
+        <div v-if="form.platform === 'openai'" class="border-t border-gray-200 pt-4 dark:border-dark-600">
+          <label class="input-label">{{ t('admin.accounts.openai.imageProtocol') }}</label>
+          <select v-model="imageProtocol" class="input" data-testid="create-openai-image-protocol">
+            <option value="openai">{{ t('admin.accounts.openai.imageProtocolOpenAI') }}</option>
+            <option value="novelai">{{ t('admin.accounts.openai.imageProtocolNovelAI') }}</option>
+          </select>
+          <p class="input-hint">{{ t('admin.accounts.openai.imageProtocolDesc') }}</p>
+        </div>
         <OpenCodeGoProtocolRulesEditor
           v-if="isOpenCodeGoPlatform && apiProtocol === 'adaptive'"
           v-model:rows="openCodeGoProtocolRules"
@@ -4156,6 +4164,7 @@ const accountCategory = ref<'oauth-based' | 'apikey' | 'bedrock' | 'service_acco
 const addMethod = ref<AddMethod>('oauth') // For oauth-based: 'oauth' or 'setup-token'
 const apiKeyBaseUrl = ref('https://api.anthropic.com')
 const apiKeyValue = ref('')
+const imageProtocol = ref<'openai' | 'novelai'>('openai')
 const upstreamBillingAutoProbeEnabled = ref(true)
 
 // ── 国产供应商（Kimi / Zhipu / DeepSeek）账号类型、API 协议与端点 ──
@@ -4907,6 +4916,7 @@ watch(
       interceptWarmupRequests.value = false
     }
     if (newPlatform !== 'openai') {
+      imageProtocol.value = 'openai'
       openaiPassthroughEnabled.value = false
       openaiFlattenNamespacesEnabled.value = false
       openAIEndpointCapabilities.value = ['chat_completions', 'embeddings']
@@ -5326,6 +5336,7 @@ const resetForm = () => {
   adaptiveBaseUrls.value = { chat_completions: '', anthropic: '', responses: '' }
   apiKeyBaseUrl.value = 'https://api.anthropic.com'
   apiKeyValue.value = ''
+  imageProtocol.value = 'openai'
   upstreamRequestIdHeader.value = ''
   upstreamBillingAutoProbeEnabled.value = true
   editQuotaLimit.value = null
@@ -5789,6 +5800,9 @@ const handleSubmit = async () => {
   const credentials: Record<string, unknown> = {
     base_url: apiKeyBaseUrl.value.trim() || defaultBaseUrl,
     api_key: apiKeyValue.value.trim()
+  }
+  if (form.platform === 'openai' && imageProtocol.value === 'novelai') {
+    credentials.image_protocol = 'novelai'
   }
   if (form.platform === 'gemini') {
     credentials.tier_id = geminiTierAIStudio.value

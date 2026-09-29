@@ -477,13 +477,20 @@ func applyOpenAIImagesDefaults(req *OpenAIImagesRequest) {
 }
 
 func isOpenAIImageGenerationModel(model string) bool {
-	return IsGPTImageGenerationModel(model) || isGrokImageGenerationModel(model)
+	return IsGPTImageGenerationModel(model) || IsNovelAIImageGenerationModel(model) || isGrokImageGenerationModel(model)
 }
 
 // IsGPTImageGenerationModel identifies the GPT native image-generation model family.
 func IsGPTImageGenerationModel(model string) bool {
 	model = strings.ToLower(strings.TrimSpace(model))
 	return strings.HasPrefix(model, "gpt-image-")
+}
+
+// IsNovelAIImageGenerationModel identifies the native NovelAI Diffusion image
+// model family exposed through the NovelAI-compatible image endpoint.
+func IsNovelAIImageGenerationModel(model string) bool {
+	model = strings.ToLower(strings.TrimSpace(model))
+	return strings.HasPrefix(model, "nai-diffusion-")
 }
 
 func isGrokImageGenerationModel(model string) bool {

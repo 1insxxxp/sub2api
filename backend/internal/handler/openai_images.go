@@ -73,6 +73,7 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", err.Error())
 		return
 	}
+	nativeRequest, nativeProtocol := service.NovelAIImageRequestFromContext(c.Request.Context())
 	requestModel := parsed.Model
 	ensureCompositeTargetPlatform(c, apiKey, requestModel)
 	clientRequestModel := clientRequestedModel(c, requestModel)
@@ -218,6 +219,12 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 		)
 
 		account := selection.Account
+		if nativeProtocol && account.GetImageProtocol() != service.ImageProtocolNovelAI {
+			// A native NovelAI request must never fall through to an ordinary
+			// OpenAI image credential just because it was selected first.
+			failedAccountIDs[account.ID] = struct{}{}
+			continue
+		}
 		sessionHash = ensureOpenAIPoolModeSessionHash(sessionHash, account)
 		reqLog.Debug("openai.images.account_selected", zap.Int64("account_id", account.ID), zap.String("account_name", account.Name))
 		setOpsSelectedAccount(c, account.ID, account.Platform)
@@ -236,18 +243,24 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 		}
 
 		service.SetOpsLatencyMs(c, service.OpsRoutingLatencyMsKey, time.Since(routingStart).Milliseconds())
-		if !parsed.Stream && !jsonKeepaliveStarted {
+		if !nativeProtocol && !parsed.Stream && !jsonKeepaliveStarted {
 			stopJSONKeepalive = service.StartOpenAIImagesJSONKeepalive(c, h.openAIImagesJSONKeepaliveInterval())
 			jsonKeepaliveStarted = true
 		}
 		forwardStart := time.Now()
 		writerSizeBeforeForward := service.OpenAIImagesJSONKeepaliveAdjustedWrittenSize(c)
+		var nativeResult *service.NovelAIForwardResult
 		result, err := func() (*service.OpenAIForwardResult, error) {
 			defer func() {
 				if accountReleaseFunc != nil {
 					accountReleaseFunc()
 				}
 			}()
+			if nativeProtocol {
+				var err error
+				nativeResult, err = h.gatewayService.ForwardNovelAI(requestCtx, c, account, nativeRequest, channelMapping.MappedModel)
+				return service.OpenAIForwardResultFromNovelAI(nativeResult), err
+			}
 			return h.gatewayService.ForwardImages(requestCtx, c, account, body, parsed, channelMapping.MappedModel)
 		}()
 		forwardDurationMs := time.Since(forwardStart).Milliseconds()
@@ -379,7 +392,11 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 
 		userAgent := c.GetHeader("User-Agent")
 		clientIP := ip.GetClientIP(c)
-		requestPayloadHash := service.HashUsageRequestPayload(body)
+		requestPayload := body
+		if nativeProtocol && nativeRequest != nil {
+			requestPayload = nativeRequest.RawBody
+		}
+		requestPayloadHash := service.HashUsageRequestPayload(requestPayload)
 		if parsed.Multipart {
 			requestPayloadHash = service.HashUsageRequestPayload([]byte(parsed.StickySessionSeed()))
 		}
@@ -424,6 +441,18 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 			zap.Int64("account_id", account.ID),
 			zap.Int("switch_count", switchCount),
 		)
+		if nativeProtocol && nativeResult != nil {
+			for _, header := range []string{"Content-Disposition", "Cache-Control", "X-Request-Id"} {
+				if value := nativeResult.ResponseHeaders.Get(header); value != "" {
+					c.Header(header, value)
+				}
+			}
+			contentType := nativeResult.ResponseHeaders.Get("Content-Type")
+			if contentType == "" {
+				contentType = "application/octet-stream"
+			}
+			c.Data(http.StatusOK, contentType, nativeResult.Body)
+		}
 		return
 	}
 }

@@ -170,6 +170,7 @@ func (s *OpenAIGatewayService) ForwardNovelAI(
 		proxyURL = account.Proxy.URL()
 	}
 	resp, err := s.doOpenAIUpstream(upstreamReq, proxyURL, account)
+	SetOpsLatencyMs(c, OpsUpstreamLatencyMsKey, time.Since(start).Milliseconds())
 	if err != nil {
 		return nil, fmt.Errorf("NovelAI upstream request failed: %w", err)
 	}
@@ -186,11 +187,19 @@ func (s *OpenAIGatewayService) ForwardNovelAI(
 		if message == "" {
 			message = http.StatusText(resp.StatusCode)
 		}
-		return nil, &OpenAIImagesUpstreamError{
+		message = sanitizeUpstreamErrorMessage(message)
+		if s.shouldFailoverOpenAIUpstreamResponse(account, resp.StatusCode, message, responseBody) {
+			shouldDisable := s.handleFailoverSideEffects(upstreamCtx, resp, account, responseBody, upstreamModel)
+			retryableOnSameAccount := !shouldDisable && account.IsPoolMode() && account.IsPoolModeRetryableStatus(resp.StatusCode)
+			return nil, newOpenAIUpstreamFailoverError(resp.StatusCode, resp.Header, responseBody, message, retryableOnSameAccount)
+		}
+		upstreamErr := &OpenAIImagesUpstreamError{
 			StatusCode:        resp.StatusCode,
-			Message:           sanitizeUpstreamErrorMessage(message),
+			Message:           message,
 			UpstreamRequestID: resp.Header.Get("x-request-id"),
 		}
+		writeOpenAIImagesUpstreamErrorResponse(c, upstreamErr)
+		return nil, upstreamErr
 	}
 	return &NovelAIForwardResult{
 		Body:            responseBody,
@@ -202,4 +211,22 @@ func (s *OpenAIGatewayService) ForwardNovelAI(
 		ImageSize:       request.Size(),
 		Duration:        time.Since(start),
 	}, nil
+}
+
+// OpenAIForwardResultFromNovelAI adapts native response metadata to the
+// existing image billing/scheduling lifecycle. The response body itself stays
+// native and is written by the gateway handler after usage is queued.
+func OpenAIForwardResultFromNovelAI(result *NovelAIForwardResult) *OpenAIForwardResult {
+	if result == nil {
+		return nil
+	}
+	return &OpenAIForwardResult{
+		RequestID:       result.RequestID,
+		UpstreamHeaders: result.ResponseHeaders,
+		Model:           result.Model,
+		UpstreamModel:   result.UpstreamModel,
+		ImageCount:      result.ImageCount,
+		ImageSize:       result.ImageSize,
+		Duration:        result.Duration,
+	}
 }

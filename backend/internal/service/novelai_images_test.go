@@ -54,7 +54,6 @@ func TestParseNovelAIImageRequestRejectsInvalidPayload(t *testing.T) {
 		{name: "malformed json", body: `{`, want: "invalid JSON"},
 		{name: "missing input", body: `{"model":"nai-diffusion-5-full"}`, want: "input"},
 		{name: "missing model", body: `{"input":"cat"}`, want: "model"},
-		{name: "unsupported action", body: `{"input":"cat","model":"nai-diffusion-5-full","action":"generate-prompt"}`, want: "action"},
 		{name: "parameters must be object", body: `{"input":"cat","model":"nai-diffusion-5-full","parameters":[]}`, want: "parameters"},
 		{name: "invalid sample count", body: `{"input":"cat","model":"nai-diffusion-5-full","parameters":{"n_samples":0}}`, want: "n_samples"},
 	}
@@ -65,4 +64,25 @@ func TestParseNovelAIImageRequestRejectsInvalidPayload(t *testing.T) {
 			require.Contains(t, err.Error(), tt.want)
 		})
 	}
+}
+
+func TestParseNovelAIImageRequestAllowsNativeGenerationActions(t *testing.T) {
+	parsed, err := ParseNovelAIImageRequest([]byte(`{"input":"cat","model":"nai-diffusion-5-full","action":"img2img","parameters":{"strength":0.7}}`))
+	require.NoError(t, err)
+	require.Equal(t, "img2img", parsed.Action)
+}
+
+func TestBuildOpenAIImageRoutingBodyKeepsNativeModelAndPrompt(t *testing.T) {
+	request, err := ParseNovelAIImageRequest([]byte(`{"input":"cat","model":"nai-diffusion-5-full","parameters":{"width":832,"height":1216,"n_samples":2}}`))
+	require.NoError(t, err)
+	body, err := BuildOpenAIImageRoutingBody(request)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"model":"nai-diffusion-5-full","prompt":"cat","n":2,"size":"832x1216","response_format":"b64_json"}`, string(body))
+}
+
+func TestNovelAIImageModelsAreAcceptedByImageValidation(t *testing.T) {
+	require.True(t, IsNovelAIImageGenerationModel("nai-diffusion-4-5-full"))
+	require.True(t, IsNovelAIImageGenerationModel("NAI-DIFFUSION-5-FULL"))
+	require.NoError(t, validateCompatibleImagesModel("nai-diffusion-5-full"))
+	require.False(t, IsNovelAIImageGenerationModel("nai-text-model"))
 }
