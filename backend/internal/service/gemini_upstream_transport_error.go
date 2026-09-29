@@ -20,7 +20,8 @@ var geminiTransportFailoverBody = []byte(`{"error":{"code":502,"message":"Upstre
 //     （见 isClientCanceledTransportError）；
 //   - 持久性故障（代理凭据失效、端点拒绝连接、DNS/路由不可达）临时摘除账号；
 //     瞬时故障（EOF / reset / 超时）账号保持可调度；
-//   - 客户端已断开（context.Canceled）原样返回：不换号、不摘号；
+//   - 客户端已断开（request context 为 context.Canceled）原样返回：不换号、不摘号；
+//     上游自行取消请求但 request context 仍存活时，按传输故障交给换号循环；
 //   - 其余一律返回 *UpstreamFailoverError，由 handler 的 failover 循环换号。
 //
 // 本函数不写响应：响应归 handler 所有（换号，或耗尽后按端点格式渲染错误）。
@@ -40,8 +41,7 @@ func (s *GeminiMessagesCompatService) handleUpstreamTransportError(ctx context.C
 	}
 	event.ProxyID, event.ProxyName = opsUpstreamProxyAttribution(account)
 	appendOpsUpstreamError(c, event)
-
-	if errors.Is(err, context.Canceled) || (errors.Is(err, context.DeadlineExceeded) && errors.Is(ctx.Err(), context.DeadlineExceeded)) {
+	if errors.Is(err, context.DeadlineExceeded) && ctx != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return err
 	}
 

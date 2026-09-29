@@ -222,9 +222,11 @@ func TestGeminiForwardAsChatCompletions_CanceledTransportDoesNotRetry(t *testing
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
 	body := []byte(`{"model":"gemini-2.5-flash","messages":[{"role":"user","content":"hi"}]}`)
-	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(body))
+	requestCtx, cancel := context.WithCancel(context.Background())
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(body)).WithContext(requestCtx)
+	cancel()
 
-	result, err := svc.ForwardAsChatCompletions(context.Background(), c, account, body)
+	result, err := svc.ForwardAsChatCompletions(requestCtx, c, account, body)
 	require.Nil(t, result)
 	require.ErrorIs(t, err, context.Canceled)
 	require.Equal(t, 1, httpStub.calls)
@@ -565,7 +567,7 @@ func TestGeminiChatCompletionsStream_ClientDisconnectDrainsFinalUsage(t *testing
 	}
 
 	result, err := (&GeminiMessagesCompatService{}).handleChatCompletionsStreamingResponseFromGemini(
-		c, resp, time.Now(), "gemini-2.5-flash", false, true,
+		context.Background(), c, resp, time.Now(), "gemini-2.5-flash", nil, false, true, nil, ModelFirstOutputTimeoutPolicy{},
 	)
 	require.NoError(t, err)
 	require.NotNil(t, result)

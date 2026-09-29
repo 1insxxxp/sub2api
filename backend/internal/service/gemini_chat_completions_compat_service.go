@@ -108,6 +108,16 @@ func (s *GeminiMessagesCompatService) forwardClaudeBodyAsChatCompletions(
 		useUpstreamStream = true
 	}
 
+	requestContext := ctx
+	firstOutputGuard := (*modelFirstOutputGuard)(nil)
+	firstOutputPolicy := ModelFirstOutputTimeoutPolicy{}
+	if clientStream && !isImageGenerationModel(originalModel) && !isImageGenerationModel(mappedModel) {
+		requestContext, firstOutputGuard, firstOutputPolicy = newModelFirstOutputGuard(ctx, c, s.settingService, account.Platform, originalModel)
+		if firstOutputGuard != nil {
+			defer firstOutputGuard.Close()
+		}
+	}
+
 	buildReq, requestIDHeader := s.buildGeminiChatCompletionsUpstreamRequestFunc(
 		account,
 		mappedModel,
@@ -118,7 +128,7 @@ func (s *GeminiMessagesCompatService) forwardClaudeBodyAsChatCompletions(
 
 	var resp *http.Response
 	for attempt := 1; attempt <= geminiMaxRetries; attempt++ {
-		upstreamReq, idHeader, err := buildReq(ctx)
+		upstreamReq, idHeader, err := buildReq(requestContext)
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				return nil, err
@@ -129,6 +139,9 @@ func (s *GeminiMessagesCompatService) forwardClaudeBodyAsChatCompletions(
 
 		resp, err = s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
 		if err != nil {
+			if firstOutputGuard != nil && firstOutputGuard.TimedOut() {
+				return nil, newModelFirstOutputTimeoutFailoverError(c, account, originalModel, firstOutputPolicy, nil)
+			}
 			return nil, s.handleUpstreamTransportError(ctx, c, account, err)
 		}
 
@@ -244,7 +257,7 @@ func (s *GeminiMessagesCompatService) forwardClaudeBodyAsChatCompletions(
 	var clientDisconnect bool
 	var forwardErr error
 	if clientStream {
-		streamRes, streamErr := s.handleChatCompletionsStreamingResponseFromGemini(c, resp, startTime, originalModel, account.Type == AccountTypeOAuth, includeUsage)
+		streamRes, streamErr := s.handleChatCompletionsStreamingResponseFromGemini(requestContext, c, resp, startTime, originalModel, account, account.Type == AccountTypeOAuth, includeUsage, firstOutputGuard, firstOutputPolicy)
 		if streamRes != nil {
 			usage = streamRes.usage
 			firstTokenMs = streamRes.firstTokenMs
@@ -580,16 +593,19 @@ func (s *GeminiMessagesCompatService) handleEmptyGeminiChatResponse(c *gin.Conte
 }
 
 func (s *GeminiMessagesCompatService) handleChatCompletionsStreamingResponseFromGemini(
+	ctx context.Context,
 	c *gin.Context,
 	resp *http.Response,
 	startTime time.Time,
 	originalModel string,
+	account *Account,
 	isOAuth bool,
 	includeUsage bool,
+	firstOutputGuard *modelFirstOutputGuard,
+	firstOutputPolicy ModelFirstOutputTimeoutPolicy,
 ) (result *geminiStreamResult, err error) {
-	ctx := context.Background()
-	if c != nil && c.Request != nil {
-		ctx = c.Request.Context()
+	if ctx == nil {
+		ctx = context.Background()
 	}
 	_, outcomeCollector := EnsureResponseOutcomeCollector(ctx, c, resp.StatusCode, resp.StatusCode)
 	clientDisconnected := false
@@ -731,6 +747,9 @@ func (s *GeminiMessagesCompatService) handleChatCompletionsStreamingResponseFrom
 		if delta == "" {
 			return false
 		}
+		if firstOutputGuard != nil {
+			firstOutputGuard.Stop()
+		}
 		if startStream() {
 			return true
 		}
@@ -825,6 +844,9 @@ func (s *GeminiMessagesCompatService) handleChatCompletionsStreamingResponseFrom
 									}
 								}
 								if openToolIndex < 0 {
+									if firstOutputGuard != nil {
+										firstOutputGuard.Stop()
+									}
 									if startStream() {
 										return &geminiStreamResult{usage: &usage, firstTokenMs: firstTokenMs}, nil
 									}
@@ -884,9 +906,17 @@ func (s *GeminiMessagesCompatService) handleChatCompletionsStreamingResponseFrom
 			break
 		}
 		if err != nil {
+			if firstOutputGuard != nil && firstOutputGuard.TimedOut() && !sawVisibleOutput {
+				_ = resp.Body.Close()
+				return nil, newModelFirstOutputTimeoutFailoverError(c, account, originalModel, firstOutputPolicy, resp.Header)
+			}
 			streamReadErr = err
 			break
 		}
+	}
+	if firstOutputGuard != nil && firstOutputGuard.TimedOut() && !sawVisibleOutput {
+		_ = resp.Body.Close()
+		return nil, newModelFirstOutputTimeoutFailoverError(c, account, originalModel, firstOutputPolicy, resp.Header)
 	}
 
 	if strings.TrimSpace(finishReason) == "" {
