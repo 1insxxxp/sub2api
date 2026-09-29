@@ -3,7 +3,7 @@
     <div class="user-workspace usage-workspace">
       <UsageStatsCards class="workspace-stats" :stats="usageStats" :show-account-cost="false" :strike-standard-cost="true" />
 
-      <div class="space-y-4">
+      <div class="usage-analytics-layout">
         <div class="workspace-toolbar">
           <div class="usage-filter-bar flex flex-wrap items-center gap-4">
             <div class="usage-filter-item flex items-center gap-2">
@@ -23,53 +23,76 @@
           </div>
         </div>
 
-        <div class="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2">
-          <ModelDistributionChart
-            class="workspace-chart"
-            v-model:metric="modelDistributionMetric"
-            :model-stats="requestedModelStats"
-            :loading="modelStatsLoading"
-            :show-source-toggle="false"
-            :show-metric-toggle="true"
-            :enable-breakdown="false"
-            :show-account-cost="false"
-            :start-date="startDate"
-            :end-date="endDate"
-          />
-          <GroupDistributionChart
-            class="workspace-chart"
-            v-model:metric="groupDistributionMetric"
-            :group-stats="groupStats"
-            :loading="chartsLoading"
-            :show-metric-toggle="true"
-            :enable-breakdown="false"
-            :show-account-cost="false"
-            :start-date="startDate"
-            :end-date="endDate"
-          />
-        </div>
+        <section
+          class="usage-analytics"
+          :class="{ 'usage-analytics-expanded': usageAnalyticsExpanded }"
+          data-testid="usage-analytics-panel"
+        >
+          <button
+            type="button"
+            class="usage-analytics-toggle"
+            :aria-expanded="usageAnalyticsExpanded"
+            aria-controls="usage-analytics-content"
+            @click="toggleUsageAnalytics"
+          >
+            <span class="usage-analytics-toggle-label">{{ t('usage.analytics.title') }}</span>
+            <span class="usage-analytics-toggle-action">
+              {{ usageAnalyticsExpanded ? t('usage.analytics.collapse') : t('usage.analytics.expand') }}
+              <Icon name="chevronDown" size="sm" :class="{ 'rotate-180': usageAnalyticsExpanded }" />
+            </span>
+          </button>
 
-        <div class="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2">
-          <EndpointDistributionChart
-            class="workspace-chart"
-            v-model:source="endpointDistributionSource"
-            v-model:metric="endpointDistributionMetric"
-            :endpoint-stats="inboundEndpointStats"
-            :upstream-endpoint-stats="upstreamEndpointStats"
-            :endpoint-path-stats="endpointPathStats"
-            :loading="endpointStatsLoading"
-            :show-source-toggle="false"
-            :show-metric-toggle="true"
-            :enable-breakdown="false"
-            :title="t('usage.endpointDistribution')"
-            :start-date="startDate"
-            :end-date="endDate"
-          />
-          <TokenUsageTrend class="workspace-chart" :trend-data="trendData" :loading="chartsLoading" />
-        </div>
+          <div id="usage-analytics-content" class="usage-analytics-content">
+            <div class="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2">
+              <ModelDistributionChart
+                class="workspace-chart"
+                v-model:metric="modelDistributionMetric"
+                :model-stats="requestedModelStats"
+                :loading="modelStatsLoading"
+                :show-source-toggle="false"
+                :show-metric-toggle="true"
+                :enable-breakdown="false"
+                :show-account-cost="false"
+                :start-date="startDate"
+                :end-date="endDate"
+              />
+              <GroupDistributionChart
+                class="workspace-chart"
+                v-model:metric="groupDistributionMetric"
+                :group-stats="groupStats"
+                :loading="chartsLoading"
+                :show-metric-toggle="true"
+                :enable-breakdown="false"
+                :show-account-cost="false"
+                :start-date="startDate"
+                :end-date="endDate"
+              />
+            </div>
+
+            <div class="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2">
+              <EndpointDistributionChart
+                class="workspace-chart"
+                v-model:source="endpointDistributionSource"
+                v-model:metric="endpointDistributionMetric"
+                :endpoint-stats="inboundEndpointStats"
+                :upstream-endpoint-stats="upstreamEndpointStats"
+                :endpoint-path-stats="endpointPathStats"
+                :loading="endpointStatsLoading"
+                :show-source-toggle="false"
+                :show-metric-toggle="true"
+                :enable-breakdown="false"
+                :title="t('usage.endpointDistribution')"
+                :start-date="startDate"
+                :end-date="endDate"
+              />
+              <TokenUsageTrend class="workspace-chart" :trend-data="trendData" :loading="chartsLoading" />
+            </div>
+          </div>
+        </section>
       </div>
 
-      <div class="usage-record-tabs" role="group" :aria-label="t('nav.usage')">
+      <section class="usage-records-section">
+        <div data-testid="usage-record-tabs" class="usage-record-tabs usage-record-tabs-segmented" role="group" :aria-label="t('nav.usage')">
         <button type="button" class="tab" :aria-pressed="activeTab === 'usage'" :class="{ 'tab-active': activeTab === 'usage' }" @click="activeTab = 'usage'">
           {{ t('usage.tabs.usage') }}
         </button>
@@ -79,7 +102,7 @@
         <button data-testid="empty-response-tab" type="button" class="tab" :aria-pressed="activeTab === 'emptyResponses'" :class="{ 'tab-active': activeTab === 'emptyResponses' }" @click="switchToEmptyResponses">
           {{ t('usage.tabs.emptyResponses') }}
         </button>
-      </div>
+        </div>
 
       <div class="usage-records-toolbar">
         <div class="flex min-w-0 flex-col gap-3">
@@ -474,6 +497,7 @@
         @update:pageSize="onErrorPageSize"
         @ipGeoBatchFailed="handleIpGeoBatchFailed"
       />
+      </section>
     </div>
   </AppLayout>
 
@@ -563,6 +587,8 @@ const errorPageSize = ref(20)
 const errorSortBy = ref('created_at')
 const errorSortOrder = ref<'asc' | 'desc'>('desc')
 const errorTotal = ref(0)
+const usageAnalyticsExpanded = ref(false)
+const usageAnalyticsStorageKey = 'user-usage-analytics-expanded'
 const errorFilter = ref<{ model: string | null; category: string; api_key_id: number | null; status_code: number | null }>({
   model: '',
   category: '',
@@ -1314,11 +1340,25 @@ const switchToEmptyResponses = () => {
   if (emptyResponseRows.value.length === 0) void loadEmptyResponses()
 }
 
+const toggleUsageAnalytics = () => {
+  usageAnalyticsExpanded.value = !usageAnalyticsExpanded.value
+  try {
+    localStorage.setItem(usageAnalyticsStorageKey, usageAnalyticsExpanded.value ? '1' : '0')
+  } catch {
+    // Restricted storage should not block the page interaction.
+  }
+}
+
 const formatMoney = (value: number) => `$${Number(value || 0).toFixed(6)}`
 const formatTokenCount = (value: number) => Number(value || 0).toLocaleString()
 const formatDateTime = (value: string) => new Date(value).toLocaleString()
 
 onMounted(() => {
+  try {
+    usageAnalyticsExpanded.value = localStorage.getItem(usageAnalyticsStorageKey) === '1'
+  } catch {
+    usageAnalyticsExpanded.value = false
+  }
   loadSavedColumns()
   loadSavedErrColumns()
   document.addEventListener('click', handleColumnClickOutside)
@@ -1340,6 +1380,11 @@ watch(endpointDistributionSource, () => {
 .usage-filter-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.75rem; align-items: end; }
 .usage-filter-grid > div { width: 100%; min-width: 0; }
 .usage-filter-grid .input-label { margin-bottom: 0.375rem; color: var(--workspace-muted); font-size: 0.75rem; font-weight: 500; }
+.usage-analytics-layout { display: flex; min-width: 0; flex-direction: column; gap: 1rem; }
+.usage-analytics { min-width: 0; }
+.usage-analytics-content { display: flex; min-width: 0; flex-direction: column; gap: 1rem; }
+.usage-analytics-toggle { display: none; }
+.usage-records-section { min-width: 0; }
 .usage-record-tabs { display: flex; min-width: 0; gap: 1.5rem; border-bottom: 1px solid var(--workspace-rule); }
 .usage-record-tabs .tab { position: relative; min-width: 0; min-height: 2.75rem; padding: 0.625rem 0.125rem; border: 0; border-radius: 0; background: transparent; color: var(--workspace-muted); font-size: 0.875rem; font-weight: 500; box-shadow: none; }
 .usage-record-tabs .tab-active { color: var(--workspace-ink); font-weight: 600; }
@@ -1355,19 +1400,81 @@ watch(endpointDistributionSource, () => {
 .usage-workspace :deep(.workspace-records [data-mobile-table-row]) { padding: 0.875rem; }
 .usage-workspace :deep(.workspace-records .admin-surface::before) { content: none; }
 @media (max-width: 767px) {
+  .usage-workspace { gap: 0.75rem; }
+  .usage-analytics-layout { display: contents; }
+  .usage-analytics-layout > .workspace-toolbar { order: 2; }
+  .usage-records-section { display: flex; order: 3; flex-direction: column; gap: 0.625rem; }
+  .usage-analytics { order: 4; }
+  .usage-analytics-layout > .workspace-toolbar { padding-block: 0; }
+  .usage-analytics-toggle {
+    display: flex;
+    min-height: 2.75rem;
+    width: 100%;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.75rem 0;
+    border: 0;
+    border-bottom: 1px solid var(--workspace-rule);
+    background: transparent;
+    color: var(--workspace-ink);
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-align: left;
+  }
+  .usage-analytics-toggle:focus-visible { outline: 2px solid rgb(var(--brand-rgb) / 50%); outline-offset: 3px; }
+  .usage-analytics-toggle-label { min-width: 0; }
+  .usage-analytics-toggle-action { display: inline-flex; align-items: center; gap: 0.375rem; color: var(--workspace-muted); font-size: 0.75rem; font-weight: 500; }
+  .usage-analytics-toggle-action :deep(svg) { transition: transform 160ms ease; }
+  .usage-analytics-content { display: none; padding-top: 0.75rem; }
+  .usage-analytics-expanded .usage-analytics-content { display: flex; }
   .usage-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .usage-record-tabs-segmented {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.25rem;
+    padding: 0.25rem;
+    border: 1px solid var(--workspace-rule);
+    border-radius: 8px;
+    background: linear-gradient(135deg, var(--workspace-highlight), transparent), var(--workspace-control);
+    box-shadow: var(--workspace-shadow);
+  }
+  .usage-record-tabs-segmented .tab {
+    display: flex;
+    min-height: 2.5rem;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem 0.375rem;
+    border-radius: 6px;
+    color: var(--workspace-muted);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    line-height: 1.25;
+    white-space: nowrap;
+  }
+  .usage-record-tabs-segmented .tab-active {
+    color: #fff;
+    background: rgb(var(--brand-rgb));
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 25%), 0 2px 5px rgb(var(--brand-rgb) / 16%);
+  }
+  .usage-record-tabs-segmented .tab-active::after { display: none; }
+  .usage-record-tabs-segmented .tab:focus-visible { outline-offset: -2px; }
 }
 @media (max-width: 639px) {
-  .usage-filter-grid { gap: 0.625rem; }
-  .usage-filter-bar { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.625rem; }
+  .usage-filter-grid { gap: 0.5rem; }
+  .usage-filter-bar { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.5rem; }
   .usage-filter-item { min-width: 0; flex-wrap: wrap; }
-  .usage-filter-item > span { color: var(--workspace-muted); font-size: 0.75rem; }
+  .usage-filter-item { gap: 0.375rem; }
+  .usage-filter-item > span { color: var(--workspace-muted); font-size: 0.75rem; line-height: 1.25; }
   .usage-filter-item:first-child > div,
   .usage-filter-item :deep(.date-picker-trigger) { width: 100%; }
   .usage-filter-item-granularity { width: 100%; margin-left: 0; justify-content: space-between; }
-  .usage-record-tabs { gap: 1rem; }
-  .usage-record-tabs .tab { flex: 1; font-size: 0.8125rem; }
+  .usage-record-tabs-segmented .tab { min-height: 2.375rem; padding-inline: 0.25rem; }
+  .usage-record-actions { gap: 0.5rem !important; }
   .usage-record-actions .workspace-menu { left: 50%; right: auto; translate: -50% 0; }
   .usage-record-actions .btn-primary { padding-inline: 0.75rem; font-size: 0.8125rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .usage-analytics-toggle-action :deep(svg) { transition: none; }
 }
 </style>

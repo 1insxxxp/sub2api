@@ -469,6 +469,7 @@ export default {
     billed: '计费',
     noRecords: '未找到使用记录，请尝试调整筛选条件。',
     failedToLoad: '加载使用记录失败',
+    analytics: { title: '统计分析', expand: '展开统计', collapse: '收起统计' },
     noDataToExport: '没有可导出的数据',
     exportSuccess: '使用数据导出成功',
     exportFailed: '使用数据导出失败',
