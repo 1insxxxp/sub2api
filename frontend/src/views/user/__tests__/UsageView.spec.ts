@@ -12,6 +12,7 @@ const {
   getDashboardModels,
   getDashboardSnapshotV2,
   listMyErrorRequests,
+  listRecentEmptyResponses,
   list,
   getAvailable,
   showError,
@@ -24,6 +25,7 @@ const {
   getDashboardModels: vi.fn(),
   getDashboardSnapshotV2: vi.fn(),
   listMyErrorRequests: vi.fn(),
+  listRecentEmptyResponses: vi.fn(),
   list: vi.fn(),
   getAvailable: vi.fn(),
   showError: vi.fn(),
@@ -59,6 +61,9 @@ const messages: Record<string, string> = {
   'usage.errors.allKeys': 'All API Keys',
   'usage.tabs.usage': 'Usage records',
   'usage.tabs.errors': 'Error records',
+  'usage.analytics.title': 'Analytics',
+  'usage.analytics.expand': 'Show analytics',
+  'usage.analytics.collapse': 'Hide analytics',
   'usage.apiKeyFilter': 'API Key',
   'usage.model': 'Model',
   'usage.type': 'Type',
@@ -86,6 +91,7 @@ vi.mock('@/api', () => ({
     getDashboardModels,
     getDashboardSnapshotV2,
     listMyErrorRequests,
+    listRecentEmptyResponses,
   },
   keysAPI: {
     list,
@@ -186,6 +192,7 @@ describe('user UsageView', () => {
     getDashboardModels.mockReset()
     getDashboardSnapshotV2.mockReset()
     listMyErrorRequests.mockReset()
+    listRecentEmptyResponses.mockReset()
     list.mockReset()
     getAvailable.mockReset()
     showError.mockReset()
@@ -221,14 +228,16 @@ describe('user UsageView', () => {
       groups: [],
     })
     listMyErrorRequests.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20, pages: 0 })
+    listRecentEmptyResponses.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20, pages: 0 })
     list.mockResolvedValue({ items: [{ id: 1, name: 'demo-key' }], total: 1, page: 1, page_size: 100, pages: 1 })
     getAvailable.mockResolvedValue([{ id: 1, name: 'default' }])
   })
 
   it('loads logs, stats, model stats, and snapshot on first render', async () => {
-    mountUsageView()
+    const wrapper = mountUsageView()
     await flushPromises()
 
+    expect(wrapper.get('[data-testid="usage-stats-grid"]')).toBeTruthy()
     expect(query).toHaveBeenCalled()
     expect(getStats).toHaveBeenCalled()
     expect(getDashboardModels).toHaveBeenCalled()
@@ -240,6 +249,46 @@ describe('user UsageView', () => {
     expect(list).toHaveBeenCalledTimes(1)
     expect(list).toHaveBeenCalledWith(1, 100)
     expect(getAvailable).toHaveBeenCalled()
+  })
+
+  it('keeps analytics collapsed by default and remembers an explicit expansion', async () => {
+    localStorage.removeItem('user-usage-analytics-expanded')
+    const wrapper = mountUsageView()
+    await flushPromises()
+
+    const panel = wrapper.get('[data-testid="usage-analytics-panel"]')
+    const toggle = panel.get('button')
+    expect(toggle.attributes('aria-expanded')).toBe('false')
+    expect(panel.classes()).not.toContain('usage-analytics-expanded')
+
+    await toggle.trigger('click')
+    expect(toggle.attributes('aria-expanded')).toBe('true')
+    expect(panel.classes()).toContain('usage-analytics-expanded')
+    expect(localStorage.getItem('user-usage-analytics-expanded')).toBe('1')
+
+    wrapper.unmount()
+
+    const restoredWrapper = mountUsageView()
+    await flushPromises()
+    expect(restoredWrapper.get('[data-testid="usage-analytics-panel"] button').attributes('aria-expanded')).toBe('true')
+    restoredWrapper.unmount()
+    localStorage.removeItem('user-usage-analytics-expanded')
+  })
+
+  it('uses one unified segmented surface for all usage record tabs', async () => {
+    const wrapper = mountUsageView()
+    await flushPromises()
+
+    const tabs = wrapper.get('[data-testid="usage-record-tabs"]')
+    expect(tabs.classes()).toContain('usage-record-tabs-segmented')
+    expect(tabs.findAll('button.tab')).toHaveLength(3)
+    expect(tabs.findAll('button[aria-pressed="true"]')).toHaveLength(1)
+
+    await tabs.findAll('button.tab')[1].trigger('click')
+    expect(tabs.find('button[aria-pressed="true"]').text()).toContain('Error records')
+
+    await tabs.findAll('button.tab')[2].trigger('click')
+    expect(tabs.findAll('button[aria-pressed="true"]')).toHaveLength(1)
   })
 
   it('uses the date range from a dashboard day link', async () => {

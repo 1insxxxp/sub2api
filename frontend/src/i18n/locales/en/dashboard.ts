@@ -464,6 +464,7 @@ export default {
     billed: 'Billed',
     noRecords: 'No usage records found. Try adjusting your filters.',
     failedToLoad: 'Failed to load usage logs',
+    analytics: { title: 'Analytics', expand: 'Show analytics', collapse: 'Hide analytics' },
     noDataToExport: 'No data to export',
     exportSuccess: 'Usage data exported successfully',
     exportFailed: 'Failed to export usage data',
