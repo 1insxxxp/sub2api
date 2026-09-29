@@ -19,7 +19,10 @@ import (
 func TestChatCompletionsRejectsGPTImageModelsBeforeScheduling(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	for _, model := range []string{"gpt-image-1", "gpt-image-1.5", "gpt-image-2"} {
+	for _, model := range []string{
+		"gpt-image-1", "gpt-image-1.5", "gpt-image-2",
+		"nai-diffusion-4-5-full", "nai-diffusion-5-full",
+	} {
 		for _, tc := range []struct {
 			name string
 			call func(*gin.Context)
