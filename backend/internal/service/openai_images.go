@@ -195,6 +195,15 @@ func (s *OpenAIGatewayService) ParseOpenAIImagesRequest(c *gin.Context, body []b
 		return nil, fmt.Errorf("missing request context")
 	}
 	endpoint := normalizeOpenAIImagesEndpointPath(c.Request.URL.Path)
+	// The NovelAI native adapter reuses the shared image scheduler with a
+	// client-facing /ai/generate-image route. Its context carries the native
+	// request, while the scheduler still needs the canonical generations
+	// endpoint for capability, billing, and forwarding decisions.
+	if endpoint == "" {
+		if _, native := NovelAIImageRequestFromContext(c.Request.Context()); native {
+			endpoint = openAIImagesGenerationsEndpoint
+		}
+	}
 	if endpoint == "" {
 		return nil, fmt.Errorf("unsupported images endpoint")
 	}

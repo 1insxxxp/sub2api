@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"mime/multipart"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
 
@@ -102,4 +105,22 @@ func TestNovelAIImageModelsAreAcceptedByImageValidation(t *testing.T) {
 	require.True(t, IsNovelAIImageGenerationModel("NAI-DIFFUSION-5-FULL"))
 	require.NoError(t, validateCompatibleImagesModel("nai-diffusion-5-full"))
 	require.False(t, IsNovelAIImageGenerationModel("nai-text-model"))
+}
+
+func TestParseOpenAIImagesRequestAcceptsNovelAINativeRoute(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	body := []byte(`{"model":"nai-diffusion-5-full","prompt":"cat","n":1,"response_format":"b64_json"}`)
+	native, err := ParseNovelAIImageRequest([]byte(`{"input":"cat","model":"nai-diffusion-5-full","parameters":{}}`))
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPost, "/ai/generate-image", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = req.WithContext(WithNovelAIImageRequest(req.Context(), native))
+
+	parsed, err := (&OpenAIGatewayService{}).ParseOpenAIImagesRequest(c, body)
+	require.NoError(t, err)
+	require.Equal(t, openAIImagesGenerationsEndpoint, parsed.Endpoint)
+	require.Equal(t, "nai-diffusion-5-full", parsed.Model)
 }
