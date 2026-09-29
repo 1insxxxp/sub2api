@@ -130,6 +130,8 @@ func TestNativeAnthropicPassthroughStreamRecordsEffort(t *testing.T) {
 	require.NotNil(t, result)
 	require.NotNil(t, result.ReasoningEffort)
 	require.Equal(t, "max", *result.ReasoningEffort)
+	require.NotNil(t, result.Outcome)
+	require.True(t, result.Outcome.StreamCompleted)
 }
 
 func TestNativeAnthropicPassthroughNoEffortStaysNil(t *testing.T) {

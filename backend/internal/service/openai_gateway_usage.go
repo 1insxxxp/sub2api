@@ -198,7 +198,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		ImageOutputTokens:    result.Usage.ImageOutputTokens,
 	}
 	tokens := providerTokens
-	tokens.OutputTokens = customerBillableOutputTokens(result.ClientDisconnect, result.DeliveredOutputTokens, result.Usage.OutputTokens)
+	tokens.OutputTokens = recordedOpenAIOutputTokens(result)
 
 	// Get rate multiplier
 	multiplier := 1.0

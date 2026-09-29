@@ -327,6 +327,7 @@ func (s *OpenAIGatewayService) handleNativeAnthropicStreamingResponse(
 	if !ok {
 		return nil, errors.New("streaming not supported")
 	}
+	_, outcomeCollector := EnsureResponseOutcomeCollector(ctx, c, http.StatusOK, resp.StatusCode)
 
 	usage := &ClaudeUsage{}
 	var firstTokenMs *int
@@ -451,6 +452,7 @@ func (s *OpenAIGatewayService) handleNativeAnthropicStreamingResponse(
 			if data, ok := extractAnthropicSSEDataLine(line); ok {
 				trimmed := strings.TrimSpace(data)
 				observer.ObserveAnthropic([]byte(trimmed))
+				outcomeCollector.ObserveAnthropicSSEData(trimmed)
 				if anthropicStreamEventIsTerminal("", trimmed) {
 					sawTerminalEvent = true
 				}
@@ -555,6 +557,7 @@ func (s *OpenAIGatewayService) nativeAnthropicStreamResult(
 		Duration:         time.Since(startTime),
 		FirstTokenMs:     firstTokenMs,
 		ClientDisconnect: clientDisconnect,
+		Outcome:          ResponseOutcomeSnapshotFromContext(c.Request.Context()),
 	}
 }
 

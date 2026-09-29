@@ -273,3 +273,34 @@ func TestCustomerBillableOutputTokensUsesDeliveredOnlyAfterDisconnect(t *testing
 	require.Equal(t, 13811, customerBillableOutputTokens(false, &delivered, 13811))
 	require.Equal(t, 13811, customerBillableOutputTokens(true, nil, 13811))
 }
+
+func TestCompletedUpstreamUsageWinsOverDeliveredTokensAfterDisconnect(t *testing.T) {
+	delivered := 1935
+	result := &OpenAIForwardResult{
+		ClientDisconnect:      true,
+		DeliveredOutputTokens: &delivered,
+		Usage:                 OpenAIUsage{OutputTokens: 13811},
+		Outcome:               &ResponseOutcome{StreamCompleted: true},
+	}
+
+	require.Equal(t, 13811, recordedOpenAIOutputTokens(result))
+
+	claudeResult := &ForwardResult{
+		ClientDisconnect:      true,
+		DeliveredOutputTokens: &delivered,
+		Usage:                 ClaudeUsage{OutputTokens: 13811},
+		Outcome:               &ResponseOutcome{StreamCompleted: true},
+	}
+	require.Equal(t, 13811, recordedOutputTokens(claudeResult))
+}
+
+func TestIncompleteUpstreamUsageFallsBackToDeliveredTokensWithoutDisconnect(t *testing.T) {
+	delivered := 1935
+	result := &OpenAIForwardResult{
+		DeliveredOutputTokens: &delivered,
+		Usage:                 OpenAIUsage{OutputTokens: 13811},
+		Outcome:               &ResponseOutcome{StreamCompleted: false},
+	}
+
+	require.Equal(t, 1935, recordedOpenAIOutputTokens(result))
+}

@@ -317,8 +317,8 @@ func AttachDownstreamOutputTokenCollector(c *gin.Context, model string) (*Downst
 	}
 }
 
-// ApplyDeliveredOutputTokens snapshots display-only output without mutating
-// provider usage, which remains authoritative for billing.
+// ApplyDeliveredOutputTokens snapshots output that reached the client. It is
+// used as a billing fallback only when the upstream response is incomplete.
 func ApplyDeliveredOutputTokens(result *ForwardResult, collector *DownstreamOutputTokenCollector) {
 	if result == nil || collector == nil {
 		return
@@ -351,6 +351,12 @@ func recordedOutputTokens(result *ForwardResult) int {
 	if result == nil {
 		return 0
 	}
+	if upstreamUsageComplete(result.Outcome) {
+		return result.Usage.OutputTokens
+	}
+	if result.Outcome != nil && result.DeliveredOutputTokens != nil {
+		return deliveredOutputTokens(result.DeliveredOutputTokens)
+	}
 	return customerBillableOutputTokens(result.ClientDisconnect, result.DeliveredOutputTokens, result.Usage.OutputTokens)
 }
 
@@ -358,13 +364,27 @@ func recordedOpenAIOutputTokens(result *OpenAIForwardResult) int {
 	if result == nil {
 		return 0
 	}
+	if upstreamUsageComplete(result.Outcome) {
+		return result.Usage.OutputTokens
+	}
+	if result.Outcome != nil && result.DeliveredOutputTokens != nil {
+		return deliveredOutputTokens(result.DeliveredOutputTokens)
+	}
 	return customerBillableOutputTokens(result.ClientDisconnect, result.DeliveredOutputTokens, result.Usage.OutputTokens)
+}
+
+func upstreamUsageComplete(outcome *ResponseOutcome) bool {
+	return outcome != nil && outcome.StreamCompleted
 }
 
 func customerBillableOutputTokens(clientDisconnect bool, delivered *int, provider int) int {
 	if !clientDisconnect || delivered == nil {
 		return provider
 	}
+	return deliveredOutputTokens(delivered)
+}
+
+func deliveredOutputTokens(delivered *int) int {
 	if *delivered < 0 {
 		return 0
 	}
@@ -375,7 +395,7 @@ func customerBillingForwardResult(result *ForwardResult) *ForwardResult {
 	if result == nil {
 		return nil
 	}
-	outputTokens := customerBillableOutputTokens(result.ClientDisconnect, result.DeliveredOutputTokens, result.Usage.OutputTokens)
+	outputTokens := recordedOutputTokens(result)
 	if outputTokens == result.Usage.OutputTokens {
 		return result
 	}

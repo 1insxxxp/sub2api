@@ -618,7 +618,8 @@ type ForwardResult struct {
 	Usage           ClaudeUsage
 	Model           string
 	// DeliveredOutputTokens is the user-visible text successfully written before
-	// the downstream request was canceled. Usage.OutputTokens remains provider-reported.
+	// the downstream request was canceled. It is only a billing fallback when
+	// the upstream response did not complete with authoritative usage.
 	DeliveredOutputTokens *int
 	// CacheCreationTTLTarget records the client's requested Anthropic prompt-cache TTL
 	// ("5m" or "1h") so billing can classify aggregate cache-creation usage when

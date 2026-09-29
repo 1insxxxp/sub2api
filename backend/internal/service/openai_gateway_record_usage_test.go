@@ -144,6 +144,43 @@ func TestOpenAIGatewayServiceRecordUsage_ClientDisconnectBillsDeliveredOutput(t 
 	require.InDelta(t, expected.ActualCost, userRepo.lastAmount, 1e-12)
 }
 
+func TestOpenAIGatewayServiceRecordUsage_CompletedUpstreamBillsProviderOutput(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	userRepo := &openAIRecordUsageUserRepoStub{}
+	svc := newOpenAIRecordUsageServiceForTest(usageRepo, userRepo, &openAIRecordUsageSubRepoStub{}, nil)
+	delivered := 1935
+
+	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			RequestID:             "openai_completed_upstream_provider_billing",
+			Model:                 "gpt-5.1",
+			Stream:                true,
+			ClientDisconnect:      true,
+			DeliveredOutputTokens: &delivered,
+			Usage: OpenAIUsage{
+				InputTokens:  23291,
+				OutputTokens: 13811,
+			},
+			Outcome: &ResponseOutcome{StreamCompleted: true},
+		},
+		APIKey:  &APIKey{ID: 2},
+		User:    &User{ID: 1},
+		Account: &Account{ID: 3},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, usageRepo.lastLog)
+	require.Equal(t, 13811, usageRepo.lastLog.OutputTokens)
+	require.Equal(t, 13811, usageRepo.lastLog.UpstreamOutputTokens)
+	expected := expectedOpenAICost(t, svc, "gpt-5.1", OpenAIUsage{
+		InputTokens: 23291, OutputTokens: 13811,
+	}, 1.1)
+	require.InDelta(t, expected.OutputCost, usageRepo.lastLog.OutputCost, 1e-12)
+	require.InDelta(t, expected.TotalCost, usageRepo.lastLog.TotalCost, 1e-12)
+	require.InDelta(t, expected.ActualCost, usageRepo.lastLog.ActualCost, 1e-12)
+	require.InDelta(t, expected.ActualCost, userRepo.lastAmount, 1e-12)
+}
+
 func TestRecordCyberPolicyUsageLog_BillsRealUpstreamTokens(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
 	userRepo := &openAIRecordUsageUserRepoStub{thresholdExemptCost: 0.00000001}

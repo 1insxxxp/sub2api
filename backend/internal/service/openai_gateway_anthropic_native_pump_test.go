@@ -227,6 +227,9 @@ func TestCCStreamingFromNativeAnthropic_HappyPathStillConverts(t *testing.T) {
 	if res == nil {
 		t.Fatalf("expected result")
 	}
+	if res.Outcome == nil || !res.Outcome.StreamCompleted {
+		t.Fatalf("expected completed upstream outcome, got %+v", res.Outcome)
+	}
 	body := rec.Body.String()
 	if !strings.Contains(body, "Hello") {
 		t.Fatalf("expected converted text chunk, got %q", body)

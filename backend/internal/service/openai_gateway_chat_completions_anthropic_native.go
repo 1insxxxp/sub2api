@@ -324,6 +324,7 @@ func (s *OpenAIGatewayService) handleCCStreamingFromNativeAnthropic(
 	c.Writer.Header().Set("Connection", "keep-alive")
 	c.Writer.Header().Set("X-Accel-Buffering", "no")
 	c.Writer.WriteHeader(http.StatusOK)
+	_, outcomeCollector := EnsureResponseOutcomeCollector(c.Request.Context(), c, http.StatusOK, resp.StatusCode)
 
 	anthState := apicompat.NewAnthropicEventToResponsesState()
 	anthState.Model = originalModel
@@ -357,6 +358,7 @@ func (s *OpenAIGatewayService) handleCCStreamingFromNativeAnthropic(
 			Duration:         time.Since(startTime),
 			FirstTokenMs:     firstTokenMs,
 			ClientDisconnect: clientDisconnected,
+			Outcome:          ResponseOutcomeSnapshotFromContext(c.Request.Context()),
 		}
 	}
 
@@ -469,6 +471,7 @@ func (s *OpenAIGatewayService) handleCCStreamingFromNativeAnthropic(
 		if err := json.Unmarshal([]byte(payload), &event); err != nil {
 			continue
 		}
+		outcomeCollector.ObserveAnthropicSSEData(payload)
 
 		if processAnthropicEvent(&event) {
 			return resultWithUsage(), nil

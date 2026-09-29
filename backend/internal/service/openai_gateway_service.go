@@ -241,7 +241,8 @@ type OpenAIForwardResult struct {
 	UpstreamHeaders http.Header
 	Usage           OpenAIUsage
 	Model           string // 原始模型（用于响应和日志显示）
-	// DeliveredOutputTokens is display-only; Usage.OutputTokens remains authoritative for billing.
+	// DeliveredOutputTokens is the downstream billing fallback when the upstream
+	// response did not complete with authoritative usage.
 	DeliveredOutputTokens *int
 	// BillingModel is the model used for cost calculation.
 	// When non-empty, CalculateCost uses this instead of Model.
