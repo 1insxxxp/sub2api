@@ -1203,6 +1203,14 @@ func (h *GatewayHandler) Models(c *gin.Context) {
 		return
 	}
 
+	// Gemini model discovery must use the same local, group-scoped catalogue as
+	// the native Gemini endpoint. Do not let /v1/models drift with whichever
+	// upstream Gemini account happens to be selected for discovery.
+	if platform == service.PlatformGemini && apiKey != nil && apiKey.Group != nil {
+		writeModelsList(c, platform, h.geminiModelIDsForGroup(c.Request.Context(), apiKey.Group))
+		return
+	}
+
 	// Get available models from account configurations for the selected group platform.
 	availableModels := h.gatewayService.GetAvailableModels(c.Request.Context(), groupID, platform)
 	if apiKey != nil && apiKey.Group != nil && apiKey.Group.ModelAllowlistEnabled() {
@@ -1232,6 +1240,39 @@ func (h *GatewayHandler) Models(c *gin.Context) {
 	}
 
 	writeModelsListResponse(c, claude.DefaultModels)
+}
+
+// geminiModelIDsForGroup returns the canonical Gemini model catalogue for a
+// group. The catalogue is built from schedulable account mappings and mixed
+// Antigravity mappings, then constrained by the group allowlist. It must not
+// call an upstream /v1beta/models endpoint because that endpoint can expose a
+// different account's capabilities on each request.
+func (h *GatewayHandler) geminiModelIDsForGroup(ctx context.Context, group *service.Group) []string {
+	if group == nil {
+		return nil
+	}
+
+	var availableModels []string
+	if h != nil && h.gatewayService != nil {
+		groupID := group.ID
+		availableModels = h.gatewayService.GetAvailableModels(ctx, &groupID, service.PlatformGemini)
+	}
+	if h != nil && h.geminiCompatService != nil {
+		groupID := group.ID
+		if antigravityModels, err := h.geminiCompatService.AntigravityGeminiModelIDs(ctx, &groupID, true); err == nil {
+			availableModels = mergeModelIDs(availableModels, antigravityModels)
+		}
+	}
+
+	modelIDs := modelListingSource(
+		service.PlatformGemini,
+		availableModels,
+		defaultModelIDsForPlatform(service.PlatformGemini),
+	)
+	if group.ModelAllowlistEnabled() {
+		modelIDs = group.EffectiveModelAllowlist().FilterForListing(modelIDs)
+	}
+	return modelIDs
 }
 
 // SystemCustomCodexModels serves the local Codex manifest for a system custom

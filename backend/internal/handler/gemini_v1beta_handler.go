@@ -68,68 +68,26 @@ func (h *GatewayHandler) GeminiV1BetaListModels(c *gin.Context) {
 		return
 	}
 
-	// 分组级模型白名单开启时过滤 models[].name（名字形如 models/xxx）。
-	filterGeminiModels := func(models []gemini.Model) []gemini.Model {
-		if apiKey.Group == nil || !apiKey.Group.ModelAllowlistEnabled() {
-			return models
-		}
-		filtered := make([]gemini.Model, 0, len(models))
-		for _, model := range models {
-			if apiKey.Group.ModelAllowlist.Allows(model.Name) {
-				filtered = append(filtered, model)
-			}
-		}
-		return filtered
-	}
-
-	agModelIDs, err := h.geminiCompatService.AntigravityGeminiModelIDs(c.Request.Context(), apiKey.GroupID, forcePlatform != service.PlatformAntigravity)
-	if err != nil {
-		googleError(c, http.StatusServiceUnavailable, "Unable to list Antigravity models")
-		return
-	}
-	agModels := make([]gemini.Model, 0, len(agModelIDs))
-	for _, id := range agModelIDs {
-		agModels = append(agModels, gemini.FallbackModel(id))
-	}
+	// The forced Antigravity route keeps its platform-specific catalogue. The
+	// regular Gemini route shares the same group catalogue as /v1/models.
 	if forcePlatform == service.PlatformAntigravity {
-		c.JSON(http.StatusOK, gemini.ModelsListResponse{Models: filterGeminiModels(agModels)})
-		return
-	}
-
-	account, err := h.geminiCompatService.SelectAccountForAIStudioEndpoints(c.Request.Context(), apiKey.GroupID)
-	if err != nil {
-		if len(agModels) > 0 {
-			c.JSON(http.StatusOK, gemini.ModelsListResponse{Models: filterGeminiModels(agModels)})
+		modelIDs, err := h.geminiCompatService.AntigravityGeminiModelIDs(c.Request.Context(), apiKey.GroupID, false)
+		if err != nil {
+			googleError(c, http.StatusServiceUnavailable, "Unable to list Antigravity models")
 			return
 		}
-		markOpsRoutingCapacityLimitedIfNoAvailable(c, err)
-		googleError(c, http.StatusServiceUnavailable, "No available Gemini accounts: "+err.Error())
+		if apiKey.Group != nil && apiKey.Group.ModelAllowlistEnabled() {
+			modelIDs = apiKey.Group.EffectiveModelAllowlist().FilterForListing(modelIDs)
+		}
+		c.JSON(http.StatusOK, customGroupGeminiModels(modelIDs))
 		return
 	}
 
-	res, err := h.geminiCompatService.ForwardAIStudioGET(c.Request.Context(), account, "/v1beta/models")
-	if err != nil {
-		googleError(c, http.StatusBadGateway, err.Error())
+	if apiKey.Group == nil {
+		c.JSON(http.StatusOK, gemini.ModelsListResponse{Models: gemini.DefaultModels()})
 		return
 	}
-	if shouldFallbackGeminiModels(res) {
-		c.JSON(http.StatusOK, gemini.ModelsListResponse{Models: filterGeminiModels(mergeGeminiModelLists(gemini.DefaultModels(), agModels))})
-		return
-	}
-	if res.StatusCode == http.StatusOK && len(agModels) > 0 {
-		if merged, ok := appendUpstreamGeminiModels(res.Body, agModels); ok {
-			res.Body = merged
-		}
-	}
-
-	if apiKey.Group != nil && apiKey.Group.ModelAllowlistEnabled() {
-		if filtered, dropped, ok := filterUpstreamGeminiModelsBody(res.Body, apiKey.Group.ModelAllowlist); ok && dropped {
-			// 只在确有条目被过滤时替换响应体；全命中或解析失败时保持原始响应，
-			// 统一经 writeUpstreamResponse 写出（保留全部上游响应头）。
-			res.Body = filtered
-		}
-	}
-	writeUpstreamResponse(c, res)
+	c.JSON(http.StatusOK, customGroupGeminiModels(h.geminiModelIDsForGroup(c.Request.Context(), apiKey.Group)))
 }
 
 // mergeGeminiModelLists keeps native metadata when both sources advertise a model.

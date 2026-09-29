@@ -14,6 +14,52 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestGeminiModelCatalogue_UsesGroupSourcesAndAllowlist(t *testing.T) {
+	groupID := int64(73)
+	repo := &geminiAllowlistAccountRepoStub{gatewayModelsAccountRepoStub: gatewayModelsAccountRepoStub{
+		byGroup: map[int64][]service.Account{
+			groupID: {
+				{
+					ID:       1,
+					Platform: service.PlatformGemini,
+					Credentials: map[string]any{
+						"model_mapping": map[string]any{
+							"gemini-2.5-pro":   "gemini-2.5-pro",
+							"gemini-2.5-flash": "gemini-2.5-flash",
+						},
+					},
+				},
+				{
+					ID:       2,
+					Platform: service.PlatformAntigravity,
+					Extra: map[string]any{
+						"mixed_scheduling": true,
+					},
+					Credentials: map[string]any{
+						"model_mapping": map[string]any{
+							"gemini-2.5-flash": "gemini-2.5-flash",
+							"gemini-3-pro":     "gemini-3-pro",
+						},
+					},
+				},
+			},
+		},
+	}}
+	h := newGatewayModelsHandlerForTest(repo)
+	h.geminiCompatService = service.NewGeminiMessagesCompatService(repo, nil, nil, nil, nil, nil, nil, nil, nil)
+	group := &service.Group{
+		ID:       groupID,
+		Platform: service.PlatformGemini,
+		ModelAllowlist: service.GroupModelAllowlist{
+			Enabled: true,
+			Models:  []string{"gemini-2.5-flash"},
+		},
+	}
+
+	got := h.geminiModelIDsForGroup(context.Background(), group)
+	require.Equal(t, []string{"gemini-2.5-flash"}, got)
+}
+
 // 通配条目在 /v1/models 中展开为候选来源中所有匹配项，保持来源顺序。
 func TestGatewayModels_ModelAllowlistWildcardExpandsAgainstSource(t *testing.T) {
 	gin.SetMode(gin.TestMode)
