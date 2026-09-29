@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"io"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"strings"
 	"testing"
@@ -77,10 +79,24 @@ func TestForwardNovelAIUsesNativeEndpointAndPreservesBody(t *testing.T) {
 	require.NotNil(t, upstream.lastReq)
 	require.Equal(t, "/ai/generate-image", upstream.lastReq.URL.Path)
 	require.Equal(t, "Bearer ynai-test", upstream.lastReq.Header.Get("Authorization"))
-	require.Equal(t, "application/json", upstream.lastReq.Header.Get("Content-Type"))
+	contentType := upstream.lastReq.Header.Get("Content-Type")
+	mediaType, params, err := mime.ParseMediaType(contentType)
+	require.NoError(t, err)
+	require.Equal(t, "multipart/form-data", mediaType)
+	require.NotEmpty(t, params["boundary"])
 	forwarded, readErr := io.ReadAll(upstream.lastReq.Body)
 	require.NoError(t, readErr)
-	require.JSONEq(t, string(body), string(forwarded))
+	reader := multipart.NewReader(strings.NewReader(string(forwarded)), params["boundary"])
+	part, readErr := reader.NextPart()
+	require.NoError(t, readErr)
+	require.Equal(t, "request", part.FormName())
+	require.Equal(t, "blob", part.FileName())
+	require.Equal(t, "application/json", part.Header.Get("Content-Type"))
+	requestPart, readErr := io.ReadAll(part)
+	require.NoError(t, readErr)
+	require.JSONEq(t, string(body), string(requestPart))
+	_, readErr = reader.NextPart()
+	require.ErrorIs(t, readErr, io.EOF)
 }
 
 func TestForwardNovelAIReturnsFailoverForRetryableUpstream(t *testing.T) {

@@ -5,7 +5,9 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"strings"
 	"time"
@@ -70,6 +72,29 @@ func buildNovelAIImageURL(base string) (string, error) {
 	return strings.TrimRight(parsed.String(), "/"), nil
 }
 
+// buildNovelAIImageMultipartBody wraps NovelAI's native JSON payload in the
+// multipart request shape used by the official image client. The native API
+// expects the JSON in a file-like `request` part (filename `blob`) rather than
+// as an application/json request body.
+func buildNovelAIImageMultipartBody(body []byte) ([]byte, string, error) {
+	var encoded bytes.Buffer
+	writer := multipart.NewWriter(&encoded)
+	header := make(textproto.MIMEHeader)
+	header.Set("Content-Disposition", `form-data; name="request"; filename="blob"`)
+	header.Set("Content-Type", "application/json")
+	part, err := writer.CreatePart(header)
+	if err != nil {
+		return nil, "", fmt.Errorf("create NovelAI request part: %w", err)
+	}
+	if _, err := part.Write(body); err != nil {
+		return nil, "", fmt.Errorf("write NovelAI request part: %w", err)
+	}
+	if err := writer.Close(); err != nil {
+		return nil, "", fmt.Errorf("finalize NovelAI multipart request: %w", err)
+	}
+	return encoded.Bytes(), writer.FormDataContentType(), nil
+}
+
 func (s *OpenAIGatewayService) buildNovelAIImagesRequest(
 	ctx context.Context,
 	c *gin.Context,
@@ -92,7 +117,11 @@ func (s *OpenAIGatewayService) buildNovelAIImagesRequest(
 	if err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(body))
+	multipartBody, contentType, err := buildNovelAIImageMultipartBody(body)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(multipartBody))
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +145,7 @@ func (s *OpenAIGatewayService) buildNovelAIImagesRequest(
 			}
 		}
 	}
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", contentType)
 	if userAgent := account.GetOpenAIUserAgent(); userAgent != "" {
 		req.Header.Set("User-Agent", userAgent)
 	}
