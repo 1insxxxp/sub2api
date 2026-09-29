@@ -1,7 +1,7 @@
 <template>
   <AppLayout>
     <div class="user-workspace usage-workspace">
-      <UsageStatsCards class="workspace-stats" :stats="usageStats" :show-account-cost="false" :strike-standard-cost="true" />
+      <UsageStatsCards data-testid="usage-stats-grid" class="workspace-stats" :stats="usageStats" :show-account-cost="false" :strike-standard-cost="true" />
 
       <div class="usage-analytics-layout">
         <div class="workspace-toolbar">
@@ -1461,6 +1461,13 @@ watch(endpointDistributionSource, () => {
   .usage-record-tabs-segmented .tab:focus-visible { outline-offset: -2px; }
 }
 @media (max-width: 639px) {
+  .usage-workspace .workspace-stats { gap: 0.5rem; }
+  .usage-workspace .workspace-stats :deep(.stat-card) { gap: 0.5rem !important; padding: 0.625rem !important; }
+  .usage-workspace .workspace-stats :deep(.stat-icon) { width: 1.75rem; height: 1.75rem; }
+  .usage-workspace .workspace-stats :deep(.stat-icon svg) { width: 0.875rem; height: 0.875rem; }
+  .usage-workspace .workspace-stats :deep(.stat-label) { font-size: 0.75rem; line-height: 1.2; }
+  .usage-workspace .workspace-stats :deep(.stat-value) { font-size: 1.125rem !important; line-height: 1.2; }
+  .usage-workspace .workspace-stats :deep(.stat-trend) { font-size: 0.6875rem; line-height: 1.2; }
   .usage-filter-grid { gap: 0.5rem; }
   .usage-filter-bar { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.5rem; }
   .usage-filter-item { min-width: 0; flex-wrap: wrap; }
