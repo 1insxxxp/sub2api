@@ -5,6 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"mime"
+	"mime/multipart"
 	"strconv"
 	"strings"
 )
@@ -105,6 +108,40 @@ func ParseNovelAIImageRequest(body []byte) (*NovelAIImageRequest, error) {
 		}
 	}
 	return request, nil
+}
+
+// ParseNovelAIImageRequestBody accepts both the JSON body used by simple
+// integrations and the multipart/form-data envelope sent by NovelAI's native
+// image client. The native client stores the JSON contract in a file-like
+// part named "request".
+func ParseNovelAIImageRequestBody(body []byte, contentType string) (*NovelAIImageRequest, error) {
+	mediaType, params, err := mime.ParseMediaType(strings.TrimSpace(contentType))
+	if err != nil || mediaType != "multipart/form-data" {
+		return ParseNovelAIImageRequest(body)
+	}
+	boundary := strings.TrimSpace(params["boundary"])
+	if boundary == "" {
+		return nil, fmt.Errorf("multipart request boundary is missing")
+	}
+	reader := multipart.NewReader(bytes.NewReader(body), boundary)
+	for {
+		part, err := reader.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("invalid multipart request: %w", err)
+		}
+		if part.FormName() != "request" {
+			continue
+		}
+		requestBody, err := io.ReadAll(part)
+		if err != nil {
+			return nil, fmt.Errorf("read multipart request part: %w", err)
+		}
+		return ParseNovelAIImageRequest(requestBody)
+	}
+	return nil, fmt.Errorf("multipart request part %q is missing", "request")
 }
 
 func requiredStringField(payload map[string]json.RawMessage, name string) (string, error) {

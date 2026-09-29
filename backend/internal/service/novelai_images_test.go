@@ -1,11 +1,28 @@
 package service
 
 import (
+	"bytes"
 	"encoding/json"
+	"mime/multipart"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
+
+func TestParseNovelAIImageRequestBodyExtractsMultipartRequestPart(t *testing.T) {
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("request", "blob")
+	require.NoError(t, err)
+	_, err = part.Write([]byte(`{"input":"cat","model":"nai-diffusion-5-full","parameters":{"n_samples":1}}`))
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+
+	request, err := ParseNovelAIImageRequestBody(body.Bytes(), writer.FormDataContentType())
+	require.NoError(t, err)
+	require.Equal(t, "cat", request.Input)
+	require.Equal(t, "nai-diffusion-5-full", request.Model)
+}
 
 func TestParseNovelAIImageRequestPreservesNativeParametersAndUnknownFields(t *testing.T) {
 	body := []byte(`{

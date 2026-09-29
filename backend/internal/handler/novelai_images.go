@@ -21,7 +21,7 @@ func (h *OpenAIGatewayHandler) NovelAIImages(c *gin.Context) {
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to read request body")
 		return
 	}
-	request, err := service.ParseNovelAIImageRequest(body)
+	request, err := service.ParseNovelAIImageRequestBody(body, c.GetHeader("Content-Type"))
 	if err != nil {
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", err.Error())
 		return
