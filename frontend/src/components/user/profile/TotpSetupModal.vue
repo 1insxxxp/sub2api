@@ -1,5 +1,4 @@
 <template>
-  <Transition name="overlay">
   <div class="fixed inset-0 z-50 overflow-y-auto" @click.self="$emit('close')">
     <div class="flex min-h-full items-center justify-center p-4">
       <div class="fixed inset-0 bg-black/50 transition-opacity" @click="$emit('close')"></div>
@@ -166,7 +165,6 @@
       </div>
     </div>
   </div>
-  </Transition>
 </template>
 
 <script setup lang="ts">
