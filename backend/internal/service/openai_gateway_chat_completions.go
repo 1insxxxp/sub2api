@@ -205,6 +205,10 @@ func (s *OpenAIGatewayService) forwardAsChatCompletions(
 	// derive a stable seed from the final upstream model family.
 	billingModel := resolveOpenAIForwardModel(account, originalModel, defaultMappedModel)
 	upstreamModel := normalizeOpenAIModelForUpstream(account, billingModel)
+	if err := validateGPT61SolCompatRequest(body, upstreamModel); err != nil {
+		writeChatCompletionsError(c, http.StatusBadRequest, "invalid_request_error", err.Error())
+		return nil, err
+	}
 	if injectedBody, applied, injectErr := ApplyAccountModelSystemPrompt(body, account, upstreamModel, ModelSystemPromptOpenAIChat); injectErr != nil {
 		return nil, fmt.Errorf("inject account model system prompt: %w", injectErr)
 	} else if applied {

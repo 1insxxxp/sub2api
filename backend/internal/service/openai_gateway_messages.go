@@ -96,6 +96,10 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 	// 2. Model mapping
 	billingModel := resolveOpenAIForwardModel(account, normalizedModel, defaultMappedModel)
 	upstreamModel := normalizeOpenAIModelForUpstream(account, billingModel)
+	if err := validateGPT61SolCompatRequest(body, upstreamModel); err != nil {
+		writeAnthropicError(c, http.StatusBadRequest, "invalid_request_error", err.Error())
+		return nil, err
+	}
 	if injectedBody, applied, injectErr := ApplyAccountModelSystemPrompt(body, account, upstreamModel, ModelSystemPromptClaude); injectErr != nil {
 		return nil, fmt.Errorf("inject account model system prompt: %w", injectErr)
 	} else if applied {
