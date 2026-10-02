@@ -9,6 +9,14 @@ import type {
 
 export const PAYMENT_RECOVERY_STORAGE_KEY = 'payment.recovery.current'
 
+export function getPaymentRecoveryStorageKey(userId: number | string | null | undefined): string {
+  const normalized = String(userId ?? '').trim()
+  if (!/^[1-9]\d*$/.test(normalized)) {
+    return ''
+  }
+  return `${PAYMENT_RECOVERY_STORAGE_KEY}.${normalized}`
+}
+
 const VISIBLE_METHOD_ALIASES = {
   alipay: 'alipay',
   alipay_direct: 'alipay',

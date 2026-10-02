@@ -39,6 +39,7 @@ vi.mock('@/stores/payment', () => ({
 
 vi.mock('@/stores/auth', () => ({
   useAuthStore: () => ({
+    user: { id: 9 },
     refreshUser,
   }),
 }))
@@ -52,8 +53,13 @@ vi.mock('@/api/payment', () => ({
 }))
 
 import PaymentResultView from '../PaymentResultView.vue'
-import { PAYMENT_RECOVERY_STORAGE_KEY } from '@/components/payment/paymentFlow'
+import {
+  getPaymentRecoveryStorageKey,
+  PAYMENT_RECOVERY_STORAGE_KEY,
+} from '@/components/payment/paymentFlow'
 import { formatPaymentAmount } from '@/components/payment/currency'
+
+const PAYMENT_RECOVERY_USER_KEY = getPaymentRecoveryStorageKey(9)
 
 const orderFactory = (status: string) => ({
   id: 42,
@@ -113,7 +119,7 @@ describe('PaymentResultView', () => {
       order_id: '999',
       status: 'success',
     }
-    window.localStorage.setItem(PAYMENT_RECOVERY_STORAGE_KEY, JSON.stringify({
+    window.localStorage.setItem(PAYMENT_RECOVERY_USER_KEY, JSON.stringify({
       orderId: 42,
       amount: 88,
       qrCode: '',
@@ -159,7 +165,7 @@ describe('PaymentResultView', () => {
       order_id: '42',
       status: 'success',
     }
-    window.localStorage.setItem(PAYMENT_RECOVERY_STORAGE_KEY, JSON.stringify({
+    window.localStorage.setItem(PAYMENT_RECOVERY_USER_KEY, JSON.stringify({
       orderId: 42,
       amount: 88,
       qrCode: '',
@@ -203,7 +209,7 @@ describe('PaymentResultView', () => {
     expect(wrapper.text()).toContain('payment.result.success')
     expect(wrapper.text()).toContain('103.00')
     expect(wrapper.text()).toContain('100.00')
-    expect(window.localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY)).toBeNull()
+    expect(window.localStorage.getItem(PAYMENT_RECOVERY_USER_KEY)).toBeNull()
   })
 
   it('waits for completed fulfillment before refreshing the user balance', async () => {
@@ -212,7 +218,7 @@ describe('PaymentResultView', () => {
       resume_token: 'resume-77',
     }
     window.localStorage.setItem(
-      PAYMENT_RECOVERY_STORAGE_KEY,
+      PAYMENT_RECOVERY_USER_KEY,
       JSON.stringify(recoverySnapshotFactory('resume-77')),
     )
     resolveOrderPublicByResumeToken
@@ -236,7 +242,7 @@ describe('PaymentResultView', () => {
     expect(resolveOrderPublicByResumeToken).toHaveBeenCalledTimes(1)
     expect(refreshUser).not.toHaveBeenCalled()
     expect(wrapper.text()).toContain('payment.result.processing')
-    expect(window.localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY)).not.toBeNull()
+    expect(window.localStorage.getItem(PAYMENT_RECOVERY_USER_KEY)).not.toBeNull()
 
     await vi.advanceTimersByTimeAsync(2000)
     await flushPromises()
@@ -245,7 +251,7 @@ describe('PaymentResultView', () => {
     expect(refreshUser).toHaveBeenCalledTimes(1)
     expect(wrapper.text()).toContain('payment.result.success')
     expect(wrapper.text()).not.toContain('payment.result.failed')
-    expect(window.localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY)).toBeNull()
+    expect(window.localStorage.getItem(PAYMENT_RECOVERY_USER_KEY)).toBeNull()
   })
 
   it('keeps the successful result when refreshing the user balance fails', async () => {
@@ -278,7 +284,7 @@ describe('PaymentResultView', () => {
       order_id: '77',
     }
     window.localStorage.setItem(
-      PAYMENT_RECOVERY_STORAGE_KEY,
+      PAYMENT_RECOVERY_USER_KEY,
       JSON.stringify({
         ...recoverySnapshotFactory('resume-fail'),
         orderId: 42,
@@ -304,7 +310,7 @@ describe('PaymentResultView', () => {
     expect(pollOrderStatus).toHaveBeenCalledWith(77)
     expect(verifyOrderPublic).not.toHaveBeenCalled()
     expect(wrapper.text()).toContain('payment.result.success')
-    expect(window.localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY)).toBeNull()
+    expect(window.localStorage.getItem(PAYMENT_RECOVERY_USER_KEY)).toBeNull()
   })
 
   it('falls back to public out_trade_no verification when resume_token recovery fails in legacy return flows', async () => {

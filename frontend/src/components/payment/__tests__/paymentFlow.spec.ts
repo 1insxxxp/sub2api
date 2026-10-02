@@ -3,6 +3,7 @@ import type { CreateOrderResult, MethodLimit } from '@/types/payment'
 import {
   buildCreateOrderPayload,
   decidePaymentLaunch,
+  getPaymentRecoveryStorageKey,
   getVisibleMethods,
   readPaymentRecoverySnapshot,
   type PaymentRecoverySnapshot,
@@ -489,5 +490,14 @@ describe('readPaymentRecoverySnapshot', () => {
     expect(restored?.currency).toBe('')
     expect(restored?.countryCode).toBe('')
     expect(restored?.paymentEnv).toBe('')
+  })
+})
+
+describe('getPaymentRecoveryStorageKey', () => {
+  it('uses a user-scoped key and rejects anonymous keys', () => {
+    expect(getPaymentRecoveryStorageKey(42)).toBe('payment.recovery.current.42')
+    expect(getPaymentRecoveryStorageKey('42')).toBe('payment.recovery.current.42')
+    expect(getPaymentRecoveryStorageKey(undefined)).toBe('')
+    expect(getPaymentRecoveryStorageKey(0)).toBe('')
   })
 })

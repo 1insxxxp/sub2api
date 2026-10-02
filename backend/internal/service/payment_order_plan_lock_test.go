@@ -126,6 +126,7 @@ func createSubscriptionOrderFromPlanSnapshot(ctx context.Context, client *dbent.
 		snapshot.Price,
 		snapshot.Price,
 		0,
+		0,
 		snapshot.Price,
 		nil,
 	)

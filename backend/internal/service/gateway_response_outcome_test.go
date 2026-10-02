@@ -171,7 +171,7 @@ func TestGatewayChatCompletionsBridgeCapturesAnthropicOutcome(t *testing.T) {
 		}, "\n"))),
 	}
 
-	result, err := (&GatewayService{}).handleCCStreamingFromAnthropic(resp, c, "model", "model", "", nil, time.Now(), true)
+	result, err := (&GatewayService{}).handleCCStreamingFromAnthropic(resp, c, "model", "model", "", nil, time.Now())
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.NotNil(t, result.Outcome)

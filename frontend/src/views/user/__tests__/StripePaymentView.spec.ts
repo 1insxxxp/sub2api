@@ -26,6 +26,10 @@ const stripeInstance = vi.hoisted(() => ({
   confirmWechatPayPayment: vi.fn(),
 }))
 
+vi.mock('@/stores/auth', () => ({
+  useAuthStore: () => ({ user: { id: 9 } }),
+}))
+
 vi.mock('vue-router', async () => {
   const actual = await vi.importActual<typeof import('vue-router')>('vue-router')
   return {

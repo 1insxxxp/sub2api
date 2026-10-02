@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, shallowMount } from '@vue/test-utils'
 import PaymentView from '../PaymentView.vue'
-import { PAYMENT_RECOVERY_STORAGE_KEY } from '@/components/payment/paymentFlow'
+import {
+  getPaymentRecoveryStorageKey,
+  PAYMENT_RECOVERY_STORAGE_KEY,
+} from '@/components/payment/paymentFlow'
 import { formatPaymentAmount } from '@/components/payment/currency'
 import AmountInput from '@/components/payment/AmountInput.vue'
 import SubscriptionPlanCard from '@/components/payment/SubscriptionPlanCard.vue'
@@ -29,6 +32,7 @@ const translate = vi.hoisted(() => vi.fn((key: string) => key))
 const appStoreState = vi.hoisted(() => ({
   setPublicSettings: (_value: Record<string, unknown> | undefined) => {},
 }))
+const PAYMENT_RECOVERY_USER_KEY = getPaymentRecoveryStorageKey(9)
 
 vi.mock('vue-router', async () => {
   const actual = await vi.importActual<typeof import('vue-router')>('vue-router')
@@ -56,6 +60,7 @@ vi.mock('vue-i18n', async () => {
 vi.mock('@/stores/auth', () => ({
   useAuthStore: () => ({
     user: {
+      id: 9,
       username: 'demo-user',
       balance: 0,
     },
@@ -741,7 +746,7 @@ describe('PaymentView payment recovery', () => {
         },
       },
     }))
-    window.localStorage.setItem(PAYMENT_RECOVERY_STORAGE_KEY, JSON.stringify({
+    window.localStorage.setItem(PAYMENT_RECOVERY_USER_KEY, JSON.stringify({
       orderId: 888,
       amount: 66,
       qrCode: 'ldc-qr',
@@ -785,6 +790,52 @@ describe('PaymentView payment recovery', () => {
     await flushPromises()
 
     expect(wrapper.find('[data-test="method-selector"]').text()).toBe('ldc')
+  })
+
+  it('does not restore the global recovery snapshot for the current user', async () => {
+    getCheckoutInfo.mockResolvedValue(checkoutInfoFixture())
+    window.localStorage.setItem(PAYMENT_RECOVERY_STORAGE_KEY, JSON.stringify({
+      orderId: 888,
+      amount: 66,
+      qrCode: 'foreign-user-qr',
+      expiresAt: '2099-01-01T00:10:00.000Z',
+      paymentType: 'wxpay',
+      payUrl: 'https://pay.example.com/foreign-user',
+      outTradeNo: 'sub2_foreign_user_888',
+      clientSecret: '',
+      intentId: '',
+      currency: '',
+      countryCode: '',
+      paymentEnv: '',
+      payAmount: 66,
+      orderType: 'balance',
+      paymentMode: 'popup',
+      resumeToken: '',
+      createdAt: Date.now(),
+    }))
+
+    const wrapper = shallowMount(PaymentView, {
+      global: {
+        stubs: {
+          AppLayout: {
+            template: '<div><slot /></div>',
+          },
+          PaymentStatusPanel: {
+            template: '<button data-test="payment-status" />',
+          },
+          PaymentMethodSelector: {
+            props: ['selected'],
+            template: '<div data-test="method-selector">{{ selected }}</div>',
+          },
+          Teleport: true,
+          Transition: false,
+        },
+      },
+    })
+    await flushPromises()
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="payment-status"]').exists()).toBe(false)
   })
 })
 
@@ -838,7 +889,7 @@ describe('PaymentView WeChat JSAPI flow', () => {
         resume_token: 'resume-token-123',
       },
     })
-    expect(window.localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY)).toBeNull()
+    expect(window.localStorage.getItem(PAYMENT_RECOVERY_USER_KEY)).toBeNull()
   })
 
   it('resets payment state when JSAPI reports cancellation', async () => {
@@ -860,7 +911,7 @@ describe('PaymentView WeChat JSAPI flow', () => {
 
     expect(showInfo).toHaveBeenCalledWith('payment.qr.cancelled')
     expect(routerPush).not.toHaveBeenCalled()
-    expect(window.localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY)).toBeNull()
+    expect(window.localStorage.getItem(PAYMENT_RECOVERY_USER_KEY)).toBeNull()
   })
 
   it('clears stale recovery state when JSAPI never becomes available', async () => {
@@ -886,13 +937,13 @@ describe('PaymentView WeChat JSAPI flow', () => {
       'payment.errors.wechatJsapiUnavailable payment.errors.wechatOpenInWeChatHint',
     )
     expect(routerPush).not.toHaveBeenCalled()
-    expect(window.localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY)).toBeNull()
+    expect(window.localStorage.getItem(PAYMENT_RECOVERY_USER_KEY)).toBeNull()
     expect(wrapper.html()).not.toContain('payment-status-panel-stub')
   })
 
   it('clears a stale recovery snapshot before handling wechat resume callback params', async () => {
     createOrder.mockRejectedValueOnce(new Error('resume failed'))
-    window.localStorage.setItem(PAYMENT_RECOVERY_STORAGE_KEY, JSON.stringify({
+    window.localStorage.setItem(PAYMENT_RECOVERY_USER_KEY, JSON.stringify({
       orderId: 999,
       amount: 66,
       qrCode: 'stale-qr',
@@ -926,7 +977,7 @@ describe('PaymentView WeChat JSAPI flow', () => {
     expect(createOrder).toHaveBeenCalledWith(expect.objectContaining({
       wechat_resume_token: 'resume-token-123',
     }))
-    expect(window.localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY)).toBeNull()
+    expect(window.localStorage.getItem(PAYMENT_RECOVERY_USER_KEY)).toBeNull()
   })
 
   it('keeps subscription resume context for token-only WeChat callbacks', async () => {
@@ -1021,7 +1072,7 @@ describe('PaymentView WeChat JSAPI flow', () => {
     }))
     expect(showWarning).toHaveBeenCalledWith('payment.errors.mobilePaymentFallbackToQr')
     expect(showError).not.toHaveBeenCalled()
-    expect(window.localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY)).toContain('weixin://wxpay/bizpayurl?pr=fallback-native')
+    expect(window.localStorage.getItem(PAYMENT_RECOVERY_USER_KEY)).toContain('weixin://wxpay/bizpayurl?pr=fallback-native')
   })
 })
 

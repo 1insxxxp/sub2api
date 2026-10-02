@@ -18,6 +18,7 @@ const brands: Record<AvailableChannelBrand['key'], AvailableChannelBrand> = {
   minimax: { key: 'minimax', label: 'MiniMax', platform: 'minimax' },
   opencode_go: { key: 'opencode_go', label: 'OpenCode', platform: 'opencode_go' },
   composite: { key: 'composite', label: 'Composite', platform: 'composite' },
+  typesafe: { key: 'typesafe', label: 'TypeSafe / Jev', platform: 'typesafe' },
   generic: { key: 'generic', label: 'AI' },
 }
 
@@ -33,6 +34,7 @@ export function resolveAvailableChannelBrand(platform: string): AvailableChannel
   if (value.includes('deepseek')) return brands.deepseek
   if (value.includes('minimax')) return brands.minimax
   if (value.includes('opencode')) return brands.opencode_go
+  if (value.includes('typesafe')) return brands.typesafe
   if (value.includes('composite')) return brands.composite
   return brands.generic
 }

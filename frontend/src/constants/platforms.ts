@@ -21,7 +21,8 @@ export const CONCRETE_PLATFORM_OPTIONS = [
   { value: 'zhipu', label: 'Zhipu GLM', platform: 'zhipu' },
   { value: 'deepseek', label: 'DeepSeek', platform: 'deepseek' },
   { value: 'minimax', label: 'MiniMax', platform: 'minimax' },
-  { value: 'opencode_go', label: 'OpenCode', platform: 'opencode_go' }
+  { value: 'opencode_go', label: 'OpenCode', platform: 'opencode_go' },
+  { value: 'typesafe', label: 'TypeSafe / Jev', platform: 'typesafe' }
 ] as const satisfies readonly PlatformOption<AccountPlatform>[]
 
 /** Platforms that can own a group. */

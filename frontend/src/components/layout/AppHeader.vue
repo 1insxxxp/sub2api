@@ -626,7 +626,7 @@ const checkinLoading = ref(false)
 const checkinSubmitting = ref(false)
 const checkinPopoverPinned = ref(false)
 const checkinPopoverPreview = ref(false)
-const isMobileCheckinPopover = ref(false)
+const isMobileCheckinPopover = ref(typeof window !== 'undefined' && isMobileCheckinViewport())
 const checkinPopoverOpen = computed(() => checkinPopoverPinned.value || checkinPopoverPreview.value)
 const checkinContainerRef = ref<HTMLElement | null>(null)
 let checkinStatusRequest = 0
@@ -989,7 +989,6 @@ function closeCheckinPreview() {
 function closeCheckinPopover() {
   checkinPopoverPinned.value = false
   checkinPopoverPreview.value = false
-  isMobileCheckinPopover.value = false
 }
 
 function handleCheckinFocusOut(event: FocusEvent) {
@@ -1025,7 +1024,10 @@ function handleFloatingPanelOpen(event: Event) {
 }
 
 function handleHeaderResize() {
+  const mobile = isMobileCheckinViewport()
+  if (mobile === isMobileCheckinPopover.value) return
   if (checkinPopoverOpen.value) closeCheckinPopover()
+  isMobileCheckinPopover.value = mobile
 }
 
 onMounted(() => {
@@ -1629,5 +1631,11 @@ watch(
   to {
     background-position: -60% 0;
   }
+}
+</style>
+
+<style scoped>
+@media (max-width: 767px) {
+  .daily-checkin-popover { backdrop-filter: none; -webkit-backdrop-filter: none; }
 }
 </style>

@@ -28,10 +28,11 @@
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import {
-  PAYMENT_RECOVERY_STORAGE_KEY,
+  getPaymentRecoveryStorageKey,
   readPaymentRecoverySnapshot,
   type PaymentRecoverySnapshot,
 } from '@/components/payment/paymentFlow'
@@ -39,6 +40,7 @@ import {
 const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
+const authStore = useAuthStore()
 
 const loading = ref(true)
 const errorMessage = ref('')
@@ -69,8 +71,12 @@ function restoreAirwallexSnapshot(): PaymentRecoverySnapshot | null {
   const orderId = Number(queryString('order_id')) || 0
   const outTradeNo = queryString('out_trade_no')
   const resumeToken = queryString('resume_token')
+  const storageKey = getPaymentRecoveryStorageKey(authStore.user?.id)
+  if (!storageKey) {
+    return null
+  }
   const snapshot = readPaymentRecoverySnapshot(
-    window.localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY),
+    window.localStorage.getItem(storageKey),
     resumeToken ? { resumeToken } : {},
   )
 

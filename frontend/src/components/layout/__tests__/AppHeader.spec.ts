@@ -961,6 +961,30 @@ describe('AppHeader daily check-in entry', () => {
     expect(button.attributes('aria-expanded')).toBe('false')
   })
 
+  it('keeps the mobile checkin open on height-only resize and retains its placement on close', async () => {
+    const width = window.innerWidth
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 })
+    getCheckinStatus.mockResolvedValue({ enabled: true, eligible: true, checked_in: true, recent_records: [] })
+    const wrapper = await mountHeader()
+    try {
+      const button = wrapper.get('[data-test="daily-checkin-button"]')
+      await button.trigger('click')
+      window.dispatchEvent(new Event('resize'))
+      await flushPromises()
+      expect(button.attributes('aria-expanded')).toBe('true')
+      await wrapper.get('header').trigger('keydown', { key: 'Escape' })
+      expect(document.querySelector('[data-test="daily-checkin-popover"]')?.classList.contains('fixed')).toBe(true)
+      await button.trigger('click')
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1024 })
+      window.dispatchEvent(new Event('resize'))
+      await flushPromises()
+      expect(button.attributes('aria-expanded')).toBe('false')
+    } finally {
+      wrapper.unmount()
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: width })
+    }
+  })
+
   it('lets an ineligible user inspect eligibility details without submitting', async () => {
     getCheckinStatus.mockResolvedValue({
       enabled: true,

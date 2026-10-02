@@ -2,9 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, shallowMount } from '@vue/test-utils'
 import AirwallexPaymentView from '../AirwallexPaymentView.vue'
 import {
-  PAYMENT_RECOVERY_STORAGE_KEY,
+  getPaymentRecoveryStorageKey,
   type PaymentRecoverySnapshot,
 } from '@/components/payment/paymentFlow'
+
+const PAYMENT_RECOVERY_USER_KEY = getPaymentRecoveryStorageKey(9)
 
 const routeState = vi.hoisted(() => ({
   query: {} as Record<string, unknown>,
@@ -35,6 +37,10 @@ vi.mock('vue-i18n', async () => {
 
 vi.mock('@airwallex/components-sdk', () => ({
   init: airwallexInit,
+}))
+
+vi.mock('@/stores/auth', () => ({
+  useAuthStore: () => ({ user: { id: 9 } }),
 }))
 
 function airwallexSnapshot(overrides: Partial<PaymentRecoverySnapshot> = {}): PaymentRecoverySnapshot {
@@ -91,7 +97,7 @@ describe('AirwallexPaymentView', () => {
       resume_token: 'resume-awx',
     }
     window.localStorage.setItem(
-      PAYMENT_RECOVERY_STORAGE_KEY,
+      PAYMENT_RECOVERY_USER_KEY,
       JSON.stringify(airwallexSnapshot()),
     )
 

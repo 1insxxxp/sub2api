@@ -262,6 +262,7 @@ export interface UserTrendParams extends TrendParams {
   page?: number
   page_size?: number
   sort_order?: 'asc' | 'desc'
+  metric?: 'tokens' | 'actual_cost'
 }
 
 export interface UserTrendResponse {

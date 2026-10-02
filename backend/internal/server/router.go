@@ -132,7 +132,7 @@ func registerRoutes(
 	routes.RegisterModelStatusRoutes(v1, h, panelRateLimiter)
 	routes.RegisterAdminRoutes(v1, h, adminAuth, adminWorkbenchAuth, auditLog, stepUpAuth, settingService, panelRateLimiter)
 	routes.RegisterGatewayRoutes(r, h, apiKeyAuth, apiKeyService, subscriptionService, opsService, settingService, compositeResolver, cfg)
-	routes.RegisterPaymentRoutes(v1, h.Payment, h.PaymentWebhook, h.Admin.Payment, jwtAuth, adminAuth, auditLog, settingService, panelRateLimiter)
+	routes.RegisterPaymentRoutes(v1, h.Payment, h.PaymentWebhook, h.Admin.Payment, jwtAuth, adminAuth, auditLog, settingService, panelRateLimiter, redisClient)
 	routes.RegisterInternalRoutes(v1, h, cfg)
 	routes.RegisterPublicGroupSyncRoute(r.Group("/api"), h)
 
