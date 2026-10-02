@@ -100,6 +100,7 @@ func TestProvideAdminHandlersPreservesLegacyConstructor(t *testing.T) {
 		ollamaCloudUsage,
 		nil,
 		nil,
+		nil,
 	)
 
 	require.Same(t, dashboardHandler, got.Dashboard)

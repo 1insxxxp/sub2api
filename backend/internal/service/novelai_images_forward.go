@@ -203,7 +203,7 @@ func (s *OpenAIGatewayService) ForwardNovelAI(
 	if err != nil {
 		return nil, fmt.Errorf("NovelAI upstream request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	responseBody, err := io.ReadAll(io.LimitReader(resp.Body, novelAIImageMaxResponseBytes+1))
 	if err != nil {
 		return nil, fmt.Errorf("read NovelAI upstream response: %w", err)

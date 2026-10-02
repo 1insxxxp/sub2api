@@ -90,22 +90,6 @@ func (h *GatewayHandler) GeminiV1BetaListModels(c *gin.Context) {
 	c.JSON(http.StatusOK, customGroupGeminiModels(h.geminiModelIDsForGroup(c.Request.Context(), apiKey.Group)))
 }
 
-// mergeGeminiModelLists keeps native metadata when both sources advertise a model.
-func mergeGeminiModelLists(native, extra []gemini.Model) []gemini.Model {
-	result := append([]gemini.Model{}, native...)
-	seen := make(map[string]bool, len(native))
-	for _, model := range native {
-		seen[model.Name] = true
-	}
-	for _, model := range extra {
-		if !seen[model.Name] {
-			result = append(result, model)
-			seen[model.Name] = true
-		}
-	}
-	return result
-}
-
 // appendUpstreamGeminiModels preserves unknown model metadata and envelope fields.
 func appendUpstreamGeminiModels(body []byte, extra []gemini.Model) ([]byte, bool) {
 	var envelope map[string]json.RawMessage
