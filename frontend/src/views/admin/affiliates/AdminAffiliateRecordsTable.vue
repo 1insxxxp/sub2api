@@ -26,7 +26,7 @@
 
       <template #table>
         <DataTable
-          :columns="columns"
+          :columns="columns" :mobile-layout="props.type === 'invites' ? { title: 'invitee', subtitle: 'inviter', summary: ['rate', 'total_rebate', 'created_at'] } : props.type === 'rebates' ? { title: 'order', subtitle: 'invitee', status: 'order_status', summary: ['order_amount', 'rebate_amount', 'created_at'] } : { title: 'user', subtitle: 'action', summary: ['amount', 'balance_after', 'created_at'] }"
           :data="records"
           :loading="loading"
           :server-side-sort="true"

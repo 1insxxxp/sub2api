@@ -93,7 +93,7 @@
       <template #table>
         <div ref="proxyTableRef" class="flex min-h-0 flex-1 flex-col overflow-hidden">
         <DataTable
-          :columns="columns"
+          :columns="columns" :mobile-layout="{ title: 'name', status: 'status', selection: 'select', summary: ['address', 'latency', 'account_count', 'expiry'] }"
           :data="proxies"
           :loading="loading"
           :server-side-sort="true"

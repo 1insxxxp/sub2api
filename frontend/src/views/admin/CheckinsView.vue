@@ -511,7 +511,7 @@
         </div>
 
         <DataTable
-          :columns="recordColumns"
+          :columns="recordColumns" :mobile-layout="{ title: 'user', subtitle: 'checkin_date', summary: ['streak_day', 'reward_amount'] }"
           :data="records"
           :loading="recordsLoading"
           row-key="id"
@@ -722,7 +722,7 @@
           </div>
 
           <DataTable
-            :columns="blacklistColumns"
+            :columns="blacklistColumns" :mobile-layout="{ title: 'user', summary: ['reason', 'created_at'] }"
             :data="blacklist"
             :loading="blacklistLoading"
             row-key="id"

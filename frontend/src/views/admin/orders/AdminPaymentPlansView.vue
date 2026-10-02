@@ -10,7 +10,7 @@
       </div>
 
       <!-- Plans Table -->
-      <DataTable :columns="planColumns" :data="plans" :loading="plansLoading">
+      <DataTable :columns="planColumns" :mobile-layout="{ title: 'name', status: 'for_sale', summary: ['price', 'validity_days', 'group_id'] }" :data="plans" :loading="plansLoading">
         <template #cell-name="{ value, row }">
           <span class="text-sm font-medium" :class="getPlanNameClass(row.group_id)">{{ value }}</span>
         </template>

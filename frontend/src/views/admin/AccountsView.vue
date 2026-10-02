@@ -3,7 +3,7 @@
     <div class="admin-workbench-page accounts-admin-page w-full min-w-0 space-y-6">
       <TablePageLayout>
       <template #filters>
-        <AdminListToolbar :active-filters="activeFilterCount" filter-id="account-list-filters">
+        <AdminListToolbar :active-filters="activeFilterCount" filter-id="account-list-filters" filter-state-key="admin-accounts-filters-expanded">
           <template #search>
             <SearchInput
               v-model="params.search"

@@ -65,7 +65,7 @@
 
       <template #table>
         <DataTable
-          :columns="columns"
+          :columns="columns" :mobile-layout="{ title: 'code', status: 'status', summary: ['type', 'value'] }"
           :data="codes"
           :loading="loading"
           :server-side-sort="true"

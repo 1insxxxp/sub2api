@@ -245,8 +245,9 @@
         }}</span>
       </button>
 
-      <!-- Collapse Button -->
+      <!-- Desktop sidebar collapse; mobile uses the drawer backdrop. -->
       <button
+        v-if="!isMobileViewport"
         @click="toggleSidebar"
         class="sidebar-link w-full"
         :class="{ 'sidebar-link-collapsed': sidebarCollapsed }"

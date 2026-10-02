@@ -3,7 +3,7 @@
     <div class="admin-workbench-page users-workbench space-y-4">
       <TablePageLayout>
       <template #filters>
-        <AdminListToolbar :active-filters="activeFilterCount" filter-id="users-list-filters">
+        <AdminListToolbar :active-filters="activeFilterCount" filter-id="users-list-filters" inline-filters>
           <template #search>
             <div class="relative min-w-0 flex-1">
               <Icon

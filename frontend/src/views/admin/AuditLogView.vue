@@ -84,7 +84,7 @@
 
       <!-- Table -->
       <template #table>
-        <DataTable :columns="columns" :data="logs" :loading="loading" row-key="id">
+        <DataTable :columns="columns" :mobile-layout="{ title: 'actor', status: 'status_code', summary: ['action', 'created_at'] }" :data="logs" :loading="loading" row-key="id">
           <template #cell-created_at="{ value }">
             <span class="whitespace-nowrap text-gray-600 dark:text-gray-300">{{ formatTime(value) }}</span>
           </template>

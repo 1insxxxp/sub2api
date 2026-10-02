@@ -4,7 +4,7 @@
       <IpGeoBatchToolbar :ips="rows.map((r) => r.client_ip)" @failed="emit('ipGeoBatchFailed')" />
 
       <DataTable
-        :columns="columns"
+        :columns="columns" :mobile-layout="{ title: 'model', status: 'status', subtitle: 'user', summary: ['message', 'account', 'created_at'] }"
         :data="rows"
         :loading="loading"
         clickable-rows

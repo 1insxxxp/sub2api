@@ -6,6 +6,7 @@ vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
 
 describe('AdminListToolbar', () => {
   beforeEach(() => {
+    localStorage.clear()
     vi.stubGlobal('matchMedia', vi.fn(() => ({
       matches: true,
       addEventListener: vi.fn(), removeEventListener: vi.fn(),
@@ -39,6 +40,25 @@ describe('AdminListToolbar', () => {
     await wrapper.get('[data-test="admin-filter-panel"]').trigger('keydown', { key: 'Escape' })
     expect(toggle.attributes('aria-expanded')).toBe('false')
     expect(wrapper.get<HTMLInputElement>('input[aria-label="Status"]').element.value).toBe('active')
+    wrapper.unmount()
+  })
+
+  it('restores both expanded and collapsed filters when revisiting a page', async () => {
+    const options = {
+      props: { filterStateKey: 'admin-accounts-filters-expanded' },
+      slots: { filters: '<input />' }
+    }
+    let wrapper = mount(AdminListToolbar, options)
+    await wrapper.get('[data-test="admin-filter-toggle"]').trigger('click')
+    wrapper.unmount()
+    wrapper = mount(AdminListToolbar, options)
+    await wrapper.vm.$nextTick()
+    expect(wrapper.get('[data-test="admin-filter-toggle"]').attributes('aria-expanded')).toBe('true')
+    await wrapper.get('[data-test="admin-filter-panel"]').trigger('keydown', { key: 'Escape' })
+    wrapper.unmount()
+    wrapper = mount(AdminListToolbar, options)
+    await wrapper.vm.$nextTick()
+    expect(wrapper.get('[data-test="admin-filter-toggle"]').attributes('aria-expanded')).toBe('false')
     wrapper.unmount()
   })
 

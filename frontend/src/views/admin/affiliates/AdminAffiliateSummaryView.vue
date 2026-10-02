@@ -29,7 +29,7 @@
 
       <template #table>
         <DataTable
-          :columns="columns"
+          :columns="columns" :mobile-layout="{ title: 'inviter', summary: ['invited_count', 'qualified_invitee_count', 'total_rebate', 'available_quota'] }"
           :data="summaries"
           :loading="loading"
           :server-side-sort="true"

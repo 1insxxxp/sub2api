@@ -1,13 +1,29 @@
 <script setup lang="ts">
-import { computed, getCurrentInstance, nextTick, ref } from 'vue'
+import { computed, getCurrentInstance, nextTick, ref, watch } from 'vue'
 import { useMediaQuery } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
 
-const props = withDefaults(defineProps<{ activeFilters?: number; filterId?: string }>(), { activeFilters: 0 })
+const props = withDefaults(defineProps<{ activeFilters?: number; filterId?: string; inlineFilters?: boolean; filterStateKey?: string }>(), { activeFilters: 0 })
 const { t } = useI18n()
 const mobile = useMediaQuery('(max-width: 1023px)')
-const open = ref(false)
+function readFilterState(): boolean {
+  if (!props.filterStateKey) return false
+  try {
+    return localStorage.getItem(props.filterStateKey) === 'true'
+  } catch {
+    return false
+  }
+}
+const open = ref(readFilterState())
+watch(open, (value) => {
+  if (!props.filterStateKey) return
+  try {
+    localStorage.setItem(props.filterStateKey, String(value))
+  } catch {
+    // Keep the filter usable when browser storage is unavailable.
+  }
+})
 const toggle = ref<HTMLButtonElement>()
 const instanceId = getCurrentInstance()?.uid
 const panelId = computed(() => props.filterId || `admin-list-filters-${instanceId}`)
@@ -23,7 +39,7 @@ async function closeFilters(event: KeyboardEvent) {
 </script>
 
 <template>
-  <div class="admin-list-toolbar">
+  <div class="admin-list-toolbar" :class="{ 'admin-list-toolbar-inline': inlineFilters }">
     <div class="admin-list-toolbar-main">
       <div v-if="$slots.search" class="admin-list-search"><slot name="search" /></div>
       <div class="admin-list-actions">
@@ -73,6 +89,14 @@ async function closeFilters(event: KeyboardEvent) {
 .admin-list-filter-toggle.is-active { color: rgb(var(--brand-rgb)); border-color: rgb(var(--brand-rgb) / 35%); }
 .admin-list-filter-toggle:focus-visible { outline: 2px solid rgb(var(--brand-rgb) / 50%); outline-offset: 2px; }
 .admin-list-filter-count { display: inline-flex; min-width: 1.125rem; height: 1.125rem; align-items: center; justify-content: center; border-radius: 4px; background: rgb(var(--brand-rgb) / 9%); font-size: 0.6875rem; font-variant-numeric: tabular-nums; }
+@media (min-width: 1024px) {
+  .admin-list-toolbar-inline { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 0.625rem; }
+  .admin-list-toolbar-inline .admin-list-toolbar-main { display: contents; }
+  .admin-list-toolbar-inline .admin-list-search { order: 0; }
+  .admin-list-toolbar-inline .admin-list-filters { order: 1; padding-top: 0; border-top: 0; }
+  .admin-list-toolbar-inline .admin-list-actions { order: 2; margin-left: auto; }
+  .admin-list-toolbar-inline .admin-list-secondary { order: 3; flex-basis: 100%; }
+}
 @media (max-width: 1023px) {
   .admin-list-toolbar-main { flex-wrap: wrap; gap: 0.625rem; }
   .admin-list-filter-toggle { display: inline-flex; }

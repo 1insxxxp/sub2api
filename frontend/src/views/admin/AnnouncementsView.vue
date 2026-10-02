@@ -1,11 +1,11 @@
 <template>
   <AppLayout>
-    <div class="space-y-6">
+    <div class="announcements-workbench space-y-4">
       <TablePageLayout>
       <template #filters>
-        <div class="admin-toolbar">
+        <AdminListToolbar inline-filters filter-id="announcement-list-filters" :active-filters="filters.status ? 1 : 0">
           <!-- Left: Search + Filters -->
-          <div class="admin-toolbar-group flex-1">
+          <template #search>
             <div class="relative w-full sm:w-64">
               <Icon
                 name="search"
@@ -20,16 +20,18 @@
                 @input="handleSearch"
               />
             </div>
+          </template>
+          <template #filters>
             <Select
               v-model="filters.status"
               :options="statusFilterOptions"
               class="w-40"
               @change="handleStatusChange"
             />
-          </div>
+          </template>
 
           <!-- Right: Action buttons -->
-          <div class="admin-toolbar-group w-full justify-end lg:w-auto lg:flex-none">
+          <template #actions>
             <button
               @click="loadAnnouncements"
               :disabled="loading"
@@ -42,13 +44,14 @@
               <Icon name="plus" size="md" class="mr-1" />
               {{ t('admin.announcements.createAnnouncement') }}
             </button>
-          </div>
-        </div>
+          </template>
+        </AdminListToolbar>
       </template>
 
       <template #table>
         <DataTable
           :columns="columns"
+          :mobile-layout="{ title: 'title', status: 'status', summary: ['notify_mode', 'targeting'] }"
           :data="announcements"
           :loading="loading"
           :server-side-sort="true"
@@ -56,10 +59,10 @@
           default-sort-order="desc"
           @sort="handleSort"
         >
-          <template #cell-title="{ value, row }">
+          <template #cell-title="{ value, row, mobile }">
             <div class="min-w-0">
               <div class="flex items-center gap-2">
-                <span class="truncate font-medium text-gray-900 dark:text-white">{{ value }}</span>
+                <span class="font-medium text-gray-900 dark:text-white" :class="mobile ? 'announcement-mobile-title' : 'truncate'">{{ value }}</span>
               </div>
               <div class="mt-1 flex items-center gap-2 text-xs text-gray-500 dark:text-dark-400">
                 <span>#{{ row.id }}</span>
@@ -277,6 +280,7 @@ import type { Column } from '@/components/common/types'
 
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
+import AdminListToolbar from '@/components/admin/AdminListToolbar.vue'
 import DataTable from '@/components/common/DataTable.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
@@ -632,3 +636,10 @@ onUnmounted(() => {
   currentController?.abort()
 })
 </script>
+
+<style scoped>
+.announcement-mobile-title { overflow-wrap: anywhere; white-space: normal; }
+@media (max-width: 639px) {
+  .announcements-workbench :deep(.admin-record-actions button) { min-width: 44px; min-height: 44px; }
+}
+</style>
