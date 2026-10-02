@@ -634,6 +634,10 @@ export default {
       openai: {
         baseUrlHint: 'Leave default for official OpenAI API',
         apiKeyHint: 'Your OpenAI API Key',
+        imageProtocol: 'Image protocol',
+        imageProtocolOpenAI: 'OpenAI Images',
+        imageProtocolNovelAI: 'NovelAI native',
+        imageProtocolDesc: 'With NovelAI native enabled, /ai/generate-image requests are forwarded unchanged to this account Base URL.',
         oauthPassthrough: 'Auto passthrough (auth only)',
         oauthPassthroughDesc:
           'When enabled, this OpenAI account uses automatic passthrough: the gateway forwards request/response as-is and only swaps auth, while keeping billing/concurrency/audit and necessary safety filtering.',

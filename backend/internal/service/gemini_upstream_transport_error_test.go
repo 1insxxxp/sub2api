@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
@@ -26,6 +27,34 @@ import (
 // ---------------------------------------------------------------------------
 
 const geminiTransportTestNativeBody = `{"contents":[{"role":"user","parts":[{"text":"hi"}]}]}`
+
+type geminiFirstOutputTimeoutUpstreamStub struct {
+	calls int
+}
+
+func (s *geminiFirstOutputTimeoutUpstreamStub) Do(req *http.Request, _ string, _ int64, _ int) (*http.Response, error) {
+	s.calls++
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+		Body:       geminiContextBlockingReader{ctx: req.Context()},
+	}, nil
+}
+
+func (s *geminiFirstOutputTimeoutUpstreamStub) DoWithTLS(req *http.Request, proxyURL string, accountID int64, accountConcurrency int, _ *tlsfingerprint.Profile) (*http.Response, error) {
+	return s.Do(req, proxyURL, accountID, accountConcurrency)
+}
+
+type geminiContextBlockingReader struct {
+	ctx context.Context
+}
+
+func (r geminiContextBlockingReader) Read([]byte) (int, error) {
+	<-r.ctx.Done()
+	return 0, r.ctx.Err()
+}
+
+func (geminiContextBlockingReader) Close() error { return nil }
 
 func newGeminiTransportErrorService(upstreamErr error) (*GeminiMessagesCompatService, *geminiCompatHTTPUpstreamStub, *transportTempUnschedRepoStub) {
 	httpStub := &geminiCompatHTTPUpstreamStub{err: upstreamErr}
@@ -97,8 +126,11 @@ func TestGeminiForwardNative_ClientCanceledReturnsOriginalError(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	svc, httpStub, repo := newGeminiTransportErrorService(context.Canceled)
 	c, _ := newGeminiNativeTestContext(t)
+	requestCtx, cancel := context.WithCancel(context.Background())
+	c.Request = c.Request.WithContext(requestCtx)
+	cancel()
 
-	_, err := svc.ForwardNative(context.Background(), c, geminiPoolModeAPIKeyAccount(),
+	_, err := svc.ForwardNative(requestCtx, c, geminiPoolModeAPIKeyAccount(),
 		"gemini-2.5-flash", "generateContent", false, []byte(geminiTransportTestNativeBody))
 
 	require.ErrorIs(t, err, context.Canceled)
@@ -107,6 +139,61 @@ func TestGeminiForwardNative_ClientCanceledReturnsOriginalError(t *testing.T) {
 	require.Equal(t, 1, httpStub.calls)
 	require.Zero(t, repo.calls, "客户端断开不摘号")
 	require.False(t, c.Writer.Written())
+}
+
+// Upstream libraries can return context.Canceled after aborting their own
+// round-trip while the client request is still alive. That is an upstream
+// transport failure and must enter the account failover loop.
+func TestGeminiForward_UpstreamContextCanceledWithLiveRequestFailsOver(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	svc, httpStub, repo := newGeminiTransportErrorService(context.Canceled)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	requestCtx := context.Background()
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(nil)).WithContext(requestCtx)
+
+	result, err := svc.ForwardAsChatCompletions(requestCtx, c, geminiPoolModeAPIKeyAccount(), []byte(`{"model":"gemini-2.5-flash","messages":[{"role":"user","content":"hi"}]}`))
+
+	require.Nil(t, result)
+	requireGeminiTransportFailover(t, err)
+	require.Equal(t, 1, httpStub.calls)
+	require.Zero(t, repo.calls)
+	require.False(t, c.Writer.Written())
+}
+
+func TestGeminiForwardAsChatCompletions_FirstOutputTimeoutFailsOver(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	settings := &SettingService{settingRepo: &modelFirstOutputSettingRepo{value: `{"enabled":true,"default":{"enabled":true,"target_seconds":1,"switch_seconds":1,"hard_cap_seconds":1}}`}}
+	httpStub := &geminiFirstOutputTimeoutUpstreamStub{}
+	svc := &GeminiMessagesCompatService{
+		httpUpstream:   httpStub,
+		cfg:            &config.Config{},
+		settingService: settings,
+	}
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	body := []byte(`{"model":"gemini-3.1-pro-preview","messages":[{"role":"user","content":"hi"}],"stream":true}`)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(body))
+
+	done := make(chan struct{})
+	var result *ForwardResult
+	var err error
+	go func() {
+		result, err = svc.ForwardAsChatCompletions(context.Background(), c, geminiPoolModeAPIKeyAccount(), body)
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("first-output timeout did not return control for failover")
+	}
+
+	require.Nil(t, result)
+	var failoverErr *UpstreamFailoverError
+	require.ErrorAs(t, err, &failoverErr)
+	require.Equal(t, http.StatusGatewayTimeout, failoverErr.StatusCode)
+	require.Equal(t, GatewayFailureReason("first_output_timeout"), failoverErr.Reason)
+	require.Equal(t, 1, httpStub.calls)
+	require.False(t, c.Writer.Written(), "failover must happen before committing a stream")
 }
 
 func TestGeminiForwardNative_CountTokensTransportErrorFallsBackToEstimate(t *testing.T) {

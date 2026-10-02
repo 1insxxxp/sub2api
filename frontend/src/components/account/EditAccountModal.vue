@@ -111,6 +111,14 @@
             {{ t('admin.accounts.cnProviders.apiProtocol.responsesFallbackDesc') }}
           </p>
         </div>
+        <div v-if="account.platform === 'openai'" class="border-t border-gray-200 pt-4 dark:border-dark-600">
+          <label class="input-label">{{ t('admin.accounts.openai.imageProtocol') }}</label>
+          <select v-model="editImageProtocol" class="input" data-testid="edit-openai-image-protocol">
+            <option value="openai">{{ t('admin.accounts.openai.imageProtocolOpenAI') }}</option>
+            <option value="novelai">{{ t('admin.accounts.openai.imageProtocolNovelAI') }}</option>
+          </select>
+          <p class="input-hint">{{ t('admin.accounts.openai.imageProtocolDesc') }}</p>
+        </div>
         <!-- OpenCode Zen vs GO -->
         <div v-if="isCNApiKeyAccount && account.platform === 'opencode_go'">
           <label class="input-label">{{ t('admin.accounts.cnProviders.accountMode.title') }}</label>
@@ -3435,6 +3443,7 @@ interface TempUnschedRuleForm {
 const submitting = ref(false)
 const editBaseUrl = ref('https://api.anthropic.com')
 const editApiKey = ref('')
+const editImageProtocol = ref<'openai' | 'novelai'>('openai')
 
 // ── 国产供应商（Kimi / Zhipu / DeepSeek）account_mode / api_protocol 编辑 ──
 // account_mode 决定额度/余额监控路径，api_protocol 决定转发端点与格式；
@@ -4479,6 +4488,9 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   // Initialize API Key fields for apikey type
   if (newAccount.type === 'apikey' && newAccount.credentials) {
     const credentials = newAccount.credentials as Record<string, unknown>
+    editImageProtocol.value = newAccount.platform === 'openai' && credentials.image_protocol === 'novelai'
+      ? 'novelai'
+      : 'openai'
     // 国产供应商：读取 account_mode 与 api_protocol 作为可编辑初始值
     // （编辑弹窗允许修正两者，用于修复早期存错默认值的账号）。
     if (isCNProviderPlatform(newAccount.platform) || newAccount.platform === 'opencode_go') {
@@ -5448,6 +5460,11 @@ const handleSubmit = async () => {
         newCredentials.model_mapping = currentCredentials.model_mapping
       }
       if (props.account.platform === 'openai') {
+        if (editImageProtocol.value === 'novelai') {
+          newCredentials.image_protocol = 'novelai'
+        } else {
+          delete newCredentials.image_protocol
+        }
         applyOpenAIEndpointCapabilities(newCredentials)
         const compactModelMapping = buildModelMappingObject('mapping', [], openAICompactModelMappings.value)
         if (compactModelMapping) {

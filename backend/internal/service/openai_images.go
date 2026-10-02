@@ -195,6 +195,15 @@ func (s *OpenAIGatewayService) ParseOpenAIImagesRequest(c *gin.Context, body []b
 		return nil, fmt.Errorf("missing request context")
 	}
 	endpoint := normalizeOpenAIImagesEndpointPath(c.Request.URL.Path)
+	// The NovelAI native adapter reuses the shared image scheduler with a
+	// client-facing /ai/generate-image route. Its context carries the native
+	// request, while the scheduler still needs the canonical generations
+	// endpoint for capability, billing, and forwarding decisions.
+	if endpoint == "" {
+		if _, native := NovelAIImageRequestFromContext(c.Request.Context()); native {
+			endpoint = openAIImagesGenerationsEndpoint
+		}
+	}
 	if endpoint == "" {
 		return nil, fmt.Errorf("unsupported images endpoint")
 	}
@@ -477,13 +486,20 @@ func applyOpenAIImagesDefaults(req *OpenAIImagesRequest) {
 }
 
 func isOpenAIImageGenerationModel(model string) bool {
-	return IsGPTImageGenerationModel(model) || isGrokImageGenerationModel(model)
+	return IsGPTImageGenerationModel(model) || IsNovelAIImageGenerationModel(model) || isGrokImageGenerationModel(model)
 }
 
 // IsGPTImageGenerationModel identifies the GPT native image-generation model family.
 func IsGPTImageGenerationModel(model string) bool {
 	model = strings.ToLower(strings.TrimSpace(model))
 	return strings.HasPrefix(model, "gpt-image-")
+}
+
+// IsNovelAIImageGenerationModel identifies the native NovelAI Diffusion image
+// model family exposed through the NovelAI-compatible image endpoint.
+func IsNovelAIImageGenerationModel(model string) bool {
+	model = strings.ToLower(strings.TrimSpace(model))
+	return strings.HasPrefix(model, "nai-diffusion-")
 }
 
 func isGrokImageGenerationModel(model string) bool {

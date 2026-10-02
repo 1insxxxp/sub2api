@@ -16,6 +16,7 @@ import (
 
 // 三条传输层失败处理的共同契约：请求 context 已取消（客户端断开）时不记 Ops 上游错误事件；
 // 请求 context 仍存活时即便错误是 context.Canceled 也照常记录，不归为客户端断开。
+// Gemini 将存活请求上的上游 context.Canceled 交给账号换号循环，其他入口保留原始错误。
 func TestTransportErrorHandlers_ClientDisconnectRecordsNoOpsEvent(t *testing.T) {
 	account := &Account{ID: 9, Name: "acc", Platform: PlatformAnthropic}
 	clientErr := &url.Error{Op: "Post", URL: "https://upstream.example/v1/messages", Err: context.Canceled}
@@ -57,7 +58,12 @@ func TestTransportErrorHandlers_ClientDisconnectRecordsNoOpsEvent(t *testing.T) 
 
 			err := h.handle(context.Background(), c)
 
-			require.ErrorIs(t, err, context.Canceled)
+			if h.name == "gemini" {
+				var failoverErr *UpstreamFailoverError
+				require.ErrorAs(t, err, &failoverErr)
+			} else {
+				require.ErrorIs(t, err, context.Canceled)
+			}
 			raw, recorded := c.Get(OpsUpstreamErrorsKey)
 			require.True(t, recorded)
 			require.Len(t, raw.([]*OpsUpstreamErrorEvent), 1)
