@@ -223,18 +223,18 @@ describe('ModelStatusView', () => {
     expect(wrapper.get('[data-testid="refresh-countdown"]').text()).toContain('30')
   })
 
-  it('plays the bucket sweep once after every successful refresh', async () => {
+  it('keeps bucket lights static on load and refresh', async () => {
     const wrapper = render()
     await flushPromises()
 
-    expect(wrapper.get('.recent-bars').classes()).toContain('bucket-hint-active')
+    expect(wrapper.find('.bucket-hint-active').exists()).toBe(false)
     await vi.advanceTimersByTimeAsync(1400)
     expect(wrapper.get('.recent-bars').classes()).not.toContain('bucket-hint-active')
 
     getModelStatus.mockResolvedValueOnce(report())
     await wrapper.get('[data-testid="refresh"]').trigger('click')
     await flushPromises()
-    expect(wrapper.get('.recent-bars').classes()).toContain('bucket-hint-active')
+    expect(wrapper.find('.bucket-hint-active').exists()).toBe(false)
   })
 
   it('keeps the full refresh label on mobile and does not render a model search field', async () => {

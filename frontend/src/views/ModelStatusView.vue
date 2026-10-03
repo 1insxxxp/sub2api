@@ -77,7 +77,7 @@
         </div>
 
         <div v-if="visibleGroups.length" ref="statusGroups" class="status-groups">
-          <section v-for="(group, groupIndex) in visibleGroups" :key="group.id" class="status-group" :aria-labelledby="`status-group-${group.id}`">
+          <section v-for="group in visibleGroups" :key="group.id" class="status-group" :aria-labelledby="`status-group-${group.id}`">
             <header class="group-heading" :data-group-id="group.id">
               <div class="group-title">
                 <span class="group-accent" aria-hidden="true" />
@@ -85,7 +85,7 @@
               </div>
             </header>
             <div class="model-grid">
-          <article v-for="(model, modelIndex) in group.visibleModels" :key="`${model.platform}:${model.name}`" class="card model-row workspace-surface" data-testid="model-row">
+          <article v-for="model in group.visibleModels" :key="`${model.platform}:${model.name}`" class="card model-row workspace-surface" data-testid="model-row">
             <div class="model-identity model-identity-stack">
               <div class="model-title">
                 <span class="model-logo"><ModelIcon :model="model.name" size="20px" /></span>
@@ -123,7 +123,7 @@
                   </span>
                   <span>{{ modelBuckets(model).length }}/{{ bucketCount }}</span>
                 </div>
-              <div class="recent-bars status-bucket-grid" :class="{ 'bucket-hint-active': showBucketHint && groupIndex === 0 && modelIndex === 0 }" :aria-label="t('modelStatus.fifteenMinuteBuckets')">
+              <div class="recent-bars status-bucket-grid" :aria-label="t('modelStatus.fifteenMinuteBuckets')">
                 <button
                   v-for="(bucket, index) in modelBuckets(model)"
                   :key="`${bucket.start_at}:${index}`"
@@ -248,7 +248,6 @@ const refreshCountdown = ref(refreshIntervalSeconds)
 const outcomes = ['success', 'failure', 'empty'] as const
 const mobileNavHidden = ref(false)
 const showBackToTop = ref(false)
-const showBucketHint = ref(false)
 const activeGroupId = ref('')
 const showGroupContext = ref(false)
 const statusGroups = ref<HTMLElement | null>(null)
@@ -268,7 +267,6 @@ let loadMoreObserver: IntersectionObserver | null = null
 let groupContextObserver: IntersectionObserver | null = null
 let disposed = false
 let lastScrollY = 0
-let bucketHintTimer: ReturnType<typeof setTimeout> | undefined
 
 function readStoredGroupFilter(): string {
   try {
@@ -556,7 +554,6 @@ async function loadReport() {
     const data = await getModelStatus({ signal: controller.signal })
     if (disposed) return
     report.value = data
-    triggerBucketHint(data)
     loadFailed.value = false
     validateGroupFilter(data.groups)
   } catch {
@@ -602,16 +599,6 @@ function handleWindowResize() {
 function scrollToTop() {
   const behavior = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
   window.scrollTo({ top: 0, behavior })
-}
-
-function triggerBucketHint(data: ModelStatusResponse) {
-  if (!data.groups.some(group => group.models.length)) return
-  if (bucketHintTimer) clearTimeout(bucketHintTimer)
-  showBucketHint.value = true
-  bucketHintTimer = setTimeout(() => {
-    showBucketHint.value = false
-    bucketHintTimer = undefined
-  }, 1400)
 }
 
 function observeStatusGroups() {
@@ -684,7 +671,6 @@ onBeforeUnmount(() => {
   customGroupsRequest?.abort()
   loadMoreObserver?.disconnect()
   if (pressedBucketTimer) clearTimeout(pressedBucketTimer)
-  if (bucketHintTimer) clearTimeout(bucketHintTimer)
   clearInterval(timer)
   clearInterval(refreshCountdownTimer)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
@@ -768,8 +754,6 @@ onBeforeUnmount(() => {
 .recent-heading-label { display: inline-flex; min-width: 0; align-items: center; gap: 5px; }
 .recent-bars { position: relative; display: grid; grid-template-columns: repeat(20, minmax(0, 1fr)); gap: 4px; height: 22px; margin: 8px 0; overflow: visible; }
 .status-bucket-grid { isolation: isolate; }
-.recent-bars.bucket-hint-active { overflow: hidden; }
-.bucket-hint-active::after { position: absolute; top: -4px; bottom: -4px; left: -32%; width: 32%; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--brand-500) 48%, transparent), transparent); content: ''; pointer-events: none; transform: translateX(0); animation: bucket-hint-sweep 1.2s cubic-bezier(.2, .7, .25, 1) both; }
 .recent-bar { position: relative; display: block; min-width: 0; width: 100%; height: 22px; padding: 0; border: 1px solid transparent; border-radius: 999px; cursor: pointer; touch-action: manipulation; transition: transform .18s ease, opacity .18s ease, box-shadow .18s ease, border-color .18s ease; }
 .recent-bar::after { position: absolute; inset: 0; border: 1px solid currentColor; border-radius: inherit; content: ''; opacity: 0; pointer-events: none; transform: scale(.78); transition: opacity .18s ease, transform .18s ease; }
 .recent-placeholder { @apply bg-slate-200 dark:bg-dark-700; display: block; min-width: 0; height: 22px; border-radius: 999px; }
@@ -798,10 +782,6 @@ onBeforeUnmount(() => {
   100% { transform: scale(1); }
 }
 
-@keyframes bucket-hint-sweep {
-  from { transform: translateX(0); }
-  to { transform: translateX(420%); }
-}
 .bucket-detail { display: flex; flex-direction: column; gap: 18px; }
 .bucket-detail-range { @apply text-slate-500 dark:text-dark-300; margin: 0; font-size: 13px; }
 .bucket-detail-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
@@ -823,7 +803,7 @@ onBeforeUnmount(() => {
 
 @media (prefers-reduced-motion: reduce) {
   .model-row, .recent-bar { transition: none; }
-  .recent-bar::after, .bucket-pressed, .bucket-hint-active::after { animation: none; transition: none; }
+  .recent-bar::after, .bucket-pressed { animation: none; transition: none; }
 }
 
 @container model-status (min-width: 1400px) {
