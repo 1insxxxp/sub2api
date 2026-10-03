@@ -2494,3 +2494,28 @@
     padding-bottom: env(safe-area-inset-bottom);
   }
 }
+
+/* Only theme-button transitions override the browser's default crossfade. */
+html.theme-reveal::view-transition-old(root),
+html.theme-reveal::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+html.theme-reveal::view-transition-old(root) { z-index: 1; }
+html.theme-reveal::view-transition-new(root) {
+  z-index: 2;
+  animation: theme-circle-reveal 600ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+/* Capture final colors, rather than intermediate component transitions. */
+html.theme-reveal *,
+html.theme-reveal *::before,
+html.theme-reveal *::after {
+  transition: none !important;
+}
+@keyframes theme-circle-reveal {
+  from { clip-path: circle(0px at var(--theme-reveal-x) var(--theme-reveal-y)); }
+  to { clip-path: circle(var(--theme-reveal-radius) at var(--theme-reveal-x) var(--theme-reveal-y)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  html.theme-reveal::view-transition-new(root) { animation: none; }
+}

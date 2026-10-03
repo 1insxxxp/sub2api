@@ -281,6 +281,7 @@ import VersionBadge from '@/components/common/VersionBadge.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { sanitizeSvg } from '@/utils/sanitize'
 import { sanitizeUrl } from '@/utils/url'
+import { revealTheme } from '@/utils/themeTransition'
 import { resolveCustomMenuNavigation } from '@/utils/custom-menu-navigation'
 import { FeatureFlags, makeSidebarFlag } from '@/utils/featureFlags'
 import { resolveSiteBillingMode } from '@/utils/siteBillingMode'
@@ -1076,10 +1077,17 @@ function toggleSidebar() {
   appStore.toggleSidebar()
 }
 
-function toggleTheme() {
-  isDark.value = !isDark.value
-  document.documentElement.classList.toggle('dark', isDark.value)
-  localStorage.setItem('theme', isDark.value ? 'dark' : 'light')
+function toggleTheme(event: MouseEvent) {
+  const button = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  void revealTheme(button, () => {
+    isDark.value = !isDark.value
+    document.documentElement.classList.toggle('dark', isDark.value)
+    try {
+      localStorage.setItem('theme', isDark.value ? 'dark' : 'light')
+    } catch {
+      // Theme switching remains available when browser storage is blocked.
+    }
+  })
 }
 
 function closeMobile() {
