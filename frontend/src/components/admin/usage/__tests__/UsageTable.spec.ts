@@ -901,3 +901,26 @@ describe('admin UsageTable deleted-user badge', () => {
     expect(wrapper.text()).toContain('active@test.com')
   })
 })
+
+describe('admin usage mobile cards', () => {
+  it('separates core metrics from expandable details without dropping fields', () => {
+    const originalMatchMedia = window.matchMedia
+    const mediaSpy = vi.spyOn(window, 'matchMedia').mockImplementation(query => ({
+      ...originalMatchMedia(query), matches: false,
+    }))
+    const wrapper = mount(UsageTable, {
+      props: {
+        data: [{ ...baseImageRow, user_id: 7, user: { email: 'long-user@example.com' }, model: 'a-very-long-model-name', ip_address: '240e:1234:5678:1234:5678:1234:5678:1234' } as any],
+        compactMobile: true,
+        columns: ['user', 'model', 'stream', 'tokens', 'cost', 'latency', 'created_at', 'ip_address'].map(key => ({ key, label: key })),
+      },
+      global: { stubs: { EmptyState: true, Icon: true, Teleport: true } },
+    })
+    expect(wrapper.find('[data-test="mobile-record-title"]').exists()).toBe(true)
+    expect(wrapper.get('[data-test="mobile-record-title"]').text()).toContain('long-user@example.com')
+    expect(wrapper.get('[data-test="mobile-record-summary"]').find('[data-field="tokens"]').exists()).toBe(true)
+    expect(wrapper.get('details').text()).toContain('240e:1234')
+    wrapper.unmount()
+    mediaSpy.mockRestore()
+  })
+})

@@ -12,6 +12,30 @@ vi.mock('vue-i18n', () => ({
 }))
 
 describe('BaseDialog', () => {
+  it('sizes the overlay to the visible viewport and focuses without scrolling', async () => {
+    const viewport = Object.assign(new EventTarget(), {
+      width: 390, height: 500, offsetTop: 120, offsetLeft: 0,
+    })
+    vi.stubGlobal('visualViewport', viewport)
+    const focus = vi.spyOn(HTMLElement.prototype, 'focus')
+    const wrapper = mount(BaseDialog, {
+      props: { show: true, title: 'Test', appearance: 'neutral' },
+      global: { stubs: { teleport: true } },
+    })
+    await nextTick()
+    const overlay = wrapper.get('[role="dialog"]').element as HTMLElement
+    expect(overlay.style.top).toBe('120px')
+    expect(overlay.style.height).toBe('500px')
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true })
+    viewport.height = 400
+    viewport.dispatchEvent(new Event('resize'))
+    await nextTick()
+    expect(overlay.style.height).toBe('400px')
+    wrapper.unmount()
+    focus.mockRestore()
+    vi.unstubAllGlobals()
+  })
+
   it('inherits admin appearance reactively while respecting an explicit appearance', async () => {
     const adminAppearance = ref(false)
     const wrapper = mount(BaseDialog, {

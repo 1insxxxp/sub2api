@@ -281,7 +281,7 @@ func TestHandleCCStreamingFromAnthropic_PreservesMessageStartCacheUsageAndReason
 	require.Contains(t, rec.Body.String(), `[DONE]`)
 }
 
-func TestHandleCCStreamingFromAnthropic_ClientDisconnectDrainsFinalUsage(t *testing.T) {
+func TestHandleCCStreamingFromAnthropic_ClientDisconnectStopsBeforeFinalUsage(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	rec := httptest.NewRecorder()
@@ -315,6 +315,9 @@ func TestHandleCCStreamingFromAnthropic_ClientDisconnectDrainsFinalUsage(t *test
 	result, err := (&GatewayService{}).handleCCStreamingFromAnthropic(resp, c, "gpt-5", "claude-sonnet-4.5", "", nil, time.Now())
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	require.Equal(t, 321, result.Usage.OutputTokens)
+	require.Equal(t, 20, result.Usage.InputTokens)
+	require.Zero(t, result.Usage.OutputTokens)
+	require.False(t, result.Outcome.StreamCompleted)
+	require.Equal(t, DisconnectSourceClient, result.Outcome.DisconnectSource)
 	require.True(t, result.ClientDisconnect)
 }

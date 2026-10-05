@@ -5,7 +5,7 @@
         v-if="show"
         class="modal-overlay brand-overlay"
         :class="{ 'modal-neutral': neutralAppearance }"
-        :style="zIndexStyle"
+        :style="[zIndexStyle, viewportStyle]"
         :aria-labelledby="dialogId"
         role="dialog"
         aria-modal="true"
@@ -67,8 +67,20 @@ function topDialogId(): string | undefined {
 
 <script setup lang="ts">
 import { computed, watch, onMounted, onUnmounted, ref, nextTick } from 'vue'
+import { useVisibleViewport } from '@/composables/useVisibleViewport'
 import Icon from '@/components/icons/Icon.vue'
 import { useAdminAppearance } from '@/composables/useAdminAppearance'
+
+const viewport = useVisibleViewport()
+const viewportStyle = computed(() => ({
+  top: `${viewport.value.top}px`,
+  left: `${viewport.value.left}px`,
+  width: `${viewport.value.width}px`,
+  height: `${viewport.value.height}px`,
+  bottom: 'auto',
+  right: 'auto',
+  '--dialog-viewport-height': `${viewport.value.height}px`,
+}))
 
 // 生成唯一ID以避免多个对话框时ID冲突
 const dialogId = `modal-title-${++dialogIdCounter}`
@@ -144,7 +156,7 @@ const unregisterDialog = () => {
   openDialogs.delete(dialogId)
   document.body.classList.toggle('modal-open', openDialogs.size > 0)
   if (wasTopmost && previousActiveElement?.isConnected) {
-    previousActiveElement.focus()
+    previousActiveElement.focus({ preventScroll: true })
   }
   previousActiveElement = null
 }
@@ -169,7 +181,7 @@ watch(
         const firstFocusable = dialogRef.value.querySelector<HTMLElement>(
           'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
         )
-        firstFocusable?.focus()
+        firstFocusable?.focus({ preventScroll: true })
       }
     } else {
       unregisterDialog()
@@ -189,6 +201,15 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.modal-content {
+  min-height: 0;
+  max-height: min(90vh, 100%);
+}
+@media (max-width: 767px) {
+  .modal-content {
+    max-height: min(calc(100dvh - env(safe-area-inset-top)), 100%);
+  }
+}
 .modal-neutral {
   --dialog-surface: rgb(252 252 253 / 98%);
   --dialog-control: rgb(255 255 255 / 88%);
@@ -208,7 +229,7 @@ onUnmounted(() => {
 }
 .modal-neutral .modal-content {
   min-height: 0;
-  max-height: calc(100dvh - 1.5rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  max-height: calc(var(--dialog-viewport-height, 100dvh) - 1.5rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
   border: 1px solid var(--dialog-rule);
   border-radius: 8px;
   background: linear-gradient(125deg, var(--dialog-highlight), transparent 60%), var(--dialog-surface);
@@ -265,7 +286,7 @@ onUnmounted(() => {
 .modal-neutral.modal-enter-from .modal-content,
 .modal-neutral.modal-leave-to .modal-content { transform: translateY(8px); }
 @media (min-width: 640px) {
-  .modal-neutral .modal-content { max-height: min(90dvh, 58rem); }
+  .modal-neutral .modal-content { max-height: min(calc(var(--dialog-viewport-height, 100dvh) - 2rem), 58rem); }
   .modal-neutral .modal-header,
   .modal-neutral .modal-footer { padding-left: 1.25rem; padding-right: 1.25rem; }
   .modal-neutral .modal-body { padding: 1.25rem; }

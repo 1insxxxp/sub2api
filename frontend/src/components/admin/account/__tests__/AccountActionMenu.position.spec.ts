@@ -60,6 +60,16 @@ describe('AccountActionMenu viewport positioning', () => {
     vi.unstubAllGlobals()
   })
 
+  it('keeps the menu inside the visible viewport when Safari pans or zooms', async () => {
+    setViewport(390, 900)
+    vi.stubGlobal('visualViewport', Object.assign(new EventTarget(), {
+      width: 390, height: 500, offsetTop: 200, offsetLeft: 0,
+    }))
+    await mountMenu(new DOMRect(179, 660, 32, 24))
+    expect(getTop()).toBe(351)
+    expect(getMenu().style.maxHeight).toBe('484px')
+  })
+
   it('measures a long OAuth menu and opens above the last row', async () => {
     await mountMenu()
 

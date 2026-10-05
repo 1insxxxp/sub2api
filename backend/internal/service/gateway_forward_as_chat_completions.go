@@ -120,11 +120,11 @@ func (s *GatewayService) ForwardAsChatCompletions(
 	// 7. Enforce cache_control block limit
 	anthropicBody = enforceCacheControlLimit(anthropicBody)
 
-	// 8. Get access token using the upstream lifecycle so client disconnects do
-	// not abort OAuth refresh before the request is dispatched.
-	tokenCtx, releaseTokenCtx := detachUpstreamContext(ctx)
-	token, tokenType, err := s.GetAccessToken(tokenCtx, account)
-	releaseTokenCtx()
+	// 8. Token acquisition and generation share the caller lifetime.
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	token, tokenType, err := s.GetAccessToken(ctx, account)
 	if err != nil {
 		return nil, fmt.Errorf("get access token: %w", err)
 	}
@@ -136,9 +136,9 @@ func (s *GatewayService) ForwardAsChatCompletions(
 	}
 
 	// 10. Build upstream request
-	upstreamCtx, releaseUpstreamCtx := detachUpstreamContext(ctx)
+	upstreamCtx, releaseUpstreamCtx := context.WithCancel(ctx)
+	defer releaseUpstreamCtx()
 	upstreamReq, forwardedBody, err := s.buildUpstreamRequest(upstreamCtx, c, account, anthropicBody, token, tokenType, mappedModel, reqStream, shouldMimicClaudeCode)
-	releaseUpstreamCtx()
 	if err != nil {
 		return nil, fmt.Errorf("build upstream request: %w", err)
 	}
@@ -162,6 +162,11 @@ func (s *GatewayService) ForwardAsChatCompletions(
 		})
 	}
 	defer func() { _ = resp.Body.Close() }()
+	// Unblock adapters waiting between SSE events when the client cancels.
+	// Capture the body before error handling can replace it.
+	responseBody := resp.Body
+	stopCloseOnCancel := context.AfterFunc(upstreamCtx, func() { _ = responseBody.Close() })
+	defer stopCloseOnCancel()
 
 	// 12. Handle error response with failover
 	if resp.StatusCode >= 400 {
@@ -209,7 +214,20 @@ func (s *GatewayService) ForwardAsChatCompletions(
 		result, handleErr = s.handleCCBufferedFromAnthropic(resp, c, originalModel, mappedModel, cacheCreationTTLTarget, reasoningEffort, startTime)
 	}
 
+	if result != nil && result.ClientDisconnect {
+		logger.FromContext(ctx).Info("gateway.cc.client_disconnected_upstream_stopped",
+			zap.Int64("account_id", account.ID),
+			zap.String("model", originalModel),
+			zap.String("upstream_request_id", result.RequestID),
+			zap.Int64("duration_ms", result.Duration.Milliseconds()),
+			zap.Int("observed_input_tokens", result.Usage.InputTokens),
+			zap.Int("observed_output_tokens", result.Usage.OutputTokens))
+	}
 	return result, handleErr
+}
+
+func ccRequestCanceled(c *gin.Context) bool {
+	return c != nil && c.Request != nil && c.Request.Context().Err() != nil
 }
 
 // The Responses intermediate has no Anthropic thinking control. Restore explicit
@@ -267,8 +285,32 @@ func (s *GatewayService) handleCCBufferedFromAnthropic(
 
 	var finalResp *apicompat.AnthropicResponse
 	var usage ClaudeUsage
+	resultWithUsage := func(clientDisconnected bool) *ForwardResult {
+		outcome := outcomeCollector.Snapshot()
+		result := &ForwardResult{
+			RequestID:              requestID,
+			Usage:                  usage,
+			Model:                  originalModel,
+			CacheCreationTTLTarget: cacheCreationTTLTarget,
+			UpstreamModel:          mappedModel,
+			ReasoningEffort:        reasoningEffort,
+			Stream:                 false,
+			Duration:               time.Since(startTime),
+			ClientDisconnect:       clientDisconnected,
+			Outcome:                &outcome,
+		}
+		if clientDisconnected {
+			// Buffered clients received no response body and have no stream collector.
+			zero := 0
+			result.DeliveredOutputTokens = &zero
+		}
+		return result
+	}
 
-	for scanner.Scan() {
+	for !ccRequestCanceled(c) && scanner.Scan() {
+		if ccRequestCanceled(c) {
+			break
+		}
 		line := scanner.Text()
 		// SSE 规范允许 `event:xxx`（冒号后无空格）：Kimi 等 Anthropic 兼容上游
 		// 返回紧凑格式，严格匹配 "event: " 会丢弃全部事件（#4653 同根因）。
@@ -276,7 +318,7 @@ func (s *GatewayService) handleCCBufferedFromAnthropic(
 			continue
 		}
 
-		if !scanner.Scan() {
+		if !scanner.Scan() || ccRequestCanceled(c) {
 			break
 		}
 		payload, ok := extractOpenAISSEDataLine(scanner.Text())
@@ -323,6 +365,16 @@ func (s *GatewayService) handleCCBufferedFromAnthropic(
 		}
 	}
 
+	if ccRequestCanceled(c) {
+		outcomeCollector.MarkStreamError(c.Request.Context().Err(), true)
+		if finalResp == nil {
+			return nil, c.Request.Context().Err()
+		}
+		// Return observed usage for settlement; an error would make the CC
+		// handler discard it. The outcome records cancellation, not success.
+		return resultWithUsage(true), nil
+	}
+
 	if err := scanner.Err(); err != nil {
 		outcomeCollector.MarkStreamError(err, false)
 		if !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
@@ -363,6 +415,10 @@ func (s *GatewayService) handleCCBufferedFromAnthropic(
 	// 无法覆盖已存在的 SSE 头。这里显式 Set 强制改回 JSON，避免下游中间层
 	// （如 new-api）按 Content-Type 误判为流式。
 	c.Writer.Header().Set("Content-Type", "application/json; charset=utf-8")
+	if ccRequestCanceled(c) {
+		outcomeCollector.MarkStreamError(c.Request.Context().Err(), true)
+		return resultWithUsage(true), nil
+	}
 	// Marshal then bytes-replace so tool name mapping is reversed at byte level
 	// (parity with Parrot non-stream flow that marshals → restore → emit).
 	if respBytes, err := json.Marshal(ccResp); err == nil {
@@ -372,18 +428,7 @@ func (s *GatewayService) handleCCBufferedFromAnthropic(
 		c.JSON(http.StatusOK, ccResp)
 	}
 
-	outcome := outcomeCollector.Snapshot()
-	return &ForwardResult{
-		RequestID:              requestID,
-		Usage:                  usage,
-		Model:                  originalModel,
-		CacheCreationTTLTarget: cacheCreationTTLTarget,
-		UpstreamModel:          mappedModel,
-		ReasoningEffort:        reasoningEffort,
-		Stream:                 false,
-		Duration:               time.Since(startTime),
-		Outcome:                &outcome,
-	}, nil
+	return resultWithUsage(false), nil
 }
 
 // handleCCStreamingFromAnthropic reads Anthropic SSE events, converts each
@@ -445,8 +490,9 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 	}
 
 	writeChunk := func(chunk apicompat.ChatCompletionsChunk) bool {
-		if clientDisconnected {
-			return false
+		if clientDisconnected || ccRequestCanceled(c) {
+			clientDisconnected = true
+			return true
 		}
 		sse, err := apicompat.ChatChunkToSSE(chunk)
 		if err != nil {
@@ -457,9 +503,10 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 		out := string(reverseToolNamesIfPresent(c, []byte(sse)))
 		if _, err := fmt.Fprint(c.Writer, out); err != nil {
 			clientDisconnected = true
-			logger.L().Info("forward_as_cc stream: client disconnected, continuing to drain upstream usage",
-				zap.String("request_id", requestID),
+			logger.L().Info("forward_as_cc stream: client disconnected, stopping upstream",
+				zap.String("upstream_request_id", requestID),
 			)
+			return true
 		}
 		return false
 	}
@@ -488,8 +535,9 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 		if event.Type == "message_start" && event.Message != nil {
 			mergeAnthropicUsage(&usage, event.Message.Usage)
 		}
-		if clientDisconnected {
-			return false
+		if clientDisconnected || ccRequestCanceled(c) {
+			clientDisconnected = true
+			return true
 		}
 
 		// Keep the outward Responses/Chat usage on the same normalized buckets used
@@ -509,18 +557,25 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 		}
 		if len(responsesEvents) > 0 && !clientDisconnected {
 			c.Writer.Flush()
+			if ccRequestCanceled(c) {
+				clientDisconnected = true
+				return true
+			}
 		}
 		return false
 	}
 
-	for scanner.Scan() {
+	for !ccRequestCanceled(c) && scanner.Scan() {
+		if ccRequestCanceled(c) {
+			break
+		}
 		line := scanner.Text()
 		// 与缓冲路径一致：接受 SSE 紧凑格式（冒号后无空格，#4653 同根因）。
 		if _, ok := extractOpenAISSEEventLine(line); !ok {
 			continue
 		}
 
-		if !scanner.Scan() {
+		if !scanner.Scan() || ccRequestCanceled(c) {
 			break
 		}
 		payload, ok := extractOpenAISSEDataLine(scanner.Text())
@@ -542,6 +597,13 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 			outcomeCollector.MarkStreamError(errors.New("client disconnected"), true)
 			return resultWithUsage(), nil
 		}
+	}
+
+	if ccRequestCanceled(c) {
+		clientDisconnected = true
+		outcomeCollector.MarkStreamError(c.Request.Context().Err(), true)
+		// Preserve partial input/cache usage and the delivered-output fallback.
+		return resultWithUsage(), nil
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -573,12 +635,20 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 			writeChunk(chunk) //nolint:errcheck
 		}
 		if !clientDisconnected {
-			// Write [DONE] marker
-			fmt.Fprint(c.Writer, "data: [DONE]\n\n") //nolint:errcheck
-			c.Writer.Flush()
+			if ccRequestCanceled(c) {
+				clientDisconnected = true
+			} else if _, err := fmt.Fprint(c.Writer, "data: [DONE]\n\n"); err != nil {
+				clientDisconnected = true
+			} else {
+				c.Writer.Flush()
+				clientDisconnected = ccRequestCanceled(c)
+			}
 		}
 	}
 
+	if clientDisconnected {
+		outcomeCollector.MarkStreamError(errors.New("client disconnected"), true)
+	}
 	return resultWithUsage(), nil
 }
 

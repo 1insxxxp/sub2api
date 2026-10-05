@@ -1,5 +1,5 @@
 <template>
-  <div :class="flat ? '' : 'card overflow-hidden'">
+  <div :class="[flat ? '' : 'card overflow-hidden', { 'usage-mobile-cards': compactMobile }]">
     <div
       v-if="showIpGeoToolbar"
       class="flex items-center justify-end gap-2 border-b border-gray-200 px-4 py-2 dark:border-dark-700"
@@ -19,6 +19,7 @@
     <div class="overflow-auto">
       <DataTable
         :columns="columns"
+        :mobile-layout="compactMobile ? { title: 'user', subtitle: 'model', status: 'stream', summary: ['group', 'billing_mode', 'tokens', 'cost', 'latency', 'created_at'] } : undefined"
         :data="data"
         :loading="loading"
         :server-side-sort="serverSideSort"
@@ -613,6 +614,7 @@ interface Props {
   showUpstreamEndpoint?: boolean
   showCompensationAction?: boolean
   /** 嵌入统一卡片内使用：去掉自身卡片外观 */
+  compactMobile?: boolean
   flat?: boolean
 }
 
@@ -624,6 +626,7 @@ const props = withDefaults(defineProps<Props>(), {
   showAccountBilling: true,
   showUpstreamEndpoint: true,
   showCompensationAction: false,
+  compactMobile: false,
   flat: false
 })
 const emit = defineEmits<{
@@ -784,3 +787,26 @@ const hideTokenTooltip = () => {
   tokenTooltipData.value = null
 }
 </script>
+
+<style scoped>
+@media (max-width: 767px) {
+  .usage-mobile-cards :deep(.admin-record-identity) { min-width: 0; }
+  .usage-mobile-cards :deep(.admin-record-title),
+  .usage-mobile-cards :deep(.admin-record-subtitle),
+  .usage-mobile-cards :deep(.admin-record-value) {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+  .usage-mobile-cards :deep(.admin-record-title button) { text-align: left; overflow-wrap: anywhere; }
+  .usage-mobile-cards :deep(.admin-record-subtitle) { margin-top: 8px; }
+  .usage-mobile-cards :deep(.admin-record-summary [data-field='tokens']),
+  .usage-mobile-cards :deep(.admin-record-summary [data-field='group']),
+  .usage-mobile-cards :deep(.admin-record-summary [data-field='billing_mode']),
+  .usage-mobile-cards :deep(.admin-record-summary [data-field='created_at']) { grid-column: 1 / -1; }
+  .usage-mobile-cards :deep(.admin-record-value .flex) { flex-wrap: wrap; }
+  .usage-mobile-cards :deep(.admin-record-value .inline-flex) { max-width: 100%; flex-wrap: wrap; }
+  .usage-mobile-cards :deep(.admin-record-value svg) { flex-shrink: 0; }
+  .usage-mobile-cards :deep(.admin-record-detail) { grid-template-columns: minmax(64px, auto) minmax(0, 1fr); }
+}
+</style>

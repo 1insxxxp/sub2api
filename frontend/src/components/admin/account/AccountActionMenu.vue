@@ -64,16 +64,19 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, onUnmounted } from 'vue'
-import { useResizeObserver, useWindowSize } from '@vueuse/core'
+import { useResizeObserver } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { Icon } from '@/components/icons'
+import { useVisibleViewport } from '@/composables/useVisibleViewport'
 import type { Account } from '@/types'
 
 const props = defineProps<{ show: boolean; account: Account | null; anchorRect: DOMRect | null }>()
 const emit = defineEmits(['close', 'test', 'stats', 'schedule', 'duplicate', 'reauth', 'refresh-token', 'recover-state', 'reset-quota', 'set-privacy', 'create-spark-shadow'])
 const { t } = useI18n()
 const menuRef = ref<HTMLElement | null>(null)
-const { width: viewportWidth, height: viewportHeight } = useWindowSize()
+const viewport = useVisibleViewport()
+const viewportWidth = computed(() => viewport.value.width)
+const viewportHeight = computed(() => viewport.value.height)
 const viewportPadding = 8
 const menuPosition = ref({ top: viewportPadding, left: viewportPadding })
 const menuStyle = computed(() => ({
@@ -89,7 +92,7 @@ const updatePosition = () => {
   const { width, height } = menuRef.value.getBoundingClientRect()
   const anchor = props.anchorRect
   const gap = 4
-  const maxTop = viewportHeight.value - height - viewportPadding
+  const maxTop = viewport.value.top + viewportHeight.value - height - viewportPadding
   const top = anchor.bottom + gap <= maxTop
     ? anchor.bottom + gap
     : anchor.top - height - gap
@@ -97,12 +100,12 @@ const updatePosition = () => {
     ? anchor.left + anchor.width / 2 - width / 2
     : anchor.right - width
 
-  menuPosition.value.top = Math.max(viewportPadding, Math.min(top, maxTop))
-  menuPosition.value.left = Math.max(viewportPadding, Math.min(left, viewportWidth.value - width - viewportPadding))
+  menuPosition.value.top = Math.max(viewport.value.top + viewportPadding, Math.min(top, maxTop))
+  menuPosition.value.left = Math.max(viewport.value.left + viewportPadding, Math.min(left, viewport.value.left + viewportWidth.value - width - viewportPadding))
 }
 
 // Measure after rendering; menu items and translated labels can change its size.
-watch([menuRef, () => props.anchorRect, viewportWidth, viewportHeight], updatePosition, { flush: 'post' })
+watch([menuRef, () => props.anchorRect, viewport], updatePosition, { flush: 'post' })
 useResizeObserver(menuRef, updatePosition)
 
 const canDuplicate = computed(() => {

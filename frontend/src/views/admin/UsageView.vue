@@ -130,6 +130,7 @@
 
         <div v-show="activeTab === 'usage'" class="overflow-hidden rounded-b-2xl">
           <UsageTable
+            compact-mobile
             flat
             :data="usageLogs"
             :loading="loading"
