@@ -529,6 +529,7 @@ export default {
       tokens: 'Token',
       tokenDetail: '入 {input} / 出 {output} / 缓存 {cache} / 总 {total}',
       claimRules: {
+        tavernOnly: '仅限酒馆补空回',
         dailyLimit: '每天最多可申请补偿 15 条',
         tokenLimit: '输出 Token 小于等于 10 才可申请'
       },

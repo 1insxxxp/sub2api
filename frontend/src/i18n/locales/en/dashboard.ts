@@ -524,6 +524,7 @@ export default {
       tokens: 'Tokens',
       tokenDetail: 'In {input} / Out {output} / Cache {cache} / Total {total}',
       claimRules: {
+        tavernOnly: 'Empty-response compensation is for SillyTavern only',
         dailyLimit: 'Up to 15 compensation claims per day',
         tokenLimit: 'Output Token must be 10 or less'
       },

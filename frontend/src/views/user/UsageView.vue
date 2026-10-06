@@ -171,6 +171,9 @@
               </span>
             </p>
             <div class="mt-2 flex flex-wrap gap-2 text-[11px] font-medium">
+              <span class="rounded border border-amber-100 bg-amber-50 px-2 py-1 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">
+                {{ t('usage.emptyResponse.claimRules.tavernOnly') }}
+              </span>
               <span class="rounded border border-primary-100 bg-primary-50 px-2 py-1 text-primary-700 dark:border-primary-500/20 dark:bg-primary-500/10 dark:text-primary-300">
                 {{ t('usage.emptyResponse.claimRules.dailyLimit') }}
               </span>
@@ -1384,7 +1387,7 @@ watch(endpointDistributionSource, () => {
 .usage-analytics { min-width: 0; }
 .usage-analytics-content { display: flex; min-width: 0; flex-direction: column; gap: 1rem; }
 .usage-analytics-toggle { display: none; }
-.usage-records-section { min-width: 0; }
+.usage-records-section { display: flex; min-width: 0; flex-direction: column; gap: 1rem; }
 .usage-record-tabs { display: flex; min-width: 0; gap: 1.5rem; border-bottom: 1px solid var(--workspace-rule); }
 .usage-record-tabs .tab { position: relative; min-width: 0; min-height: 2.75rem; padding: 0.625rem 0.125rem; border: 0; border-radius: 0; background: transparent; color: var(--workspace-muted); font-size: 0.875rem; font-weight: 500; box-shadow: none; }
 .usage-record-tabs .tab-active { color: var(--workspace-ink); font-weight: 600; }
@@ -1403,7 +1406,7 @@ watch(endpointDistributionSource, () => {
   .usage-workspace { gap: 0.75rem; }
   .usage-analytics-layout { display: contents; }
   .usage-analytics-layout > .workspace-toolbar { order: 2; }
-  .usage-records-section { display: flex; order: 3; flex-direction: column; gap: 0.625rem; }
+  .usage-records-section { order: 3; gap: 0.625rem; }
   .usage-analytics { order: 4; }
   .usage-analytics-layout > .workspace-toolbar { padding-block: 0; }
   .usage-analytics-toggle {
