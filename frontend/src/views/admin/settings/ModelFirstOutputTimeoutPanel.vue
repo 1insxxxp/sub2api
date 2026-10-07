@@ -156,7 +156,6 @@ const appStore = useAppStore()
 
 const profileKeys = ['gemini_flash', 'gemini_pro', 'gemini_thinking'] as const
 const policyFields = [
-  { key: 'target_seconds', label: 'targetSeconds' },
   { key: 'switch_seconds', label: 'switchSeconds' },
   { key: 'hard_cap_seconds', label: 'hardCapSeconds' },
 ] as const
@@ -201,10 +200,12 @@ const newModelKey = ref('')
 
 function clonePolicy(policy?: Partial<ModelFirstOutputTimeoutPolicy> | null): ModelFirstOutputTimeoutPolicy {
   const defaults = makePolicy()
+  const switchSeconds = Number(policy?.switch_seconds) || defaults.switch_seconds
   return {
     enabled: policy?.enabled !== false,
-    target_seconds: Number(policy?.target_seconds) || defaults.target_seconds,
-    switch_seconds: Number(policy?.switch_seconds) || defaults.switch_seconds,
+    // The API still requires this legacy reference value to be <= the account wait.
+    target_seconds: Math.min(Number(policy?.target_seconds) || defaults.target_seconds, switchSeconds),
+    switch_seconds: switchSeconds,
     hard_cap_seconds: Number(policy?.hard_cap_seconds) || defaults.hard_cap_seconds,
   }
 }
@@ -253,12 +254,12 @@ function allPolicies(): ModelFirstOutputTimeoutPolicy[] {
 
 function validate(): boolean {
   for (const policy of allPolicies()) {
-    const values = [policy.target_seconds, policy.switch_seconds, policy.hard_cap_seconds]
+    const values = [policy.switch_seconds, policy.hard_cap_seconds]
     if (values.some((value) => !Number.isFinite(Number(value)) || Number(value) <= 0 || Number(value) > 900)) {
       validationError.value = t('admin.settings.modelFirstOutputTimeout.validationPositive')
       return false
     }
-    if (!(policy.target_seconds <= policy.switch_seconds && policy.switch_seconds <= policy.hard_cap_seconds)) {
+    if (policy.switch_seconds > policy.hard_cap_seconds) {
       validationError.value = t('admin.settings.modelFirstOutputTimeout.validationOrder')
       return false
     }
@@ -325,7 +326,7 @@ const PolicyEditor = defineComponent({
           onChange: (event: Event) => emit('update', { enabled: (event.target as HTMLInputElement).checked }),
         }),
       ]),
-      h('div', { class: 'grid gap-3 sm:grid-cols-3' }, policyFields.map((field) => h('label', { class: 'block' }, [
+      h('div', { class: 'grid gap-3 sm:grid-cols-2' }, policyFields.map((field) => h('label', { class: 'block' }, [
         h('span', { class: 'mb-1 block text-xs font-medium text-gray-600 dark:text-dark-300' }, t(`admin.settings.modelFirstOutputTimeout.${field.label}`)),
         h('input', {
           type: 'number', min: 1, max: 900, step: 1,

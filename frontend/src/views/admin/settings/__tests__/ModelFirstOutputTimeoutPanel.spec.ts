@@ -78,10 +78,11 @@ describe('ModelFirstOutputTimeoutPanel', () => {
     await flushPromises()
 
     expect(getModelFirstOutputTimeoutSettings).toHaveBeenCalledTimes(1)
-    expect((wrapper.get('[data-test="model-first-output-timeout-default-target_seconds"]').element as HTMLInputElement).value).toBe('30')
+    expect((wrapper.get('[data-test="model-first-output-timeout-default-switch_seconds"]').element as HTMLInputElement).value).toBe('120')
 
     await wrapper.get('[data-test="model-first-output-timeout-model-new-key"]').setValue('gemini-2.5-flash')
     await wrapper.get('[data-test="model-first-output-timeout-model-add"]').trigger('click')
+    expect(wrapper.find('[data-test$="-target_seconds"]').exists()).toBe(false)
     await wrapper.get('[data-test="model-first-output-timeout-save"]').trigger('click')
     await flushPromises()
 
@@ -93,11 +94,36 @@ describe('ModelFirstOutputTimeoutPanel', () => {
     expect(showSuccess).toHaveBeenCalledWith('admin.settings.modelFirstOutputTimeout.saved')
   })
 
-  it('validates ordered positive timeout values before saving', async () => {
+  it('allows lowering account waits below the hidden legacy targets in every policy scope', async () => {
+    const loaded = settings()
+    loaded.models = { 'gemini-2.5-flash': policy() }
+    getModelFirstOutputTimeoutSettings.mockResolvedValueOnce(loaded)
+    const wrapper = mountPanel()
+    await flushPromises()
+
+    for (const input of wrapper.findAll('[data-test$="-switch_seconds"]')) {
+      await input.setValue('15')
+    }
+    await wrapper.get('[data-test="model-first-output-timeout-save"]').trigger('click')
+    await flushPromises()
+
+    expect(updateModelFirstOutputTimeoutSettings).toHaveBeenCalledTimes(1)
+    const payload = updateModelFirstOutputTimeoutSettings.mock.calls[0][0]
+    const policies = [payload.default, ...Object.values(payload.profiles), ...Object.values(payload.platforms), ...Object.values(payload.models)]
+    expect(policies).toHaveLength(6)
+    for (const saved of policies) {
+      expect(saved).toMatchObject({ target_seconds: 15, switch_seconds: 15 })
+    }
+    expect(payload.profiles.gemini_thinking.hard_cap_seconds).toBe(600)
+    expect(wrapper.find('[data-test="model-first-output-timeout-error"]').exists()).toBe(false)
+  })
+
+  it('rejects an account wait longer than the total traversal limit', async () => {
     const wrapper = mountPanel()
     await flushPromises()
 
     await wrapper.get('[data-test="model-first-output-timeout-default-switch_seconds"]').setValue('10')
+    await wrapper.get('[data-test="model-first-output-timeout-default-hard_cap_seconds"]').setValue('5')
     await wrapper.get('[data-test="model-first-output-timeout-save"]').trigger('click')
     await flushPromises()
 
