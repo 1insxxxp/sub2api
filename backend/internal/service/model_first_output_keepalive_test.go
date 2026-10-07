@@ -117,7 +117,8 @@ func modelFirstOutputKeepaliveForTest(t *testing.T, c *gin.Context) *modelFirstO
 	t.Helper()
 	value, ok := c.Get(modelFirstOutputKeepaliveKey)
 	require.True(t, ok)
-	state := value.(*modelFirstOutputKeepaliveState)
+	state, ok := value.(*modelFirstOutputKeepaliveState)
+	require.True(t, ok)
 	require.NotNil(t, state.active)
 	return state.active
 }
