@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
+	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -241,7 +242,7 @@ func TestGatewayAdmissionError_MessagesStreamingIncludesGatewayCode(t *testing.T
 		gatewayConcurrencyLimitCode, "Concurrency limit exceeded for account, please retry later", true)
 
 	body := w.Body.String()
-	assert.True(t, strings.HasPrefix(body, `data: {"type":"error"`))
+	assert.True(t, strings.HasPrefix(body, "event: error\ndata: {\"type\":\"error\""))
 	payload := body[strings.Index(body, "{"):]
 	assert.Equal(t, "rate_limit_error", gjson.Get(payload, "error.type").String())
 	assert.Equal(t, gatewayConcurrencyLimitCode, gjson.Get(payload, "error.code").String())
@@ -257,15 +258,32 @@ func TestGatewayAdmissionError_BareResponsesFailedIncludesGatewayCode(t *testing
 	assert.Equal(t, gatewayQueueFullCode, errObj["code"])
 }
 
-// Gateway handler: /v1/messages preserves the legacy data:{type:error,...} format
-// (Anthropic spec accepts a type:"error" stream event).
-func TestGatewayHandleStreamingAwareError_MessagesStreamingKeepsLegacy(t *testing.T) {
+// Anthropic consumers dispatch errors by the SSE event name, including errors
+// sent after non-semantic keepalives committed HTTP 200.
+func TestGatewayHandleStreamingAwareError_MessagesStreamingEmitsErrorEvent(t *testing.T) {
 	c, w := newGinContextForEndpoint(t, EndpointMessages)
 	h := &GatewayHandler{}
 	h.handleStreamingAwareError(c, http.StatusBadGateway, "upstream_error", "boom", true)
 
 	body := w.Body.String()
-	assert.True(t, strings.HasPrefix(body, `data: {"type":"error"`), "got: %q", body)
+	assert.True(t, strings.HasPrefix(body, "event: error\ndata: {\"type\":\"error\""), "got: %q", body)
+}
+
+func TestGatewayHandleFailoverExhausted_MessagesKeepaliveEmitsErrorEvent(t *testing.T) {
+	c, w := newGinContextForEndpoint(t, EndpointMessages)
+	c.Header("Content-Type", "text/event-stream")
+	_, err := c.Writer.WriteString(": ping\n\n")
+	require.NoError(t, err)
+	c.Writer.Flush()
+	h := &GatewayHandler{}
+	h.handleFailoverExhausted(c, &service.UpstreamFailoverError{
+		StatusCode:   http.StatusServiceUnavailable,
+		ResponseBody: []byte(`{"error":{"message":"upstream unavailable"}}`),
+	}, service.PlatformGemini, false)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), "event: error\ndata: {\"type\":\"error\"")
+	assert.Equal(t, 1, strings.Count(w.Body.String(), "event: error"))
 }
 
 // 项目里 /responses 注册在多组路由：/v1/responses（gateway）、裸 /responses（top-level）、

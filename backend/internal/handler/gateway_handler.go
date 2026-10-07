@@ -348,6 +348,9 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	hasBoundSession := sessionKey != "" && sessionBoundAccountID > 0
 
 	if platform == service.PlatformGemini {
+		cleanupTraversal := service.StartModelFirstOutputTraversal(c, h.settingService, platform, reqModel, reqStream)
+		defer cleanupTraversal()
+		budgetExpired := func() bool { return handleModelFirstOutputTraversalTimeout(c, "messages") }
 		fs := NewFailoverState(h.maxAccountSwitchesGemini, hasBoundSession)
 
 		// 单账号分组提前设置 SingleAccountRetry 标记，让 Service 层首次 503 就不设模型限流标记。
@@ -358,8 +361,14 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		}
 
 		for {
+			if budgetExpired() {
+				return
+			}
 			selection, err := h.gatewayService.SelectAccountWithLoadAwareness(c.Request.Context(), apiKey.GroupID, sessionKey, reqModel, fs.FailedAccountIDs, "", int64(0)) // Gemini 不使用会话限制
 			if err != nil {
+				if budgetExpired() {
+					return
+				}
 				if failoverClientGone(c) {
 					reqLog.Info("gateway.account_select_aborted_client_disconnected", zap.Error(err))
 					return
@@ -390,7 +399,9 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 					c.Request = c.Request.WithContext(ctx)
 					continue
 				case FailoverCanceled:
-					failoverClientGone(c)
+					if !budgetExpired() {
+						failoverClientGone(c)
+					}
 					return
 				default: // FailoverExhausted
 					if fs.LastFailoverErr != nil {
@@ -466,6 +477,9 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				if err != nil {
 					reqLog.Warn("gateway.account_slot_acquire_failed", zap.Int64("account_id", account.ID), zap.Error(err))
 					releaseWait()
+					if budgetExpired() {
+						return
+					}
 					h.handleConcurrencyError(c, err, "account", streamStarted)
 					return
 				}
@@ -500,6 +514,12 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			// 账号槽位/等待计数需要在超时或断开时安全回收
 			accountReleaseFunc = wrapReleaseOnDone(c.Request.Context(), accountReleaseFunc)
 
+			if budgetExpired() {
+				if accountReleaseFunc != nil {
+					accountReleaseFunc()
+				}
+				return
+			}
 			// 转发请求 - 根据账号平台分流
 			var result *service.ForwardResult
 			requestCtx := c.Request.Context()
@@ -507,7 +527,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				requestCtx = service.WithAccountSwitchCount(requestCtx, fs.SwitchCount, h.metadataBridgeEnabled())
 			}
 			// 记录 Forward 前已写入字节数，Forward 后若增加则说明 SSE 内容已发，禁止 failover
-			writerSizeBeforeForward := c.Writer.Size()
+			writerSizeBeforeForward := service.ModelFirstOutputKeepaliveAdjustedWrittenSize(c)
 			if account.Platform == service.PlatformAntigravity {
 				result, err = h.antigravityGatewayService.ForwardGemini(
 					requestCtx,
@@ -527,10 +547,13 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				accountReleaseFunc()
 			}
 			if err != nil {
+				if budgetExpired() {
+					return
+				}
 				var failoverErr *service.UpstreamFailoverError
 				if errors.As(err, &failoverErr) {
 					// 流式内容已写入客户端，无法撤销，禁止 failover 以防止流拼接腐化
-					if c.Writer.Size() != writerSizeBeforeForward && !failoverErr.SafeToFailoverAfterWrite {
+					if service.ModelFirstOutputKeepaliveAdjustedWrittenSize(c) != writerSizeBeforeForward && !failoverErr.SafeToFailoverAfterWrite {
 						h.handleFailoverExhausted(c, failoverErr, service.PlatformGemini, true)
 						return
 					}
@@ -542,7 +565,9 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 						h.handleFailoverExhausted(c, fs.LastFailoverErr, service.PlatformGemini, streamStarted)
 						return
 					case FailoverCanceled:
-						failoverClientGone(c)
+						if !budgetExpired() {
+							failoverClientGone(c)
+						}
 						return
 					}
 				}
@@ -2044,6 +2069,8 @@ func (h *GatewayHandler) handleStreamingAwareError(c *gin.Context, status int, e
 }
 
 func (h *GatewayHandler) handleStreamingAwareErrorWithCode(c *gin.Context, status int, errType, code, message string, streamStarted bool) {
+	streamStarted = service.StopModelFirstOutputKeepaliveCommitted(c) || streamStarted ||
+		(c.Writer.Written() && strings.Contains(c.Writer.Header().Get("Content-Type"), "text/event-stream"))
 	if streamStarted {
 		// 响应状态码已固化为 200（ping/部分数据已 flush），错误只能就地以 SSE 帧回传。
 		// 标记本次流内错误，供 ops_error_logger 补记——否则该中间件按 status>=400 采集，
@@ -2067,6 +2094,9 @@ func (h *GatewayHandler) handleStreamingAwareErrorWithCode(c *gin.Context, statu
 				errorCode = `,"code":` + strconv.Quote(code)
 			}
 			errorEvent := `data: {"type":"error","error":{"type":` + strconv.Quote(errType) + errorCode + `,"message":` + strconv.Quote(message) + `}}` + "\n\n"
+			if GetInboundEndpoint(c) == EndpointMessages {
+				errorEvent = "event: error\n" + errorEvent
+			}
 			if _, err := fmt.Fprint(c.Writer, errorEvent); err != nil {
 				_ = c.Error(err)
 			}
@@ -2116,7 +2146,7 @@ func gatewayForwardErrorAlreadyCommunicated(c *gin.Context, writerSizeBeforeForw
 	if err == nil || c == nil || c.Writer == nil {
 		return false
 	}
-	if c.Writer.Size() == writerSizeBeforeForward {
+	if service.ModelFirstOutputKeepaliveAdjustedWrittenSize(c) == writerSizeBeforeForward {
 		return false
 	}
 

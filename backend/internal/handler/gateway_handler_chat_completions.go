@@ -199,6 +199,13 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 	if groupPlatform == service.PlatformGemini && selectionSessionHash != "" {
 		selectionSessionHash = "gemini:" + selectionSessionHash
 	}
+	traversalModel := reqModel
+	if channelMapping.Mapped {
+		traversalModel = channelMapping.MappedModel
+	}
+	cleanupTraversal := service.StartModelFirstOutputTraversal(c, h.settingService, groupPlatform, traversalModel, reqStream)
+	defer cleanupTraversal()
+	budgetExpired := func() bool { return handleModelFirstOutputTraversalTimeout(c, "chat") }
 	// 3. Account selection + failover loop
 	fs := NewFailoverState(h.maxAccountSwitches, false)
 	if groupPlatform == service.PlatformGemini {
@@ -206,11 +213,14 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 	}
 
 	for {
-		if failoverClientGone(c) {
+		if budgetExpired() || failoverClientGone(c) {
 			return
 		}
 		selection, err := h.gatewayService.SelectAccountWithLoadAwareness(c.Request.Context(), apiKey.GroupID, selectionSessionHash, reqModel, fs.FailedAccountIDs, "", int64(0))
 		if err != nil {
+			if budgetExpired() {
+				return
+			}
 			if failoverClientGone(c) {
 				reqLog.Info("gateway.cc.account_select_aborted_client_disconnected", zap.Error(err))
 				return
@@ -233,7 +243,9 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 			case FailoverContinue:
 				continue
 			case FailoverCanceled:
-				failoverClientGone(c)
+				if !budgetExpired() {
+					failoverClientGone(c)
+				}
 				return
 			default:
 				if fs.LastFailoverErr != nil {
@@ -264,6 +276,9 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 				&streamStarted,
 			)
 			if err != nil {
+				if budgetExpired() {
+					return
+				}
 				reqLog.Warn("gateway.cc.account_slot_acquire_failed", zap.Int64("account_id", account.ID), zap.Error(err))
 				h.handleConcurrencyError(c, err, "account", streamStarted)
 				return
@@ -301,8 +316,14 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 			continue
 		}
 
+		if budgetExpired() {
+			if accountReleaseFunc != nil {
+				accountReleaseFunc()
+			}
+			return
+		}
 		// 5. Forward request
-		writerSizeBeforeForward := c.Writer.Size()
+		writerSizeBeforeForward := service.ModelFirstOutputKeepaliveAdjustedWrittenSize(c)
 		forwardBody := body
 		if channelMapping.Mapped {
 			forwardBody = h.gatewayService.ReplaceModelInBody(body, channelMapping.MappedModel)
@@ -337,13 +358,16 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 		}
 
 		if err != nil {
+			if budgetExpired() {
+				return
+			}
 			var failoverErr *service.UpstreamFailoverError
 			if errors.As(err, &failoverErr) {
-				if !gatewayForwardMayFailoverAfterWrite(writerSizeBeforeForward, c.Writer.Size(), failoverErr) {
+				if !gatewayForwardMayFailoverAfterWrite(writerSizeBeforeForward, service.ModelFirstOutputKeepaliveAdjustedWrittenSize(c), failoverErr) {
 					h.handleCCFailoverExhausted(c, failoverErr, true)
 					return
 				}
-				if c.Writer.Size() != writerSizeBeforeForward {
+				if service.ModelFirstOutputKeepaliveAdjustedWrittenSize(c) != writerSizeBeforeForward {
 					streamStarted = true
 				}
 				action := fs.HandleFailoverError(c.Request.Context(), h.gatewayService, account.ID, account.Platform, account.GetPoolModeRetryCount(), failoverErr)
@@ -354,7 +378,9 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 					h.handleCCFailoverExhausted(c, fs.LastFailoverErr, streamStarted)
 					return
 				case FailoverCanceled:
-					failoverClientGone(c)
+					if !budgetExpired() {
+						failoverClientGone(c)
+					}
 					return
 				}
 			}
@@ -413,19 +439,13 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 
 // chatCompletionsErrorResponse writes an error in OpenAI Chat Completions format.
 func (h *GatewayHandler) chatCompletionsErrorResponse(c *gin.Context, status int, errType, message string) {
-	c.JSON(status, gin.H{
-		"error": gin.H{
-			"type":    errType,
-			"message": message,
-		},
-	})
+	writeModelFirstOutputProtocolError(c, "chat", status, errType, "", message)
 }
 
 // handleCCFailoverExhausted writes a failover-exhausted error in CC format.
 func (h *GatewayHandler) handleCCFailoverExhausted(c *gin.Context, lastErr *service.UpstreamFailoverError, streamStarted bool) {
-	if streamStarted {
-		return
-	}
+	// A keepalive may have committed HTTP 200 before the pool was exhausted.
+	// chatCompletionsErrorResponse appends the terminal SSE error in that case.
 	if lastErr != nil {
 		copyFailoverRetryAfter(c, lastErr.ResponseHeaders)
 	}

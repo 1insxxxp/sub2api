@@ -67,7 +67,7 @@ func gatewayForwardMayFailoverAfterWrite(writerSizeBeforeForward, writerSize int
 }
 
 func firstOutputTimeoutPoolTraversalAllowed(enabled bool, failoverErr *service.UpstreamFailoverError) bool {
-	return enabled && failoverErr != nil && failoverErr.Reason == service.GatewayFailureReason("first_output_timeout")
+	return enabled && failoverErr != nil && (failoverErr.PreferNextAccount || failoverErr.Reason == service.GatewayFailureReason("first_output_timeout"))
 }
 
 func sameAccountRetryDelayFor(failoverErr *service.UpstreamFailoverError, retryCount int) time.Duration {
@@ -92,7 +92,7 @@ func sameAccountRetryDelayFor(failoverErr *service.UpstreamFailoverError, retryC
 }
 
 func sameAccountRetryAllowed(failoverErr *service.UpstreamFailoverError, retryCount, retryLimit int) bool {
-	if failoverErr == nil || !failoverErr.RetryableOnSameAccount {
+	if failoverErr == nil || failoverErr.PreferNextAccount || !failoverErr.RetryableOnSameAccount {
 		return false
 	}
 	if !sameAccountRetryDeadlineAllows(failoverErr) {
@@ -226,7 +226,7 @@ func (s *FailoverState) HandleFailoverError(
 	if failoverErr == nil || !failoverErr.ShouldRetryNextAccount() {
 		return FailoverExhausted
 	}
-	if failoverErr.Reason == service.GatewayFailureReason("first_output_timeout") {
+	if failoverErr.PreferNextAccount || failoverErr.Reason == service.GatewayFailureReason("first_output_timeout") {
 		s.firstOutputTimeoutPoolTraversal = true
 	}
 	// 同账号重试不算切换账号，粘性会话仅在实际切换时强制缓存计费。
@@ -255,7 +255,7 @@ func (s *FailoverState) HandleFailoverError(
 	}
 
 	// 同账号重试用尽，执行临时封禁
-	if failoverErr.RetryableOnSameAccount {
+	if failoverErr.RetryableOnSameAccount && !failoverErr.PreferNextAccount {
 		gatewayService.TempUnscheduleRetryableError(ctx, accountID, failoverErr)
 	}
 
@@ -299,6 +299,11 @@ func (s *FailoverState) HandleSelectionExhausted(ctx context.Context) FailoverAc
 	// 不代表账号耗尽，直接按取消终止。
 	if ctx.Err() != nil {
 		return FailoverCanceled
+	}
+	// A bounded pre-output traversal visits each eligible account once. Do
+	// not clear its exclusions and send another round to the same failed pool.
+	if s.firstOutputTimeoutPoolTraversal {
+		return FailoverExhausted
 	}
 
 	if s.LastFailoverErr != nil &&

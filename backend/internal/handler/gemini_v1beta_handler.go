@@ -15,7 +15,6 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/gemini"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/googleapi"
 	pkghttputil "github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
@@ -484,6 +483,9 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 	hasBoundSession := sessionKey != "" && sessionBoundAccountID > 0
 	cleanedForUnknownBinding := false
 
+	cleanupTraversal := service.StartModelFirstOutputTraversal(c, h.settingService, effectiveAPIKeyPlatform(c, apiKey), modelName, stream)
+	defer cleanupTraversal()
+	budgetExpired := func() bool { return handleModelFirstOutputTraversalTimeout(c, "gemini") }
 	fs := NewFailoverState(h.maxAccountSwitchesGemini, hasBoundSession)
 
 	// 单账号分组提前设置 SingleAccountRetry 标记，让 Service 层首次 503 就不设模型限流标记。
@@ -494,8 +496,14 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 	}
 
 	for {
+		if budgetExpired() {
+			return
+		}
 		selection, err := h.gatewayService.SelectAccountWithLoadAwareness(c.Request.Context(), apiKey.GroupID, sessionKey, modelName, fs.FailedAccountIDs, "", int64(0)) // Gemini 不使用会话限制
 		if err != nil {
+			if budgetExpired() {
+				return
+			}
 			if failoverClientGone(c) {
 				reqLog.Info("gemini.account_select_aborted_client_disconnected", zap.Error(err))
 				return
@@ -519,7 +527,9 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 				c.Request = c.Request.WithContext(ctx)
 				continue
 			case FailoverCanceled:
-				failoverClientGone(c)
+				if !budgetExpired() {
+					failoverClientGone(c)
+				}
 				return
 			default: // FailoverExhausted
 				h.handleGeminiFailoverExhausted(c, fs.LastFailoverErr)
@@ -591,6 +601,9 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 				&streamStarted,
 			)
 			if err != nil {
+				if budgetExpired() {
+					return
+				}
 				reqLog.Warn("gemini.account_slot_acquire_failed", zap.Int64("account_id", account.ID), zap.Error(err))
 				googleConcurrencyError(c, err, "account")
 				return
@@ -628,7 +641,14 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 		// 账号槽位/等待计数需要在超时或断开时安全回收
 		accountReleaseFunc = wrapReleaseOnDone(c.Request.Context(), accountReleaseFunc)
 
+		if budgetExpired() {
+			if accountReleaseFunc != nil {
+				accountReleaseFunc()
+			}
+			return
+		}
 		// 5) forward (根据平台分流)
+		writerSizeBeforeForward := service.ModelFirstOutputKeepaliveAdjustedWrittenSize(c)
 		var result *service.ForwardResult
 		requestCtx := c.Request.Context()
 		if fs.SwitchCount > 0 {
@@ -654,8 +674,15 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 			accountReleaseFunc()
 		}
 		if err != nil {
+			if budgetExpired() {
+				return
+			}
 			var failoverErr *service.UpstreamFailoverError
 			if errors.As(err, &failoverErr) {
+				if !gatewayForwardMayFailoverAfterWrite(writerSizeBeforeForward, service.ModelFirstOutputKeepaliveAdjustedWrittenSize(c), failoverErr) {
+					h.handleGeminiFailoverExhausted(c, failoverErr)
+					return
+				}
 				failoverAction := fs.HandleFailoverError(c.Request.Context(), h.gatewayService, account.ID, account.Platform, account.GetPoolModeRetryCount(), failoverErr)
 				switch failoverAction {
 				case FailoverContinue:
@@ -664,7 +691,9 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 					h.handleGeminiFailoverExhausted(c, fs.LastFailoverErr)
 					return
 				case FailoverCanceled:
-					failoverClientGone(c)
+					if !budgetExpired() {
+						failoverClientGone(c)
+					}
 					return
 				}
 			}
@@ -822,13 +851,7 @@ type pathParseError struct{ msg string }
 func (e *pathParseError) Error() string { return e.msg }
 
 func googleError(c *gin.Context, status int, message string) {
-	c.JSON(status, gin.H{
-		"error": gin.H{
-			"code":    status,
-			"message": message,
-			"status":  googleapi.HTTPStatusToGoogleStatus(status),
-		},
-	})
+	writeModelFirstOutputProtocolError(c, "gemini", status, "upstream_error", "", message)
 }
 
 // googleConcurrencyError 以 Google 错误格式回写并发槽获取失败，状态码与文案

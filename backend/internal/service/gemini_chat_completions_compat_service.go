@@ -70,7 +70,7 @@ func (s *GeminiMessagesCompatService) forwardClaudeBodyAsChatCompletions(
 	clientStream bool,
 	includeUsage bool,
 	startTime time.Time,
-) (*ForwardResult, error) {
+) (result *ForwardResult, returnErr error) {
 	var req struct {
 		Model  string `json:"model"`
 		Stream bool   `json:"stream"`
@@ -111,10 +111,19 @@ func (s *GeminiMessagesCompatService) forwardClaudeBodyAsChatCompletions(
 	requestContext := ctx
 	firstOutputGuard := (*modelFirstOutputGuard)(nil)
 	firstOutputPolicy := ModelFirstOutputTimeoutPolicy{}
+	if isImageGenerationModel(originalModel) || isImageGenerationModel(mappedModel) {
+		stopModelFirstOutputTraversal(ctx)
+	}
 	if clientStream && !isImageGenerationModel(originalModel) && !isImageGenerationModel(mappedModel) {
 		requestContext, firstOutputGuard, firstOutputPolicy = newModelFirstOutputGuard(ctx, c, s.settingService, account.Platform, originalModel)
 		if firstOutputGuard != nil {
-			defer firstOutputGuard.Close()
+			defer func() {
+				returnErr = preferNextAccountBeforeFirstOutput(returnErr, firstOutputGuard)
+				firstOutputGuard.Close()
+			}()
+			if modelFirstOutputBudgetExhausted(c, time.Now()) {
+				return nil, newModelFirstOutputTimeoutFailoverError(c, account, originalModel, firstOutputPolicy, nil)
+			}
 		}
 	}
 
@@ -129,6 +138,16 @@ func (s *GeminiMessagesCompatService) forwardClaudeBodyAsChatCompletions(
 	var resp *http.Response
 	for attempt := 1; attempt <= geminiMaxRetries; attempt++ {
 		upstreamReq, idHeader, err := buildReq(requestContext)
+		if firstOutputGuard != nil {
+			if ctx.Err() != nil && !ModelFirstOutputTraversalBudgetExceeded(ctx) {
+				return nil, ctx.Err()
+			}
+			// Credential refresh may consume the entire attempt before an HTTP
+			// request exists. Do not send late credentials after its deadline.
+			if firstOutputGuard.TimedOut() || modelFirstOutputBudgetExhausted(c, time.Now()) {
+				return nil, newModelFirstOutputTimeoutFailoverError(c, account, originalModel, firstOutputPolicy, nil)
+			}
+		}
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				return nil, err
@@ -139,7 +158,7 @@ func (s *GeminiMessagesCompatService) forwardClaudeBodyAsChatCompletions(
 
 		resp, err = s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
 		if err != nil {
-			if firstOutputGuard != nil && firstOutputGuard.TimedOut() {
+			if firstOutputGuard != nil && firstOutputGuard.TimedOut() && (ctx.Err() == nil || ModelFirstOutputTraversalBudgetExceeded(ctx)) {
 				return nil, newModelFirstOutputTimeoutFailoverError(c, account, originalModel, firstOutputPolicy, nil)
 			}
 			return nil, s.handleUpstreamTransportError(ctx, c, account, err)
@@ -152,7 +171,7 @@ func (s *GeminiMessagesCompatService) forwardClaudeBodyAsChatCompletions(
 			resp = rebuilt
 		}
 
-		if resp.StatusCode >= 400 && s.shouldRetryGeminiUpstreamError(account, resp.StatusCode) {
+		if firstOutputGuard == nil && resp.StatusCode >= 400 && s.shouldRetryGeminiUpstreamError(account, resp.StatusCode) {
 			respBody := s.readUpstreamErrorBody(resp)
 			_ = resp.Body.Close()
 			if resp.StatusCode == http.StatusForbidden && isGeminiInsufficientScope(resp.Header, respBody) {
@@ -1124,7 +1143,7 @@ func (s *GeminiMessagesCompatService) writeGeminiChatCompletionsMappedError(
 }
 
 func (s *GeminiMessagesCompatService) writeChatCompletionsError(c *gin.Context, status int, errType, message string) error {
-	c.JSON(status, gin.H{
+	writeGeminiErrorJSON(c, status, "", gin.H{
 		"error": gin.H{
 			"type":    errType,
 			"message": message,

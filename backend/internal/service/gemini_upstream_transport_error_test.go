@@ -163,7 +163,7 @@ func TestGeminiForward_UpstreamContextCanceledWithLiveRequestFailsOver(t *testin
 
 func TestGeminiForwardAsChatCompletions_FirstOutputTimeoutFailsOver(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	settings := &SettingService{settingRepo: &modelFirstOutputSettingRepo{value: `{"enabled":true,"default":{"enabled":true,"target_seconds":1,"switch_seconds":1,"hard_cap_seconds":1}}`}}
+	settings := &SettingService{settingRepo: &modelFirstOutputSettingRepo{value: `{"enabled":true,"default":{"enabled":true,"target_seconds":1,"switch_seconds":1,"hard_cap_seconds":5}}`}}
 	httpStub := &geminiFirstOutputTimeoutUpstreamStub{}
 	svc := &GeminiMessagesCompatService{
 		httpUpstream:   httpStub,

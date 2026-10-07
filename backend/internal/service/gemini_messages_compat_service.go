@@ -656,7 +656,7 @@ func (s *GeminiMessagesCompatService) SelectAccountForAIStudioEndpoints(ctx cont
 	return s.hydrateSelectedAccount(ctx, selected)
 }
 
-func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Context, account *Account, body []byte) (*ForwardResult, error) {
+func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Context, account *Account, body []byte) (result *ForwardResult, returnErr error) {
 	beginUpstreamResponseModelObservation(c)
 	beginGeminiImageOutputObservation(c)
 	startTime := time.Now()
@@ -680,10 +680,19 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 	if account.Type == AccountTypeAPIKey || account.Type == AccountTypeServiceAccount {
 		mappedModel = account.GetMappedModel(req.Model)
 	}
+	if isImageGenerationModel(originalModel) || isImageGenerationModel(mappedModel) {
+		stopModelFirstOutputTraversal(ctx)
+	}
 	if req.Stream && !isImageGenerationModel(originalModel) && !isImageGenerationModel(mappedModel) {
 		requestContext, firstOutputGuard, firstOutputPolicy = newModelFirstOutputGuard(ctx, c, s.settingService, account.Platform, originalModel)
 		if firstOutputGuard != nil {
-			defer firstOutputGuard.Close()
+			defer func() {
+				returnErr = preferNextAccountBeforeFirstOutput(returnErr, firstOutputGuard)
+				firstOutputGuard.Close()
+			}()
+			if modelFirstOutputBudgetExhausted(c, time.Now()) {
+				return nil, newModelFirstOutputTimeoutFailoverError(c, account, originalModel, firstOutputPolicy, nil)
+			}
 		}
 	}
 
@@ -859,6 +868,16 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 	signatureRetryStage := 0
 	for attempt := 1; attempt <= geminiMaxRetries; attempt++ {
 		upstreamReq, idHeader, err := buildReq(requestContext)
+		if firstOutputGuard != nil {
+			if ctx.Err() != nil && !ModelFirstOutputTraversalBudgetExceeded(ctx) {
+				return nil, ctx.Err()
+			}
+			// Credential refresh may consume the entire attempt before an HTTP
+			// request exists. Do not send late credentials after its deadline.
+			if firstOutputGuard.TimedOut() || modelFirstOutputBudgetExhausted(c, time.Now()) {
+				return nil, newModelFirstOutputTimeoutFailoverError(c, account, originalModel, firstOutputPolicy, nil)
+			}
+		}
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				return nil, err
@@ -873,7 +892,7 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 
 		resp, err = s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
 		if err != nil {
-			if req.Stream && firstOutputGuard != nil && firstOutputGuard.TimedOut() {
+			if req.Stream && firstOutputGuard != nil && firstOutputGuard.TimedOut() && (ctx.Err() == nil || ModelFirstOutputTraversalBudgetExceeded(ctx)) {
 				return nil, newModelFirstOutputTimeoutFailoverError(c, account, originalModel, firstOutputPolicy, nil)
 			}
 			return nil, s.handleUpstreamTransportError(ctx, c, account, err)
@@ -957,7 +976,7 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 			resp = rebuilt
 		}
 
-		if resp.StatusCode >= 400 && s.shouldRetryGeminiUpstreamError(account, resp.StatusCode) {
+		if firstOutputGuard == nil && resp.StatusCode >= 400 && s.shouldRetryGeminiUpstreamError(account, resp.StatusCode) {
 			respBody := s.readUpstreamErrorBody(resp)
 			_ = resp.Body.Close()
 			// Don't treat insufficient-scope as transient.
@@ -1224,7 +1243,7 @@ func isGeminiSignatureRelatedError(respBody []byte) bool {
 	return strings.Contains(msg, "thought_signature") || strings.Contains(msg, "signature")
 }
 
-func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.Context, account *Account, originalModel string, action string, stream bool, body []byte) (*ForwardResult, error) {
+func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.Context, account *Account, originalModel string, action string, stream bool, body []byte) (result *ForwardResult, returnErr error) {
 	beginUpstreamResponseModelObservation(c)
 	beginGeminiImageOutputObservation(c)
 	startTime := time.Now()
@@ -1265,10 +1284,19 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 	requestContext := ctx
 	firstOutputGuard := (*modelFirstOutputGuard)(nil)
 	firstOutputPolicy := ModelFirstOutputTimeoutPolicy{}
+	if isImageGenerationModel(originalModel) || isImageGenerationModel(mappedModel) {
+		stopModelFirstOutputTraversal(ctx)
+	}
 	if stream && !isImageGenerationModel(originalModel) && !isImageGenerationModel(mappedModel) {
 		requestContext, firstOutputGuard, firstOutputPolicy = newModelFirstOutputGuard(ctx, c, s.settingService, account.Platform, originalModel)
 		if firstOutputGuard != nil {
-			defer firstOutputGuard.Close()
+			defer func() {
+				returnErr = preferNextAccountBeforeFirstOutput(returnErr, firstOutputGuard)
+				firstOutputGuard.Close()
+			}()
+			if modelFirstOutputBudgetExhausted(c, time.Now()) {
+				return nil, newModelFirstOutputTimeoutFailoverError(c, account, originalModel, firstOutputPolicy, nil)
+			}
 		}
 	}
 	if injectedBody, applied, injectErr := ApplyAccountModelSystemPrompt(body, account, mappedModel, ModelSystemPromptGemini); injectErr != nil {
@@ -1424,6 +1452,16 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 	var resp *http.Response
 	for attempt := 1; attempt <= geminiMaxRetries; attempt++ {
 		upstreamReq, idHeader, err := buildReq(requestContext)
+		if firstOutputGuard != nil {
+			if ctx.Err() != nil && !ModelFirstOutputTraversalBudgetExceeded(ctx) {
+				return nil, ctx.Err()
+			}
+			// Credential refresh may consume the entire attempt before an HTTP
+			// request exists. Do not send late credentials after its deadline.
+			if firstOutputGuard.TimedOut() || modelFirstOutputBudgetExhausted(c, time.Now()) {
+				return nil, newModelFirstOutputTimeoutFailoverError(c, account, originalModel, firstOutputPolicy, nil)
+			}
+		}
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				return nil, err
@@ -1438,7 +1476,7 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 
 		resp, err = s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
 		if err != nil {
-			if stream && firstOutputGuard != nil && firstOutputGuard.TimedOut() {
+			if stream && firstOutputGuard != nil && firstOutputGuard.TimedOut() && (ctx.Err() == nil || ModelFirstOutputTraversalBudgetExceeded(ctx)) {
 				return nil, newModelFirstOutputTimeoutFailoverError(c, account, originalModel, firstOutputPolicy, nil)
 			}
 			transportErr := s.handleUpstreamTransportError(ctx, c, account, err)
@@ -1468,7 +1506,7 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 			resp = rebuilt
 		}
 
-		if resp.StatusCode >= 400 && s.shouldRetryGeminiUpstreamError(account, resp.StatusCode) {
+		if firstOutputGuard == nil && resp.StatusCode >= 400 && s.shouldRetryGeminiUpstreamError(account, resp.StatusCode) {
 			respBody := s.readUpstreamErrorBody(resp)
 			_ = resp.Body.Close()
 			// Don't treat insufficient-scope as transient.
@@ -1903,7 +1941,20 @@ func (s *GeminiMessagesCompatService) writeGeminiNativeUpstreamError(c *gin.Cont
 		contentType = "application/json"
 	}
 	MarkResponseCommitted(c)
-	c.Data(resp.StatusCode, contentType, sanitizedBody)
+	var streamPayload any = json.RawMessage(sanitizedBody)
+	if !json.Valid(sanitizedBody) {
+		message := upstreamMsg
+		if message == "" {
+			message = http.StatusText(resp.StatusCode)
+		}
+		streamPayload = gin.H{"error": gin.H{
+			"code": resp.StatusCode, "message": message,
+			"status": googleapi.HTTPStatusToGoogleStatus(resp.StatusCode),
+		}}
+	}
+	if !writeGeminiSSEErrorIfStarted(c, "", streamPayload) {
+		c.Data(resp.StatusCode, contentType, sanitizedBody)
+	}
 	if upstreamMsg == "" {
 		return fmt.Errorf("gemini upstream error: %d", resp.StatusCode)
 	}
@@ -1979,7 +2030,7 @@ func (s *GeminiMessagesCompatService) writeGeminiMappedError(c *gin.Context, acc
 		"upstream_error",
 		"Upstream request failed",
 	); matched {
-		c.JSON(status, gin.H{
+		writeGeminiErrorJSON(c, status, "error", gin.H{
 			"type":  "error",
 			"error": gin.H{"type": errType, "message": errMsg},
 		})
@@ -2099,7 +2150,7 @@ func (s *GeminiMessagesCompatService) writeGeminiMappedError(c *gin.Context, acc
 		}
 	}
 
-	c.JSON(statusCode, gin.H{
+	writeGeminiErrorJSON(c, statusCode, "error", gin.H{
 		"type":  "error",
 		"error": gin.H{"type": errType, "message": errMsg},
 	})
@@ -2618,7 +2669,7 @@ func generateAnthropicMsgID() string {
 
 func (s *GeminiMessagesCompatService) writeClaudeError(c *gin.Context, status int, errType, message string) error {
 	MarkResponseCommitted(c)
-	c.JSON(status, gin.H{
+	writeGeminiErrorJSON(c, status, "error", gin.H{
 		"type":  "error",
 		"error": gin.H{"type": errType, "message": message},
 	})
@@ -2627,7 +2678,7 @@ func (s *GeminiMessagesCompatService) writeClaudeError(c *gin.Context, status in
 
 func (s *GeminiMessagesCompatService) writeGoogleError(c *gin.Context, status int, message string) error {
 	MarkResponseCommitted(c)
-	c.JSON(status, gin.H{
+	writeGeminiErrorJSON(c, status, "", gin.H{
 		"error": gin.H{
 			"code":    status,
 			"message": message,
@@ -4356,4 +4407,37 @@ func (s *GeminiMessagesCompatService) extractImageInputSize(body []byte) string 
 	}
 
 	return ""
+}
+
+// A pre-output heartbeat has already committed HTTP 200. Finish that response
+// with the endpoint's SSE error envelope instead of appending bare HTTP JSON.
+func writeGeminiSSEErrorIfStarted(c *gin.Context, event string, payload any) bool {
+	if !StopModelFirstOutputKeepaliveCommitted(c) {
+		return false
+	}
+	MarkResponseCommitted(c)
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		_ = c.Error(err)
+		return true
+	}
+	c.Header("Content-Type", "text/event-stream")
+	if event != "" {
+		if _, err = fmt.Fprintf(c.Writer, "event: %s\n", event); err != nil {
+			_ = c.Error(err)
+			return true
+		}
+	}
+	if _, err = fmt.Fprintf(c.Writer, "data: %s\n\n", encoded); err != nil {
+		_ = c.Error(err)
+		return true
+	}
+	c.Writer.Flush()
+	return true
+}
+
+func writeGeminiErrorJSON(c *gin.Context, status int, event string, payload any) {
+	if !writeGeminiSSEErrorIfStarted(c, event, payload) {
+		c.JSON(status, payload)
+	}
 }

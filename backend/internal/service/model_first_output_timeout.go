@@ -200,6 +200,18 @@ func newModelFirstOutputTimeoutFailoverError(c *gin.Context, account *Account, m
 	if headers == nil {
 		headers = make(http.Header)
 	}
+	if modelFirstOutputBudgetExhausted(c, time.Now()) {
+		return &UpstreamFailoverError{
+			StatusCode:               http.StatusGatewayTimeout,
+			ResponseBody:             []byte(`{"type":"error","error":{"type":"first_output_budget_exhausted","message":"Timed out waiting for output across available accounts. Please retry."}}`),
+			ResponseHeaders:          headers.Clone(),
+			SafeToFailoverAfterWrite: true,
+			NextAccountAction:        NextAccountStop,
+			Reason:                   GatewayFailureReason("first_output_budget_exhausted"),
+			ClientStatusCode:         http.StatusGatewayTimeout,
+			ClientMessage:            ModelFirstOutputTraversalTimeoutMessage,
+		}
+	}
 	if account != nil {
 		if account.Platform == PlatformGemini || account.Platform == PlatformAntigravity {
 			recordGeminiFirstOutput(account.ID, model, 0, true)
@@ -222,7 +234,23 @@ func newModelFirstOutputTimeoutFailoverError(c *gin.Context, account *Account, m
 		ResponseBody:             []byte(`{"type":"error","error":{"type":"first_output_timeout","message":"Upstream produced no semantic output before the configured deadline"}}`),
 		ResponseHeaders:          headers.Clone(),
 		SafeToFailoverAfterWrite: true,
+		PreferNextAccount:        true,
 		NextAccountAction:        NextAccountRetry,
 		Reason:                   GatewayFailureReason("first_output_timeout"),
 	}
+}
+
+// preferNextAccountBeforeFirstOutput preserves existing error classification,
+// but spends an active first-output budget on untried accounts before retrying
+// a failing credential. It never grants permission to replay emitted content.
+func preferNextAccountBeforeFirstOutput(err error, guard *modelFirstOutputGuard) error {
+	if guard == nil || guard.stopped.Load() {
+		return err
+	}
+	var failoverErr *UpstreamFailoverError
+	if errors.As(err, &failoverErr) && failoverErr.ShouldRetryNextAccount() {
+		failoverErr.PreferNextAccount = true
+		failoverErr.RetryableOnSameAccount = false
+	}
+	return err
 }
