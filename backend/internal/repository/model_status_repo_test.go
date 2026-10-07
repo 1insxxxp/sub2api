@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -186,6 +187,98 @@ INSERT INTO usage_response_outcomes (usage_log_id,http_status,upstream_status,ha
 	require.Equal(t, int64(1), rows[0].Metrics.Failure)
 	require.Equal(t, int64(1), rows[0].Metrics.Unknown)
 	require.Zero(t, rows[0].Metrics.Empty)
+}
+
+func TestModelStatusPostgresExcludesClientErrorsWithoutHidingServerFailures(t *testing.T) {
+	db := modelStatusTestPostgres(t)
+	ctx := context.Background()
+	end := time.Date(2026, 9, 6, 12, 0, 0, 0, time.UTC)
+	_, err := db.ExecContext(ctx, "INSERT INTO groups (id, platform, status, is_exclusive) VALUES (1,'openai','active',false)")
+	require.NoError(t, err)
+	type sample struct {
+		name                 string
+		http, upstream       int
+		kind, disconnect     string
+		completed            bool
+		noUsage              bool
+		requestType          int
+		opsHTTP, opsUpstream int
+		opsType              string
+		want                 service.UsageOutcomeStatus
+		wantStatus           int
+	}
+	samples := []sample{}
+	for _, status := range []int{400, 401, 403, 404, 408, 429, 499} {
+		samples = append(samples,
+			sample{name: fmt.Sprintf("terminal-%d-over-success", status), http: 200, upstream: 200, completed: true, opsHTTP: status, want: service.UsageOutcomeUnknown, wantStatus: status},
+			sample{name: fmt.Sprintf("usage-http-%d", status), http: status, upstream: 200, completed: true, want: service.UsageOutcomeUnknown, wantStatus: status},
+			sample{name: fmt.Sprintf("usage-upstream-%d", status), http: 200, upstream: status, completed: true, want: service.UsageOutcomeUnknown, wantStatus: status},
+		)
+	}
+	samples = append(samples,
+		sample{name: "routing-503-without-usage", noUsage: true, opsHTTP: 503, want: service.UsageOutcomeFailure, wantStatus: 503},
+		sample{name: "ops-client-499-over-upstream-502", noUsage: true, opsHTTP: 499, opsUpstream: 502, want: service.UsageOutcomeUnknown, wantStatus: 502},
+		sample{name: "ops-upstream-502-wrapped-as-400", http: 200, upstream: 200, completed: true, opsHTTP: 400, opsUpstream: 502, want: service.UsageOutcomeFailure, wantStatus: 502},
+		sample{name: "ops-http-503-over-upstream-400", http: 200, upstream: 200, completed: true, opsHTTP: 503, opsUpstream: 400, want: service.UsageOutcomeFailure, wantStatus: 503},
+		sample{name: "usage-upstream-502-wrapped-as-400", http: 400, upstream: 502, want: service.UsageOutcomeFailure, wantStatus: 502},
+		sample{name: "usage-http-503-over-upstream-400", http: 503, upstream: 400, want: service.UsageOutcomeFailure, wantStatus: 503},
+		sample{name: "usage-502-over-terminal-400", http: 502, opsHTTP: 400, want: service.UsageOutcomeFailure, wantStatus: 502},
+		sample{name: "client-400-with-error-markers", http: 400, upstream: 400, kind: "protocol", disconnect: "upstream", want: service.UsageOutcomeUnknown, wantStatus: 400},
+		sample{name: "no-http-upstream-interruption", disconnect: "upstream", want: service.UsageOutcomeFailure},
+		sample{name: "no-http-server-interruption", disconnect: "server", want: service.UsageOutcomeFailure},
+		sample{name: "no-http-protocol-error", kind: "protocol", want: service.UsageOutcomeFailure},
+		sample{name: "recovered-success-with-stale-kind", http: 200, upstream: 200, completed: true, kind: "other", opsHTTP: 200, opsUpstream: 502, want: service.UsageOutcomeSuccess, wantStatus: 200},
+		sample{name: "client-cancel-over-server-error", http: 200, upstream: 200, disconnect: "client", opsHTTP: 502, want: service.UsageOutcomeUnknown, wantStatus: 200},
+		sample{name: "cyber-policy-not-server-error", http: 200, upstream: 200, requestType: 4, opsHTTP: 200, opsType: "cyber_policy", want: service.UsageOutcomeUnknown, wantStatus: 200},
+		sample{name: "completed-cyber-usage-without-ops", http: 200, upstream: 200, completed: true, requestType: 4, want: service.UsageOutcomeUnknown, wantStatus: 200},
+		sample{name: "cyber-usage-with-real-server-error", http: 200, upstream: 502, completed: true, requestType: 4, want: service.UsageOutcomeFailure, wantStatus: 502},
+	)
+	scopes := make([]service.ModelStatusScope, 0, len(samples))
+	for _, sample := range samples {
+		scopes = append(scopes, service.ModelStatusScope{GroupID: 1, Platform: "openai", Model: sample.name})
+		if !sample.noUsage {
+			var usageID int64
+			err := db.QueryRowContext(ctx, `INSERT INTO usage_logs
+(group_id, api_key_id, request_id, requested_model, created_at, output_tokens, stream, request_type)
+VALUES (1,1,$1,$2,$3,7,true,$4) RETURNING id`, "local:"+sample.name, sample.name, end.Add(-time.Minute), sample.requestType).Scan(&usageID)
+			require.NoError(t, err)
+			_, err = db.ExecContext(ctx, `INSERT INTO usage_response_outcomes
+(usage_log_id,http_status,upstream_status,has_text,stream_completed,disconnect_source,upstream_error_kind)
+VALUES ($1,$2,$3,true,$4,$5,$6)`, usageID, sample.http, sample.upstream, sample.completed, sample.disconnect, sample.kind)
+			require.NoError(t, err)
+		}
+		if sample.opsHTTP > 0 {
+			_, err = db.ExecContext(ctx, `INSERT INTO ops_error_logs
+(group_id, api_key_id, request_id, requested_model, created_at, status_code, upstream_status_code, error_type)
+VALUES (1,1,$1,$1,$2,$3,$4,$5)`, sample.name, end.Add(-30*time.Second), sample.opsHTTP, sample.opsUpstream, sample.opsType)
+			require.NoError(t, err)
+		}
+	}
+	rows, err := NewModelStatusRepository(db).Aggregate(ctx, end, scopes)
+	require.NoError(t, err)
+	require.Len(t, rows, len(samples))
+	byModel := make(map[string]service.ModelStatusAggregate, len(rows))
+	for _, row := range rows {
+		byModel[row.Model] = row
+	}
+	for _, sample := range samples {
+		t.Run(sample.name, func(t *testing.T) {
+			row := byModel[sample.name]
+			require.Equal(t, int64(1), row.Metrics.Total, "usage and terminal errors must count once")
+			require.Len(t, row.Recent, 1)
+			require.Equal(t, sample.want, row.Recent[0].Outcome)
+			require.Equal(t, sample.wantStatus, row.Recent[0].StatusCode)
+			want := map[service.UsageOutcomeStatus]int64{sample.want: 1}
+			require.Equal(t, want[service.UsageOutcomeSuccess], row.Metrics.Success)
+			require.Equal(t, want[service.UsageOutcomeFailure], row.Metrics.Failure)
+			require.Equal(t, want[service.UsageOutcomeUnknown], row.Metrics.Unknown)
+			require.Zero(t, row.Metrics.Empty)
+			require.Len(t, row.Buckets, 1)
+			require.Equal(t, row.Metrics.Success, row.Buckets[0].Success)
+			require.Equal(t, row.Metrics.Failure, row.Buckets[0].Failure)
+			require.Equal(t, row.Metrics.Unknown, row.Buckets[0].Unknown)
+		})
+	}
 }
 
 func TestModelStatusPostgresCorrelatesGatewayBillingPrefixesWithOpsIDs(t *testing.T) {

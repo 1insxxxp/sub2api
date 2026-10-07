@@ -65,6 +65,32 @@ func TestAntigravityModelNotFoundKeepsBare404Fallback(t *testing.T) {
 	}
 }
 
+func TestIsUpstreamModelNotFoundError_UnsupportedModel(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body string
+		want bool
+	}{
+		{"named model unsupported", `{"error":{"type":"model_not_found","message":"Model \"claude-opus-4-6\" is not supported by any configured account in this group"}}`, true},
+		{"unsupported message only", `{"error":{"message":"Model \"claude-opus-4-6\" is not supported by any configured account in this group"}}`, true},
+		{"plain text unsupported", `Model claude-opus-4-6 is not supported`, true},
+		{"model not found type", `{"error":{"type":"model_not_found","message":"Unavailable"}}`, true},
+		{"anthropic not found type and model message", `{"type":"error","error":{"type":"not_found_error","message":"model: claude-opus-4-6"}}`, true},
+		{"not found type without model error", `{"error":{"type":"not_found_error","message":"endpoint: /v1/messages"},"model":"claude-opus-4-6"}`, false},
+		{"missing model", `{"error":{"message":"The model claude-opus-4-6 does not exist"}}`, true},
+		{"unsupported model code", `{"error":{"code":"unsupported_model","message":"Unavailable"}}`, true},
+		{"unrelated unsupported option", `{"error":{"message":"This endpoint is not supported"},"model":"claude-opus-4-6"}`, false},
+		{"echoed model failure", `{"error":{"message":"endpoint missing"},"echo":"Model claude-opus-4-6 is not supported"}`, false},
+		{"echoed not found", `{"error":{"message":"endpoint missing"},"echo":"Model not found"}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isUpstreamModelNotFoundError(http.StatusNotFound, []byte(tc.body)); got != tc.want {
+				t.Fatalf("isUpstreamModelNotFoundError() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestIsOpenAICodexPlanGatedModelError(t *testing.T) {
 	tests := []struct {
 		name       string

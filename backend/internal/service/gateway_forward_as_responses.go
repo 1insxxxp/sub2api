@@ -168,6 +168,11 @@ func (s *GatewayService) ForwardAsResponses(
 	defer func() { _ = resp.Body.Close() }()
 
 	// 12. Handle error response with failover
+	if failoverErr := s.handleUpstreamModelNotFound(ctx, c, account, resp, originalModel, OpsUpstreamErrorEvent{
+		UpstreamURL: safeUpstreamURL(upstreamReq.URL.String()),
+	}); failoverErr != nil {
+		return nil, failoverErr
+	}
 	if resp.StatusCode >= 400 {
 		respBody, _ := s.readUpstreamErrorBody(resp)
 		_ = resp.Body.Close()

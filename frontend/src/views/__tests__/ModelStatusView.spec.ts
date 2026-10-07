@@ -600,6 +600,27 @@ describe('ModelStatusView', () => {
     expect(wrapper.find('.model-row .incomplete-note').exists()).toBe(false)
   })
 
+  it.each([400, 401, 403, 404, 408, 429, 499])('labels excluded HTTP %i records without lowering the success rate', async statusCode => {
+    const data = report()
+    data.groups[0].models[0].buckets![19] = {
+      ...data.groups[0].models[0].buckets![19],
+      total: 6, success: 5, failure: 0, empty: 0, unknown: 1,
+      requests: [{ at: '2026-09-06T03:54:00Z', outcome: 'unknown', status_code: statusCode }],
+    }
+    getModelStatus.mockResolvedValueOnce(data)
+    const wrapper = render()
+    await flushPromises()
+
+    expect(wrapper.get('.model-row .model-rate strong').text()).toBe('100%')
+    const bucket = wrapper.findAll('[data-testid="status-bucket"]')[19]
+    expect(bucket.classes()).toContain('bucket-success')
+    await bucket.trigger('click')
+    await flushPromises()
+    expect(document.body.textContent).toContain(`modelStatus.statusCode ${statusCode}`)
+    expect(document.body.textContent).toContain('modelStatus.clientErrorExcluded')
+    expect(document.body.textContent).not.toContain('modelStatus.incompleteResult')
+  })
+
   it('filters by group without merging names or changing model metrics', async () => {
     const data = report()
     data.groups[1].models[0].buckets![19] = { ...data.groups[1].models[0].buckets![19], total: 1, success: 1, requests: [

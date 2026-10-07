@@ -39,6 +39,8 @@ export default {
     refreshFailed: '刷新失败，当前显示上次获取的报告。',
     staleData: '报告已超过 90 秒未更新。',
     incompleteResult: '记录不完整，未计入成功率',
+    clientErrorExcluded: '客户端错误，不计入成功率',
+    noRatedRequests: '此时间段暂无计入成功率的请求',
     outcome: { success: '成功', failure: '失败', empty: '空回' },
     health: {
       healthy: '正常',

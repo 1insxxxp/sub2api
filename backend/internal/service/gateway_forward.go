@@ -453,6 +453,12 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 			})
 		}
 
+		if failoverErr := s.handleUpstreamModelNotFound(ctx, c, account, resp, originalModel, OpsUpstreamErrorEvent{
+			UpstreamURL: safeUpstreamURL(upstreamReq.URL.String()),
+		}); failoverErr != nil {
+			return nil, failoverErr
+		}
+
 		// 优先检测thinking block签名错误（400）并重试一次
 		if resp.StatusCode == 400 {
 			respBody, readErr := s.readUpstreamErrorBody(resp)
@@ -721,6 +727,11 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 		return nil, errors.New("upstream request failed: empty response")
 	}
 	defer func() { _ = resp.Body.Close() }()
+
+	// Rectification retries can replace resp and leave the main retry loop.
+	if failoverErr := s.handleUpstreamModelNotFound(ctx, c, account, resp, originalModel, OpsUpstreamErrorEvent{}); failoverErr != nil {
+		return nil, failoverErr
+	}
 
 	// 处理重试耗尽的情况
 	if resp.StatusCode >= 400 && s.shouldRetryUpstreamError(account, resp.StatusCode) {

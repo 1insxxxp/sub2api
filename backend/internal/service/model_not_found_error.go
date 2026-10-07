@@ -3,17 +3,46 @@ package service
 import (
 	"net/http"
 	"strings"
+
+	"github.com/tidwall/gjson"
 )
 
-var upstreamModelNotFoundKeywords = []string{"model not found", "unknown model", "not found"}
+var upstreamModelNotFoundKeywords = []string{"model not found", "unknown model", "not found", "not supported", "unsupported", "does not exist"}
 
 func isUpstreamModelNotFoundError(statusCode int, body []byte) bool {
 	if statusCode != http.StatusNotFound {
 		return false
 	}
-	normalized := normalizeModelNotFoundBody(body)
+	notFoundType := false
+	for _, code := range []string{
+		extractUpstreamErrorCode(body),
+		gjson.GetBytes(body, "error.type").String(),
+		gjson.GetBytes(body, "code").String(),
+		gjson.GetBytes(body, "type").String(),
+	} {
+		switch normalizeModelNotFoundBody([]byte(code)) {
+		case "model not found", "unknown model", "unsupported model", "model not supported":
+			return true
+		case "not found", "not found error":
+			notFoundType = true
+		}
+	}
+	// Inspect the error itself, not model names or echoed requests elsewhere in JSON.
+	message := extractUpstreamErrorMessage(body)
+	if message == "" {
+		switch value := gjson.GetBytes(body, "error"); {
+		case value.Type == gjson.String:
+			message = value.String()
+		case !gjson.ValidBytes(body):
+			message = string(body)
+		}
+	}
+	normalized := normalizeModelNotFoundBody([]byte(message))
 	if normalized == "" || !strings.Contains(normalized, "model") {
 		return false
+	}
+	if notFoundType && strings.HasPrefix(normalized, "model:") {
+		return true
 	}
 	return containsModelNotFoundKeyword(normalized)
 }

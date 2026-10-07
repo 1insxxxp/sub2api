@@ -148,23 +148,35 @@ WITH scope AS MATERIALIZED (
     ul.created_at, 1 AS source_rank,
     CASE
       WHEN outcome.disconnect_source = 'client' THEN 'unknown'
+      WHEN outcome.http_status >= 500 OR outcome.upstream_status >= 500 THEN 'failure'
+      WHEN outcome.http_status >= 400 OR outcome.upstream_status >= 400 THEN 'unknown'
+      WHEN ul.request_type = 4 THEN 'unknown'
       WHEN outcome.id IS NOT NULL AND outcome.stream_completed
         AND outcome.http_status < 400 AND outcome.upstream_status < 400
         AND COALESCE(outcome.disconnect_source, 'none') NOT IN ('upstream', 'server')
         AND (outcome.has_text OR outcome.has_tool_call OR outcome.has_reasoning OR outcome.has_media) THEN 'success'
       WHEN outcome.id IS NOT NULL AND (
-        outcome.http_status >= 400 OR outcome.upstream_status >= 400
-        OR outcome.upstream_error_kind NOT IN ('', 'none')
+        outcome.upstream_error_kind NOT IN ('', 'none')
         OR outcome.disconnect_source IN ('upstream', 'server')) THEN 'failure'
-      WHEN ul.request_type = 4 THEN 'failure'
       WHEN outcome.id IS NOT NULL AND ul.stream AND NOT outcome.stream_completed THEN 'unknown'
       WHEN outcome.id IS NOT NULL AND (outcome.has_text OR outcome.has_tool_call OR outcome.has_reasoning OR outcome.has_media) THEN 'success'
       WHEN outcome.id IS NOT NULL THEN 'empty'
       WHEN ul.output_tokens > 0 OR ul.image_output_tokens > 0 OR ul.image_count > 0 OR claim.reason_code = 'effective_output' THEN 'success'
       ELSE 'unknown'
     END AS outcome,
-    COALESCE(NULLIF(outcome.upstream_status, 0), NULLIF(outcome.http_status, 0), 0) AS status_code,
-    CASE WHEN outcome.disconnect_source = 'client' THEN 3 ELSE 1 END AS priority,
+    CASE
+      WHEN outcome.upstream_status >= 500 THEN outcome.upstream_status
+      WHEN outcome.http_status >= 500 THEN outcome.http_status
+      WHEN outcome.upstream_status >= 400 THEN outcome.upstream_status
+      WHEN outcome.http_status >= 400 THEN outcome.http_status
+      ELSE COALESCE(NULLIF(outcome.upstream_status, 0), NULLIF(outcome.http_status, 0), 0)
+    END AS status_code,
+    CASE
+      WHEN outcome.disconnect_source = 'client' THEN 5
+      WHEN outcome.http_status >= 500 OR outcome.upstream_status >= 500 THEN 4
+      WHEN outcome.http_status >= 400 OR outcome.upstream_status >= 400 OR ul.request_type = 4 THEN 3
+      ELSE 1
+    END AS priority,
     CASE WHEN ul.first_token_ms >= 0 THEN ul.first_token_ms END AS ttft_ms,
     CASE WHEN ul.duration_ms >= 0 THEN ul.duration_ms END AS duration_ms
   FROM usage_logs ul
@@ -181,9 +193,25 @@ WITH scope AS MATERIALIZED (
       THEN 'request:' || e.api_key_id::text || ':local:' || TRIM(e.request_id)
       ELSE 'error:' || e.id::text END AS identity,
     e.created_at, 2 AS source_rank,
-    CASE WHEN e.status_code = 499 THEN 'unknown' ELSE 'failure' END AS outcome,
-    COALESCE(NULLIF(e.upstream_status_code, 0), NULLIF(e.status_code, 0), 0) AS status_code,
-    CASE WHEN e.status_code = 499 THEN 3 ELSE 2 END AS priority,
+    -- Keep client errors as evidence so their usage rows cannot become successes.
+    -- A real server failure takes precedence over a translated client status.
+    CASE
+      WHEN e.status_code = 499 THEN 'unknown'
+      WHEN e.status_code >= 500 OR e.upstream_status_code >= 500 THEN 'failure'
+      ELSE 'unknown'
+    END AS outcome,
+    CASE
+      WHEN e.upstream_status_code >= 500 THEN e.upstream_status_code
+      WHEN e.status_code >= 500 THEN e.status_code
+      WHEN e.upstream_status_code >= 400 THEN e.upstream_status_code
+      WHEN e.status_code >= 400 THEN e.status_code
+      ELSE COALESCE(NULLIF(e.upstream_status_code, 0), NULLIF(e.status_code, 0), 0)
+    END AS status_code,
+    CASE
+      WHEN e.status_code = 499 THEN 5
+      WHEN e.status_code >= 500 OR e.upstream_status_code >= 500 THEN 4
+      ELSE 3
+    END AS priority,
     CASE WHEN e.time_to_first_token_ms >= 0 THEN e.time_to_first_token_ms END AS ttft_ms,
     CASE WHEN e.duration_ms >= 0 THEN e.duration_ms END AS duration_ms
   FROM ops_error_logs e

@@ -143,7 +143,7 @@
                 <div class="recent-heading"><span>{{ t('modelStatus.recentRequests', { count: 30 }) }}</span><span>{{ model.recent?.length ?? 0 }}/30</span></div>
                 <div class="recent-bars" :aria-label="t('modelStatus.recentRequests', { count: 30 })">
                   <span v-for="index in Math.max(0, 30 - (model.recent?.length ?? 0))" :key="`placeholder-${index}`" class="recent-placeholder" aria-hidden="true" />
-                  <span v-for="(result, index) in model.recent ?? []" :key="`${result.at}:${index}`" class="recent-bar" :class="result.outcome === 'unknown' ? 'recent-incomplete' : `outcome-${result.outcome}`" :data-outcome="result.outcome === 'unknown' ? undefined : result.outcome" :title="resultLabel(result.at, result.outcome)" />
+                  <span v-for="(result, index) in model.recent ?? []" :key="`${result.at}:${index}`" class="recent-bar" :class="result.outcome === 'unknown' ? 'recent-incomplete' : `outcome-${result.outcome}`" :data-outcome="result.outcome === 'unknown' ? undefined : result.outcome" :title="resultLabel(result.at, result.outcome, result.status_code)" />
                 </div>
                 <div class="recent-heading"><span>{{ t('modelStatus.older') }}</span><span>{{ t('modelStatus.newer') }}</span></div>
               </template>
@@ -197,7 +197,7 @@
                 <span>{{ new Date(requestItem.at).toLocaleString(locale, { hour12: false }) }}</span>
                 <span v-if="requestItem.status_code" class="bucket-request-status">{{ t('modelStatus.statusCode', { code: requestItem.status_code }) }}</span>
               </div>
-              <span class="badge" :class="requestOutcomeClass(requestItem.outcome)">{{ requestOutcomeLabel(requestItem.outcome) }}</span>
+              <span class="badge" :class="requestOutcomeClass(requestItem.outcome)">{{ requestOutcomeLabel(requestItem.outcome, requestItem.status_code) }}</span>
             </div>
           </div>
         </div>
@@ -464,8 +464,8 @@ function healthLightStyle(metrics: ModelStatusModel['metrics']): Record<string, 
   return { '--health-hue': `${Math.round(successRatio * 120)}deg` }
 }
 
-function resultLabel(at: string, outcome: ModelStatusOutcome): string {
-  const label = outcome === 'unknown' ? t('modelStatus.incompleteResult') : t(`modelStatus.outcome.${outcome}`)
+function resultLabel(at: string, outcome: ModelStatusOutcome, statusCode?: number): string {
+  const label = requestOutcomeLabel(outcome, statusCode)
   return `${label} · ${new Date(at).toLocaleString(locale.value, { hour12: false })}`
 }
 
@@ -487,7 +487,7 @@ function bucketOutcome(bucket: ModelStatusBucket): ModelStatusBucketOutcome {
 function bucketLabel(bucket: ModelStatusBucket): string {
   const outcome = bucketOutcome(bucket)
   const status = outcome === 'unknown'
-    ? t(bucket.total > 0 ? 'modelStatus.incompleteResult' : 'modelStatus.noRequestsInBucket')
+    ? t(bucket.total > 0 ? 'modelStatus.noRatedRequests' : 'modelStatus.noRequestsInBucket')
     : outcome === 'degraded'
       ? t('modelStatus.bucketStatus.degraded')
       : t(`modelStatus.outcome.${outcome}`)
@@ -533,7 +533,10 @@ function requestOutcomeClass(outcome: ModelStatusOutcome): string {
   return outcome === 'success' ? 'badge-success' : outcome === 'failure' ? 'badge-danger' : outcome === 'empty' ? 'badge-warning' : 'badge-gray'
 }
 
-function requestOutcomeLabel(outcome: ModelStatusOutcome): string {
+function requestOutcomeLabel(outcome: ModelStatusOutcome, statusCode?: number): string {
+  if (outcome === 'unknown' && statusCode !== undefined && statusCode >= 400 && statusCode < 500) {
+    return t('modelStatus.clientErrorExcluded')
+  }
   return outcome === 'unknown' ? t('modelStatus.incompleteResult') : t(`modelStatus.outcome.${outcome}`)
 }
 
@@ -766,12 +769,12 @@ onBeforeUnmount(() => {
 .recent-bar:focus-visible { outline: 2px solid var(--brand-500); outline-offset: 2px; }
 .bucket-success { @apply bg-emerald-500 text-emerald-500 dark:bg-emerald-400 dark:text-emerald-400; }
 .bucket-failure { @apply bg-red-500 text-red-500 dark:bg-red-400 dark:text-red-400; }
-.bucket-degraded { @apply bg-orange-500 text-orange-500 dark:bg-orange-400 dark:text-orange-400; }
+.bucket-degraded { @apply bg-emerald-200 text-emerald-200 dark:bg-emerald-200 dark:text-emerald-200; }
 .bucket-empty { @apply bg-amber-400 text-amber-400 dark:bg-amber-300 dark:text-amber-300; }
 .bucket-unknown { @apply bg-slate-200 text-slate-400 dark:bg-dark-700 dark:text-slate-500; }
 .dark .model-status-page .bucket-success { box-shadow: 0 0 9px rgba(52, 211, 153, 0.3); }
 .dark .model-status-page .bucket-failure { box-shadow: 0 0 9px rgba(248, 113, 113, 0.27); }
-.dark .model-status-page .bucket-degraded { box-shadow: 0 0 9px rgba(251, 146, 60, 0.3); }
+.dark .model-status-page .bucket-degraded { box-shadow: 0 0 9px rgba(167, 243, 208, 0.2); }
 .dark .model-status-page .bucket-empty { box-shadow: 0 0 9px rgba(251, 191, 36, 0.24); }
 .dark .model-status-page .bucket-unknown { background: #1e293b; box-shadow: none; }
 

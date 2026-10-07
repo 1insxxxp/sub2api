@@ -43,6 +43,37 @@ jobs:
         working-directory: backend
         run: make test-integration
 
+  model-status-postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: model_status_test
+          POSTGRES_PASSWORD: model_status_test
+          POSTGRES_DB: model_status_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U model_status_test -d model_status_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: backend/go.mod
+          check-latest: false
+          cache: true
+          cache-dependency-path: backend/go.sum
+      - name: Model status PostgreSQL regression tests
+        working-directory: backend
+        env:
+          MODEL_STATUS_TEST_DSN: postgres://model_status_test:model_status_test@localhost:5432/model_status_test?sslmode=disable
+        run: go test -tags=unit ./internal/repository -run '^TestModelStatus' -count=1 -v
+
   frontend:
     runs-on: ubuntu-latest
     steps:

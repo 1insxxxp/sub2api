@@ -128,6 +128,13 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInput(
 			})
 		}
 
+		if failoverErr := s.handleUpstreamModelNotFound(ctx, c, account, resp, input.OriginalModel, OpsUpstreamErrorEvent{
+			UpstreamURL: safeUpstreamURL(upstreamReq.URL.String()),
+			Passthrough: true,
+		}); failoverErr != nil {
+			return nil, failoverErr
+		}
+
 		// 透传分支禁止 400 请求体降级重试（该重试会改写请求体）
 		if resp.StatusCode >= 400 && resp.StatusCode != 400 && s.shouldRetryUpstreamError(account, resp.StatusCode) {
 			if attempt < maxRetryAttempts {

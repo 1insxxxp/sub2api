@@ -39,6 +39,8 @@ export default {
     refreshFailed: 'Refresh failed. Showing the last available report.',
     staleData: 'This report has not been updated for more than 90 seconds.',
     incompleteResult: 'Incomplete record excluded from success rate',
+    clientErrorExcluded: 'Client error excluded from success rate',
+    noRatedRequests: 'No requests included in the success rate for this interval',
     outcome: { success: 'Success', failure: 'Failure', empty: 'Empty' },
     health: {
       healthy: 'Healthy',
