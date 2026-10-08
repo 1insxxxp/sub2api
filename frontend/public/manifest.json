@@ -1,0 +1,23 @@
+{
+  "id": "/",
+  "name": "Passion API",
+  "short_name": "Passion API",
+  "lang": "zh-CN",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "icons": [
+    {
+      "src": "/logo-passion-api-mark.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo-passion-api-mark.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
