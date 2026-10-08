@@ -1,10 +1,10 @@
-import type { GroupPlatform } from '@/types'
+import type { GroupPlatform, KeyDisplayCategory } from '@/types'
 
-export type KeyGroupProvider = 'anthropic' | 'openai' | 'domestic' | 'other'
+export type KeyGroupProvider = Exclude<KeyDisplayCategory, ''>
 
 export const KEY_GROUP_PROVIDERS = ['anthropic', 'openai', 'domestic', 'other'] as const
 
-// Classify by the configured upstream platform, never by a group's display name.
+// Platform remains the fallback for automatic and legacy display categories.
 const PROVIDER_BY_PLATFORM: Record<GroupPlatform, KeyGroupProvider> = {
   anthropic: 'anthropic',
   openai: 'openai',
@@ -20,8 +20,15 @@ const PROVIDER_BY_PLATFORM: Record<GroupPlatform, KeyGroupProvider> = {
   typesafe: 'other'
 }
 
-export function getKeyGroupProvider(platform: GroupPlatform): KeyGroupProvider {
-  return PROVIDER_BY_PLATFORM[platform] ?? 'other'
+export function getKeyGroupProvider(group: {
+  platform: GroupPlatform
+  key_display_category?: string
+}): KeyGroupProvider {
+  const category = group.key_display_category
+  if (KEY_GROUP_PROVIDERS.some((provider) => provider === category)) {
+    return category as KeyGroupProvider
+  }
+  return PROVIDER_BY_PLATFORM[group.platform] ?? 'other'
 }
 
 // Collections use representative provider marks rather than an invented brand logo.

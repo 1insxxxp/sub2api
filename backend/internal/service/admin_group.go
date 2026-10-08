@@ -387,7 +387,7 @@ func normalizeCreateGroupInputForSimpleMode(input *CreateGroupInput) {
 		return
 	}
 	*input = CreateGroupInput{
-		Name: input.Name, Description: input.Description, Tag: input.Tag, TagColor: input.TagColor, Platform: input.Platform,
+		Name: input.Name, Description: input.Description, Tag: input.Tag, TagColor: input.TagColor, KeyDisplayCategory: input.KeyDisplayCategory, Platform: input.Platform,
 		RateMultiplier: 1, SubscriptionType: SubscriptionTypeStandard,
 	}
 }
@@ -396,10 +396,13 @@ func normalizeUpdateGroupInputForSimpleMode(input *UpdateGroupInput) {
 	if input == nil {
 		return
 	}
-	*input = UpdateGroupInput{Name: input.Name, Description: input.Description, Tag: input.Tag, TagColor: input.TagColor}
+	*input = UpdateGroupInput{Name: input.Name, Description: input.Description, Tag: input.Tag, TagColor: input.TagColor, KeyDisplayCategory: input.KeyDisplayCategory}
 }
 
 func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupInput) (*Group, error) {
+	if err := validateGroupKeyDisplayCategory(input.KeyDisplayCategory); err != nil {
+		return nil, err
+	}
 	tag, tagColor, err := normalizeGroupTag(input.Tag, input.TagColor)
 	if err != nil {
 		return nil, err
@@ -590,6 +593,7 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		Description:                      input.Description,
 		Tag:                              tag,
 		TagColor:                         tagColor,
+		KeyDisplayCategory:               input.KeyDisplayCategory,
 		Platform:                         platform,
 		RateMultiplier:                   input.RateMultiplier,
 		EmptyResponseCompensationEnabled: input.EmptyResponseCompensationEnabled,
@@ -788,6 +792,11 @@ func (s *adminServiceImpl) validateFallbackGroupOnInvalidRequest(ctx context.Con
 }
 
 func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *UpdateGroupInput) (*Group, error) {
+	if input.KeyDisplayCategory != nil {
+		if err := validateGroupKeyDisplayCategory(*input.KeyDisplayCategory); err != nil {
+			return nil, err
+		}
+	}
 	group, err := s.groupRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -818,6 +827,9 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	}
 	if err := updateGroupTag(group, input.Tag, input.TagColor); err != nil {
 		return nil, err
+	}
+	if input.KeyDisplayCategory != nil {
+		group.KeyDisplayCategory = *input.KeyDisplayCategory
 	}
 	if input.Platform != "" {
 		group.Platform = input.Platform

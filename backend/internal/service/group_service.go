@@ -83,6 +83,7 @@ type GroupSortOrderUpdate struct {
 
 // CreateGroupRequest 创建分组请求
 type CreateGroupRequest struct {
+	KeyDisplayCategory   string   `json:"key_display_category"`
 	Name                 string   `json:"name"`
 	Description          string   `json:"description"`
 	RateMultiplier       float64  `json:"rate_multiplier"`
@@ -94,6 +95,7 @@ type CreateGroupRequest struct {
 
 // UpdateGroupRequest 更新分组请求
 type UpdateGroupRequest struct {
+	KeyDisplayCategory   *string  `json:"key_display_category"`
 	Name                 *string  `json:"name"`
 	Description          *string  `json:"description"`
 	RateMultiplier       *float64 `json:"rate_multiplier"`
@@ -120,6 +122,9 @@ func NewGroupService(groupRepo GroupRepository, authCacheInvalidator APIKeyAuthC
 
 // Create 创建分组
 func (s *GroupService) Create(ctx context.Context, req CreateGroupRequest) (*Group, error) {
+	if err := validateGroupKeyDisplayCategory(req.KeyDisplayCategory); err != nil {
+		return nil, err
+	}
 	imageRateMultiplier := 1.0
 	if req.ImageRateMultiplier != nil {
 		if *req.ImageRateMultiplier < 0 {
@@ -141,6 +146,7 @@ func (s *GroupService) Create(ctx context.Context, req CreateGroupRequest) (*Gro
 		Name:                 req.Name,
 		Description:          req.Description,
 		Platform:             PlatformAnthropic,
+		KeyDisplayCategory:   req.KeyDisplayCategory,
 		RateMultiplier:       req.RateMultiplier,
 		IsExclusive:          req.IsExclusive,
 		Status:               StatusActive,
@@ -186,6 +192,11 @@ func (s *GroupService) ListActive(ctx context.Context) ([]Group, error) {
 
 // Update 更新分组
 func (s *GroupService) Update(ctx context.Context, id int64, req UpdateGroupRequest) (*Group, error) {
+	if req.KeyDisplayCategory != nil {
+		if err := validateGroupKeyDisplayCategory(*req.KeyDisplayCategory); err != nil {
+			return nil, err
+		}
+	}
 	group, err := s.groupRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("get group: %w", err)
@@ -206,6 +217,9 @@ func (s *GroupService) Update(ctx context.Context, id int64, req UpdateGroupRequ
 
 	if req.Description != nil {
 		group.Description = *req.Description
+	}
+	if req.KeyDisplayCategory != nil {
+		group.KeyDisplayCategory = *req.KeyDisplayCategory
 	}
 
 	if req.RateMultiplier != nil {

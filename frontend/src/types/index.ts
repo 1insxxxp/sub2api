@@ -643,12 +643,15 @@ export interface ReasoningEffortMapping {
 
 export type GroupTag = string
 
+export type KeyDisplayCategory = '' | 'anthropic' | 'openai' | 'domestic' | 'other'
+
 export interface Group {
   id: number
   name: string
   description: string | null
   tag?: GroupTag
   tag_color?: string
+  key_display_category?: KeyDisplayCategory
   platform: GroupPlatform
   rate_multiplier: number
   empty_response_compensation_enabled: boolean
@@ -776,6 +779,7 @@ export interface SystemCustomGroupModelInput {
 export interface CreateSystemCustomGroupRequest {
   tag?: GroupTag
   tag_color?: string
+  key_display_category?: KeyDisplayCategory
   name: string
   description: string | null
   daily_limit_usd: number | null
@@ -793,6 +797,7 @@ export type UpdateSystemCustomGroupRequest = CreateSystemCustomGroupRequest
 export interface SystemCustomGroupContainer {
   tag?: GroupTag
   tag_color?: string
+  key_display_category?: KeyDisplayCategory
   id: number
   name: string
   description: string
@@ -1048,6 +1053,7 @@ export interface CreateGroupRequest {
   name: string
   tag?: GroupTag
   tag_color?: string
+  key_display_category?: KeyDisplayCategory
   description?: string | null
   platform?: GroupPlatform
   rate_multiplier?: number
@@ -1119,6 +1125,7 @@ export interface UpdateGroupRequest {
   name?: string
   tag?: GroupTag
   tag_color?: string
+  key_display_category?: KeyDisplayCategory
   description?: string | null
   platform?: GroupPlatform
   rate_multiplier?: number

@@ -30,6 +30,7 @@ type SystemCustomGroupHandler struct {
 }
 
 type systemCustomGroupContainerResponse struct {
+	KeyDisplayCategory         string    `json:"key_display_category"`
 	Tag                        string    `json:"tag"`
 	TagColor                   string    `json:"tag_color"`
 	ID                         int64     `json:"id"`
@@ -246,9 +247,10 @@ func systemCustomGroupToResponse(group *service.SystemCustomGroup) systemCustomG
 func systemCustomGroupContainerToResponse(group service.Group) systemCustomGroupContainerResponse {
 	return systemCustomGroupContainerResponse{
 		ID: group.ID, Name: group.Name, Description: group.Description, Platform: group.Platform,
-		Tag:            group.Tag,
-		TagColor:       group.TagColor,
-		RateMultiplier: group.RateMultiplier, IsExclusive: group.IsExclusive, Status: group.Status,
+		Tag:                group.Tag,
+		TagColor:           group.TagColor,
+		KeyDisplayCategory: group.KeyDisplayCategory,
+		RateMultiplier:     group.RateMultiplier, IsExclusive: group.IsExclusive, Status: group.Status,
 		SubscriptionType: group.SubscriptionType, SystemCustomRoutingEnabled: group.SystemCustomRoutingEnabled,
 		DailyLimitUSD: group.DailyLimitUSD, WeeklyLimitUSD: group.WeeklyLimitUSD, MonthlyLimitUSD: group.MonthlyLimitUSD,
 		DefaultValidityDays: group.DefaultValidityDays, CreatedAt: group.CreatedAt, UpdatedAt: group.UpdatedAt,

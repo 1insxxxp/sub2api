@@ -186,13 +186,14 @@ func (h *GroupHandler) rejectUnsupportedSimpleModeOperation(c *gin.Context, oper
 }
 
 type simpleModeGroupResponse struct {
-	ID          int64  `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Tag         string `json:"tag"`
-	TagColor    string `json:"tag_color"`
-	Platform    string `json:"platform"`
-	Status      string `json:"status"`
+	KeyDisplayCategory string `json:"key_display_category"`
+	ID                 int64  `json:"id"`
+	Name               string `json:"name"`
+	Description        string `json:"description"`
+	Tag                string `json:"tag"`
+	TagColor           string `json:"tag_color"`
+	Platform           string `json:"platform"`
+	Status             string `json:"status"`
 
 	AccountCount            int64     `json:"account_count,omitempty"`
 	ActiveAccountCount      int64     `json:"active_account_count,omitempty"`
@@ -207,7 +208,7 @@ func groupForSimpleMode(group *service.Group) *simpleModeGroupResponse {
 		return nil
 	}
 	return &simpleModeGroupResponse{
-		ID: group.ID, Name: group.Name, Description: group.Description, Tag: group.Tag, TagColor: group.TagColor, Platform: group.Platform,
+		ID: group.ID, Name: group.Name, Description: group.Description, Tag: group.Tag, TagColor: group.TagColor, KeyDisplayCategory: group.KeyDisplayCategory, Platform: group.Platform,
 		Status:             group.Status,
 		AccountCount:       group.AccountCount,
 		ActiveAccountCount: group.ActiveAccountCount, RateLimitedAccountCount: group.RateLimitedAccountCount,
@@ -219,7 +220,7 @@ func sanitizeCreateGroupRequestForSimpleMode(req *CreateGroupRequest) {
 	if req == nil {
 		return
 	}
-	allowed := CreateGroupRequest{Name: req.Name, Description: req.Description, Tag: req.Tag, TagColor: req.TagColor, Platform: req.Platform}
+	allowed := CreateGroupRequest{Name: req.Name, Description: req.Description, Tag: req.Tag, TagColor: req.TagColor, KeyDisplayCategory: req.KeyDisplayCategory, Platform: req.Platform}
 	allowed.RateMultiplier = 1
 	allowed.SubscriptionType = service.SubscriptionTypeStandard
 	*req = allowed
@@ -229,11 +230,12 @@ func sanitizeUpdateGroupRequestForSimpleMode(req *UpdateGroupRequest) {
 	if req == nil {
 		return
 	}
-	*req = UpdateGroupRequest{Name: req.Name, Description: req.Description, Tag: req.Tag, TagColor: req.TagColor}
+	*req = UpdateGroupRequest{Name: req.Name, Description: req.Description, Tag: req.Tag, TagColor: req.TagColor, KeyDisplayCategory: req.KeyDisplayCategory}
 }
 
 // CreateGroupRequest represents create group request
 type CreateGroupRequest struct {
+	KeyDisplayCategory               string                        `json:"key_display_category" binding:"omitempty,oneof=anthropic openai domestic other"`
 	Name                             string                        `json:"name" binding:"required"`
 	Description                      string                        `json:"description"`
 	Tag                              string                        `json:"tag"`
@@ -313,6 +315,7 @@ type CreateGroupRequest struct {
 
 // UpdateGroupRequest represents update group request
 type UpdateGroupRequest struct {
+	KeyDisplayCategory               *string                        `json:"key_display_category" binding:"omitempty,oneof='' anthropic openai domestic other"`
 	Name                             string                         `json:"name"`
 	Description                      *string                        `json:"description"`
 	Tag                              *string                        `json:"tag"`
@@ -728,6 +731,7 @@ func (h *GroupHandler) Create(c *gin.Context) {
 		Description:                      req.Description,
 		Tag:                              req.Tag,
 		TagColor:                         req.TagColor,
+		KeyDisplayCategory:               req.KeyDisplayCategory,
 		Platform:                         req.Platform,
 		RateMultiplier:                   req.RateMultiplier,
 		EmptyResponseCompensationEnabled: req.EmptyResponseCompensationEnabled,
@@ -878,6 +882,7 @@ func (h *GroupHandler) Update(c *gin.Context) {
 		Description:                      req.Description,
 		Tag:                              req.Tag,
 		TagColor:                         req.TagColor,
+		KeyDisplayCategory:               req.KeyDisplayCategory,
 		Platform:                         req.Platform,
 		RateMultiplier:                   req.RateMultiplier,
 		EmptyResponseCompensationEnabled: req.EmptyResponseCompensationEnabled,

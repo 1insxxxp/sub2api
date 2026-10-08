@@ -1393,6 +1393,26 @@ func init() {
 	groupDescProfitSafetyBuffer := groupFields[69].Descriptor()
 	// group.DefaultProfitSafetyBuffer holds the default value on creation for the profit_safety_buffer field.
 	group.DefaultProfitSafetyBuffer = groupDescProfitSafetyBuffer.Default.(float64)
+	// groupDescKeyDisplayCategory is the schema descriptor for key_display_category field.
+	groupDescKeyDisplayCategory := groupFields[70].Descriptor()
+	// group.DefaultKeyDisplayCategory holds the default value on creation for the key_display_category field.
+	group.DefaultKeyDisplayCategory = groupDescKeyDisplayCategory.Default.(string)
+	// group.KeyDisplayCategoryValidator is a validator for the "key_display_category" field. It is called by the builders before save.
+	group.KeyDisplayCategoryValidator = func() func(string) error {
+		validators := groupDescKeyDisplayCategory.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(key_display_category string) error {
+			for _, fn := range fns {
+				if err := fn(key_display_category); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
 	idempotencyrecordMixin := schema.IdempotencyRecord{}.Mixin()
 	idempotencyrecordMixinFields0 := idempotencyrecordMixin[0].Fields()
 	_ = idempotencyrecordMixinFields0

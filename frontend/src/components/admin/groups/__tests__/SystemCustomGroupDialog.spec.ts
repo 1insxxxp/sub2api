@@ -2,6 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import SystemCustomGroupDialog from '../SystemCustomGroupDialog.vue'
+import Select from '@/components/common/Select.vue'
 
 const {
   createSystemCustomGroup,
@@ -112,7 +113,8 @@ function mountDialog(props: Record<string, unknown> = {}) {
           emits: ['close'],
           template: '<div v-if="show"><slot /><slot name="footer" /></div>'
         },
-        Icon: true
+        Icon: true,
+        Teleport: true
       }
     }
   })
@@ -149,6 +151,7 @@ describe('SystemCustomGroupDialog', () => {
       name: '酒馆综合月卡',
       tag: '',
       tag_color: '',
+      key_display_category: '',
       description: null,
       daily_limit_usd: null,
       weekly_limit_usd: null,
@@ -158,6 +161,60 @@ describe('SystemCustomGroupDialog', () => {
     })
     expect(wrapper.find('[data-testid="system-custom-model-row"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="system-custom-sync"]').exists()).toBe(false)
+  })
+
+  it('creates the chosen display category without changing source order and resets it when reopened', async () => {
+    const wrapper = mountDialog()
+    await flushPromises()
+    expect(wrapper.getComponent(Select).props('modelValue')).toBe('')
+    expect(wrapper.getComponent(Select).props('options').map(option => option.value)).toEqual(['', 'anthropic', 'openai', 'domestic', 'other'])
+    await wrapper.get('#system-custom-key-display-category').trigger('click')
+    await wrapper.findAll('[role="option"]').find(option => option.text() === 'keys.providers.domestic')!.trigger('click')
+    await wrapper.get('[data-testid="system-custom-name"]').setValue('Custom collection')
+    await sourceCheckbox(wrapper, 22).setValue(true)
+    await sourceCheckbox(wrapper, 11).setValue(true)
+    await wrapper.get('[data-testid="system-custom-save"]').trigger('click')
+    await flushPromises()
+    expect(createSystemCustomGroup).toHaveBeenCalledWith(expect.objectContaining({ key_display_category: 'domestic', source_group_ids: [22, 11] }))
+    await wrapper.setProps({ show: false })
+    await wrapper.setProps({ show: true })
+    await flushPromises()
+    expect(wrapper.getComponent(Select).props('modelValue')).toBe('')
+    expect(wrapper.get<HTMLInputElement>('[data-testid="system-custom-name"]').element.value).toBe('')
+    expect(wrapper.findAll('[data-testid="system-custom-priority-row"]')).toHaveLength(0)
+    wrapper.unmount()
+  })
+
+  it('hydrates and updates the display category, including an explicit automatic reset', async () => {
+    const saved = { ...existingGroup, group: { ...existingGroup.group, key_display_category: 'domestic' } }
+    getSystemCustomGroup.mockResolvedValue(saved)
+    updateSystemCustomGroup.mockResolvedValue(saved)
+    const wrapper = mountDialog({ groupId: 90 })
+    await flushPromises()
+    expect(wrapper.getComponent(Select).props('modelValue')).toBe('domestic')
+    await wrapper.get('#system-custom-key-display-category').trigger('click')
+    await wrapper.findAll('[role="option"]').find(option => option.text() === 'keys.providers.anthropic')!.trigger('click')
+    await wrapper.get('[data-testid="system-custom-save"]').trigger('click')
+    await flushPromises()
+    expect(updateSystemCustomGroup).toHaveBeenCalledWith(90, expect.objectContaining({ key_display_category: 'anthropic', source_group_ids: [22, 11] }))
+    getSystemCustomGroup.mockResolvedValue({ ...saved, group: { ...saved.group, key_display_category: 'anthropic' } })
+    await wrapper.setProps({ show: false })
+    await wrapper.setProps({ show: true })
+    await flushPromises()
+    expect(wrapper.getComponent(Select).props('modelValue')).toBe('anthropic')
+    await wrapper.get('#system-custom-key-display-category').trigger('click')
+    await wrapper.findAll('[role="option"]').find(option => option.text() === 'admin.groups.form.keyDisplayCategoryAuto')!.trigger('click')
+    await wrapper.get('[data-testid="system-custom-save"]').trigger('click')
+    await flushPromises()
+    expect(updateSystemCustomGroup).toHaveBeenLastCalledWith(90, expect.objectContaining({ key_display_category: '', source_group_ids: [22, 11] }))
+    wrapper.unmount()
+  })
+
+  it('opens legacy system custom groups with automatic display classification', async () => {
+    const wrapper = mountDialog({ groupId: 90 })
+    await flushPromises()
+    expect(wrapper.getComponent(Select).props('modelValue')).toBe('')
+    wrapper.unmount()
   })
 
   it('loads persisted source priority and recalculates the dynamic catalog summary', async () => {

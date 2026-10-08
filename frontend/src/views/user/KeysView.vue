@@ -1579,6 +1579,7 @@ const formatDateTimeLocal = (isoDate: string): string => {
 interface GroupOption {
   tag?: Group['tag']
   tag_color?: string
+  key_display_category?: Group['key_display_category']
   value: number
   label: string
   description: string | null
@@ -1979,6 +1980,7 @@ const groupOptions = computed(() =>
     description: group.description,
     tag: group.tag,
     tag_color: group.tag_color,
+    key_display_category: group.key_display_category,
     rate: group.rate_multiplier,
     userRate: userGroupRates.value[group.id] ?? null,
     peakRateEnabled: group.peak_rate_enabled,
@@ -2002,12 +2004,12 @@ const createProvider = ref<KeyGroupProvider>('anthropic')
 const createProviderOptions = computed(() => KEY_GROUP_PROVIDERS.map((value) => ({
   value,
   label: t(`keys.providers.${value}`),
-  count: groups.value.filter((group) => getKeyGroupProvider(group.platform) === value).length
+  count: groups.value.filter((group) => getKeyGroupProvider(group) === value).length
 })))
 
 const formGroupOptions = computed(() => showEditModal.value
   ? groupOptions.value
-  : groupOptions.value.filter((group) => getKeyGroupProvider(group.platform) === createProvider.value)
+  : groupOptions.value.filter((group) => getKeyGroupProvider(group) === createProvider.value)
 )
 
 const selectCreateProvider = (provider: KeyGroupProvider) => {

@@ -104,6 +104,7 @@ type Group struct {
 	Description                      string  `json:"description"`
 	Tag                              string  `json:"tag"`
 	TagColor                         string  `json:"tag_color"`
+	KeyDisplayCategory               string  `json:"key_display_category"`
 	Platform                         string  `json:"platform"`
 	RateMultiplier                   float64 `json:"rate_multiplier"`
 	EmptyResponseCompensationEnabled bool    `json:"empty_response_compensation_enabled"`

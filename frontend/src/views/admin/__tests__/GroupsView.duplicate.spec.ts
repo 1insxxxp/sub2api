@@ -9,6 +9,7 @@ import { adminAPI } from '@/api/admin'
 const {
   listGroups,
   duplicateGroup,
+  createGroup,
   updateGroup,
   getModelAllowlistCandidates,
   getUsageSummary,
@@ -19,6 +20,7 @@ const {
 } = vi.hoisted(() => ({
   listGroups: vi.fn(),
   duplicateGroup: vi.fn(),
+  createGroup: vi.fn(),
   updateGroup: vi.fn(),
   getModelAllowlistCandidates: vi.fn(),
   getUsageSummary: vi.fn(),
@@ -39,8 +41,9 @@ vi.mock('@/api/admin', () => ({
       getUsageSummary,
       getCapacitySummary,
       getLiveCapability,
-      getAll: vi.fn(),
-      create: vi.fn(),
+      getAll: vi.fn().mockResolvedValue([]),
+      getAllIncludingInactive: vi.fn().mockResolvedValue([]),
+      create: createGroup,
       update: updateGroup,
       delete: vi.fn(),
       updateSortOrder: vi.fn()
@@ -152,6 +155,12 @@ const BaseDialogStub = defineComponent({
   template: '<div v-if="show"><slot /><slot name="footer" /></div>'
 })
 
+const SelectStub = defineComponent({
+  props: ['modelValue', 'options', 'disabled'],
+  emits: ['update:modelValue'],
+  template: '<select :value="modelValue" :disabled="disabled" @change="$emit(\'update:modelValue\', $event.target.value)"><option v-for="option in options" :key="option.value" :value="option.value">{{ option.label }}</option></select>'
+})
+
 function mountView() {
   return mount(GroupsView, {
     global: {
@@ -163,7 +172,7 @@ function mountView() {
         BaseDialog: BaseDialogStub,
         ConfirmDialog: true,
         EmptyState: true,
-        Select: true,
+        Select: SelectStub,
         PlatformIcon: true,
         Icon: true,
         GroupCapacityBadge: true,
@@ -176,6 +185,58 @@ function mountView() {
 }
 
 describe('GroupsView duplicate action', () => {
+  it.each([false, true])('creates a display category and resets it when reopening (simple mode: %s)', async (simpleMode) => {
+    authState.isSimpleMode = simpleMode
+    createGroup.mockResolvedValue({ ...sourceGroup, key_display_category: 'domestic' })
+    const wrapper = mountView()
+    await flushPromises()
+    const openCreate = () => wrapper.get('[data-tour="groups-create-btn"]').trigger('click')
+    await openCreate()
+    const category = wrapper.get<HTMLSelectElement>('[data-test="create-group-key-display-category"]')
+    expect(category.element.value).toBe('')
+    expect(category.findAll('option').map(option => option.attributes('value'))).toEqual(['', 'anthropic', 'openai', 'domestic', 'other'])
+    await wrapper.get('[data-tour="group-form-name"]').setValue('Custom protocol group')
+    await category.setValue('domestic')
+    await wrapper.get('#create-group-form').trigger('submit')
+    await flushPromises()
+    expect(createGroup).toHaveBeenCalledWith(expect.objectContaining({ name: 'Custom protocol group', platform: 'anthropic', key_display_category: 'domestic' }))
+    await openCreate()
+    expect(wrapper.get<HTMLSelectElement>('[data-test="create-group-key-display-category"]').element.value).toBe('')
+    expect(wrapper.get<HTMLInputElement>('[data-tour="group-form-name"]').element.value).toBe('')
+    wrapper.unmount()
+  })
+
+  it.each([false, true])('restores and saves a display category, including an automatic reset (simple mode: %s)', async (simpleMode) => {
+    authState.isSimpleMode = simpleMode
+    const saved = { ...sourceGroup, key_display_category: 'domestic' }
+    listGroups.mockResolvedValue({ items: [saved], total: 1, page: 1, page_size: 20, pages: 1 })
+    updateGroup.mockResolvedValue({ ...saved, key_display_category: 'other' })
+    const wrapper = mountView()
+    await flushPromises()
+    const openEditor = async () => {
+      await wrapper.findAll('button').find(button => button.text() === 'common.edit')!.trigger('click')
+      await flushPromises()
+    }
+    await openEditor()
+    expect(wrapper.get<HTMLSelectElement>('[data-test="edit-group-key-display-category"]').element.value).toBe('domestic')
+    await wrapper.get('[data-test="edit-group-key-display-category"]').setValue('other')
+    listGroups.mockResolvedValue({ items: [{ ...saved, key_display_category: 'other' }], total: 1, page: 1, page_size: 20, pages: 1 })
+    await wrapper.get('#edit-group-form').trigger('submit')
+    await flushPromises()
+    expect(updateGroup).toHaveBeenCalledWith(42, expect.objectContaining({ key_display_category: 'other' }))
+    await openEditor()
+    expect(wrapper.get<HTMLSelectElement>('[data-test="edit-group-key-display-category"]').element.value).toBe('other')
+    await wrapper.get('[data-test="edit-group-key-display-category"]').setValue('')
+    updateGroup.mockResolvedValue({ ...saved, key_display_category: '' })
+    listGroups.mockResolvedValue({ items: [{ ...saved, key_display_category: '' }], total: 1, page: 1, page_size: 20, pages: 1 })
+    await wrapper.get('#edit-group-form').trigger('submit')
+    await flushPromises()
+    expect(updateGroup).toHaveBeenCalledWith(42, expect.objectContaining({ key_display_category: '' }))
+    await openEditor()
+    expect(wrapper.get<HTMLSelectElement>('[data-test="edit-group-key-display-category"]').element.value).toBe('')
+    wrapper.unmount()
+  })
+
   it('saves custom tag text and color and restores both when editing again', async () => {
     const saved = { ...sourceGroup, tag: '专属高速', tag_color: '#16A34A' }
     updateGroup.mockResolvedValue(saved)
@@ -218,6 +279,7 @@ describe('GroupsView duplicate action', () => {
     for (const fn of [
       listGroups,
       duplicateGroup,
+      createGroup,
       updateGroup,
       getModelAllowlistCandidates,
       getUsageSummary,
@@ -243,6 +305,8 @@ describe('GroupsView duplicate action', () => {
       status: 'inactive'
     })
     getModelAllowlistCandidates.mockResolvedValue([])
+    vi.mocked(adminAPI.groups.getAll).mockResolvedValue([])
+    vi.mocked(adminAPI.groups.getAllIncludingInactive).mockResolvedValue([])
     getUsageSummary.mockResolvedValue([])
     getCapacitySummary.mockResolvedValue([])
     getLiveCapability.mockResolvedValue({ supported: false })

@@ -193,6 +193,7 @@ func groupFromServiceBase(g *service.Group) Group {
 		Description:                      g.Description,
 		Tag:                              g.Tag,
 		TagColor:                         g.TagColor,
+		KeyDisplayCategory:               g.KeyDisplayCategory,
 		Platform:                         g.Platform,
 		RateMultiplier:                   g.RateMultiplier,
 		EmptyResponseCompensationEnabled: g.EmptyResponseCompensationEnabled,

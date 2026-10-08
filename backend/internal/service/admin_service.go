@@ -238,6 +238,7 @@ type AdminBoundAuthIdentityChannel struct {
 }
 
 type CreateGroupInput struct {
+	KeyDisplayCategory               string
 	Name                             string
 	Description                      string
 	Tag                              string
@@ -325,6 +326,7 @@ type CreateGroupInput struct {
 }
 
 type UpdateGroupInput struct {
+	KeyDisplayCategory               *string
 	Name                             string
 	Description                      *string
 	Tag                              *string

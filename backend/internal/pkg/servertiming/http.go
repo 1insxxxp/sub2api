@@ -53,9 +53,11 @@ func Do(client *http.Client, req *http.Request) (*http.Response, error) {
 		client = http.DefaultClient
 	}
 	if req == nil || !Active(req.Context()) {
+		// #nosec G704 -- This wrapper does not construct URLs; callers validate request hosts and redirects.
 		return client.Do(req) //nolint:gosec // G704: 通用埋点包装器，不构造 URL；请求由调用方构造，SSRF 信任边界在调用方
 	}
 	startedAt := time.Now()
+	// #nosec G704 -- The same caller-owned URL and redirect validation applies to this timing path.
 	response, err := client.Do(req) //nolint:gosec // G704: 同上
 	RecordDependency(req.Context(), dependencyModule(req), startedAt, time.Now())
 	return response, err

@@ -78,6 +78,10 @@ vi.mock('@/api', () => ({
   },
 }))
 
+vi.mock('@/api/customGroups', () => ({
+  customGroupsAPI: { list: vi.fn().mockResolvedValue([]) },
+}))
+
 vi.mock('@/stores/app', () => ({
   useAppStore: () => ({
     showError,
@@ -798,6 +802,55 @@ describe('user KeysView column settings', () => {
       await chooseProvider(wrapper, 'other')
       expect(optionIds(wrapper)).toEqual([7, 8, 9, 10, 11, 12])
       expect(wrapper.findAllComponents({ name: 'Select' })[0].props('options')).toHaveLength(14)
+    })
+
+    it('enables explicit categories, filters their groups, and creates with the original group ID', async () => {
+      getAvailableGroups.mockResolvedValue([
+        { ...availableGroups[1], id: 42, name: 'Claude domestic hybrid', tag: 'openai', key_display_category: 'domestic' },
+        { ...availableGroups[9], id: 43, key_display_category: 'anthropic' },
+        { ...availableGroups[0], id: 44, key_display_category: 'other' },
+      ])
+      const wrapper = await openCreate()
+      expect(wrapper.get<HTMLInputElement>('input[value="anthropic"]').element.disabled).toBe(false)
+      expect(wrapper.get<HTMLInputElement>('input[value="openai"]').element.disabled).toBe(true)
+      expect(wrapper.get<HTMLInputElement>('input[value="domestic"]').element.disabled).toBe(false)
+      expect(optionIds(wrapper)).toEqual([43])
+      await chooseProvider(wrapper, 'other')
+      expect(optionIds(wrapper)).toEqual([44])
+      await chooseProvider(wrapper, 'domestic')
+      expect(optionIds(wrapper)).toEqual([42])
+      await wrapper.get('[data-tour="key-form-name"]').setValue('Domestic key')
+      groupSelect(wrapper).vm.$emit('update:modelValue', 42)
+      vi.mocked(keysAPI.create).mockResolvedValue({ ...createApiKey(), group_id: 42 })
+      await wrapper.get('#key-form').trigger('submit')
+      await flushPromises()
+      expect(vi.mocked(keysAPI.create).mock.calls[0].slice(0, 2)).toEqual(['Domestic key', 42])
+      wrapper.unmount()
+    })
+
+    it('keeps automatic and unknown categories on their platform and preserves the edit binding', async () => {
+      getAvailableGroups.mockResolvedValue([
+        { ...availableGroups[1], id: 42, key_display_category: '' },
+        { ...availableGroups[4], id: 43, key_display_category: 'future-category' },
+        { ...availableGroups[9], id: 44 },
+      ])
+      listKeys.mockResolvedValue({ items: [{ ...createApiKey(), group_id: 43 }], total: 1, page: 1, page_size: 20, pages: 1 })
+      const wrapper = await openCreate()
+      expect(optionIds(wrapper)).toEqual([42])
+      await chooseProvider(wrapper, 'domestic')
+      expect(optionIds(wrapper)).toEqual([43])
+      await chooseProvider(wrapper, 'other')
+      expect(optionIds(wrapper)).toEqual([44])
+      await wrapper.get('[data-test="close-dialog"]').trigger('click')
+      await getButtonByText(wrapper, 'common.edit').trigger('click')
+      expect(wrapper.find('[data-tour="key-form-provider"]').exists()).toBe(false)
+      expect(optionIds(wrapper)).toEqual([42, 43, 44])
+      expect(groupSelect(wrapper).props('modelValue')).toBe(43)
+      updateKey.mockResolvedValue({ ...createApiKey(), group_id: 43 })
+      await wrapper.get('#key-form').trigger('submit')
+      await flushPromises()
+      expect(updateKey).toHaveBeenCalledWith(1, expect.objectContaining({ group_id: 43 }))
+      wrapper.unmount()
     })
 
     it('clears the previous group on provider change and submits only the newly selected group', async () => {

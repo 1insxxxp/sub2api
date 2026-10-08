@@ -313,6 +313,11 @@ func (Group) Fields() []ent.Field {
 			SchemaType(map[string]string{dialect.Postgres: "decimal(10,4)"}).
 			Default(0).
 			Comment("安全缓冲，小数；与 margin 相加后从下游倍率中扣除，默认 0"),
+		field.String("key_display_category").
+			MaxLen(20).
+			Default(domain.KeyDisplayCategoryAutomatic).
+			Validate(domain.ValidateGroupKeyDisplayCategory).
+			Comment("API key selection display category; empty follows platform without changing routing or billing"),
 	}
 }
 

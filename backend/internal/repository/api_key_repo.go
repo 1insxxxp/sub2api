@@ -1023,6 +1023,7 @@ func groupEntityToService(g *dbent.Group) *service.Group {
 		Description:                      derefString(g.Description),
 		Tag:                              g.Tag,
 		TagColor:                         g.TagColor,
+		KeyDisplayCategory:               g.KeyDisplayCategory,
 		Platform:                         g.Platform,
 		RateMultiplier:                   g.RateMultiplier,
 		EmptyResponseCompensationEnabled: g.EmptyResponseCompensationEnabled,

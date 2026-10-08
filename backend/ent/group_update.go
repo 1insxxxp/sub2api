@@ -1319,6 +1319,20 @@ func (_u *GroupUpdate) AddProfitSafetyBuffer(v float64) *GroupUpdate {
 	return _u
 }
 
+// SetKeyDisplayCategory sets the "key_display_category" field.
+func (_u *GroupUpdate) SetKeyDisplayCategory(v string) *GroupUpdate {
+	_u.mutation.SetKeyDisplayCategory(v)
+	return _u
+}
+
+// SetNillableKeyDisplayCategory sets the "key_display_category" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableKeyDisplayCategory(v *string) *GroupUpdate {
+	if v != nil {
+		_u.SetKeyDisplayCategory(*v)
+	}
+	return _u
+}
+
 // AddAPIKeyIDs adds the "api_keys" edge to the APIKey entity by IDs.
 func (_u *GroupUpdate) AddAPIKeyIDs(ids ...int64) *GroupUpdate {
 	_u.mutation.AddAPIKeyIDs(ids...)
@@ -1844,6 +1858,11 @@ func (_u *GroupUpdate) check() error {
 			return &ValidationError{Name: "max_reasoning_effort_over_limit", err: fmt.Errorf(`ent: validator failed for field "Group.max_reasoning_effort_over_limit": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.KeyDisplayCategory(); ok {
+		if err := group.KeyDisplayCategoryValidator(v); err != nil {
+			return &ValidationError{Name: "key_display_category", err: fmt.Errorf(`ent: validator failed for field "Group.key_display_category": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -2233,6 +2252,9 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.AddedProfitSafetyBuffer(); ok {
 		_spec.AddField(group.FieldProfitSafetyBuffer, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.KeyDisplayCategory(); ok {
+		_spec.SetField(group.FieldKeyDisplayCategory, field.TypeString, value)
 	}
 	if _u.mutation.APIKeysCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -4052,6 +4074,20 @@ func (_u *GroupUpdateOne) AddProfitSafetyBuffer(v float64) *GroupUpdateOne {
 	return _u
 }
 
+// SetKeyDisplayCategory sets the "key_display_category" field.
+func (_u *GroupUpdateOne) SetKeyDisplayCategory(v string) *GroupUpdateOne {
+	_u.mutation.SetKeyDisplayCategory(v)
+	return _u
+}
+
+// SetNillableKeyDisplayCategory sets the "key_display_category" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableKeyDisplayCategory(v *string) *GroupUpdateOne {
+	if v != nil {
+		_u.SetKeyDisplayCategory(*v)
+	}
+	return _u
+}
+
 // AddAPIKeyIDs adds the "api_keys" edge to the APIKey entity by IDs.
 func (_u *GroupUpdateOne) AddAPIKeyIDs(ids ...int64) *GroupUpdateOne {
 	_u.mutation.AddAPIKeyIDs(ids...)
@@ -4590,6 +4626,11 @@ func (_u *GroupUpdateOne) check() error {
 			return &ValidationError{Name: "max_reasoning_effort_over_limit", err: fmt.Errorf(`ent: validator failed for field "Group.max_reasoning_effort_over_limit": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.KeyDisplayCategory(); ok {
+		if err := group.KeyDisplayCategoryValidator(v); err != nil {
+			return &ValidationError{Name: "key_display_category", err: fmt.Errorf(`ent: validator failed for field "Group.key_display_category": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -4996,6 +5037,9 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if value, ok := _u.mutation.AddedProfitSafetyBuffer(); ok {
 		_spec.AddField(group.FieldProfitSafetyBuffer, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.KeyDisplayCategory(); ok {
+		_spec.SetField(group.FieldKeyDisplayCategory, field.TypeString, value)
 	}
 	if _u.mutation.APIKeysCleared() {
 		edge := &sqlgraph.EdgeSpec{

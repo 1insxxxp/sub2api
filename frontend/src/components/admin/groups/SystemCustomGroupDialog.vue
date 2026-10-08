@@ -48,6 +48,19 @@
         :reusable-tags="reusableTags"
       />
 
+      <div>
+        <label class="input-label" for="system-custom-key-display-category">{{ t('admin.groups.form.keyDisplayCategory') }}</label>
+        <Select
+          id="system-custom-key-display-category"
+          v-model="form.key_display_category"
+          :options="keyDisplayCategoryOptions"
+          :aria-label="t('admin.groups.form.keyDisplayCategory')"
+          aria-describedby="system-custom-key-display-category-hint"
+          data-testid="system-custom-key-display-category"
+        />
+        <p id="system-custom-key-display-category-hint" class="input-hint">{{ t('admin.groups.form.keyDisplayCategoryHint') }}</p>
+      </div>
+
       <section class="border-y border-slate-200 py-4 dark:border-dark-700">
         <button
           data-testid="system-custom-advanced-toggle"
@@ -221,9 +234,11 @@ import { useI18n } from 'vue-i18n'
 
 import { adminAPI } from '@/api/admin'
 import BaseDialog from '@/components/common/BaseDialog.vue'
+import Select from '@/components/common/Select.vue'
 import Icon from '@/components/icons/Icon.vue'
 import type {
   GroupTag,
+  KeyDisplayCategory,
   CreateSystemCustomGroupRequest,
   SystemCustomGroup,
   SystemCustomGroupCandidate,
@@ -231,6 +246,7 @@ import type {
 } from '@/types'
 import type { ReusableGroupTagOption } from '@/utils/groupTagOptions'
 import GroupTagField from '@/components/admin/group/GroupTagField.vue'
+import { KEY_GROUP_PROVIDERS } from '@/utils/keyGroupProviders'
 
 interface Props {
   show: boolean
@@ -248,6 +264,11 @@ const props = withDefaults(defineProps<Props>(), { groupId: null, reusableTags: 
 const emit = defineEmits<Emits>()
 const { t } = useI18n()
 
+const keyDisplayCategoryOptions = computed(() => [
+  { value: '', label: t('admin.groups.form.keyDisplayCategoryAuto') },
+  ...KEY_GROUP_PROVIDERS.map(value => ({ value, label: t(`keys.providers.${value}`) }))
+])
+
 const candidates = ref<SystemCustomGroupCandidate[]>([])
 const selectedSourceIDs = ref<number[]>([])
 const loading = ref(false)
@@ -261,6 +282,7 @@ let session = 0
 const form = reactive({
   tag: '' as GroupTag,
   tag_color: '',
+  key_display_category: '' as KeyDisplayCategory,
   name: '',
   description: '',
   daily_limit_usd: '' as number | string | null,
@@ -279,6 +301,7 @@ const reset = () => {
   form.description = ''
   form.tag = ''
   form.tag_color = ''
+  form.key_display_category = ''
   form.daily_limit_usd = ''
   form.weekly_limit_usd = ''
   form.monthly_limit_usd = ''
@@ -365,6 +388,7 @@ const load = async () => {
       form.description = detail.group.description || ''
       form.tag = detail.group.tag || ''
       form.tag_color = detail.group.tag_color || ''
+      form.key_display_category = detail.group.key_display_category || ''
       form.daily_limit_usd = detail.group.daily_limit_usd ?? ''
       form.weekly_limit_usd = detail.group.weekly_limit_usd ?? ''
       form.monthly_limit_usd = detail.group.monthly_limit_usd ?? ''
@@ -434,6 +458,7 @@ const snapshot = (): CreateSystemCustomGroupRequest => ({
   description: form.description.trim() || null,
   tag: form.tag,
   tag_color: form.tag_color,
+  key_display_category: form.key_display_category,
   daily_limit_usd: nullableNumber(form.daily_limit_usd),
   weekly_limit_usd: nullableNumber(form.weekly_limit_usd),
   monthly_limit_usd: nullableNumber(form.monthly_limit_usd),

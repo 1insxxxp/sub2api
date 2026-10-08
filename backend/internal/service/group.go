@@ -18,13 +18,15 @@ type ReasoningEffortMapping = domain.ReasoningEffortMapping
 type GroupModelsListConfig = GroupModelAllowlist
 
 type Group struct {
-	ID             int64
-	Name           string
-	Description    string
-	Tag            string
-	TagColor       string
-	Platform       string
-	RateMultiplier float64
+	ID          int64
+	Name        string
+	Description string
+	Tag         string
+	TagColor    string
+	Platform    string
+	// KeyDisplayCategory changes only API key selection display; empty follows Platform.
+	KeyDisplayCategory string
+	RateMultiplier     float64
 	// EmptyResponseCompensationEnabled controls whether users in this group may
 	// submit self-service empty-response claims. It defaults to false.
 	EmptyResponseCompensationEnabled bool

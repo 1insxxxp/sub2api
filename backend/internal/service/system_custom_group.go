@@ -82,6 +82,7 @@ type SystemCustomGroupModelInput struct {
 }
 
 type CreateSystemCustomGroupRequest struct {
+	KeyDisplayCategory  string                        `json:"key_display_category"`
 	Tag                 string                        `json:"tag"`
 	TagColor            string                        `json:"tag_color"`
 	Name                string                        `json:"name"`
@@ -95,6 +96,7 @@ type CreateSystemCustomGroupRequest struct {
 }
 
 type UpdateSystemCustomGroupRequest struct {
+	KeyDisplayCategory  *string                       `json:"key_display_category"`
 	Tag                 *string                       `json:"tag"`
 	TagColor            *string                       `json:"tag_color"`
 	Name                string                        `json:"name"`

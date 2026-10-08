@@ -375,6 +375,11 @@ func ProfitSafetyBuffer(v float64) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldProfitSafetyBuffer, v))
 }
 
+// KeyDisplayCategory applies equality check predicate on the "key_display_category" field. It's identical to KeyDisplayCategoryEQ.
+func KeyDisplayCategory(v string) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldKeyDisplayCategory, v))
+}
+
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
 func CreatedAtEQ(v time.Time) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldCreatedAt, v))
@@ -2903,6 +2908,71 @@ func ProfitSafetyBufferLT(v float64) predicate.Group {
 // ProfitSafetyBufferLTE applies the LTE predicate on the "profit_safety_buffer" field.
 func ProfitSafetyBufferLTE(v float64) predicate.Group {
 	return predicate.Group(sql.FieldLTE(FieldProfitSafetyBuffer, v))
+}
+
+// KeyDisplayCategoryEQ applies the EQ predicate on the "key_display_category" field.
+func KeyDisplayCategoryEQ(v string) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldKeyDisplayCategory, v))
+}
+
+// KeyDisplayCategoryNEQ applies the NEQ predicate on the "key_display_category" field.
+func KeyDisplayCategoryNEQ(v string) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldKeyDisplayCategory, v))
+}
+
+// KeyDisplayCategoryIn applies the In predicate on the "key_display_category" field.
+func KeyDisplayCategoryIn(vs ...string) predicate.Group {
+	return predicate.Group(sql.FieldIn(FieldKeyDisplayCategory, vs...))
+}
+
+// KeyDisplayCategoryNotIn applies the NotIn predicate on the "key_display_category" field.
+func KeyDisplayCategoryNotIn(vs ...string) predicate.Group {
+	return predicate.Group(sql.FieldNotIn(FieldKeyDisplayCategory, vs...))
+}
+
+// KeyDisplayCategoryGT applies the GT predicate on the "key_display_category" field.
+func KeyDisplayCategoryGT(v string) predicate.Group {
+	return predicate.Group(sql.FieldGT(FieldKeyDisplayCategory, v))
+}
+
+// KeyDisplayCategoryGTE applies the GTE predicate on the "key_display_category" field.
+func KeyDisplayCategoryGTE(v string) predicate.Group {
+	return predicate.Group(sql.FieldGTE(FieldKeyDisplayCategory, v))
+}
+
+// KeyDisplayCategoryLT applies the LT predicate on the "key_display_category" field.
+func KeyDisplayCategoryLT(v string) predicate.Group {
+	return predicate.Group(sql.FieldLT(FieldKeyDisplayCategory, v))
+}
+
+// KeyDisplayCategoryLTE applies the LTE predicate on the "key_display_category" field.
+func KeyDisplayCategoryLTE(v string) predicate.Group {
+	return predicate.Group(sql.FieldLTE(FieldKeyDisplayCategory, v))
+}
+
+// KeyDisplayCategoryContains applies the Contains predicate on the "key_display_category" field.
+func KeyDisplayCategoryContains(v string) predicate.Group {
+	return predicate.Group(sql.FieldContains(FieldKeyDisplayCategory, v))
+}
+
+// KeyDisplayCategoryHasPrefix applies the HasPrefix predicate on the "key_display_category" field.
+func KeyDisplayCategoryHasPrefix(v string) predicate.Group {
+	return predicate.Group(sql.FieldHasPrefix(FieldKeyDisplayCategory, v))
+}
+
+// KeyDisplayCategoryHasSuffix applies the HasSuffix predicate on the "key_display_category" field.
+func KeyDisplayCategoryHasSuffix(v string) predicate.Group {
+	return predicate.Group(sql.FieldHasSuffix(FieldKeyDisplayCategory, v))
+}
+
+// KeyDisplayCategoryEqualFold applies the EqualFold predicate on the "key_display_category" field.
+func KeyDisplayCategoryEqualFold(v string) predicate.Group {
+	return predicate.Group(sql.FieldEqualFold(FieldKeyDisplayCategory, v))
+}
+
+// KeyDisplayCategoryContainsFold applies the ContainsFold predicate on the "key_display_category" field.
+func KeyDisplayCategoryContainsFold(v string) predicate.Group {
+	return predicate.Group(sql.FieldContainsFold(FieldKeyDisplayCategory, v))
 }
 
 // HasAPIKeys applies the HasEdge predicate on the "api_keys" edge.

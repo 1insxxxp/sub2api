@@ -608,6 +608,22 @@
           />
           <p class="input-hint">{{ t("admin.groups.platformHint") }}</p>
         </div>
+        <div>
+          <label class="input-label" for="create-group-key-display-category">{{
+            t("admin.groups.form.keyDisplayCategory")
+          }}</label>
+          <Select
+            id="create-group-key-display-category"
+            v-model="createForm.key_display_category"
+            :options="keyDisplayCategoryOptions"
+            :aria-label="t('admin.groups.form.keyDisplayCategory')"
+            aria-describedby="create-group-key-display-category-hint"
+            data-test="create-group-key-display-category"
+          />
+          <p id="create-group-key-display-category-hint" class="input-hint">{{
+            t("admin.groups.form.keyDisplayCategoryHint")
+          }}</p>
+        </div>
         <!-- 从分组复制账号 -->
         <div v-if="!authStore.isSimpleMode && copyAccountsGroupOptions.length > 0">
           <div class="mb-1.5 flex items-center gap-1">
@@ -2358,6 +2374,22 @@
             data-tour="group-form-platform"
           />
           <p class="input-hint">{{ t("admin.groups.platformNotEditable") }}</p>
+        </div>
+        <div>
+          <label class="input-label" for="edit-group-key-display-category">{{
+            t("admin.groups.form.keyDisplayCategory")
+          }}</label>
+          <Select
+            id="edit-group-key-display-category"
+            v-model="editForm.key_display_category"
+            :options="keyDisplayCategoryOptions"
+            :aria-label="t('admin.groups.form.keyDisplayCategory')"
+            aria-describedby="edit-group-key-display-category-hint"
+            data-test="edit-group-key-display-category"
+          />
+          <p id="edit-group-key-display-category-hint" class="input-hint">{{
+            t("admin.groups.form.keyDisplayCategoryHint")
+          }}</p>
         </div>
         <template v-if="!authStore.isSimpleMode">
         <!-- 从分组复制账号（编辑时） -->
@@ -4588,6 +4620,7 @@ import type {
   CompositeRouteMatchType,
   GroupPlatform,
   GroupTag,
+  KeyDisplayCategory,
   ModelStatusVisibility,
   SystemCustomGroup,
   SubscriptionType,
@@ -4596,6 +4629,7 @@ import {
   CONCRETE_PLATFORM_OPTIONS,
   GROUP_PLATFORM_OPTIONS,
 } from "@/constants/platforms";
+import { KEY_GROUP_PROVIDERS } from "@/utils/keyGroupProviders";
 import type { Column } from "@/components/common/types";
 import AppLayout from "@/components/layout/AppLayout.vue";
 import TablePageLayout from "@/components/layout/TablePageLayout.vue";
@@ -4969,6 +5003,14 @@ const platformFilterOptions = computed(() => [
   ...GROUP_PLATFORM_OPTIONS,
 ]);
 
+const keyDisplayCategoryOptions = computed(() => [
+  { value: "", label: t("admin.groups.form.keyDisplayCategoryAuto") },
+  ...KEY_GROUP_PROVIDERS.map((value) => ({
+    value,
+    label: t(`keys.providers.${value}`),
+  })),
+]);
+
 const compositeRoutePlatformOptions = computed(() => [
   ...CONCRETE_PLATFORM_OPTIONS,
 ]);
@@ -5309,6 +5351,7 @@ const submitEditAllowlistCustomEntry = () => {
 const createForm = reactive({
   tag: "" as GroupTag,
   tag_color: "",
+  key_display_category: "" as KeyDisplayCategory,
   name: "",
   description: "",
   platform: "anthropic" as GroupPlatform,
@@ -5721,6 +5764,7 @@ const convertApiFormatToRoutingRules = async (
 const editForm = reactive({
   tag: "" as GroupTag,
   tag_color: "",
+  key_display_category: "" as KeyDisplayCategory,
   name: "",
   description: "",
   platform: "anthropic" as GroupPlatform,
@@ -6394,6 +6438,7 @@ const closeCreateModal = () => {
   createForm.description = "";
   createForm.tag = "";
   createForm.tag_color = "";
+  createForm.key_display_category = "";
   createForm.platform = "anthropic";
   createForm.rate_multiplier = 1.0;
   createForm.empty_response_compensation_enabled = false;
@@ -6667,6 +6712,7 @@ const handleCreateGroup = async () => {
           description: createForm.description,
           tag: createForm.tag,
           tag_color: createForm.tag_color,
+          key_display_category: createForm.key_display_category,
           platform: createForm.platform,
         }
       : requestData;
@@ -6697,6 +6743,7 @@ const handleEdit = async (group: AdminGroup) => {
   editForm.description = group.description || "";
   editForm.tag = group.tag || "";
   editForm.tag_color = group.tag_color || "";
+  editForm.key_display_category = group.key_display_category || "";
   editForm.platform = group.platform;
   editForm.rate_multiplier = group.rate_multiplier;
   editForm.empty_response_compensation_enabled =
@@ -6833,6 +6880,7 @@ const closeEditModal = () => {
   clearAllAccountSearchState();
   showEditModal.value = false;
   editingGroup.value = null;
+  editForm.key_display_category = "";
   editForm.max_reasoning_effort = "";
   editForm.max_reasoning_effort_over_limit = reasoningEffortOverLimitDowngrade;
   editForm.reasoning_effort_mappings = [];
@@ -7055,6 +7103,7 @@ const handleUpdateGroup = async () => {
           description: editForm.description,
           tag: editForm.tag,
           tag_color: editForm.tag_color,
+          key_display_category: editForm.key_display_category,
         }
       : payload;
     const updatedGroup = await adminAPI.groups.update(

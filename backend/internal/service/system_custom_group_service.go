@@ -92,6 +92,9 @@ func NewSystemCustomGroupService(repo SystemCustomGroupRepository, groupRepo Gro
 }
 
 func (s *SystemCustomGroupService) Create(ctx context.Context, req CreateSystemCustomGroupRequest) (*SystemCustomGroup, error) {
+	if err := validateGroupKeyDisplayCategory(req.KeyDisplayCategory); err != nil {
+		return nil, err
+	}
 	tag, tagColor, err := normalizeGroupTag(req.Tag, req.TagColor)
 	if err != nil {
 		return nil, err
@@ -133,6 +136,7 @@ func (s *SystemCustomGroupService) Create(ctx context.Context, req CreateSystemC
 		Description:                description,
 		Tag:                        tag,
 		TagColor:                   tagColor,
+		KeyDisplayCategory:         req.KeyDisplayCategory,
 		Platform:                   PlatformComposite,
 		RateMultiplier:             1,
 		IsExclusive:                true,
@@ -155,6 +159,11 @@ func (s *SystemCustomGroupService) Create(ctx context.Context, req CreateSystemC
 }
 
 func (s *SystemCustomGroupService) Update(ctx context.Context, groupID int64, req UpdateSystemCustomGroupRequest) (*SystemCustomGroup, error) {
+	if req.KeyDisplayCategory != nil {
+		if err := validateGroupKeyDisplayCategory(*req.KeyDisplayCategory); err != nil {
+			return nil, err
+		}
+	}
 	if s == nil || s.repo == nil || s.groupRepo == nil {
 		return nil, fmt.Errorf("system custom group service is not configured")
 	}
@@ -205,6 +214,9 @@ func (s *SystemCustomGroupService) Update(ctx context.Context, groupID int64, re
 	group.Description = description
 	if err := updateGroupTag(&group, req.Tag, req.TagColor); err != nil {
 		return nil, err
+	}
+	if req.KeyDisplayCategory != nil {
+		group.KeyDisplayCategory = *req.KeyDisplayCategory
 	}
 	group.DailyLimitUSD = daily
 	group.WeeklyLimitUSD = weekly
