@@ -969,6 +969,18 @@ func ChannelMonitorV2HealthForWithThresholds(metrics ChannelMonitorV2Metric, thr
 		MinimumSample: thresholds.MinimumSample, Thresholds: thresholds,
 	}
 	result.LowSample = metrics.RequestCount > 0 && metrics.RequestCount < result.MinimumSample
+	if metrics.RequestCount < result.MinimumSample {
+		// Keep sparse counted failures visible while withholding latency/cache
+		// scores that would be misleading without enough traffic.
+		if result.LowSample && metrics.ErrorRate >= thresholds.WarningErrorRate {
+			s := errorRateScore(metrics.ErrorRate, thresholds.CriticalErrorRate)
+			result.ErrorRateScore = &s
+			result.ErrorRate = healthBand(metrics.ErrorRate, thresholds.WarningErrorRate, thresholds.CriticalErrorRate)
+			result.Score = &s
+			result.Overall = result.ErrorRate
+		}
+		return result
+	}
 
 	type scored struct {
 		score  float64

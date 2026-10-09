@@ -4,7 +4,8 @@
  */
 
 import { apiClient } from '../client'
-import type { AdminUser, UpdateUserRequest, PaginatedResponse, ApiKey, UserRole } from '@/types'
+import { listPlatformIds } from '@/constants/platformCatalog'
+import type { AccountPlatform, AdminUser, UpdateUserRequest, PaginatedResponse, ApiKey, UserRole } from '@/types'
 
 export interface AdminBindAuthIdentityChannelRequest {
   channel: string
@@ -336,7 +337,10 @@ export const PLATFORM_QUOTA_PLATFORMS = [
   'anthropic', 'openai', 'gemini', 'antigravity', 'grok',
   'kimi', 'zhipu', 'deepseek', 'minimax', 'opencode_go', 'typesafe',
 ] as const
-export type PlatformQuotaPlatform = typeof PLATFORM_QUOTA_PLATFORMS[number]
+export function platformQuotaPlatforms(): PlatformQuotaPlatform[] {
+  return listPlatformIds()
+}
+export type PlatformQuotaPlatform = AccountPlatform
 export type PlatformQuotaWindow = 'daily' | 'weekly' | 'monthly'
 
 export interface PlatformQuotaItem {

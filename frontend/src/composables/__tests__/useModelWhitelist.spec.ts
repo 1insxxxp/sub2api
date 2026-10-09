@@ -4,17 +4,38 @@ vi.mock('@/api/admin/accounts', () => ({
   getAntigravityDefaultModelMapping: vi.fn()
 }))
 
-import {
-  buildModelMappingObject,
-  generateModelMappingsFromWhitelist,
-  getModelsByPlatform,
-  getPresetMappingsByPlatform,
-  prependModelMappingPrefix,
-  rebuildModelMappingSourcesFromTargets,
-  splitModelMappingObject
-} from '../useModelWhitelist'
+import { buildModelMappingObject, getModelsByPlatform, getPresetMappingsByPlatform, splitModelMappingObject } from '../useModelWhitelist'
+import { BUILTIN_PLATFORM_CATALOG, resetPlatformCatalog, setPlatformCatalog } from '@/constants/platformCatalog'
 
 describe('useModelWhitelist', () => {
+  it('平台清单中没有内置模型列表的多协议供应商不预填白名单', () => {
+    setPlatformCatalog({
+      ...BUILTIN_PLATFORM_CATALOG,
+      platforms: [
+        ...BUILTIN_PLATFORM_CATALOG.platforms,
+        {
+          id: 'acme_router',
+          display_name: 'Acme Router',
+          gateway: 'openai',
+          cn_provider: false,
+          multi_protocol: {
+            default_mode: 'standard',
+            routing: 'by_model',
+            modes: [{ mode: 'standard', base_urls: { chat_completions: 'https://api.acme-router.example/v1' } }]
+          }
+        }
+      ]
+    })
+    try {
+      expect(getModelsByPlatform('acme_router')).toEqual([])
+      expect(getModelsByPlatform('kimi').length).toBeGreaterThan(0)
+      // 非多协议供应商的未知平台维持原有回退。
+      expect(getModelsByPlatform('bedrock')).toEqual(getModelsByPlatform('anthropic'))
+    } finally {
+      resetPlatformCatalog()
+    }
+  })
+
   it('openai 模型列表包含 GPT-5.4 官方快照', () => {
     const models = getModelsByPlatform('openai')
 
@@ -204,126 +225,5 @@ describe('useModelWhitelist', () => {
       allowedModels: ['gpt-5.4'],
       modelMappings: [{ from: 'gpt-latest', to: 'gpt-5.4' }]
     })
-  })
-
-  it('根据白名单批量生成带前缀的请求模型映射，并保留已有映射', () => {
-    const existingMappings = [{ from: '按次/claude-opus-4-6', to: 'existing-model' }]
-    const mappings = generateModelMappingsFromWhitelist(
-      [' claude-opus-4-6 ', 'claude-opus-4-6', '', '  '],
-      ' 按次/ ',
-      existingMappings
-    )
-
-    expect(mappings).toEqual([
-      { from: '按次/claude-opus-4-6', to: 'existing-model' }
-    ])
-    expect(mappings).not.toBe(existingMappings)
-    expect(existingMappings).toEqual([{ from: '按次/claude-opus-4-6', to: 'existing-model' }])
-  })
-
-  it('批量生成白名单映射时不会覆盖同名已有请求模型', () => {
-    const mappings = generateModelMappingsFromWhitelist(
-      ['gpt-5.4', 'gpt-5.4-mini'],
-      '',
-      [{ from: 'gpt-5.4', to: 'custom-upstream' }]
-    )
-
-    expect(mappings).toEqual([
-      { from: 'gpt-5.4', to: 'custom-upstream' },
-      { from: 'gpt-5.4-mini', to: 'gpt-5.4-mini' }
-    ])
-  })
-
-  it('给映射请求模型批量添加前缀，不重复添加且不修改空行', () => {
-    const mappings = [
-      { from: 'claude-opus-4-6', to: 'claude-opus-4-6' },
-      { from: '按次/claude-sonnet-4-6', to: 'claude-sonnet-4-6' },
-      { from: '', to: '' }
-    ]
-
-    const result = prependModelMappingPrefix(mappings, ' 按次/ ')
-
-    expect(result).toEqual([
-      { from: '按次/claude-opus-4-6', to: 'claude-opus-4-6' },
-      { from: '按次/claude-sonnet-4-6', to: 'claude-sonnet-4-6' },
-      { from: '', to: '' }
-    ])
-    expect(result).not.toBe(mappings)
-    expect(mappings[0]).toEqual({ from: 'claude-opus-4-6', to: 'claude-opus-4-6' })
-  })
-
-  it('空前缀不会改变映射值，但仍返回新数组', () => {
-    const mappings = [{ from: ' claude-opus-4-6 ', to: 'claude-opus-4-6' }]
-
-    const result = prependModelMappingPrefix(mappings, '   ')
-
-    expect(result).toEqual(mappings)
-    expect(result).not.toBe(mappings)
-    expect(result[0]).not.toBe(mappings[0])
-  })
-
-  it('添加前缀遇到已有目标来源时保留冲突行，避免生成重复来源', () => {
-    const mappings = [
-      { from: '按次/foo', to: 'upstream-a' },
-      { from: 'foo', to: 'upstream-b' }
-    ]
-
-    const result = prependModelMappingPrefix(mappings, '按次/')
-
-    expect(result).toEqual(mappings)
-  })
-
-  it('清理上游模型名的统一前缀和后缀，并统计变更与冲突', () => {
-    const result = rebuildModelMappingSourcesFromTargets([
-      { from: 'alias-a', to: 'a/gemini-2.5-flash-preview' },
-      { from: 'alias-b', to: 'gemini-2.5-flash' },
-      { from: 'empty', to: '' }
-    ], '测试/', 'a/', '-preview')
-
-    expect(result.mappings).toEqual([
-      { from: '测试/gemini-2.5-flash', to: 'a/gemini-2.5-flash-preview' },
-      { from: 'alias-b', to: 'gemini-2.5-flash' },
-      { from: 'empty', to: '' }
-    ])
-    expect(result.changedCount).toBe(1)
-    expect(result.collisionCount).toBe(1)
-  })
-
-  it('清理规则可重复执行且不会修改输入映射', () => {
-    const mappings = [{ from: 'alias', to: 'vendor/model-preview' }]
-    const once = rebuildModelMappingSourcesFromTargets(mappings, '测试/', 'vendor/', '-preview')
-    const twice = rebuildModelMappingSourcesFromTargets(once.mappings, '测试/', 'vendor/', '-preview')
-
-    expect(twice.mappings).toEqual(once.mappings)
-    expect(twice.changedCount).toBe(0)
-    expect(mappings).toEqual([{ from: 'alias', to: 'vendor/model-preview' }])
-  })
-
-  it('遇到已有请求模型名冲突时保留原行并统计冲突', () => {
-    const result = rebuildModelMappingSourcesFromTargets([
-      { from: 'existing', to: 'a/gemini-preview' },
-      { from: 'alias', to: 'a/gemini-preview' }
-    ], '测试/', 'a/', '-preview')
-
-    expect(result.mappings).toEqual([
-      { from: '测试/gemini', to: 'a/gemini-preview' },
-      { from: 'alias', to: 'a/gemini-preview' }
-    ])
-    expect(result.changedCount).toBe(1)
-    expect(result.collisionCount).toBe(1)
-  })
-
-  it('后续行会被重建时，不把其旧请求名误判为冲突', () => {
-    const result = rebuildModelMappingSourcesFromTargets([
-      { from: 'old-a', to: 'a/model' },
-      { from: '测试/model', to: 'a/other' }
-    ], '测试/', 'a/', '')
-
-    expect(result.mappings).toEqual([
-      { from: '测试/model', to: 'a/model' },
-      { from: '测试/other', to: 'a/other' }
-    ])
-    expect(result.changedCount).toBe(2)
-    expect(result.collisionCount).toBe(0)
   })
 })

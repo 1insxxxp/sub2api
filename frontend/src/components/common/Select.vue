@@ -455,6 +455,10 @@ const handleGlobalKeydown = (event: KeyboardEvent) => {
   }
 }
 
+watch(() => props.disabled, (disabled) => {
+  if (disabled && isOpen.value) closeDropdown()
+})
+
 watch(isOpen, (open) => {
   if (open) {
     if (!mobileSheetEnabled.value) calculateDropdownPosition()

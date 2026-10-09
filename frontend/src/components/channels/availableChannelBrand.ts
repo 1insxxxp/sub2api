@@ -19,12 +19,16 @@ const brands: Record<AvailableChannelBrand['key'], AvailableChannelBrand> = {
   opencode_go: { key: 'opencode_go', label: 'OpenCode', platform: 'opencode_go' },
   composite: { key: 'composite', label: 'Composite', platform: 'composite' },
   typesafe: { key: 'typesafe', label: 'TypeSafe / Jev', platform: 'typesafe' },
+  command_code: { key: 'command_code', label: 'Command Code', platform: 'command_code' },
+  cline: { key: 'cline', label: 'Cline', platform: 'cline' },
   generic: { key: 'generic', label: 'AI' },
 }
 
 export function resolveAvailableChannelBrand(platform: string): AvailableChannelBrand {
   const value = platform.trim().toLowerCase()
-  if (value.includes('openai') || value.includes('codex')) return brands.openai
+  if (value.includes('command') || value.includes('codex')) return brands.command_code
+  if (value.includes('cline')) return brands.cline
+  if (value.includes('openai')) return brands.openai
   if (value.includes('anthropic') || value.includes('claude')) return brands.anthropic
   if (value.includes('gemini') || value.includes('google')) return brands.gemini
   if (value.includes('antigravity')) return brands.antigravity

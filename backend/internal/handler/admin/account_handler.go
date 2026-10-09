@@ -127,46 +127,46 @@ func NewAccountHandler(
 
 // CreateAccountRequest represents create account request
 type CreateAccountRequest struct {
-	Name                    string            `json:"name" binding:"required"`
-	Notes                   *string           `json:"notes"`
-	Platform                string            `json:"platform" binding:"required"`
-	Type                    string            `json:"type" binding:"required,oneof=oauth setup-token apikey upstream bedrock service_account"`
-	Credentials             map[string]any    `json:"credentials" binding:"required"`
+	Name                    string         `json:"name" binding:"required"`
+	Notes                   *string        `json:"notes"`
+	Platform                string         `json:"platform" binding:"required"`
+	Type                    string         `json:"type" binding:"required,oneof=oauth setup-token apikey upstream bedrock service_account"`
+	Credentials             map[string]any `json:"credentials" binding:"required"`
 	Extra                   map[string]any    `json:"extra"`
 	ModelSystemPrompts      map[string]string `json:"model_system_prompts"`
-	ProxyID                 *int64            `json:"proxy_id"`
-	Concurrency             int               `json:"concurrency"`
-	Priority                int               `json:"priority"`
-	RateMultiplier          *float64          `json:"rate_multiplier"`
-	LoadFactor              *int              `json:"load_factor"`
-	GroupIDs                []int64           `json:"group_ids"`
-	ExpiresAt               *int64            `json:"expires_at"`
-	AutoPauseOnExpired      *bool             `json:"auto_pause_on_expired"`
-	ProbeEnabled            *bool             `json:"upstream_billing_probe_enabled"`
-	ConfirmMixedChannelRisk *bool             `json:"confirm_mixed_channel_risk"` // 用户确认混合渠道风险
+	ProxyID                 *int64         `json:"proxy_id"`
+	Concurrency             int            `json:"concurrency"`
+	Priority                int            `json:"priority"`
+	RateMultiplier          *float64       `json:"rate_multiplier"`
+	LoadFactor              *int           `json:"load_factor"`
+	GroupIDs                []int64        `json:"group_ids"`
+	ExpiresAt               *int64         `json:"expires_at"`
+	AutoPauseOnExpired      *bool          `json:"auto_pause_on_expired"`
+	ProbeEnabled            *bool          `json:"upstream_billing_probe_enabled"`
+	ConfirmMixedChannelRisk *bool          `json:"confirm_mixed_channel_risk"` // 用户确认混合渠道风险
 }
 
 // UpdateAccountRequest represents update account request
 // 使用指针类型来区分"未提供"和"设置为0"
 type UpdateAccountRequest struct {
-	Name                    string             `json:"name"`
-	Notes                   *string            `json:"notes"`
-	Type                    string             `json:"type" binding:"omitempty,oneof=oauth setup-token apikey upstream bedrock service_account"`
-	Credentials             map[string]any     `json:"credentials"`
+	Name                    string         `json:"name"`
+	Notes                   *string        `json:"notes"`
+	Type                    string         `json:"type" binding:"omitempty,oneof=oauth setup-token apikey upstream bedrock service_account"`
+	Credentials             map[string]any `json:"credentials"`
 	Extra                   map[string]any     `json:"extra"`
 	ModelSystemPrompts      *map[string]string `json:"model_system_prompts"`
-	ProxyID                 *int64             `json:"proxy_id"`
-	Concurrency             *int               `json:"concurrency"`
-	Priority                *int               `json:"priority"`
-	RateMultiplier          *float64           `json:"rate_multiplier"`
-	LoadFactor              *int               `json:"load_factor"`
-	Status                  string             `json:"status" binding:"omitempty,oneof=active inactive error"`
-	GroupIDs                *[]int64           `json:"group_ids"`
-	ExpiresAt               *int64             `json:"expires_at"`
-	AutoPauseOnExpired      *bool              `json:"auto_pause_on_expired"`
-	ProbeEnabled            *bool              `json:"upstream_billing_probe_enabled"`
-	RateSyncEnabled         *bool              `json:"upstream_billing_rate_sync_enabled"`
-	ConfirmMixedChannelRisk *bool              `json:"confirm_mixed_channel_risk"` // 用户确认混合渠道风险
+	ProxyID                 *int64         `json:"proxy_id"`
+	Concurrency             *int           `json:"concurrency"`
+	Priority                *int           `json:"priority"`
+	RateMultiplier          *float64       `json:"rate_multiplier"`
+	LoadFactor              *int           `json:"load_factor"`
+	Status                  string         `json:"status" binding:"omitempty,oneof=active inactive error"`
+	GroupIDs                *[]int64       `json:"group_ids"`
+	ExpiresAt               *int64         `json:"expires_at"`
+	AutoPauseOnExpired      *bool          `json:"auto_pause_on_expired"`
+	ProbeEnabled            *bool          `json:"upstream_billing_probe_enabled"`
+	RateSyncEnabled         *bool          `json:"upstream_billing_rate_sync_enabled"`
+	ConfirmMixedChannelRisk *bool          `json:"confirm_mixed_channel_risk"` // 用户确认混合渠道风险
 }
 
 // BulkUpdateAccountsRequest represents the payload for bulk editing accounts
@@ -1252,7 +1252,7 @@ func (h *AccountHandler) Update(c *gin.Context) {
 // 网关会按"现状即证据"默认走 Responses。
 func (h *AccountHandler) scheduleOpenAIResponsesProbe(account *service.Account) {
 	if account == nil || account.Type != service.AccountTypeAPIKey ||
-		(account.Platform != service.PlatformOpenAI && !service.IsCNProvider(account.Platform)) {
+		(account.Platform != service.PlatformOpenAI && !account.RoutesProtocolByInbound()) {
 		return
 	}
 	if h.accountTestService == nil {
@@ -2920,9 +2920,9 @@ func (h *AccountHandler) GetAvailableModels(c *gin.Context) {
 		return
 	}
 
-	// Handle Antigravity accounts: return Claude + Gemini models
+	// Explicit account mappings expose their request-side names to connectivity tests.
 	if account.Platform == service.PlatformAntigravity {
-		response.Success(c, antigravityAvailableModels(account))
+		response.Success(c, antigravityAccountTestModels(account.Credentials["model_mapping"]))
 		return
 	}
 
@@ -3023,47 +3023,36 @@ func (h *AccountHandler) GetAvailableModels(c *gin.Context) {
 	response.Success(c, models)
 }
 
-// antigravityAvailableModels returns the public model names configured on an
-// account. The mapping key is the request-facing alias; the value is the
-// upstream model sent to Antigravity. Falling back to the default catalog is
-// only valid when the account has no explicit model_mapping.
-func antigravityAvailableModels(account *service.Account) []antigravity.ClaudeModel {
-	if account == nil {
-		return nil
-	}
-	publicModels := make(map[string]struct{})
-	switch mapping := account.Credentials["model_mapping"].(type) {
+// antigravityAccountTestModels uses the stored mapping rather than GetModelMapping,
+// which supplies defaults and compatibility aliases that the administrator did not configure.
+func antigravityAccountTestModels(rawMapping any) []antigravity.ClaudeModel {
+	var mappedIDs []string
+	switch mapping := rawMapping.(type) {
 	case map[string]any:
-		for model := range mapping {
-			if model = strings.TrimSpace(model); model != "" {
-				publicModels[model] = struct{}{}
+		for id := range mapping {
+			if strings.TrimSpace(id) != "" {
+				mappedIDs = append(mappedIDs, id)
 			}
 		}
 	case map[string]string:
-		for model := range mapping {
-			if model = strings.TrimSpace(model); model != "" {
-				publicModels[model] = struct{}{}
+		for id := range mapping {
+			if strings.TrimSpace(id) != "" {
+				mappedIDs = append(mappedIDs, id)
 			}
 		}
 	}
-	if len(publicModels) == 0 {
+	if len(mappedIDs) == 0 {
 		return antigravity.DefaultModels()
 	}
 
+	sort.Strings(mappedIDs)
 	defaultByID := make(map[string]antigravity.ClaudeModel)
 	for _, model := range antigravity.DefaultModels() {
 		defaultByID[model.ID] = model
 	}
-	ids := make([]string, 0, len(publicModels))
-	for model := range publicModels {
-		ids = append(ids, model)
-	}
-	sort.Strings(ids)
-	models := make([]antigravity.ClaudeModel, 0, len(ids))
-	for _, id := range ids {
+	models := make([]antigravity.ClaudeModel, 0, len(mappedIDs))
+	for _, id := range mappedIDs {
 		if model, ok := defaultByID[id]; ok {
-			model.ID = id
-			model.DisplayName = id
 			models = append(models, model)
 			continue
 		}

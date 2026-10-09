@@ -717,6 +717,21 @@ func TestEmbeddedFrontendBypassesBareNovelAIImageRoute(t *testing.T) {
 	require.True(t, shouldBypassEmbeddedFrontend("/ai/generate-image"))
 }
 
+func TestEmbeddedFrontendBypassesBareAPIAliases(t *testing.T) {
+	for _, path := range []string{
+		"/chat/completions", "/embeddings", "/messages/count_tokens", "/models/gpt-5.5",
+		"/videos", "/tts", "/stt", "/custom-voices", "/custom-voices/voice-123",
+		"/realtime", "/web_search", "/x_search", "/contents/generations/tasks",
+		"/contents/generations/tasks/task-123", "/v3/contents/generations/tasks",
+		"/v3/contents/generations/tasks/task-123",
+	} {
+		require.True(t, shouldBypassEmbeddedFrontend(path), "path=%s", path)
+	}
+	for _, path := range []string{"/model-plaza", "/custom/page-1", "/monitor", "/setup", "/v3/other"} {
+		require.False(t, shouldBypassEmbeddedFrontend(path), "path=%s", path)
+	}
+}
+
 func TestNewFrontendServer(t *testing.T) {
 	t.Run("creates_server_successfully", func(t *testing.T) {
 		provider := &mockSettingsProvider{
