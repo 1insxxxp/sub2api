@@ -759,6 +759,15 @@ export default {
         moveUp: '上移',
         moveDown: '下移',
       },
+      userSidebarOrder: {
+        title: '用户侧边栏全局排序',
+        description: '统一设置普通用户和管理员个人区的侧边栏顺序；未启用的功能会自动隐藏。',
+        reset: '恢复默认顺序',
+        moveUp: '上移',
+        moveDown: '下移',
+        empty: '暂无可排序的菜单项',
+        hint: '模型广场默认排在第二项。自定义菜单仅显示为普通用户可见的项目。',
+      },
       payment: {
         title: '支付设置',
         description: '配置支付系统选项',

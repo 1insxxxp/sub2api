@@ -168,6 +168,7 @@ type UpdateSettingsRequest struct {
 	TableDefaultPageSize        int                   `json:"table_default_page_size"`
 	TablePageSizeOptions        []int                 `json:"table_page_size_options"`
 	CustomMenuItems             *[]dto.CustomMenuItem `json:"custom_menu_items"`
+	UserSidebarOrder            *[]string             `json:"user_sidebar_order"`
 	CustomEndpoints             *[]dto.CustomEndpoint `json:"custom_endpoints"`
 
 	// 默认配置
@@ -1399,6 +1400,21 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		customMenuJSON = string(menuBytes)
 	}
 
+	userSidebarOrderJSON := previousSettings.UserSidebarOrder
+	if req.UserSidebarOrder != nil {
+		normalizedOrder, err := service.NormalizeUserSidebarOrder(*req.UserSidebarOrder)
+		if err != nil {
+			response.BadRequest(c, err.Error())
+			return
+		}
+		orderBytes, err := json.Marshal(normalizedOrder)
+		if err != nil {
+			response.BadRequest(c, "Failed to serialize user sidebar order")
+			return
+		}
+		userSidebarOrderJSON = string(orderBytes)
+	}
+
 	// 自定义端点验证
 	const (
 		maxCustomEndpoints        = 10
@@ -1706,6 +1722,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		TableDefaultPageSize:                   req.TableDefaultPageSize,
 		TablePageSizeOptions:                   req.TablePageSizeOptions,
 		CustomMenuItems:                        customMenuJSON,
+		UserSidebarOrder:                       userSidebarOrderJSON,
 		CustomEndpoints:                        customEndpointsJSON,
 		DefaultConcurrency:                     req.DefaultConcurrency,
 		DefaultBalance:                         req.DefaultBalance,
@@ -2411,6 +2428,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		TableDefaultPageSize:                                   updatedSettings.TableDefaultPageSize,
 		TablePageSizeOptions:                                   updatedSettings.TablePageSizeOptions,
 		CustomMenuItems:                                        dto.ParseCustomMenuItems(updatedSettings.CustomMenuItems),
+		UserSidebarOrder:                                       service.ParseUserSidebarOrder(updatedSettings.UserSidebarOrder),
 		CustomEndpoints:                                        dto.ParseCustomEndpoints(updatedSettings.CustomEndpoints),
 		DefaultConcurrency:                                     updatedSettings.DefaultConcurrency,
 		DefaultBalance:                                         updatedSettings.DefaultBalance,

@@ -526,6 +526,7 @@ export interface SystemSettings {
   table_page_size_options: number[];
   backend_mode_enabled: boolean;
   custom_menu_items: CustomMenuItem[];
+  user_sidebar_order: string[];
   custom_endpoints: CustomEndpoint[];
   // SMTP settings
   smtp_host: string;
@@ -896,6 +897,7 @@ export interface UpdateSettingsRequest {
   table_page_size_options?: number[];
   backend_mode_enabled?: boolean;
   custom_menu_items?: CustomMenuItem[];
+  user_sidebar_order?: string[];
   custom_endpoints?: CustomEndpoint[];
   smtp_host?: string;
   smtp_port?: number;

@@ -764,6 +764,15 @@ export default {
         moveUp: 'Move Up',
         moveDown: 'Move Down',
       },
+      userSidebarOrder: {
+        title: 'Global User Sidebar Order',
+        description: 'Set one sidebar order for regular users and the personal area of administrators. Disabled features stay hidden.',
+        reset: 'Restore Default Order',
+        moveUp: 'Move Up',
+        moveDown: 'Move Down',
+        empty: 'No orderable menu items',
+        hint: 'Model Plaza is second by default. Only custom menus visible to regular users are included.',
+      },
       payment: {
         title: 'Payment Settings',
         description: 'Configure payment system options',

@@ -7079,6 +7079,107 @@
               </button>
             </div>
           </div>
+
+          <!-- Global user sidebar order -->
+          <div class="card" data-test="user-sidebar-order-card">
+            <div
+              class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
+            >
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                    {{ t("admin.settings.userSidebarOrder.title") }}
+                  </h2>
+                  <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.userSidebarOrder.description") }}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  class="btn btn-secondary btn-sm shrink-0"
+                  @click="resetUserSidebarOrder"
+                >
+                  {{ t("admin.settings.userSidebarOrder.reset") }}
+                </button>
+              </div>
+            </div>
+            <div class="space-y-2 p-6">
+              <div
+                v-for="(item, index) in userSidebarOrderEntries"
+                :key="item.path"
+                class="flex items-center gap-3 rounded-xl border border-gray-200 bg-white/70 px-3 py-2.5 dark:border-dark-600 dark:bg-dark-800/60"
+              >
+                <span
+                  class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-xs font-semibold text-gray-500 dark:bg-dark-700 dark:text-gray-300"
+                >
+                  {{ index + 1 }}
+                </span>
+                <div class="min-w-0 flex-1">
+                  <p class="truncate text-sm font-medium text-gray-800 dark:text-gray-100">
+                    {{ userSidebarOrderLabel(item.path) }}
+                  </p>
+                  <code class="block truncate text-xs text-gray-400 dark:text-gray-500">
+                    {{ item.path }}
+                  </code>
+                </div>
+                <div class="flex shrink-0 items-center gap-1">
+                  <button
+                    type="button"
+                    class="admin-inline-action min-h-8 min-w-8 rounded-md p-1"
+                    :disabled="index === 0"
+                    :aria-label="t('admin.settings.userSidebarOrder.moveUp')"
+                    :title="t('admin.settings.userSidebarOrder.moveUp')"
+                    @click="moveUserSidebarItem(index, -1)"
+                  >
+                    <svg
+                      class="h-4 w-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M5 15l7-7 7 7"
+                      />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    class="admin-inline-action min-h-8 min-w-8 rounded-md p-1"
+                    :disabled="index === userSidebarOrderEntries.length - 1"
+                    :aria-label="t('admin.settings.userSidebarOrder.moveDown')"
+                    :title="t('admin.settings.userSidebarOrder.moveDown')"
+                    @click="moveUserSidebarItem(index, 1)"
+                  >
+                    <svg
+                      class="h-4 w-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M19 9l-7 7-7-7"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <p
+                v-if="userSidebarOrderEntries.length === 0"
+                class="rounded-xl border border-dashed border-gray-300 px-4 py-6 text-center text-sm text-gray-500 dark:border-dark-600 dark:text-gray-400"
+              >
+                {{ t("admin.settings.userSidebarOrder.empty") }}
+              </p>
+              <p class="pt-2 text-xs text-gray-500 dark:text-gray-400">
+                {{ t("admin.settings.userSidebarOrder.hint") }}
+              </p>
+            </div>
+          </div>
 	        </div>
 	        <!-- /Tab: General -->
 
@@ -9617,6 +9718,10 @@ import {
   resolveSiteBillingMode,
   type SiteBillingMode,
 } from "@/utils/siteBillingMode";
+import {
+  DEFAULT_USER_SIDEBAR_ORDER,
+  resolveUserSidebarOrder,
+} from "@/utils/sidebar-order";
 import ConfirmDialog from "@/components/common/ConfirmDialog.vue";
 import PaymentProviderList from "@/components/payment/PaymentProviderList.vue";
 import PaymentProviderDialog from "@/components/payment/PaymentProviderDialog.vue";
@@ -10465,6 +10570,7 @@ const form = reactive<SettingsForm>({
   payment_alipay_mobile_precreate_deep_link: false,
   table_default_page_size: tablePageSizeDefault,
   table_page_size_options: [10, 20, 50, 100],
+  user_sidebar_order: [],
   custom_menu_items: [] as Array<{
     id: string;
     label: string;
@@ -11579,6 +11685,63 @@ function moveMenuItem(index: number, direction: -1 | 1) {
   });
 }
 
+const userSidebarOrderLabelKeys: Record<string, string> = {
+  "/dashboard": "nav.dashboard",
+  "/model-plaza": "nav.modelPlaza",
+  "/keys": "nav.apiKeys",
+  "/images": "nav.imageStudio",
+  "/batch-image": "nav.batchImage",
+  "/usage": "nav.usage",
+  "/available-channels": "nav.availableChannels",
+  "/monitor": "nav.channelStatus",
+  "/model-status": "nav.modelStatus",
+  "/subscriptions": "nav.mySubscriptions",
+  "/purchase": "nav.buySubscription",
+  "/orders": "nav.myOrders",
+  "/redeem": "nav.redeem",
+  "/lottery": "nav.lottery",
+  "/affiliate": "nav.affiliate",
+  "/profile": "nav.profile",
+};
+
+function currentUserSidebarCustomPaths(): string[] {
+  return form.custom_menu_items
+    .filter((item) => item.visibility === "user" && item.id.trim())
+    .map((item) => `/custom/${item.id.trim()}`);
+}
+
+const userSidebarOrderEntries = computed(() =>
+  resolveUserSidebarOrder(form.user_sidebar_order, currentUserSidebarCustomPaths()).map(
+    (path) => ({ path }),
+  ),
+);
+
+function userSidebarOrderLabel(path: string): string {
+  const translationKey = userSidebarOrderLabelKeys[path];
+  if (translationKey) return t(translationKey);
+  const customID = path.startsWith("/custom/") ? path.slice("/custom/".length) : "";
+  const customItem = form.custom_menu_items.find(
+    (item) => item.id.trim() === customID,
+  );
+  return customItem?.label.trim() || path;
+}
+
+function moveUserSidebarItem(index: number, direction: -1 | 1): void {
+  const entries = userSidebarOrderEntries.value.map((item) => item.path);
+  const targetIndex = index + direction;
+  if (index < 0 || targetIndex < 0 || targetIndex >= entries.length) return;
+  const next = [...entries];
+  [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
+  form.user_sidebar_order = next;
+}
+
+function resetUserSidebarOrder(): void {
+  form.user_sidebar_order = resolveUserSidebarOrder(
+    DEFAULT_USER_SIDEBAR_ORDER,
+    currentUserSidebarCustomPaths(),
+  );
+}
+
 // Custom endpoint management
 function addEndpoint() {
   form.custom_endpoints.push({ name: "", endpoint: "", description: "" });
@@ -11790,6 +11953,10 @@ async function loadSettings() {
       }
     }
     form.custom_menu_items = normalizeCustomMenuItems(form.custom_menu_items);
+    form.user_sidebar_order = resolveUserSidebarOrder(
+      settings.user_sidebar_order,
+      currentUserSidebarCustomPaths(),
+    );
     // For this optional override, null explicitly selects per-account rates.
     if (settings.openai_oauth_scheduling_rate_multiplier === null) {
       form.openai_oauth_scheduling_rate_multiplier = null;
@@ -12372,6 +12539,10 @@ async function saveSettings() {
       hide_ccs_import_button: form.hide_ccs_import_button,
       table_default_page_size: form.table_default_page_size,
       table_page_size_options: form.table_page_size_options,
+      user_sidebar_order: resolveUserSidebarOrder(
+        form.user_sidebar_order,
+        currentUserSidebarCustomPaths(),
+      ),
       custom_menu_items: normalizeCustomMenuItems(form.custom_menu_items),
       custom_endpoints: form.custom_endpoints,
       frontend_url: form.frontend_url,

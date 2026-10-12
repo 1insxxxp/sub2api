@@ -40,6 +40,18 @@ describe("admin SettingsView custom menu open mode", () => {
   });
 });
 
+describe("admin SettingsView global user sidebar order", () => {
+  it("renders the order editor and submits the normalized order", () => {
+    expect(settingsViewSource).toContain("admin.settings.userSidebarOrder.title");
+    expect(settingsViewSource).toContain("userSidebarOrderEntries");
+    expect(settingsViewSource).toContain("moveUserSidebarItem");
+    expect(settingsViewSource).toContain("resetUserSidebarOrder");
+    expect(settingsViewSource).toContain(
+      "user_sidebar_order: resolveUserSidebarOrder(",
+    );
+  });
+});
+
 describe("admin SettingsView lottery feature switch", () => {
   it("renders the lottery toggle and includes it in the settings payload", () => {
     expect(settingsViewSource).toContain('v-model="form.lottery_enabled"');

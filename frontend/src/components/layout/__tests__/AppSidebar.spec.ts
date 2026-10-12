@@ -113,6 +113,15 @@ describe('AppSidebar image studio entry', () => {
   })
 })
 
+describe('AppSidebar global user ordering', () => {
+  it('exposes the model plaza as an orderable user entry and applies the public order', () => {
+    expect(componentSource).toContain("import { orderSidebarItems } from '@/utils/sidebar-order'")
+    expect(componentSource).toContain("{ path: '/model-plaza', label: t('nav.modelPlaza')")
+    expect(componentSource).toContain('orderSidebarItems(')
+    expect(componentSource).toContain('user_sidebar_order')
+  })
+})
+
 describe('AppSidebar admin entries', () => {
   it('exposes the admin workbench entry from the admin sidebar', () => {
     expect(componentSource).toMatch(

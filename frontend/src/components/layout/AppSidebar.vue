@@ -283,6 +283,7 @@ import { sanitizeSvg } from '@/utils/sanitize'
 import { sanitizeUrl } from '@/utils/url'
 import { revealTheme } from '@/utils/themeTransition'
 import { resolveCustomMenuNavigation } from '@/utils/custom-menu-navigation'
+import { orderSidebarItems } from '@/utils/sidebar-order'
 import { FeatureFlags, makeSidebarFlag } from '@/utils/featureFlags'
 import { resolveSiteBillingMode } from '@/utils/siteBillingMode'
 import { useBatchImageAccess } from '@/composables/useBatchImageAccess'
@@ -596,6 +597,10 @@ const PluginIcon = {
   render: () => h(Icon, { name: 'cube' })
 }
 
+const ModelPlazaIcon = {
+  render: () => h(Icon, { name: 'grid' })
+}
+
 const BellIcon = {
   render: () =>
     h(
@@ -847,6 +852,7 @@ const flagChannelMonitor = makeSidebarFlag(FeatureFlags.channelMonitor)
 const flagPayment = makeSidebarFlag(FeatureFlags.payment)
 const flagAvailableChannels = makeSidebarFlag(FeatureFlags.availableChannels)
 const flagSubscription = makeSidebarFlag(FeatureFlags.subscription)
+const flagModelPlaza = makeSidebarFlag(FeatureFlags.modelPlaza)
 
 // 购买入口文案随站点计费模式切换：仅充值 → 「充值」，仅订阅 → 「订阅」，否则「充值/订阅」。
 const purchaseNavLabel = computed(() => {
@@ -893,6 +899,7 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
     items.push({ path: '/dashboard', label: t('nav.dashboard'), icon: DashboardIcon })
   }
   items.push(
+    { path: '/model-plaza', label: t('nav.modelPlaza'), icon: ModelPlazaIcon, featureFlag: flagModelPlaza },
     { path: '/keys', label: t('nav.apiKeys'), icon: KeyIcon },
     { path: '/images', label: t('nav.imageStudio'), icon: SparklesIcon, hideInSimpleMode: true, featureFlag: flagImageStudio },
     { path: '/batch-image', label: t('nav.batchImage'), icon: BatchImageIcon, hideInSimpleMode: true, featureFlag: flagBatchImageAccess },
@@ -923,8 +930,20 @@ function finalizeNav(items: NavItem[]): NavItem[] {
   return authStore.isSimpleMode ? visible.filter(item => !item.hideInSimpleMode) : visible
 }
 
+// The admin workbench is a role-specific entry that historically stays at the
+// front of a sub-admin's personal menu. Keep it outside the user-facing global
+// order so adding this setting does not move that administrative entry.
+function orderUserSidebarItems(items: NavItem[]): NavItem[] {
+  const adminWorkbench = items.filter(item => item.path === '/admin/workbench')
+  const orderable = items.filter(item => item.path !== '/admin/workbench')
+  return [
+    ...adminWorkbench,
+    ...orderSidebarItems(orderable, appStore.cachedPublicSettings?.user_sidebar_order),
+  ]
+}
+
 // User navigation items (for regular users)
-const userNavItems = computed((): NavItem[] => finalizeNav(buildSelfNavItems(true)))
+const userNavItems = computed((): NavItem[] => orderUserSidebarItems(finalizeNav(buildSelfNavItems(true))))
 function isSidebarItemFixed(path: string): boolean {
   return fixedSidebarPaths.has(path)
 }
@@ -963,7 +982,7 @@ watch(sidebarVisibilityKey, loadSidebarVisibility, { immediate: true })
 // Personal navigation items (for admin's "My Account" section, without Dashboard).
 // Admins access 可用渠道 from this section just like regular users — there is no
 // separate admin entry, since the page is purely a user-facing view.
-const personalNavItems = computed((): NavItem[] => finalizeNav(buildSelfNavItems(false)))
+const personalNavItems = computed(() => orderUserSidebarItems(finalizeNav(buildSelfNavItems(false))))
 const sidebarMenuItems = computed((): NavItem[] => isAdmin.value ? personalNavItems.value : userNavItems.value)
 const visibleSidebarMenuItems = computed(() => sidebarMenuItems.value.filter(item => isSidebarItemVisible(item.path)))
 const visiblePersonalSidebarMenuItems = computed(() => personalNavItems.value.filter(item => isSidebarItemVisible(item.path)))
