@@ -22,6 +22,7 @@ func TestThinkingBudgetConstraintErrors(t *testing.T) {
 		{"thinking.budget_tokens must be >= 1024", true},
 		{"thinking budget tokens must be greater than or equal to 1024", true},
 		{"thinking.budget_tokens: Input should be greater than 1024", true},
+		{"max_tokens must be greater than thinking.budget_tokens", true},
 		{"reasoning quota exceeded: 1024 tokens", false},
 		{"must be greater than 1024", false},
 		{"reserve tokens for a final answer when Baseten reasoning is enabled", false},

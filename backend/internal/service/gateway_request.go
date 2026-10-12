@@ -1812,6 +1812,13 @@ func isThinkingBudgetConstraintError(errMsg string) bool {
 	if isFinalAnswerReserveError(m) {
 		return true
 	}
+	// Claude-compatible upstreams also reject requests when max_tokens does not
+	// leave room beyond the configured thinking budget. This is a request
+	// parameter mismatch and can be repaired before retrying the account.
+	if strings.Contains(m, "max_tokens") && strings.Contains(m, "thinking.budget_tokens") &&
+		(strings.Contains(m, "must be greater") || strings.Contains(m, "greater than")) {
+		return true
+	}
 
 	// Condition 1: budget_tokens or budget tokens
 	hasBudget := strings.Contains(m, "budget_tokens") || strings.Contains(m, "budget tokens")
