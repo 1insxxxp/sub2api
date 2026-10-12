@@ -21,6 +21,7 @@ type Group struct {
 	ID          int64
 	Name        string
 	Description string
+	I18n        domain.GroupI18n
 	Tag         string
 	TagColor    string
 	Platform    string
