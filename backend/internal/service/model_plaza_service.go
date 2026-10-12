@@ -42,6 +42,7 @@ type PlazaGroup struct {
 	ID                 int64
 	Name               string
 	Description        string
+	I18n               GroupI18n
 	Platform           string
 	SubscriptionType   string
 	RateMultiplier     float64
