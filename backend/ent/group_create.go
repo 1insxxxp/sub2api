@@ -95,6 +95,12 @@ func (_c *GroupCreate) SetNillableDescription(v *string) *GroupCreate {
 	return _c
 }
 
+// SetI18n sets the "i18n" field.
+func (_c *GroupCreate) SetI18n(v domain.GroupI18n) *GroupCreate {
+	_c.mutation.SetI18n(v)
+	return _c
+}
+
 // SetTag sets the "tag" field.
 func (_c *GroupCreate) SetTag(v string) *GroupCreate {
 	_c.mutation.SetTag(v)
@@ -1237,6 +1243,10 @@ func (_c *GroupCreate) defaults() error {
 		v := group.DefaultUpdatedAt()
 		_c.mutation.SetUpdatedAt(v)
 	}
+	if _, ok := _c.mutation.I18n(); !ok {
+		v := group.DefaultI18n
+		_c.mutation.SetI18n(v)
+	}
 	if _, ok := _c.mutation.Tag(); !ok {
 		v := group.DefaultTag
 		_c.mutation.SetTag(v)
@@ -1730,6 +1740,10 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Description(); ok {
 		_spec.SetField(group.FieldDescription, field.TypeString, value)
 		_node.Description = &value
+	}
+	if value, ok := _c.mutation.I18n(); ok {
+		_spec.SetField(group.FieldI18n, field.TypeJSON, value)
+		_node.I18n = value
 	}
 	if value, ok := _c.mutation.Tag(); ok {
 		_spec.SetField(group.FieldTag, field.TypeString, value)
@@ -2300,6 +2314,24 @@ func (u *GroupUpsert) UpdateDescription() *GroupUpsert {
 // ClearDescription clears the value of the "description" field.
 func (u *GroupUpsert) ClearDescription() *GroupUpsert {
 	u.SetNull(group.FieldDescription)
+	return u
+}
+
+// SetI18n sets the "i18n" field.
+func (u *GroupUpsert) SetI18n(v domain.GroupI18n) *GroupUpsert {
+	u.Set(group.FieldI18n, v)
+	return u
+}
+
+// UpdateI18n sets the "i18n" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateI18n() *GroupUpsert {
+	u.SetExcluded(group.FieldI18n)
+	return u
+}
+
+// ClearI18n clears the value of the "i18n" field.
+func (u *GroupUpsert) ClearI18n() *GroupUpsert {
+	u.SetNull(group.FieldI18n)
 	return u
 }
 
@@ -3510,6 +3542,27 @@ func (u *GroupUpsertOne) UpdateDescription() *GroupUpsertOne {
 func (u *GroupUpsertOne) ClearDescription() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
 		s.ClearDescription()
+	})
+}
+
+// SetI18n sets the "i18n" field.
+func (u *GroupUpsertOne) SetI18n(v domain.GroupI18n) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetI18n(v)
+	})
+}
+
+// UpdateI18n sets the "i18n" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateI18n() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateI18n()
+	})
+}
+
+// ClearI18n clears the value of the "i18n" field.
+func (u *GroupUpsertOne) ClearI18n() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.ClearI18n()
 	})
 }
 
@@ -5068,6 +5121,27 @@ func (u *GroupUpsertBulk) UpdateDescription() *GroupUpsertBulk {
 func (u *GroupUpsertBulk) ClearDescription() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.ClearDescription()
+	})
+}
+
+// SetI18n sets the "i18n" field.
+func (u *GroupUpsertBulk) SetI18n(v domain.GroupI18n) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetI18n(v)
+	})
+}
+
+// UpdateI18n sets the "i18n" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateI18n() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateI18n()
+	})
+}
+
+// ClearI18n clears the value of the "i18n" field.
+func (u *GroupUpsertBulk) ClearI18n() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.ClearI18n()
 	})
 }
 

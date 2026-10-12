@@ -100,6 +100,18 @@ func (_u *GroupUpdate) ClearDescription() *GroupUpdate {
 	return _u
 }
 
+// SetI18n sets the "i18n" field.
+func (_u *GroupUpdate) SetI18n(v domain.GroupI18n) *GroupUpdate {
+	_u.mutation.SetI18n(v)
+	return _u
+}
+
+// ClearI18n clears the value of the "i18n" field.
+func (_u *GroupUpdate) ClearI18n() *GroupUpdate {
+	_u.mutation.ClearI18n()
+	return _u
+}
+
 // SetTag sets the "tag" field.
 func (_u *GroupUpdate) SetTag(v string) *GroupUpdate {
 	_u.mutation.SetTag(v)
@@ -1896,6 +1908,12 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.DescriptionCleared() {
 		_spec.ClearField(group.FieldDescription, field.TypeString)
 	}
+	if value, ok := _u.mutation.I18n(); ok {
+		_spec.SetField(group.FieldI18n, field.TypeJSON, value)
+	}
+	if _u.mutation.I18nCleared() {
+		_spec.ClearField(group.FieldI18n, field.TypeJSON)
+	}
 	if value, ok := _u.mutation.Tag(); ok {
 		_spec.SetField(group.FieldTag, field.TypeString, value)
 	}
@@ -2852,6 +2870,18 @@ func (_u *GroupUpdateOne) SetNillableDescription(v *string) *GroupUpdateOne {
 // ClearDescription clears the value of the "description" field.
 func (_u *GroupUpdateOne) ClearDescription() *GroupUpdateOne {
 	_u.mutation.ClearDescription()
+	return _u
+}
+
+// SetI18n sets the "i18n" field.
+func (_u *GroupUpdateOne) SetI18n(v domain.GroupI18n) *GroupUpdateOne {
+	_u.mutation.SetI18n(v)
+	return _u
+}
+
+// ClearI18n clears the value of the "i18n" field.
+func (_u *GroupUpdateOne) ClearI18n() *GroupUpdateOne {
+	_u.mutation.ClearI18n()
 	return _u
 }
 
@@ -4680,6 +4710,12 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if _u.mutation.DescriptionCleared() {
 		_spec.ClearField(group.FieldDescription, field.TypeString)
+	}
+	if value, ok := _u.mutation.I18n(); ok {
+		_spec.SetField(group.FieldI18n, field.TypeJSON, value)
+	}
+	if _u.mutation.I18nCleared() {
+		_spec.ClearField(group.FieldI18n, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.Tag(); ok {
 		_spec.SetField(group.FieldTag, field.TypeString, value)

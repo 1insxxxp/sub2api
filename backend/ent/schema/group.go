@@ -42,6 +42,10 @@ func (Group) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			SchemaType(map[string]string{dialect.Postgres: "text"}),
+		field.JSON("i18n", domain.GroupI18n{}).
+			Optional().
+			Default(domain.GroupI18n{}).
+			Comment("分组名称与描述的多语言译文"),
 		// Ent counts bytes; the service enforces the 20-codepoint limit.
 		field.String("tag").MaxLen(80).Default(""),
 		field.String("tag_color").MaxLen(7).Default(""),

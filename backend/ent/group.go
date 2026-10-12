@@ -30,6 +30,8 @@ type Group struct {
 	Name string `json:"name,omitempty"`
 	// Description holds the value of the "description" field.
 	Description *string `json:"description,omitempty"`
+	// 分组名称与描述的多语言译文
+	I18n domain.GroupI18n `json:"i18n,omitempty"`
 	// Tag holds the value of the "tag" field.
 	Tag string `json:"tag,omitempty"`
 	// TagColor holds the value of the "tag_color" field.
@@ -329,7 +331,7 @@ func (*Group) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case group.FieldVideoModelPrices, group.FieldModelPricing, group.FieldModelRouting, group.FieldSupportedModelScopes, group.FieldMessagesDispatchModelConfig, group.FieldModelAllowlist, group.FieldModelStatusVisibility, group.FieldCodexModelsManifestConfig, group.FieldReasoningEffortMappings:
+		case group.FieldI18n, group.FieldVideoModelPrices, group.FieldModelPricing, group.FieldModelRouting, group.FieldSupportedModelScopes, group.FieldMessagesDispatchModelConfig, group.FieldModelAllowlist, group.FieldModelStatusVisibility, group.FieldCodexModelsManifestConfig, group.FieldReasoningEffortMappings:
 			values[i] = new([]byte)
 		case group.FieldEmptyResponseCompensationEnabled, group.FieldPeakRateEnabled, group.FieldIsExclusive, group.FieldSystemCustomRoutingEnabled, group.FieldAllowImageGeneration, group.FieldAllowBatchImageGeneration, group.FieldImageRateIndependent, group.FieldVideoRateIndependent, group.FieldLongContextPricingEnabled, group.FieldClaudeCodeOnly, group.FieldModelRoutingEnabled, group.FieldMcpXMLInject, group.FieldAllowMessagesDispatch, group.FieldAllowLive, group.FieldForceOpenaiFast, group.FieldFreeOpenaiFast, group.FieldRequireOauthOnly, group.FieldRequirePrivacySet, group.FieldSimulateClaudeMaxEnabled, group.FieldProfitControlEnabled:
 			values[i] = new(sql.NullBool)
@@ -393,6 +395,14 @@ func (_m *Group) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Description = new(string)
 				*_m.Description = value.String
+			}
+		case group.FieldI18n:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field i18n", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.I18n); err != nil {
+					return fmt.Errorf("unmarshal field i18n: %w", err)
+				}
 			}
 		case group.FieldTag:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -962,6 +972,9 @@ func (_m *Group) String() string {
 		builder.WriteString("description=")
 		builder.WriteString(*v)
 	}
+	builder.WriteString(", ")
+	builder.WriteString("i18n=")
+	builder.WriteString(fmt.Sprintf("%v", _m.I18n))
 	builder.WriteString(", ")
 	builder.WriteString("tag=")
 	builder.WriteString(_m.Tag)
