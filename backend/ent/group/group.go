@@ -26,14 +26,25 @@ const (
 	FieldName = "name"
 	// FieldDescription holds the string denoting the description field in the database.
 	FieldDescription = "description"
-	// FieldTag holds the string denoting the tag field in the database.
-	FieldTag = "tag"
-	// FieldTagColor holds the string denoting the tag_color field in the database.
-	FieldTagColor = "tag_color"
+	// FieldI18n holds the string denoting the i18n field in the database.
+	FieldI18n = "i18n"
+	CustomModelRoutesTable = "user_custom_group_models"
+	CustomModelRoutesInverseTable = "user_custom_group_models"
+	CustomModelRoutesColumn = "source_group_id"
+	SystemCustomRoutesTable = "system_custom_group_models"
+	SystemCustomRoutesInverseTable = "system_custom_group_models"
+	SystemCustomRoutesColumn = "group_id"
+	SystemCustomSourceRoutesTable = "system_custom_group_models"
+	SystemCustomSourceRoutesInverseTable = "system_custom_group_models"
+	SystemCustomSourceRoutesColumn = "source_group_id"
+	SystemCustomSourcesTable = "system_custom_group_sources"
+	SystemCustomSourcesInverseTable = "system_custom_group_sources"
+	SystemCustomSourcesColumn = "group_id"
+	SystemCustomSourceReferencesTable = "system_custom_group_sources"
+	SystemCustomSourceReferencesInverseTable = "system_custom_group_sources"
+	SystemCustomSourceReferencesColumn = "source_group_id"
 	// FieldRateMultiplier holds the string denoting the rate_multiplier field in the database.
 	FieldRateMultiplier = "rate_multiplier"
-	// FieldEmptyResponseCompensationEnabled holds the string denoting the empty_response_compensation_enabled field in the database.
-	FieldEmptyResponseCompensationEnabled = "empty_response_compensation_enabled"
 	// FieldPeakRateEnabled holds the string denoting the peak_rate_enabled field in the database.
 	FieldPeakRateEnabled = "peak_rate_enabled"
 	// FieldPeakStart holds the string denoting the peak_start field in the database.
@@ -52,8 +63,6 @@ const (
 	FieldPlatform = "platform"
 	// FieldSubscriptionType holds the string denoting the subscription_type field in the database.
 	FieldSubscriptionType = "subscription_type"
-	// FieldSystemCustomRoutingEnabled holds the string denoting the system_custom_routing_enabled field in the database.
-	FieldSystemCustomRoutingEnabled = "system_custom_routing_enabled"
 	// FieldDailyLimitUsd holds the string denoting the daily_limit_usd field in the database.
 	FieldDailyLimitUsd = "daily_limit_usd"
 	// FieldWeeklyLimitUsd holds the string denoting the weekly_limit_usd field in the database.
@@ -112,8 +121,6 @@ const (
 	FieldFallbackGroupID = "fallback_group_id"
 	// FieldFallbackGroupIDOnInvalidRequest holds the string denoting the fallback_group_id_on_invalid_request field in the database.
 	FieldFallbackGroupIDOnInvalidRequest = "fallback_group_id_on_invalid_request"
-	// FieldDefaultReasoningEffort holds the string denoting the default_reasoning_effort field in the database.
-	FieldDefaultReasoningEffort = "default_reasoning_effort"
 	// FieldModelRouting holds the string denoting the model_routing field in the database.
 	FieldModelRouting = "model_routing"
 	// FieldModelRoutingEnabled holds the string denoting the model_routing_enabled field in the database.
@@ -138,14 +145,10 @@ const (
 	FieldRequirePrivacySet = "require_privacy_set"
 	// FieldDefaultMappedModel holds the string denoting the default_mapped_model field in the database.
 	FieldDefaultMappedModel = "default_mapped_model"
-	// FieldSimulateClaudeMaxEnabled holds the string denoting the simulate_claude_max_enabled field in the database.
-	FieldSimulateClaudeMaxEnabled = "simulate_claude_max_enabled"
 	// FieldMessagesDispatchModelConfig holds the string denoting the messages_dispatch_model_config field in the database.
 	FieldMessagesDispatchModelConfig = "messages_dispatch_model_config"
 	// FieldModelAllowlist holds the string denoting the model_allowlist field in the database.
 	FieldModelAllowlist = "model_allowlist"
-	// FieldModelStatusVisibility holds the string denoting the model_status_visibility field in the database.
-	FieldModelStatusVisibility = "model_status_visibility"
 	// FieldCodexModelsManifestConfig holds the string denoting the codex_models_manifest_config field in the database.
 	FieldCodexModelsManifestConfig = "codex_models_manifest_config"
 	// FieldRpmLimit holds the string denoting the rpm_limit field in the database.
@@ -162,8 +165,6 @@ const (
 	FieldProfitMinMargin = "profit_min_margin"
 	// FieldProfitSafetyBuffer holds the string denoting the profit_safety_buffer field in the database.
 	FieldProfitSafetyBuffer = "profit_safety_buffer"
-	// FieldKeyDisplayCategory holds the string denoting the key_display_category field in the database.
-	FieldKeyDisplayCategory = "key_display_category"
 	// EdgeAPIKeys holds the string denoting the api_keys edge name in mutations.
 	EdgeAPIKeys = "api_keys"
 	// EdgeRedeemCodes holds the string denoting the redeem_codes edge name in mutations.
@@ -172,16 +173,6 @@ const (
 	EdgeSubscriptions = "subscriptions"
 	// EdgeUsageLogs holds the string denoting the usage_logs edge name in mutations.
 	EdgeUsageLogs = "usage_logs"
-	// EdgeCustomModelRoutes holds the string denoting the custom_model_routes edge name in mutations.
-	EdgeCustomModelRoutes = "custom_model_routes"
-	// EdgeSystemCustomRoutes holds the string denoting the system_custom_routes edge name in mutations.
-	EdgeSystemCustomRoutes = "system_custom_routes"
-	// EdgeSystemCustomSourceRoutes holds the string denoting the system_custom_source_routes edge name in mutations.
-	EdgeSystemCustomSourceRoutes = "system_custom_source_routes"
-	// EdgeSystemCustomSources holds the string denoting the system_custom_sources edge name in mutations.
-	EdgeSystemCustomSources = "system_custom_sources"
-	// EdgeSystemCustomSourceReferences holds the string denoting the system_custom_source_references edge name in mutations.
-	EdgeSystemCustomSourceReferences = "system_custom_source_references"
 	// EdgeAccounts holds the string denoting the accounts edge name in mutations.
 	EdgeAccounts = "accounts"
 	// EdgeAllowedUsers holds the string denoting the allowed_users edge name in mutations.
@@ -220,41 +211,6 @@ const (
 	UsageLogsInverseTable = "usage_logs"
 	// UsageLogsColumn is the table column denoting the usage_logs relation/edge.
 	UsageLogsColumn = "group_id"
-	// CustomModelRoutesTable is the table that holds the custom_model_routes relation/edge.
-	CustomModelRoutesTable = "user_custom_group_models"
-	// CustomModelRoutesInverseTable is the table name for the UserCustomGroupModel entity.
-	// It exists in this package in order to avoid circular dependency with the "usercustomgroupmodel" package.
-	CustomModelRoutesInverseTable = "user_custom_group_models"
-	// CustomModelRoutesColumn is the table column denoting the custom_model_routes relation/edge.
-	CustomModelRoutesColumn = "source_group_id"
-	// SystemCustomRoutesTable is the table that holds the system_custom_routes relation/edge.
-	SystemCustomRoutesTable = "system_custom_group_models"
-	// SystemCustomRoutesInverseTable is the table name for the SystemCustomGroupModel entity.
-	// It exists in this package in order to avoid circular dependency with the "systemcustomgroupmodel" package.
-	SystemCustomRoutesInverseTable = "system_custom_group_models"
-	// SystemCustomRoutesColumn is the table column denoting the system_custom_routes relation/edge.
-	SystemCustomRoutesColumn = "group_id"
-	// SystemCustomSourceRoutesTable is the table that holds the system_custom_source_routes relation/edge.
-	SystemCustomSourceRoutesTable = "system_custom_group_models"
-	// SystemCustomSourceRoutesInverseTable is the table name for the SystemCustomGroupModel entity.
-	// It exists in this package in order to avoid circular dependency with the "systemcustomgroupmodel" package.
-	SystemCustomSourceRoutesInverseTable = "system_custom_group_models"
-	// SystemCustomSourceRoutesColumn is the table column denoting the system_custom_source_routes relation/edge.
-	SystemCustomSourceRoutesColumn = "source_group_id"
-	// SystemCustomSourcesTable is the table that holds the system_custom_sources relation/edge.
-	SystemCustomSourcesTable = "system_custom_group_sources"
-	// SystemCustomSourcesInverseTable is the table name for the SystemCustomGroupSource entity.
-	// It exists in this package in order to avoid circular dependency with the "systemcustomgroupsource" package.
-	SystemCustomSourcesInverseTable = "system_custom_group_sources"
-	// SystemCustomSourcesColumn is the table column denoting the system_custom_sources relation/edge.
-	SystemCustomSourcesColumn = "group_id"
-	// SystemCustomSourceReferencesTable is the table that holds the system_custom_source_references relation/edge.
-	SystemCustomSourceReferencesTable = "system_custom_group_sources"
-	// SystemCustomSourceReferencesInverseTable is the table name for the SystemCustomGroupSource entity.
-	// It exists in this package in order to avoid circular dependency with the "systemcustomgroupsource" package.
-	SystemCustomSourceReferencesInverseTable = "system_custom_group_sources"
-	// SystemCustomSourceReferencesColumn is the table column denoting the system_custom_source_references relation/edge.
-	SystemCustomSourceReferencesColumn = "source_group_id"
 	// AccountsTable is the table that holds the accounts relation/edge. The primary key declared below.
 	AccountsTable = "account_groups"
 	// AccountsInverseTable is the table name for the Account entity.
@@ -289,10 +245,8 @@ var Columns = []string{
 	FieldDeletedAt,
 	FieldName,
 	FieldDescription,
-	FieldTag,
-	FieldTagColor,
+	FieldI18n,
 	FieldRateMultiplier,
-	FieldEmptyResponseCompensationEnabled,
 	FieldPeakRateEnabled,
 	FieldPeakStart,
 	FieldPeakEnd,
@@ -302,7 +256,6 @@ var Columns = []string{
 	FieldDuplicateOperationID,
 	FieldPlatform,
 	FieldSubscriptionType,
-	FieldSystemCustomRoutingEnabled,
 	FieldDailyLimitUsd,
 	FieldWeeklyLimitUsd,
 	FieldMonthlyLimitUsd,
@@ -332,7 +285,6 @@ var Columns = []string{
 	FieldClaudeCodeOnly,
 	FieldFallbackGroupID,
 	FieldFallbackGroupIDOnInvalidRequest,
-	FieldDefaultReasoningEffort,
 	FieldModelRouting,
 	FieldModelRoutingEnabled,
 	FieldMcpXMLInject,
@@ -345,10 +297,8 @@ var Columns = []string{
 	FieldRequireOauthOnly,
 	FieldRequirePrivacySet,
 	FieldDefaultMappedModel,
-	FieldSimulateClaudeMaxEnabled,
 	FieldMessagesDispatchModelConfig,
 	FieldModelAllowlist,
-	FieldModelStatusVisibility,
 	FieldCodexModelsManifestConfig,
 	FieldRpmLimit,
 	FieldMaxReasoningEffort,
@@ -357,7 +307,6 @@ var Columns = []string{
 	FieldProfitControlEnabled,
 	FieldProfitMinMargin,
 	FieldProfitSafetyBuffer,
-	FieldKeyDisplayCategory,
 }
 
 var (
@@ -395,18 +344,10 @@ var (
 	UpdateDefaultUpdatedAt func() time.Time
 	// NameValidator is a validator for the "name" field. It is called by the builders before save.
 	NameValidator func(string) error
-	// DefaultTag holds the default value on creation for the "tag" field.
-	DefaultTag string
-	// TagValidator is a validator for the "tag" field. It is called by the builders before save.
-	TagValidator func(string) error
-	// DefaultTagColor holds the default value on creation for the "tag_color" field.
-	DefaultTagColor string
-	// TagColorValidator is a validator for the "tag_color" field. It is called by the builders before save.
-	TagColorValidator func(string) error
+	// DefaultI18n holds the default value on creation for the "i18n" field.
+	DefaultI18n domain.GroupI18n
 	// DefaultRateMultiplier holds the default value on creation for the "rate_multiplier" field.
 	DefaultRateMultiplier float64
-	// DefaultEmptyResponseCompensationEnabled holds the default value on creation for the "empty_response_compensation_enabled" field.
-	DefaultEmptyResponseCompensationEnabled bool
 	// DefaultPeakRateEnabled holds the default value on creation for the "peak_rate_enabled" field.
 	DefaultPeakRateEnabled bool
 	// DefaultPeakStart holds the default value on creation for the "peak_start" field.
@@ -435,8 +376,6 @@ var (
 	DefaultSubscriptionType string
 	// SubscriptionTypeValidator is a validator for the "subscription_type" field. It is called by the builders before save.
 	SubscriptionTypeValidator func(string) error
-	// DefaultSystemCustomRoutingEnabled holds the default value on creation for the "system_custom_routing_enabled" field.
-	DefaultSystemCustomRoutingEnabled bool
 	// DefaultDefaultValidityDays holds the default value on creation for the "default_validity_days" field.
 	DefaultDefaultValidityDays int
 	// DefaultAllowImageGeneration holds the default value on creation for the "allow_image_generation" field.
@@ -467,10 +406,6 @@ var (
 	DefaultLongContextPricingEnabled bool
 	// DefaultClaudeCodeOnly holds the default value on creation for the "claude_code_only" field.
 	DefaultClaudeCodeOnly bool
-	// DefaultDefaultReasoningEffort holds the default value on creation for the "default_reasoning_effort" field.
-	DefaultDefaultReasoningEffort string
-	// DefaultReasoningEffortValidator is a validator for the "default_reasoning_effort" field. It is called by the builders before save.
-	DefaultReasoningEffortValidator func(string) error
 	// DefaultModelRoutingEnabled holds the default value on creation for the "model_routing_enabled" field.
 	DefaultModelRoutingEnabled bool
 	// DefaultMcpXMLInject holds the default value on creation for the "mcp_xml_inject" field.
@@ -495,14 +430,10 @@ var (
 	DefaultDefaultMappedModel string
 	// DefaultMappedModelValidator is a validator for the "default_mapped_model" field. It is called by the builders before save.
 	DefaultMappedModelValidator func(string) error
-	// DefaultSimulateClaudeMaxEnabled holds the default value on creation for the "simulate_claude_max_enabled" field.
-	DefaultSimulateClaudeMaxEnabled bool
 	// DefaultMessagesDispatchModelConfig holds the default value on creation for the "messages_dispatch_model_config" field.
 	DefaultMessagesDispatchModelConfig domain.OpenAIMessagesDispatchModelConfig
 	// DefaultModelAllowlist holds the default value on creation for the "model_allowlist" field.
 	DefaultModelAllowlist domain.GroupModelAllowlist
-	// DefaultModelStatusVisibility holds the default value on creation for the "model_status_visibility" field.
-	DefaultModelStatusVisibility domain.GroupModelStatusVisibility
 	// DefaultCodexModelsManifestConfig holds the default value on creation for the "codex_models_manifest_config" field.
 	DefaultCodexModelsManifestConfig domain.GroupCodexModelsManifestConfig
 	// DefaultRpmLimit holds the default value on creation for the "rpm_limit" field.
@@ -523,10 +454,6 @@ var (
 	DefaultProfitMinMargin float64
 	// DefaultProfitSafetyBuffer holds the default value on creation for the "profit_safety_buffer" field.
 	DefaultProfitSafetyBuffer float64
-	// DefaultKeyDisplayCategory holds the default value on creation for the "key_display_category" field.
-	DefaultKeyDisplayCategory string
-	// KeyDisplayCategoryValidator is a validator for the "key_display_category" field. It is called by the builders before save.
-	KeyDisplayCategoryValidator func(string) error
 )
 
 // OrderOption defines the ordering options for the Group queries.
@@ -562,24 +489,9 @@ func ByDescription(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDescription, opts...).ToFunc()
 }
 
-// ByTag orders the results by the tag field.
-func ByTag(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldTag, opts...).ToFunc()
-}
-
-// ByTagColor orders the results by the tag_color field.
-func ByTagColor(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldTagColor, opts...).ToFunc()
-}
-
 // ByRateMultiplier orders the results by the rate_multiplier field.
 func ByRateMultiplier(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRateMultiplier, opts...).ToFunc()
-}
-
-// ByEmptyResponseCompensationEnabled orders the results by the empty_response_compensation_enabled field.
-func ByEmptyResponseCompensationEnabled(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldEmptyResponseCompensationEnabled, opts...).ToFunc()
 }
 
 // ByPeakRateEnabled orders the results by the peak_rate_enabled field.
@@ -625,11 +537,6 @@ func ByPlatform(opts ...sql.OrderTermOption) OrderOption {
 // BySubscriptionType orders the results by the subscription_type field.
 func BySubscriptionType(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSubscriptionType, opts...).ToFunc()
-}
-
-// BySystemCustomRoutingEnabled orders the results by the system_custom_routing_enabled field.
-func BySystemCustomRoutingEnabled(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldSystemCustomRoutingEnabled, opts...).ToFunc()
 }
 
 // ByDailyLimitUsd orders the results by the daily_limit_usd field.
@@ -767,11 +674,6 @@ func ByFallbackGroupIDOnInvalidRequest(opts ...sql.OrderTermOption) OrderOption 
 	return sql.OrderByField(FieldFallbackGroupIDOnInvalidRequest, opts...).ToFunc()
 }
 
-// ByDefaultReasoningEffort orders the results by the default_reasoning_effort field.
-func ByDefaultReasoningEffort(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldDefaultReasoningEffort, opts...).ToFunc()
-}
-
 // ByModelRoutingEnabled orders the results by the model_routing_enabled field.
 func ByModelRoutingEnabled(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldModelRoutingEnabled, opts...).ToFunc()
@@ -822,11 +724,6 @@ func ByDefaultMappedModel(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDefaultMappedModel, opts...).ToFunc()
 }
 
-// BySimulateClaudeMaxEnabled orders the results by the simulate_claude_max_enabled field.
-func BySimulateClaudeMaxEnabled(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldSimulateClaudeMaxEnabled, opts...).ToFunc()
-}
-
 // ByRpmLimit orders the results by the rpm_limit field.
 func ByRpmLimit(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRpmLimit, opts...).ToFunc()
@@ -855,11 +752,6 @@ func ByProfitMinMargin(opts ...sql.OrderTermOption) OrderOption {
 // ByProfitSafetyBuffer orders the results by the profit_safety_buffer field.
 func ByProfitSafetyBuffer(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldProfitSafetyBuffer, opts...).ToFunc()
-}
-
-// ByKeyDisplayCategory orders the results by the key_display_category field.
-func ByKeyDisplayCategory(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldKeyDisplayCategory, opts...).ToFunc()
 }
 
 // ByAPIKeysCount orders the results by api_keys count.
@@ -915,76 +807,6 @@ func ByUsageLogsCount(opts ...sql.OrderTermOption) OrderOption {
 func ByUsageLogs(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	return func(s *sql.Selector) {
 		sqlgraph.OrderByNeighborTerms(s, newUsageLogsStep(), append([]sql.OrderTerm{term}, terms...)...)
-	}
-}
-
-// ByCustomModelRoutesCount orders the results by custom_model_routes count.
-func ByCustomModelRoutesCount(opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newCustomModelRoutesStep(), opts...)
-	}
-}
-
-// ByCustomModelRoutes orders the results by custom_model_routes terms.
-func ByCustomModelRoutes(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newCustomModelRoutesStep(), append([]sql.OrderTerm{term}, terms...)...)
-	}
-}
-
-// BySystemCustomRoutesCount orders the results by system_custom_routes count.
-func BySystemCustomRoutesCount(opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newSystemCustomRoutesStep(), opts...)
-	}
-}
-
-// BySystemCustomRoutes orders the results by system_custom_routes terms.
-func BySystemCustomRoutes(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newSystemCustomRoutesStep(), append([]sql.OrderTerm{term}, terms...)...)
-	}
-}
-
-// BySystemCustomSourceRoutesCount orders the results by system_custom_source_routes count.
-func BySystemCustomSourceRoutesCount(opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newSystemCustomSourceRoutesStep(), opts...)
-	}
-}
-
-// BySystemCustomSourceRoutes orders the results by system_custom_source_routes terms.
-func BySystemCustomSourceRoutes(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newSystemCustomSourceRoutesStep(), append([]sql.OrderTerm{term}, terms...)...)
-	}
-}
-
-// BySystemCustomSourcesCount orders the results by system_custom_sources count.
-func BySystemCustomSourcesCount(opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newSystemCustomSourcesStep(), opts...)
-	}
-}
-
-// BySystemCustomSources orders the results by system_custom_sources terms.
-func BySystemCustomSources(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newSystemCustomSourcesStep(), append([]sql.OrderTerm{term}, terms...)...)
-	}
-}
-
-// BySystemCustomSourceReferencesCount orders the results by system_custom_source_references count.
-func BySystemCustomSourceReferencesCount(opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newSystemCustomSourceReferencesStep(), opts...)
-	}
-}
-
-// BySystemCustomSourceReferences orders the results by system_custom_source_references terms.
-func BySystemCustomSourceReferences(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newSystemCustomSourceReferencesStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
 
@@ -1069,41 +891,6 @@ func newUsageLogsStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(UsageLogsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, UsageLogsTable, UsageLogsColumn),
-	)
-}
-func newCustomModelRoutesStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(CustomModelRoutesInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.O2M, false, CustomModelRoutesTable, CustomModelRoutesColumn),
-	)
-}
-func newSystemCustomRoutesStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(SystemCustomRoutesInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.O2M, false, SystemCustomRoutesTable, SystemCustomRoutesColumn),
-	)
-}
-func newSystemCustomSourceRoutesStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(SystemCustomSourceRoutesInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.O2M, false, SystemCustomSourceRoutesTable, SystemCustomSourceRoutesColumn),
-	)
-}
-func newSystemCustomSourcesStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(SystemCustomSourcesInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.O2M, false, SystemCustomSourcesTable, SystemCustomSourcesColumn),
-	)
-}
-func newSystemCustomSourceReferencesStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(SystemCustomSourceReferencesInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.O2M, false, SystemCustomSourceReferencesTable, SystemCustomSourceReferencesColumn),
 	)
 }
 func newAccountsStep() *sqlgraph.Step {
