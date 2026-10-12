@@ -80,9 +80,24 @@ func Description(v string) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldDescription, v))
 }
 
+// Tag applies equality check predicate on the "tag" field. It's identical to TagEQ.
+func Tag(v string) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldTag, v))
+}
+
+// TagColor applies equality check predicate on the "tag_color" field. It's identical to TagColorEQ.
+func TagColor(v string) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldTagColor, v))
+}
+
 // RateMultiplier applies equality check predicate on the "rate_multiplier" field. It's identical to RateMultiplierEQ.
 func RateMultiplier(v float64) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldRateMultiplier, v))
+}
+
+// EmptyResponseCompensationEnabled applies equality check predicate on the "empty_response_compensation_enabled" field. It's identical to EmptyResponseCompensationEnabledEQ.
+func EmptyResponseCompensationEnabled(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldEmptyResponseCompensationEnabled, v))
 }
 
 // PeakRateEnabled applies equality check predicate on the "peak_rate_enabled" field. It's identical to PeakRateEnabledEQ.
@@ -128,6 +143,11 @@ func Platform(v string) predicate.Group {
 // SubscriptionType applies equality check predicate on the "subscription_type" field. It's identical to SubscriptionTypeEQ.
 func SubscriptionType(v string) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldSubscriptionType, v))
+}
+
+// SystemCustomRoutingEnabled applies equality check predicate on the "system_custom_routing_enabled" field. It's identical to SystemCustomRoutingEnabledEQ.
+func SystemCustomRoutingEnabled(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldSystemCustomRoutingEnabled, v))
 }
 
 // DailyLimitUsd applies equality check predicate on the "daily_limit_usd" field. It's identical to DailyLimitUsdEQ.
@@ -265,6 +285,11 @@ func FallbackGroupIDOnInvalidRequest(v int64) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldFallbackGroupIDOnInvalidRequest, v))
 }
 
+// DefaultReasoningEffort applies equality check predicate on the "default_reasoning_effort" field. It's identical to DefaultReasoningEffortEQ.
+func DefaultReasoningEffort(v string) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldDefaultReasoningEffort, v))
+}
+
 // ModelRoutingEnabled applies equality check predicate on the "model_routing_enabled" field. It's identical to ModelRoutingEnabledEQ.
 func ModelRoutingEnabled(v bool) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldModelRoutingEnabled, v))
@@ -315,6 +340,11 @@ func DefaultMappedModel(v string) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldDefaultMappedModel, v))
 }
 
+// SimulateClaudeMaxEnabled applies equality check predicate on the "simulate_claude_max_enabled" field. It's identical to SimulateClaudeMaxEnabledEQ.
+func SimulateClaudeMaxEnabled(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldSimulateClaudeMaxEnabled, v))
+}
+
 // RpmLimit applies equality check predicate on the "rpm_limit" field. It's identical to RpmLimitEQ.
 func RpmLimit(v int) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldRpmLimit, v))
@@ -343,6 +373,11 @@ func ProfitMinMargin(v float64) predicate.Group {
 // ProfitSafetyBuffer applies equality check predicate on the "profit_safety_buffer" field. It's identical to ProfitSafetyBufferEQ.
 func ProfitSafetyBuffer(v float64) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldProfitSafetyBuffer, v))
+}
+
+// KeyDisplayCategory applies equality check predicate on the "key_display_category" field. It's identical to KeyDisplayCategoryEQ.
+func KeyDisplayCategory(v string) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldKeyDisplayCategory, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
@@ -615,6 +650,136 @@ func DescriptionContainsFold(v string) predicate.Group {
 	return predicate.Group(sql.FieldContainsFold(FieldDescription, v))
 }
 
+// TagEQ applies the EQ predicate on the "tag" field.
+func TagEQ(v string) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldTag, v))
+}
+
+// TagNEQ applies the NEQ predicate on the "tag" field.
+func TagNEQ(v string) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldTag, v))
+}
+
+// TagIn applies the In predicate on the "tag" field.
+func TagIn(vs ...string) predicate.Group {
+	return predicate.Group(sql.FieldIn(FieldTag, vs...))
+}
+
+// TagNotIn applies the NotIn predicate on the "tag" field.
+func TagNotIn(vs ...string) predicate.Group {
+	return predicate.Group(sql.FieldNotIn(FieldTag, vs...))
+}
+
+// TagGT applies the GT predicate on the "tag" field.
+func TagGT(v string) predicate.Group {
+	return predicate.Group(sql.FieldGT(FieldTag, v))
+}
+
+// TagGTE applies the GTE predicate on the "tag" field.
+func TagGTE(v string) predicate.Group {
+	return predicate.Group(sql.FieldGTE(FieldTag, v))
+}
+
+// TagLT applies the LT predicate on the "tag" field.
+func TagLT(v string) predicate.Group {
+	return predicate.Group(sql.FieldLT(FieldTag, v))
+}
+
+// TagLTE applies the LTE predicate on the "tag" field.
+func TagLTE(v string) predicate.Group {
+	return predicate.Group(sql.FieldLTE(FieldTag, v))
+}
+
+// TagContains applies the Contains predicate on the "tag" field.
+func TagContains(v string) predicate.Group {
+	return predicate.Group(sql.FieldContains(FieldTag, v))
+}
+
+// TagHasPrefix applies the HasPrefix predicate on the "tag" field.
+func TagHasPrefix(v string) predicate.Group {
+	return predicate.Group(sql.FieldHasPrefix(FieldTag, v))
+}
+
+// TagHasSuffix applies the HasSuffix predicate on the "tag" field.
+func TagHasSuffix(v string) predicate.Group {
+	return predicate.Group(sql.FieldHasSuffix(FieldTag, v))
+}
+
+// TagEqualFold applies the EqualFold predicate on the "tag" field.
+func TagEqualFold(v string) predicate.Group {
+	return predicate.Group(sql.FieldEqualFold(FieldTag, v))
+}
+
+// TagContainsFold applies the ContainsFold predicate on the "tag" field.
+func TagContainsFold(v string) predicate.Group {
+	return predicate.Group(sql.FieldContainsFold(FieldTag, v))
+}
+
+// TagColorEQ applies the EQ predicate on the "tag_color" field.
+func TagColorEQ(v string) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldTagColor, v))
+}
+
+// TagColorNEQ applies the NEQ predicate on the "tag_color" field.
+func TagColorNEQ(v string) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldTagColor, v))
+}
+
+// TagColorIn applies the In predicate on the "tag_color" field.
+func TagColorIn(vs ...string) predicate.Group {
+	return predicate.Group(sql.FieldIn(FieldTagColor, vs...))
+}
+
+// TagColorNotIn applies the NotIn predicate on the "tag_color" field.
+func TagColorNotIn(vs ...string) predicate.Group {
+	return predicate.Group(sql.FieldNotIn(FieldTagColor, vs...))
+}
+
+// TagColorGT applies the GT predicate on the "tag_color" field.
+func TagColorGT(v string) predicate.Group {
+	return predicate.Group(sql.FieldGT(FieldTagColor, v))
+}
+
+// TagColorGTE applies the GTE predicate on the "tag_color" field.
+func TagColorGTE(v string) predicate.Group {
+	return predicate.Group(sql.FieldGTE(FieldTagColor, v))
+}
+
+// TagColorLT applies the LT predicate on the "tag_color" field.
+func TagColorLT(v string) predicate.Group {
+	return predicate.Group(sql.FieldLT(FieldTagColor, v))
+}
+
+// TagColorLTE applies the LTE predicate on the "tag_color" field.
+func TagColorLTE(v string) predicate.Group {
+	return predicate.Group(sql.FieldLTE(FieldTagColor, v))
+}
+
+// TagColorContains applies the Contains predicate on the "tag_color" field.
+func TagColorContains(v string) predicate.Group {
+	return predicate.Group(sql.FieldContains(FieldTagColor, v))
+}
+
+// TagColorHasPrefix applies the HasPrefix predicate on the "tag_color" field.
+func TagColorHasPrefix(v string) predicate.Group {
+	return predicate.Group(sql.FieldHasPrefix(FieldTagColor, v))
+}
+
+// TagColorHasSuffix applies the HasSuffix predicate on the "tag_color" field.
+func TagColorHasSuffix(v string) predicate.Group {
+	return predicate.Group(sql.FieldHasSuffix(FieldTagColor, v))
+}
+
+// TagColorEqualFold applies the EqualFold predicate on the "tag_color" field.
+func TagColorEqualFold(v string) predicate.Group {
+	return predicate.Group(sql.FieldEqualFold(FieldTagColor, v))
+}
+
+// TagColorContainsFold applies the ContainsFold predicate on the "tag_color" field.
+func TagColorContainsFold(v string) predicate.Group {
+	return predicate.Group(sql.FieldContainsFold(FieldTagColor, v))
+}
+
 // RateMultiplierEQ applies the EQ predicate on the "rate_multiplier" field.
 func RateMultiplierEQ(v float64) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldRateMultiplier, v))
@@ -653,6 +818,16 @@ func RateMultiplierLT(v float64) predicate.Group {
 // RateMultiplierLTE applies the LTE predicate on the "rate_multiplier" field.
 func RateMultiplierLTE(v float64) predicate.Group {
 	return predicate.Group(sql.FieldLTE(FieldRateMultiplier, v))
+}
+
+// EmptyResponseCompensationEnabledEQ applies the EQ predicate on the "empty_response_compensation_enabled" field.
+func EmptyResponseCompensationEnabledEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldEmptyResponseCompensationEnabled, v))
+}
+
+// EmptyResponseCompensationEnabledNEQ applies the NEQ predicate on the "empty_response_compensation_enabled" field.
+func EmptyResponseCompensationEnabledNEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldEmptyResponseCompensationEnabled, v))
 }
 
 // PeakRateEnabledEQ applies the EQ predicate on the "peak_rate_enabled" field.
@@ -1113,6 +1288,16 @@ func SubscriptionTypeEqualFold(v string) predicate.Group {
 // SubscriptionTypeContainsFold applies the ContainsFold predicate on the "subscription_type" field.
 func SubscriptionTypeContainsFold(v string) predicate.Group {
 	return predicate.Group(sql.FieldContainsFold(FieldSubscriptionType, v))
+}
+
+// SystemCustomRoutingEnabledEQ applies the EQ predicate on the "system_custom_routing_enabled" field.
+func SystemCustomRoutingEnabledEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldSystemCustomRoutingEnabled, v))
+}
+
+// SystemCustomRoutingEnabledNEQ applies the NEQ predicate on the "system_custom_routing_enabled" field.
+func SystemCustomRoutingEnabledNEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldSystemCustomRoutingEnabled, v))
 }
 
 // DailyLimitUsdEQ applies the EQ predicate on the "daily_limit_usd" field.
@@ -2195,6 +2380,71 @@ func FallbackGroupIDOnInvalidRequestNotNil() predicate.Group {
 	return predicate.Group(sql.FieldNotNull(FieldFallbackGroupIDOnInvalidRequest))
 }
 
+// DefaultReasoningEffortEQ applies the EQ predicate on the "default_reasoning_effort" field.
+func DefaultReasoningEffortEQ(v string) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldDefaultReasoningEffort, v))
+}
+
+// DefaultReasoningEffortNEQ applies the NEQ predicate on the "default_reasoning_effort" field.
+func DefaultReasoningEffortNEQ(v string) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldDefaultReasoningEffort, v))
+}
+
+// DefaultReasoningEffortIn applies the In predicate on the "default_reasoning_effort" field.
+func DefaultReasoningEffortIn(vs ...string) predicate.Group {
+	return predicate.Group(sql.FieldIn(FieldDefaultReasoningEffort, vs...))
+}
+
+// DefaultReasoningEffortNotIn applies the NotIn predicate on the "default_reasoning_effort" field.
+func DefaultReasoningEffortNotIn(vs ...string) predicate.Group {
+	return predicate.Group(sql.FieldNotIn(FieldDefaultReasoningEffort, vs...))
+}
+
+// DefaultReasoningEffortGT applies the GT predicate on the "default_reasoning_effort" field.
+func DefaultReasoningEffortGT(v string) predicate.Group {
+	return predicate.Group(sql.FieldGT(FieldDefaultReasoningEffort, v))
+}
+
+// DefaultReasoningEffortGTE applies the GTE predicate on the "default_reasoning_effort" field.
+func DefaultReasoningEffortGTE(v string) predicate.Group {
+	return predicate.Group(sql.FieldGTE(FieldDefaultReasoningEffort, v))
+}
+
+// DefaultReasoningEffortLT applies the LT predicate on the "default_reasoning_effort" field.
+func DefaultReasoningEffortLT(v string) predicate.Group {
+	return predicate.Group(sql.FieldLT(FieldDefaultReasoningEffort, v))
+}
+
+// DefaultReasoningEffortLTE applies the LTE predicate on the "default_reasoning_effort" field.
+func DefaultReasoningEffortLTE(v string) predicate.Group {
+	return predicate.Group(sql.FieldLTE(FieldDefaultReasoningEffort, v))
+}
+
+// DefaultReasoningEffortContains applies the Contains predicate on the "default_reasoning_effort" field.
+func DefaultReasoningEffortContains(v string) predicate.Group {
+	return predicate.Group(sql.FieldContains(FieldDefaultReasoningEffort, v))
+}
+
+// DefaultReasoningEffortHasPrefix applies the HasPrefix predicate on the "default_reasoning_effort" field.
+func DefaultReasoningEffortHasPrefix(v string) predicate.Group {
+	return predicate.Group(sql.FieldHasPrefix(FieldDefaultReasoningEffort, v))
+}
+
+// DefaultReasoningEffortHasSuffix applies the HasSuffix predicate on the "default_reasoning_effort" field.
+func DefaultReasoningEffortHasSuffix(v string) predicate.Group {
+	return predicate.Group(sql.FieldHasSuffix(FieldDefaultReasoningEffort, v))
+}
+
+// DefaultReasoningEffortEqualFold applies the EqualFold predicate on the "default_reasoning_effort" field.
+func DefaultReasoningEffortEqualFold(v string) predicate.Group {
+	return predicate.Group(sql.FieldEqualFold(FieldDefaultReasoningEffort, v))
+}
+
+// DefaultReasoningEffortContainsFold applies the ContainsFold predicate on the "default_reasoning_effort" field.
+func DefaultReasoningEffortContainsFold(v string) predicate.Group {
+	return predicate.Group(sql.FieldContainsFold(FieldDefaultReasoningEffort, v))
+}
+
 // ModelRoutingIsNil applies the IsNil predicate on the "model_routing" field.
 func ModelRoutingIsNil() predicate.Group {
 	return predicate.Group(sql.FieldIsNull(FieldModelRouting))
@@ -2388,6 +2638,16 @@ func DefaultMappedModelEqualFold(v string) predicate.Group {
 // DefaultMappedModelContainsFold applies the ContainsFold predicate on the "default_mapped_model" field.
 func DefaultMappedModelContainsFold(v string) predicate.Group {
 	return predicate.Group(sql.FieldContainsFold(FieldDefaultMappedModel, v))
+}
+
+// SimulateClaudeMaxEnabledEQ applies the EQ predicate on the "simulate_claude_max_enabled" field.
+func SimulateClaudeMaxEnabledEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldSimulateClaudeMaxEnabled, v))
+}
+
+// SimulateClaudeMaxEnabledNEQ applies the NEQ predicate on the "simulate_claude_max_enabled" field.
+func SimulateClaudeMaxEnabledNEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldSimulateClaudeMaxEnabled, v))
 }
 
 // RpmLimitEQ applies the EQ predicate on the "rpm_limit" field.
@@ -2650,6 +2910,71 @@ func ProfitSafetyBufferLTE(v float64) predicate.Group {
 	return predicate.Group(sql.FieldLTE(FieldProfitSafetyBuffer, v))
 }
 
+// KeyDisplayCategoryEQ applies the EQ predicate on the "key_display_category" field.
+func KeyDisplayCategoryEQ(v string) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldKeyDisplayCategory, v))
+}
+
+// KeyDisplayCategoryNEQ applies the NEQ predicate on the "key_display_category" field.
+func KeyDisplayCategoryNEQ(v string) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldKeyDisplayCategory, v))
+}
+
+// KeyDisplayCategoryIn applies the In predicate on the "key_display_category" field.
+func KeyDisplayCategoryIn(vs ...string) predicate.Group {
+	return predicate.Group(sql.FieldIn(FieldKeyDisplayCategory, vs...))
+}
+
+// KeyDisplayCategoryNotIn applies the NotIn predicate on the "key_display_category" field.
+func KeyDisplayCategoryNotIn(vs ...string) predicate.Group {
+	return predicate.Group(sql.FieldNotIn(FieldKeyDisplayCategory, vs...))
+}
+
+// KeyDisplayCategoryGT applies the GT predicate on the "key_display_category" field.
+func KeyDisplayCategoryGT(v string) predicate.Group {
+	return predicate.Group(sql.FieldGT(FieldKeyDisplayCategory, v))
+}
+
+// KeyDisplayCategoryGTE applies the GTE predicate on the "key_display_category" field.
+func KeyDisplayCategoryGTE(v string) predicate.Group {
+	return predicate.Group(sql.FieldGTE(FieldKeyDisplayCategory, v))
+}
+
+// KeyDisplayCategoryLT applies the LT predicate on the "key_display_category" field.
+func KeyDisplayCategoryLT(v string) predicate.Group {
+	return predicate.Group(sql.FieldLT(FieldKeyDisplayCategory, v))
+}
+
+// KeyDisplayCategoryLTE applies the LTE predicate on the "key_display_category" field.
+func KeyDisplayCategoryLTE(v string) predicate.Group {
+	return predicate.Group(sql.FieldLTE(FieldKeyDisplayCategory, v))
+}
+
+// KeyDisplayCategoryContains applies the Contains predicate on the "key_display_category" field.
+func KeyDisplayCategoryContains(v string) predicate.Group {
+	return predicate.Group(sql.FieldContains(FieldKeyDisplayCategory, v))
+}
+
+// KeyDisplayCategoryHasPrefix applies the HasPrefix predicate on the "key_display_category" field.
+func KeyDisplayCategoryHasPrefix(v string) predicate.Group {
+	return predicate.Group(sql.FieldHasPrefix(FieldKeyDisplayCategory, v))
+}
+
+// KeyDisplayCategoryHasSuffix applies the HasSuffix predicate on the "key_display_category" field.
+func KeyDisplayCategoryHasSuffix(v string) predicate.Group {
+	return predicate.Group(sql.FieldHasSuffix(FieldKeyDisplayCategory, v))
+}
+
+// KeyDisplayCategoryEqualFold applies the EqualFold predicate on the "key_display_category" field.
+func KeyDisplayCategoryEqualFold(v string) predicate.Group {
+	return predicate.Group(sql.FieldEqualFold(FieldKeyDisplayCategory, v))
+}
+
+// KeyDisplayCategoryContainsFold applies the ContainsFold predicate on the "key_display_category" field.
+func KeyDisplayCategoryContainsFold(v string) predicate.Group {
+	return predicate.Group(sql.FieldContainsFold(FieldKeyDisplayCategory, v))
+}
+
 // HasAPIKeys applies the HasEdge predicate on the "api_keys" edge.
 func HasAPIKeys() predicate.Group {
 	return predicate.Group(func(s *sql.Selector) {
@@ -2734,6 +3059,121 @@ func HasUsageLogs() predicate.Group {
 func HasUsageLogsWith(preds ...predicate.UsageLog) predicate.Group {
 	return predicate.Group(func(s *sql.Selector) {
 		step := newUsageLogsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasCustomModelRoutes applies the HasEdge predicate on the "custom_model_routes" edge.
+func HasCustomModelRoutes() predicate.Group {
+	return predicate.Group(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, CustomModelRoutesTable, CustomModelRoutesColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasCustomModelRoutesWith applies the HasEdge predicate on the "custom_model_routes" edge with a given conditions (other predicates).
+func HasCustomModelRoutesWith(preds ...predicate.UserCustomGroupModel) predicate.Group {
+	return predicate.Group(func(s *sql.Selector) {
+		step := newCustomModelRoutesStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasSystemCustomRoutes applies the HasEdge predicate on the "system_custom_routes" edge.
+func HasSystemCustomRoutes() predicate.Group {
+	return predicate.Group(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, SystemCustomRoutesTable, SystemCustomRoutesColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasSystemCustomRoutesWith applies the HasEdge predicate on the "system_custom_routes" edge with a given conditions (other predicates).
+func HasSystemCustomRoutesWith(preds ...predicate.SystemCustomGroupModel) predicate.Group {
+	return predicate.Group(func(s *sql.Selector) {
+		step := newSystemCustomRoutesStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasSystemCustomSourceRoutes applies the HasEdge predicate on the "system_custom_source_routes" edge.
+func HasSystemCustomSourceRoutes() predicate.Group {
+	return predicate.Group(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, SystemCustomSourceRoutesTable, SystemCustomSourceRoutesColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasSystemCustomSourceRoutesWith applies the HasEdge predicate on the "system_custom_source_routes" edge with a given conditions (other predicates).
+func HasSystemCustomSourceRoutesWith(preds ...predicate.SystemCustomGroupModel) predicate.Group {
+	return predicate.Group(func(s *sql.Selector) {
+		step := newSystemCustomSourceRoutesStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasSystemCustomSources applies the HasEdge predicate on the "system_custom_sources" edge.
+func HasSystemCustomSources() predicate.Group {
+	return predicate.Group(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, SystemCustomSourcesTable, SystemCustomSourcesColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasSystemCustomSourcesWith applies the HasEdge predicate on the "system_custom_sources" edge with a given conditions (other predicates).
+func HasSystemCustomSourcesWith(preds ...predicate.SystemCustomGroupSource) predicate.Group {
+	return predicate.Group(func(s *sql.Selector) {
+		step := newSystemCustomSourcesStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasSystemCustomSourceReferences applies the HasEdge predicate on the "system_custom_source_references" edge.
+func HasSystemCustomSourceReferences() predicate.Group {
+	return predicate.Group(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, SystemCustomSourceReferencesTable, SystemCustomSourceReferencesColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasSystemCustomSourceReferencesWith applies the HasEdge predicate on the "system_custom_source_references" edge with a given conditions (other predicates).
+func HasSystemCustomSourceReferencesWith(preds ...predicate.SystemCustomGroupSource) predicate.Group {
+	return predicate.Group(func(s *sql.Selector) {
+		step := newSystemCustomSourceReferencesStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

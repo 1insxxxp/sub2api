@@ -102,6 +102,7 @@ type Group struct {
 	ID                               int64   `json:"id"`
 	Name                             string  `json:"name"`
 	Description                      string  `json:"description"`
+	I18n                             service.GroupI18n `json:"i18n,omitempty"`
 	Tag                              string  `json:"tag"`
 	TagColor                         string  `json:"tag_color"`
 	KeyDisplayCategory               string  `json:"key_display_category"`
