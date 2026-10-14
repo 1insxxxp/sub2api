@@ -2,13 +2,16 @@ package handler
 
 import (
 	"encoding/json"
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/gemini"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -20,7 +23,7 @@ func TestGeminiNativeModelsUsesAccountMappings(t *testing.T) {
 	}{
 		{"mixed", false, true, false, 200},
 		{"mixed allowlist", false, true, true, 200},
-		{"disabled mixed", false, false, false, 200},
+		{"disabled mixed", false, false, false, 503},
 		{"forced without mixed opt-in", true, false, false, 200},
 		{"forced allowlist", true, false, true, 200},
 	} {
@@ -31,8 +34,7 @@ func TestGeminiNativeModelsUsesAccountMappings(t *testing.T) {
 					Extra:       map[string]any{"mixed_scheduling": tt.mixed},
 					Credentials: map[string]any{"model_mapping": map[string]any{"gemini-synced-custom": "gemini-3.8-flash-high", "claude-custom": "claude-sonnet-4-6"}}}},
 			}}}
-			h := newGatewayModelsHandlerForTest(repo)
-			h.geminiCompatService = service.NewGeminiMessagesCompatService(repo, nil, nil, nil, nil, nil, nil, nil, nil)
+			h := &GatewayHandler{geminiCompatService: service.NewGeminiMessagesCompatService(repo, nil, nil, nil, nil, nil, nil, nil, nil)}
 			rec := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(rec)
 			c.Request = httptest.NewRequest(http.MethodGet, "/v1beta/models", nil)
@@ -54,11 +56,7 @@ func TestGeminiNativeModelsUsesAccountMappings(t *testing.T) {
 				names = append(names, model.Name)
 				require.Contains(t, model.SupportedGenerationMethods, "generateContent")
 			}
-			if tt.mixed || tt.forced {
-				require.Contains(t, names, "models/gemini-synced-custom")
-			} else {
-				require.NotContains(t, names, "models/gemini-synced-custom")
-			}
+			require.Contains(t, names, "models/gemini-synced-custom")
 			require.NotContains(t, names, "models/claude-custom")
 			require.NotContains(t, names, "models/gemini-2.0-flash")
 			if tt.allowlist {
@@ -86,34 +84,53 @@ func TestAppendUpstreamGeminiModelsPreservesMetadata(t *testing.T) {
 	}
 }
 
-// The native list endpoint must not call an upstream account to discover models.
+// Exercise the real handler's native-upstream branch, including scope fallback.
 type geminiMixedModelsUpstream struct {
 	service.HTTPUpstream
-	calls int
+	status int
+	body   string
 }
 
 func (u *geminiMixedModelsUpstream) Do(_ *http.Request, _ string, _ int64, _ int) (*http.Response, error) {
-	u.calls++
-	return nil, nil
+	return &http.Response{StatusCode: u.status, Header: http.Header{"Content-Type": {"application/json"}, "X-Request-Id": {"native-id"}}, Body: io.NopCloser(strings.NewReader(u.body))}, nil
 }
-func TestGeminiNativeModelsUsesCanonicalGroupCatalogue(t *testing.T) {
-	id := int64(46)
-	repo := &geminiAllowlistAccountRepoStub{gatewayModelsAccountRepoStub: gatewayModelsAccountRepoStub{byGroup: map[int64][]service.Account{id: {
-		{ID: 1, Platform: service.PlatformGemini, Credentials: map[string]any{"model_mapping": map[string]any{"gemini-native": "gemini-native"}}},
-		{ID: 2, Platform: service.PlatformAntigravity, Extra: map[string]any{"mixed_scheduling": true}, Credentials: map[string]any{"model_mapping": map[string]any{"gemini-synced-custom": "gemini-3.8-flash-high"}}},
-	}}}}
-	upstream := &geminiMixedModelsUpstream{}
-	h := newGatewayModelsHandlerForTest(repo)
-	h.geminiCompatService = service.NewGeminiMessagesCompatService(repo, nil, nil, nil, nil, nil, upstream, nil, nil)
-	rec := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(rec)
-	c.Request = httptest.NewRequest(http.MethodGet, "/v1beta/models", nil)
-	c.Set(string(middleware.ContextKeyAPIKey), &service.APIKey{GroupID: &id, Group: &service.Group{ID: id, Platform: service.PlatformGemini}})
-
-	h.GeminiV1BetaListModels(c)
-
-	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-	require.Contains(t, rec.Body.String(), "models/gemini-native")
-	require.Contains(t, rec.Body.String(), "models/gemini-synced-custom")
-	require.Equal(t, 0, upstream.calls)
+func TestGeminiNativeModelsMergesNativeUpstream(t *testing.T) {
+	for _, tt := range []struct {
+		name           string
+		status         int
+		body           string
+		expectedNative string
+	}{
+		{"native", 200, `{"models":[{"name":"models/gemini-native","inputTokenLimit":123}],"nextPageToken":"next"}`, "models/gemini-native"},
+		{"scope fallback", 403, `{"error":"insufficient authentication scopes"}`, "models/gemini-2.5-pro"},
+		{"upstream error", 429, `{"error":"rate limited"}`, ""},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			id := int64(46)
+			repo := &geminiAllowlistAccountRepoStub{gatewayModelsAccountRepoStub: gatewayModelsAccountRepoStub{byGroup: map[int64][]service.Account{id: {
+				{ID: 1, Platform: service.PlatformGemini, Type: service.AccountTypeAPIKey, Credentials: map[string]any{"api_key": "test"}},
+				{ID: 2, Platform: service.PlatformAntigravity, Extra: map[string]any{"mixed_scheduling": true}, Credentials: map[string]any{"model_mapping": map[string]any{"gemini-synced-custom": "gemini-3.8-flash-high"}}},
+			}}}}
+			upstream := &geminiMixedModelsUpstream{status: tt.status, body: tt.body}
+			h := &GatewayHandler{geminiCompatService: service.NewGeminiMessagesCompatService(repo, nil, nil, nil, nil, nil, upstream, nil, &config.Config{})}
+			rec := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(rec)
+			c.Request = httptest.NewRequest(http.MethodGet, "/v1beta/models", nil)
+			c.Set(string(middleware.ContextKeyAPIKey), &service.APIKey{GroupID: &id, Group: &service.Group{ID: id, Platform: service.PlatformGemini}})
+			h.GeminiV1BetaListModels(c)
+			if tt.status == 429 {
+				require.Equal(t, 429, rec.Code)
+				require.JSONEq(t, tt.body, rec.Body.String())
+				return
+			}
+			require.Equal(t, 200, rec.Code, rec.Body.String())
+			require.Contains(t, rec.Body.String(), tt.expectedNative)
+			require.Contains(t, rec.Body.String(), "models/gemini-synced-custom")
+			if tt.status == 200 {
+				require.Contains(t, rec.Body.String(), `"inputTokenLimit":123`)
+				require.Contains(t, rec.Body.String(), `"nextPageToken":"next"`)
+				require.Equal(t, "native-id", rec.Header().Get("X-Request-Id"))
+			}
+		})
+	}
 }

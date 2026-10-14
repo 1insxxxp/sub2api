@@ -71,6 +71,9 @@ type userAvailableGroup struct {
 	IsExclusive        bool                 `json:"is_exclusive"`
 	SupportedModels    []userSupportedModel `json:"supported_models"`
 
+	// i18n is used while preparing the response; the localized name is copied
+	// into Name before the group is serialized.
+	i18n             service.GroupI18n
 	modelsListConfig service.GroupModelsListConfig
 }
 
@@ -174,6 +177,7 @@ func (h *AvailableChannelHandler) List(c *gin.Context) {
 			continue
 		}
 		visibleGroups = h.attachGroupSupportedModels(c.Request.Context(), ch, visibleGroups)
+		localizeUserAvailableGroups(visibleGroups, c.GetHeader("Accept-Language"))
 		sections := buildPlatformSections(ch, visibleGroups)
 		if len(sections) == 0 {
 			continue
@@ -186,6 +190,13 @@ func (h *AvailableChannelHandler) List(c *gin.Context) {
 	}
 
 	response.Success(c, out)
+}
+
+// localizeUserAvailableGroups applies the request's preferred language to group names.
+func localizeUserAvailableGroups(groups []userAvailableGroup, acceptLanguage string) {
+	for i := range groups {
+		groups[i].Name = groups[i].i18n.LocalizeName(acceptLanguage, groups[i].Name)
+	}
 }
 
 // buildPlatformSections 把一个渠道按 visibleGroups 的平台集合拆成有序的 section 列表：
@@ -293,6 +304,7 @@ func filterUserVisibleGroups(
 		visible = append(visible, userAvailableGroup{
 			ID:                 g.ID,
 			Name:               g.Name,
+			i18n:               g.I18n,
 			Tag:                g.Tag,
 			TagColor:           g.TagColor,
 			Platform:           g.Platform,
