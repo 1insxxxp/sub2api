@@ -1,0 +1,34 @@
+package handler
+
+import (
+	"testing"
+
+	"github.com/Wei-Shaw/sub2api/internal/domain"
+	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/stretchr/testify/require"
+)
+
+func TestResolveGroupModelAlias(t *testing.T) {
+	group := &service.Group{ModelAliases: []domain.ModelAlias{{Alias: "fast", UpstreamModel: "claude-sonnet-4-6"}}}
+	model, found := resolveGroupModelAlias(group, "FAST")
+	require.True(t, found)
+	require.Equal(t, "claude-sonnet-4-6", model)
+
+	model, found = resolveGroupModelAlias(group, "other")
+	require.False(t, found)
+	require.Equal(t, "other", model)
+	model, found = resolveGroupModelAlias(nil, "other")
+	require.False(t, found)
+	require.Equal(t, "other", model)
+}
+
+func TestAppendAvailableGroupModelAliasesRequiresAvailableTarget(t *testing.T) {
+	group := &service.Group{ModelAliases: []domain.ModelAlias{
+		{Alias: "sonnet-fast", UpstreamModel: "claude-sonnet-4-6"},
+		{Alias: "missing", UpstreamModel: "claude-opus-4-6"},
+		{Alias: "already-listed", UpstreamModel: "claude-sonnet-4-6"},
+	}}
+	got := appendAvailableGroupModelAliases([]string{"claude-sonnet-4-6", "already-listed"}, group)
+	require.Equal(t, []string{"claude-sonnet-4-6", "already-listed", "sonnet-fast"}, got)
+	require.Equal(t, []string{"claude-sonnet-4-6"}, appendAvailableGroupModelAliases([]string{"claude-sonnet-4-6"}, nil))
+}

@@ -84,6 +84,7 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 		return
 	}
 	reqModel := modelResult.String()
+	routeModel, _ := resolveGroupModelAlias(apiKey.Group, reqModel)
 	bindRequestedReasoningEffort(c, body, reqModel)
 	ensureCompositeTargetPlatform(c, apiKey, reqModel)
 	if !compositeTargetPlatformResolved(c, apiKey, reqModel) {
@@ -120,7 +121,7 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 	c.Request = c.Request.WithContext(pricingCtx)
 
 	// 解析渠道级模型映射
-	channelMapping, _ := h.gatewayService.ResolveChannelMappingAndRestrict(c.Request.Context(), apiKey.GroupID, reqModel)
+	channelMapping, _ := h.gatewayService.ResolveChannelMappingAndRestrict(c.Request.Context(), apiKey.GroupID, routeModel)
 
 	// Claude Code only restriction: /v1/chat/completions is never a Claude Code
 	// endpoint. With a fallback group the request continues and account selection
@@ -199,7 +200,7 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 	if groupPlatform == service.PlatformGemini && selectionSessionHash != "" {
 		selectionSessionHash = "gemini:" + selectionSessionHash
 	}
-	traversalModel := reqModel
+	traversalModel := routeModel
 	if channelMapping.Mapped {
 		traversalModel = channelMapping.MappedModel
 	}
@@ -216,7 +217,7 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 		if budgetExpired() || failoverClientGone(c) {
 			return
 		}
-		selection, err := h.gatewayService.SelectAccountWithLoadAwareness(c.Request.Context(), apiKey.GroupID, selectionSessionHash, reqModel, fs.FailedAccountIDs, "", int64(0))
+		selection, err := h.gatewayService.SelectAccountWithLoadAwareness(c.Request.Context(), apiKey.GroupID, selectionSessionHash, routeModel, fs.FailedAccountIDs, "", int64(0))
 		if err != nil {
 			if budgetExpired() {
 				return
@@ -325,8 +326,12 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 		// 5. Forward request
 		writerSizeBeforeForward := service.ModelFirstOutputKeepaliveAdjustedWrittenSize(c)
 		forwardBody := body
+		targetModel := routeModel
 		if channelMapping.Mapped {
-			forwardBody = h.gatewayService.ReplaceModelInBody(body, channelMapping.MappedModel)
+			targetModel = channelMapping.MappedModel
+		}
+		if targetModel != reqModel {
+			forwardBody = h.gatewayService.ReplaceModelInBody(body, targetModel)
 		}
 		var result *service.ForwardResult
 		setActualUpstreamEndpoint(c, "")

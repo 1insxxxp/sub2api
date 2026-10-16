@@ -194,10 +194,11 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		reqModel = parsedReq.Model
 		reqStream = parsedReq.Stream
 	}
+	routeModel, _ := resolveGroupModelAlias(apiKey.Group, reqModel)
 	reqLog = reqLog.With(zap.String("model", reqModel), zap.Bool("stream", reqStream))
 
 	// 解析渠道级模型映射
-	channelMapping, _ := h.gatewayService.ResolveChannelMappingAndRestrict(c.Request.Context(), apiKey.GroupID, reqModel)
+	channelMapping, _ := h.gatewayService.ResolveChannelMappingAndRestrict(c.Request.Context(), apiKey.GroupID, routeModel)
 
 	// 设置 max_tokens=1 + haiku 探测请求标识到 context 中
 	// 必须在 SetClaudeCodeClientContext 之前设置，因为 ClaudeCodeValidator 需要读取此标识进行绕过判断
@@ -350,7 +351,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	hasBoundSession := sessionKey != "" && sessionBoundAccountID > 0
 
 	if platform == service.PlatformGemini {
-		cleanupTraversal := service.StartModelFirstOutputTraversal(c, h.settingService, platform, reqModel, reqStream)
+		cleanupTraversal := service.StartModelFirstOutputTraversal(c, h.settingService, platform, routeModel, reqStream)
 		defer cleanupTraversal()
 		budgetExpired := func() bool { return handleModelFirstOutputTraversalTimeout(c, "messages") }
 		fs := NewFailoverState(h.maxAccountSwitchesGemini, hasBoundSession)
@@ -366,7 +367,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			if budgetExpired() {
 				return
 			}
-			selection, err := h.gatewayService.SelectAccountWithLoadAwareness(c.Request.Context(), apiKey.GroupID, sessionKey, reqModel, fs.FailedAccountIDs, "", int64(0)) // Gemini 不使用会话限制
+			selection, err := h.gatewayService.SelectAccountWithLoadAwareness(c.Request.Context(), apiKey.GroupID, sessionKey, routeModel, fs.FailedAccountIDs, "", int64(0)) // Gemini 不使用会话限制
 			if err != nil {
 				if budgetExpired() {
 					return
@@ -721,7 +722,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				zap.Bool("has_bound_session", hasBoundSession),
 				zap.Int("failed_account_count", len(fs.FailedAccountIDs)),
 			)
-			selection, err := h.gatewayService.SelectAccountWithLoadAwareness(c.Request.Context(), currentAPIKey.GroupID, sessionKey, reqModel, fs.FailedAccountIDs, parsedReq.MetadataUserID, subject.UserID)
+			selection, err := h.gatewayService.SelectAccountWithLoadAwareness(c.Request.Context(), currentAPIKey.GroupID, sessionKey, routeModel, fs.FailedAccountIDs, parsedReq.MetadataUserID, subject.UserID)
 			if err != nil {
 				if failoverClientGone(c) {
 					reqLog.Info("gateway.account_select_aborted_client_disconnected", zap.Error(err))
@@ -932,9 +933,13 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			// ===== 用户消息串行队列 END =====
 
 			// 渠道模型映射只作用于本次账号尝试，避免 failover 后污染原始 ParsedRequest。
+			targetModel := routeModel
 			if channelMapping.Mapped {
-				attemptParsedReq.Model = channelMapping.MappedModel
-				if err := attemptParsedReq.ReplaceBody(h.gatewayService.ReplaceModelInBody(attemptParsedReq.Body.Bytes(), channelMapping.MappedModel)); err != nil {
+				targetModel = channelMapping.MappedModel
+			}
+			if targetModel != reqModel {
+				attemptParsedReq.Model = targetModel
+				if err := attemptParsedReq.ReplaceBody(h.gatewayService.ReplaceModelInBody(attemptParsedReq.Body.Bytes(), targetModel)); err != nil {
 					h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to parse request body")
 					return
 				}
@@ -1252,12 +1257,15 @@ func (h *GatewayHandler) Models(c *gin.Context) {
 	// the native Gemini endpoint. Do not let /v1/models drift with whichever
 	// upstream Gemini account happens to be selected for discovery.
 	if platform == service.PlatformGemini && apiKey != nil && apiKey.Group != nil {
-		writeModelsList(c, platform, h.geminiModelIDsForGroup(c.Request.Context(), apiKey.Group))
+		writeModelsList(c, platform, appendAvailableGroupModelAliases(h.geminiModelIDsForGroup(c.Request.Context(), apiKey.Group), apiKey.Group))
 		return
 	}
 
 	// Get available models from account configurations for the selected group platform.
 	availableModels := h.gatewayService.GetAvailableModels(c.Request.Context(), groupID, platform)
+	if apiKey != nil && apiKey.Group != nil {
+		availableModels = appendAvailableGroupModelAliases(availableModels, apiKey.Group)
+	}
 	if apiKey != nil && apiKey.Group != nil && apiKey.Group.ModelAllowlistEnabled() {
 		source := modelListingSource(platform, availableModels, defaultModelIDsForPlatform(platform))
 		writeAllowlistedModelsList(c, platform, apiKey.Group.ModelAllowlist.FilterForListing(source))
@@ -1289,6 +1297,41 @@ func (h *GatewayHandler) Models(c *gin.Context) {
 	}
 
 	writeModelsListResponse(c, claude.DefaultModels)
+}
+
+func resolveGroupModelAlias(group *service.Group, requested string) (string, bool) {
+	if group == nil {
+		return requested, false
+	}
+	return group.ResolveModelAlias(requested)
+}
+
+// appendAvailableGroupModelAliases exposes an alias only when its target is
+// present in the group's currently available upstream model catalogue.
+func appendAvailableGroupModelAliases(models []string, group *service.Group) []string {
+	if group == nil || len(models) == 0 || len(group.ModelAliases) == 0 {
+		return models
+	}
+	available := make(map[string]struct{}, len(models))
+	for _, model := range models {
+		available[model] = struct{}{}
+	}
+	seen := make(map[string]struct{}, len(models)+len(group.ModelAliases))
+	for _, model := range models {
+		seen[model] = struct{}{}
+	}
+	out := append([]string(nil), models...)
+	for _, alias := range group.ModelAliases {
+		if _, ok := available[alias.UpstreamModel]; !ok {
+			continue
+		}
+		if _, exists := seen[alias.Alias]; exists {
+			continue
+		}
+		seen[alias.Alias] = struct{}{}
+		out = append(out, alias.Alias)
+	}
+	return out
 }
 
 // geminiModelIDsForGroup returns the canonical Gemini model catalogue for a
