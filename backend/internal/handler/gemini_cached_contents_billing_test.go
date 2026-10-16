@@ -288,6 +288,36 @@ func (r *cachedBillingUsageRepo) first() *service.UsageLog {
 	return r.logs[0]
 }
 
+type cachedBillingTransactionRepo struct {
+	service.UsageBillingRepository
+	mu       sync.Mutex
+	commands []*service.UsageBillingCommand
+}
+
+func (r *cachedBillingTransactionRepo) Apply(_ context.Context, cmd *service.UsageBillingCommand) (*service.UsageBillingApplyResult, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	clone := *cmd
+	r.commands = append(r.commands, &clone)
+	return &service.UsageBillingApplyResult{Applied: true}, nil
+}
+
+func (r *cachedBillingTransactionRepo) commandCount() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.commands)
+}
+
+func (r *cachedBillingTransactionRepo) lastCommand() *service.UsageBillingCommand {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(r.commands) == 0 {
+		return nil
+	}
+	clone := *r.commands[len(r.commands)-1]
+	return &clone
+}
+
 func (r *cachedBillingUsageRepo) totals() []float64 {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -303,6 +333,7 @@ type cachedBillingEnv struct {
 	repo     *cachedBillingRepo
 	upstream *cachedBillingUpstream
 	usage    *cachedBillingUsageRepo
+	billing  *cachedBillingTransactionRepo
 	apiKey   *service.APIKey
 	group    *service.Group
 	// accounts 是调度快照桩直接返回的账号对象，测试可改其凭据。
@@ -324,7 +355,7 @@ func newCachedBillingEnv(t *testing.T, balance float64, accountIDs ...int64) *ca
 	cfg.Default.RateMultiplier = 1
 	pricing := service.NewPricingService(cfg, nil)
 	require.NoError(t, pricing.Initialize())
-	billing := service.NewBillingService(cfg, pricing)
+	billingService := service.NewBillingService(cfg, pricing)
 
 	groupID := int64(42)
 	group := &service.Group{ID: groupID, Hydrated: true, Platform: service.PlatformGemini, Status: service.StatusActive, RateMultiplier: 1}
@@ -339,11 +370,12 @@ func newCachedBillingEnv(t *testing.T, balance float64, accountIDs ...int64) *ca
 	}
 	userRepo := &cachedBillingUserRepo{balance: balance}
 	usage := &cachedBillingUsageRepo{}
+	billingRepo := &cachedBillingTransactionRepo{}
 	bcs := service.NewBillingCacheService(nil, userRepo, nil, nil, nil, nil, cfg, nil)
 	t.Cleanup(bcs.Stop)
 	snapshot := service.NewSchedulerSnapshotService(&fakeSchedulerCache{accounts: scheduled}, nil, nil, nil, nil)
-	gw := service.NewGatewayService(nil, &fakeGroupRepo{group: group}, usage, nil, userRepo, nil, nil, nil, cfg, snapshot, nil,
-		billing, nil, &service.BillingCacheService{}, nil, nil, &service.DeferredService{}, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	gw := service.NewGatewayService(nil, &fakeGroupRepo{group: group}, usage, billingRepo, userRepo, nil, nil, nil, cfg, snapshot, nil,
+		billingService, nil, &service.BillingCacheService{}, nil, nil, &service.DeferredService{}, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	upstream := &cachedBillingUpstream{}
 	compat := service.NewGeminiMessagesCompatService(&cachedBillingAccountRepo{accounts: accounts}, nil, nil, nil, nil, nil, upstream, nil, cfg)
 	repo := &cachedBillingRepo{records: map[string]*service.GeminiCachedContent{}, mutations: map[int64]cachedBillingMutation{}}
@@ -355,7 +387,7 @@ func newCachedBillingEnv(t *testing.T, balance float64, accountIDs ...int64) *ca
 	}
 	apiKey := &service.APIKey{ID: 7, UserID: 3, GroupID: &groupID, Group: group, Status: service.StatusActive,
 		User: &service.User{ID: 3, Concurrency: 10, Balance: balance}}
-	return &cachedBillingEnv{h: h, repo: repo, upstream: upstream, usage: usage, apiKey: apiKey, group: group, accounts: accounts}
+	return &cachedBillingEnv{h: h, repo: repo, upstream: upstream, usage: usage, billing: billingRepo, apiKey: apiKey, group: group, accounts: accounts}
 }
 
 // TestGeminiExplicitCacheExclusions_FiltersUnsupportedAccountsFromSnapshot 候选过滤直接按快照里的凭据判定：
@@ -393,6 +425,7 @@ func (e *cachedBillingEnv) serve(method, target, body string, params gin.Params,
 func (e *cachedBillingEnv) waitForUsage(t *testing.T, n int) []float64 {
 	t.Helper()
 	require.Eventually(t, func() bool { return len(e.usage.totals()) >= n }, time.Second, 10*time.Millisecond)
+	require.Equal(t, n, e.billing.commandCount(), "usage log must follow a successful unified billing transaction")
 	return e.usage.totals()
 }
 
@@ -430,6 +463,7 @@ func TestGeminiCachedContentsPatch_UsesChannelUsageRecordedAtCreate(t *testing.T
 	totals := env.waitForUsage(t, 1)
 	require.Len(t, totals, 1)
 	require.InDelta(t, cachedBillingTokens*cachedBillingAliasStoragePrice*23, totals[0], 0.01, "按创建时的计费模型（请求模型别名）计存储费")
+	require.Equal(t, service.QuantizeUsageBillingAmount(totals[0]), env.billing.lastCommand().BalanceCost, "统一计费事务按 NUMERIC(20,8) 精度的同一实际成本扣款")
 	usageLog := env.usage.first()
 	require.NotNil(t, usageLog.ChannelID)
 	require.Equal(t, int64(5), *usageLog.ChannelID)
@@ -450,6 +484,7 @@ func TestGeminiCachedContentsCreate_ChargesInputAndStorage(t *testing.T) {
 	totals := env.waitForUsage(t, 1)
 	require.Len(t, totals, 1)
 	require.InDelta(t, cachedBillingTokens*cachedBillingInputPrice+cachedBillingTokens*cachedBillingStoragePrice*24, totals[0], 1e-9)
+	require.Equal(t, service.QuantizeUsageBillingAmount(totals[0]), env.billing.lastCommand().BalanceCost, "统一计费事务按 NUMERIC(20,8) 精度的同一实际成本扣款")
 	require.Len(t, env.repo.records, 1)
 	for _, record := range env.repo.records {
 		require.False(t, record.ExpireTime.After(time.Now().Add(24*time.Hour)), "本地到期时间不超过请求的有效期")

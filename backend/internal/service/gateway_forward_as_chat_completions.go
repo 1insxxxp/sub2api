@@ -47,6 +47,9 @@ func (s *GatewayService) ForwardAsChatCompletions(
 	clientStream := ccReq.Stream
 	antiTruncationPolicy, antiTruncationEnabled := RawChatAntiTruncationPolicyFromContext(ctx)
 	antiTruncationEnabled = antiTruncationEnabled && clientStream && anthropicChatContinuationAllowed(body)
+	if antiTruncationEnabled {
+		antiTruncationPolicy.MaxOutputTokens = effectiveRawChatOutputBudget(body, antiTruncationPolicy.MaxOutputTokens)
+	}
 	var group *Group
 	if parsed != nil {
 		group = s.groupForReasoningEffort(ctx, parsed.GroupID)
@@ -519,6 +522,7 @@ func (s *GatewayService) handleCCStreamingFromAnthropicWithContinuation(
 	firstChunk := true
 	clientDisconnected := false
 	antiTruncationRounds := 0
+	budgetOutputTokens := 0
 	var assistantText strings.Builder
 	maxRounds := antiTruncationPolicy.MaxRounds
 	if maxRounds <= 0 {
@@ -529,10 +533,14 @@ func (s *GatewayService) handleCCStreamingFromAnthropicWithContinuation(
 		maxDuration = 180 * time.Second
 	}
 	maxOutputTokens := antiTruncationPolicy.MaxOutputTokens
-	deadlineCtx := c.Request.Context()
+	requestCtx := context.Background()
+	if c.Request != nil {
+		requestCtx = c.Request.Context()
+	}
+	deadlineCtx := requestCtx
 	deadlineCancel := func() {}
 	if continueRequest != nil {
-		deadlineCtx, deadlineCancel = context.WithDeadline(c.Request.Context(), startTime.Add(maxDuration))
+		deadlineCtx, deadlineCancel = context.WithDeadline(requestCtx, startTime.Add(maxDuration))
 	}
 	defer deadlineCancel()
 	var responseBodyMu sync.Mutex
@@ -666,6 +674,8 @@ func (s *GatewayService) handleCCStreamingFromAnthropicWithContinuation(
 		roundTerminal := make([]anthropicBufferedEvent, 0, 2)
 		roundStopReason := ""
 		sawSemanticText := false
+		sawMessageStop := false
+		var roundAssistantText strings.Builder
 		for !ccRequestCanceled(c) && scanner.Scan() {
 			if deadlineCtx.Err() != nil {
 				streamErr = deadlineCtx.Err()
@@ -699,6 +709,7 @@ func (s *GatewayService) handleCCStreamingFromAnthropicWithContinuation(
 				} else if event.Delta.Text != "" {
 					sawSemanticText = true
 					assistantText.WriteString(event.Delta.Text)
+					roundAssistantText.WriteString(event.Delta.Text)
 				}
 			case "message_delta":
 				if event.Delta != nil {
@@ -713,6 +724,7 @@ func (s *GatewayService) handleCCStreamingFromAnthropicWithContinuation(
 					continue
 				}
 			case "message_stop":
+				sawMessageStop = true
 				if continueRequest != nil {
 					roundTerminal = append(roundTerminal, anthropicBufferedEvent{event: event, payload: payload})
 					continue
@@ -729,13 +741,18 @@ func (s *GatewayService) handleCCStreamingFromAnthropicWithContinuation(
 		if deadlineCtx.Err() != nil {
 			streamErr = deadlineCtx.Err()
 		}
+		roundOutputTokens := roundUsage.OutputTokens
+		if roundOutputTokens <= 0 && roundAssistantText.Len() > 0 {
+			roundOutputTokens = (len([]rune(roundAssistantText.String())) + 3) / 4
+		}
+		budgetOutputTokens += roundOutputTokens
 		cleanEOF := streamErr == nil && !ccRequestCanceled(c)
 		shouldContinue := continuationSafe && cleanEOF && sawSemanticText &&
-			(roundStopReason == "max_tokens" || roundStopReason == "") &&
+			(roundStopReason == "max_tokens" || (roundStopReason == "" && !sawMessageStop)) &&
 			antiTruncationRounds < maxRounds && deadlineCtx.Err() == nil &&
-			c.Request.Context().Err() == nil
+			requestCtx.Err() == nil
 		if shouldContinue && maxOutputTokens > 0 {
-			remaining := maxOutputTokens - usage.OutputTokens
+			remaining := maxOutputTokens - budgetOutputTokens
 			if remaining <= 0 {
 				shouldContinue = false
 			}
@@ -743,7 +760,7 @@ func (s *GatewayService) handleCCStreamingFromAnthropicWithContinuation(
 		if shouldContinue {
 			remaining := 0
 			if maxOutputTokens > 0 {
-				remaining = maxOutputTokens - usage.OutputTokens
+				remaining = maxOutputTokens - budgetOutputTokens
 			}
 			completedUsage = usage
 			roundUsage = ClaudeUsage{}

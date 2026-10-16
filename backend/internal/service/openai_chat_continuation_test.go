@@ -54,6 +54,33 @@ func TestBuildRawChatContinuationBodyAppendsAssistantAndPrompt(t *testing.T) {
 	require.Equal(t, "Continue the response from where you left off. Do not repeat any earlier text.", gjson.GetBytes(got, "messages.2.content").String())
 }
 
+func TestEffectiveRawChatOutputBudgetUsesMinimumExplicitClientAndPolicyCaps(t *testing.T) {
+	for _, tt := range []struct {
+		name       string
+		body       string
+		policyCap  int
+		wantBudget int
+	}{
+		{name: "client cap only", body: `{"max_tokens":20}`, wantBudget: 20},
+		{name: "policy cap only", body: `{}`, policyCap: 100, wantBudget: 100},
+		{name: "client cap wins when smaller", body: `{"max_tokens":20}`, policyCap: 100, wantBudget: 20},
+		{name: "policy cap wins when smaller", body: `{"max_tokens":100}`, policyCap: 20, wantBudget: 20},
+		{name: "completion cap wins", body: `{"max_tokens":100,"max_completion_tokens":20}`, policyCap: 100, wantBudget: 20},
+		{name: "missing client and policy caps remain unbounded", body: `{}`, wantBudget: 0},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.wantBudget, effectiveRawChatOutputBudget([]byte(tt.body), tt.policyCap))
+		})
+	}
+}
+
+func TestBuildRawChatContinuationBodyDoesNotRaisePerRoundHardLimit(t *testing.T) {
+	body := []byte(`{"model":"public","stream":true,"max_tokens":20,"messages":[{"role":"user","content":"question"}]}`)
+	got, err := buildRawChatContinuationBody(body, "partial answer", 85)
+	require.NoError(t, err)
+	require.Equal(t, int64(20), gjson.GetBytes(got, "max_tokens").Int())
+}
+
 func TestStreamRawChatCompletionsContinuesLengthRoundWithoutIntermediateTerminal(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	var continuationBody []byte

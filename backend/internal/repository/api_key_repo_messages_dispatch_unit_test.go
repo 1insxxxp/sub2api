@@ -38,6 +38,12 @@ func TestGroupEntityToService_PreservesMessagesDispatchModelConfig(t *testing.T)
 	require.Equal(t, group.VideoModelPrices, got.VideoModelPrices)
 }
 
+func TestGroupEntityToService_PreservesI18n(t *testing.T) {
+	i18n := service.GroupI18n{"en": {Name: "Standard", Description: "Pro pool"}}
+	got := groupEntityToService(&dbent.Group{ID: 9, I18n: i18n})
+	require.Equal(t, i18n, got.I18n)
+}
+
 func TestGroupEntityToServicePreservesEmptyResponseCompensationPolicy(t *testing.T) {
 	got := groupEntityToService(&dbent.Group{ID: 9, EmptyResponseCompensationEnabled: true})
 	require.True(t, got.EmptyResponseCompensationEnabled)

@@ -30,7 +30,7 @@ func buildAnthropicChatContinuationBody(body []byte, assistantText string, remai
 		return nil, err
 	}
 	if remainingOutputTokens > 0 {
-		updated, err = sjson.SetBytes(updated, "max_tokens", remainingOutputTokens)
+		updated, err = sjson.SetBytes(updated, "max_tokens", continuationRoundOutputLimit(body, "max_tokens", remainingOutputTokens))
 	}
 	return updated, err
 }
@@ -41,6 +41,12 @@ func anthropicChatContinuationAllowed(body []byte) bool {
 	}
 	for _, message := range gjson.GetBytes(body, "messages").Array() {
 		content := message.Get("content")
+		if content.Type == gjson.String || !content.Exists() || content.Type == gjson.Null {
+			continue
+		}
+		if !content.IsArray() {
+			return false
+		}
 		for _, part := range content.Array() {
 			if part.Get("type").String() != "text" {
 				return false

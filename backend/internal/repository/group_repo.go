@@ -11,6 +11,7 @@ import (
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/group"
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -174,7 +175,11 @@ func createGroupRecord(ctx context.Context, client *dbent.Client, groupIn *servi
 	if groupIn.ModelRouting != nil {
 		builder = builder.SetModelRouting(groupIn.ModelRouting)
 	}
-	builder = builder.SetModelAliases(groupIn.ModelAliases)
+	modelAliases := groupIn.ModelAliases
+	if modelAliases == nil {
+		modelAliases = []domain.ModelAlias{}
+	}
+	builder = builder.SetModelAliases(modelAliases)
 
 	// 设置支持的模型系列（始终设置，空数组表示不限制）
 	builder = builder.SetSupportedModelScopes(groupIn.SupportedModelScopes)
@@ -451,11 +456,11 @@ func (r *groupRepository) Update(ctx context.Context, groupIn *service.Group) er
 		builder = builder.ClearModelRouting()
 	}
 
-	if groupIn.ModelAliases != nil {
-		builder = builder.SetModelAliases(groupIn.ModelAliases)
-	} else {
-		builder = builder.ClearModelAliases()
+	modelAliases := groupIn.ModelAliases
+	if modelAliases == nil {
+		modelAliases = []domain.ModelAlias{}
 	}
+	builder = builder.SetModelAliases(modelAliases)
 
 	// 处理 SupportedModelScopes（始终设置，空数组表示不限制）
 	builder = builder.SetSupportedModelScopes(groupIn.SupportedModelScopes)

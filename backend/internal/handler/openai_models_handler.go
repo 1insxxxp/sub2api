@@ -44,12 +44,59 @@ func (h *GatewayHandler) pinnedOpenAIModels(c *gin.Context, group *service.Group
 		return
 	}
 	setOpsSelectedAccount(c, account.ID, account.Platform)
+	bodyChanged := false
 	if body, changed := appendOpenAIManifestModelAliases(response.Body, group); changed {
 		response.Body = body
-		response.ETag = service.CodexModelsManifestETag(body)
+		bodyChanged = true
+	}
+	if body, changed := filterOpenAIManifestModelAllowlist(response.Body, group); changed {
+		response.Body = body
+		bodyChanged = true
+	}
+	if bodyChanged {
+		response.ETag = service.CodexModelsManifestETag(response.Body)
 		response.NotModified = false
 	}
+	if c.Param("model") == "" && !response.NotModified && response.ETag != "" &&
+		service.CodexModelsManifestETagMatches(c.GetHeader("If-None-Match"), response.ETag) {
+		response.NotModified = true
+	}
 	writeOpenAIModelsResponse(c, response)
+}
+
+func filterOpenAIManifestModelAllowlist(body []byte, group *service.Group) ([]byte, bool) {
+	if group == nil || !group.ModelAllowlistEnabled() {
+		return body, false
+	}
+	var manifest struct {
+		Object string            `json:"object"`
+		Data   []json.RawMessage `json:"data"`
+	}
+	if json.Unmarshal(body, &manifest) != nil {
+		return body, false
+	}
+	filtered := make([]json.RawMessage, 0, len(manifest.Data))
+	changed := false
+	allowlist := group.EffectiveModelAllowlist()
+	for _, raw := range manifest.Data {
+		var item struct {
+			ID string `json:"id"`
+		}
+		if json.Unmarshal(raw, &item) != nil || !allowlist.Allows(item.ID) {
+			changed = true
+			continue
+		}
+		filtered = append(filtered, raw)
+	}
+	if !changed {
+		return body, false
+	}
+	manifest.Data = filtered
+	encoded, err := json.Marshal(manifest)
+	if err != nil {
+		return body, false
+	}
+	return encoded, true
 }
 
 func appendOpenAIManifestModelAliases(body []byte, group *service.Group) ([]byte, bool) {

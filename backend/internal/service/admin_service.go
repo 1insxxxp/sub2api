@@ -243,6 +243,7 @@ type CreateGroupInput struct {
 	KeyDisplayCategory               string
 	Name                             string
 	Description                      string
+	I18n                             GroupI18n
 	Tag                              string
 	TagColor                         string
 	Platform                         string
@@ -332,6 +333,7 @@ type UpdateGroupInput struct {
 	KeyDisplayCategory               *string
 	Name                             string
 	Description                      *string
+	I18n                             *GroupI18n
 	Tag                              *string
 	TagColor                         *string
 	Platform                         string

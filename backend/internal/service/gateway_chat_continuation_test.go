@@ -34,6 +34,18 @@ func TestBuildAnthropicChatContinuationBodyAppendsTranscriptAndRemainingCap(t *t
 	require.Equal(t, "user", gjson.GetBytes(got, "messages.2.role").String())
 }
 
+func TestBuildAnthropicChatContinuationBodyDoesNotRaisePerRoundHardLimit(t *testing.T) {
+	body := []byte(`{"model":"claude-public","max_tokens":20,"messages":[{"role":"user","content":"hello"}]}`)
+	got, err := buildAnthropicChatContinuationBody(body, "partial", 85)
+	require.NoError(t, err)
+	require.Equal(t, int64(20), gjson.GetBytes(got, "max_tokens").Int())
+}
+
+func TestAnthropicChatContinuationAllowsPlainStringContent(t *testing.T) {
+	body := []byte(`{"model":"claude-public","messages":[{"role":"user","content":"hello"}]}`)
+	require.True(t, anthropicChatContinuationAllowed(body))
+}
+
 func TestHandleCCStreamingFromAnthropicContinuesAndAggregatesUsage(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	recorder := httptest.NewRecorder()
@@ -72,4 +84,68 @@ func TestHandleCCStreamingFromAnthropicDoesNotContinueNormalStop(t *testing.T) {
 		func(context.Context, string, int) (*http.Response, error) { called = true; return nil, nil })
 	require.NoError(t, err)
 	require.False(t, called)
+}
+
+func TestHandleCCStreamingFromAnthropicDoesNotContinueAfterMessageStopWithoutStopReason(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"claude-public"}`))
+	initial := &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(anthropicTextStream("complete", "", 2, 0)))}
+	called := false
+	_, err := (&GatewayService{}).handleCCStreamingFromAnthropicWithContinuation(initial, c, "claude-public", "claude-upstream", "", nil, time.Now(), domain.AntiTruncationPolicy{Enabled: true, MaxRounds: 2},
+		func(context.Context, string, int) (*http.Response, error) { called = true; return nil, nil })
+	require.NoError(t, err)
+	require.False(t, called)
+	require.Contains(t, recorder.Body.String(), "data: [DONE]")
+}
+
+func TestHandleCCStreamingFromAnthropicMissingUsageUsesEstimateForBudget(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"claude-public"}`))
+	stream := anthropicTextStream("123456789012", "max_tokens", 2, 0)
+	stream = strings.ReplaceAll(stream, `,"usage":{"input_tokens":2,"output_tokens":0}`, "")
+	require.NotContains(t, stream, `"usage"`)
+	initial := &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(stream))}
+	called := false
+	result, err := (&GatewayService{}).handleCCStreamingFromAnthropicWithContinuation(initial, c, "claude-public", "claude-upstream", "", nil, time.Now(), domain.AntiTruncationPolicy{Enabled: true, MaxRounds: 1, MaxOutputTokens: 3},
+		func(context.Context, string, int) (*http.Response, error) { called = true; return nil, nil })
+	require.NoError(t, err)
+	require.False(t, called, "12 runes estimate to 3 output tokens and exhaust the budget")
+	require.Zero(t, result.AntiTruncationRounds)
+}
+
+func TestHandleCCStreamingFromAnthropicUsesTextEstimateForOutputBudgetWithoutUsage(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Run("remaining budget", func(t *testing.T) {
+		recorder := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(recorder)
+		c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"claude-public"}`))
+		initial := &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(anthropicTextStream("12345678", "max_tokens", 2, 0)))}
+		called := false
+		result, err := (&GatewayService{}).handleCCStreamingFromAnthropicWithContinuation(initial, c, "claude-public", "claude-upstream", "", nil, time.Now(), domain.AntiTruncationPolicy{Enabled: true, MaxRounds: 1, MaxOutputTokens: 3},
+			func(_ context.Context, _ string, remaining int) (*http.Response, error) {
+				called = true
+				require.Equal(t, 1, remaining, "8 runes estimate to 2 output tokens")
+				return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(anthropicTextStream("ok", "end_turn", 2, 1)))}, nil
+			})
+		require.NoError(t, err)
+		require.True(t, called)
+		require.Equal(t, 1, result.AntiTruncationRounds)
+	})
+
+	t.Run("estimated budget exhausted", func(t *testing.T) {
+		recorder := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(recorder)
+		c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"claude-public"}`))
+		initial := &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(anthropicTextStream("123456789012", "max_tokens", 2, 0)))}
+		called := false
+		result, err := (&GatewayService{}).handleCCStreamingFromAnthropicWithContinuation(initial, c, "claude-public", "claude-upstream", "", nil, time.Now(), domain.AntiTruncationPolicy{Enabled: true, MaxRounds: 1, MaxOutputTokens: 3},
+			func(context.Context, string, int) (*http.Response, error) { called = true; return nil, nil })
+		require.NoError(t, err)
+		require.False(t, called)
+		require.Zero(t, result.AntiTruncationRounds)
+	})
 }

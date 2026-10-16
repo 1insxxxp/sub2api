@@ -51,3 +51,13 @@ func TestAppendAvailableGroupModelAliasesRespectsEffectiveAllowlist(t *testing.T
 	group.ModelAllowlist.Models = []string{"claude-sonnet-4-6"}
 	require.Equal(t, []string{"claude-sonnet-4-6"}, appendAvailableGroupModelAliases([]string{"claude-sonnet-4-6"}, group))
 }
+
+func TestGeminiPublicListingDoesNotTreatFallbackDefaultsAsAvailableAliasTargets(t *testing.T) {
+	group := &service.Group{ModelAliases: []domain.ModelAlias{{Alias: "flash-fast", UpstreamModel: "gemini-2.5-flash"}}}
+	defaults := defaultModelIDsForPlatform(service.PlatformGemini)
+	listing := geminiPublicModelListing(nil, defaults, group)
+	require.Equal(t, defaults, listing)
+	available := []string{"gemini-2.5-flash"}
+	require.Equal(t, []string{"gemini-2.5-flash", "flash-fast"},
+		geminiPublicModelListing(available, nil, group))
+}

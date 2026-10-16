@@ -799,7 +799,7 @@ func TestHandleGeminiUpstreamError_ThirdPartyAPIKey429(t *testing.T) {
 			}
 
 			before := time.Now()
-			svc.handleGeminiUpstreamError(context.Background(), account, http.StatusTooManyRequests, http.Header{}, []byte(tt.body))
+			svc.handleGeminiUpstreamErrorForModel(context.Background(), account, http.StatusTooManyRequests, http.Header{}, []byte(tt.body), "")
 
 			require.Equal(t, 1, repo.rateLimitCalls)
 			require.Equal(t, int64(700), repo.lastRateLimitID)

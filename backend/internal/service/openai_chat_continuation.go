@@ -54,6 +54,36 @@ func withRawChatContinuationDeadline(parent context.Context, policy domain.AntiT
 	return context.WithDeadline(parent, start.Add(maxDuration))
 }
 
+// effectiveRawChatOutputBudget treats caller-supplied output limits as a
+// cumulative completion budget while retaining an optional smaller policy cap.
+// It must be called with the original client body, before protocol conversion
+// can synthesize a default token limit.
+func effectiveRawChatOutputBudget(clientBody []byte, policyCap int) int {
+	budget := policyCap
+	for _, path := range []string{"max_tokens", "max_completion_tokens"} {
+		value := gjson.GetBytes(clientBody, path)
+		if !value.Exists() || value.Type != gjson.Number || value.Int() <= 0 {
+			continue
+		}
+		limit := int(value.Int())
+		if budget <= 0 || limit < budget {
+			budget = limit
+		}
+	}
+	return budget
+}
+
+func continuationRoundOutputLimit(body []byte, path string, remainingOutputTokens int) int {
+	if remainingOutputTokens <= 0 {
+		return 0
+	}
+	perRoundLimit := gjson.GetBytes(body, path)
+	if perRoundLimit.Exists() && perRoundLimit.Type == gjson.Number && perRoundLimit.Int() > 0 && perRoundLimit.Int() < int64(remainingOutputTokens) {
+		return int(perRoundLimit.Int())
+	}
+	return remainingOutputTokens
+}
+
 func rawChatContinuationAllowed(body []byte) bool {
 	if gjson.GetBytes(body, "response_format").Exists() ||
 		gjson.GetBytes(body, "guided_json").Exists() ||
@@ -101,7 +131,7 @@ func buildRawChatContinuationBody(body []byte, assistantText string, remainingOu
 		tokenPath = "max_completion_tokens"
 	}
 	if remainingOutputTokens > 0 {
-		updated, err = sjson.SetBytes(updated, tokenPath, remainingOutputTokens)
+		updated, err = sjson.SetBytes(updated, tokenPath, continuationRoundOutputLimit(body, tokenPath, remainingOutputTokens))
 	}
 	return updated, err
 }

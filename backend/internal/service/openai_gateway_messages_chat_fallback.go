@@ -88,6 +88,9 @@ func (s *OpenAIGatewayService) forwardAnthropicViaRawChatCompletions(
 			antiTruncationPolicy, _ = RawChatAntiTruncationPolicyFromContext(policyCtx)
 		}
 		if antiTruncationPolicy.Enabled {
+			antiTruncationPolicy.MaxOutputTokens = effectiveRawChatOutputBudget(body, antiTruncationPolicy.MaxOutputTokens)
+		}
+		if antiTruncationPolicy.Enabled {
 			requestCtx, cancelRequest = withRawChatContinuationDeadline(ctx, antiTruncationPolicy, startTime)
 			defer cancelRequest()
 		}

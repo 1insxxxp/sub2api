@@ -1265,7 +1265,11 @@ func (h *GatewayHandler) Models(c *gin.Context) {
 	// the native Gemini endpoint. Do not let /v1/models drift with whichever
 	// upstream Gemini account happens to be selected for discovery.
 	if platform == service.PlatformGemini && apiKey != nil && apiKey.Group != nil {
-		availableModels := appendAvailableGroupModelAliases(h.geminiAvailableModelIDsForGroup(c.Request.Context(), apiKey.Group), apiKey.Group)
+		availableModels := geminiPublicModelListing(
+			h.geminiUpstreamAvailableModelIDsForGroup(c.Request.Context(), apiKey.Group),
+			defaultModelIDsForPlatform(service.PlatformGemini),
+			apiKey.Group,
+		)
 		if apiKey.Group.ModelAllowlistEnabled() {
 			availableModels = apiKey.Group.EffectiveModelAllowlist().FilterForListing(availableModels)
 		}
@@ -1374,7 +1378,17 @@ func (h *GatewayHandler) geminiAvailableModelIDsForGroup(ctx context.Context, gr
 	if group == nil {
 		return nil
 	}
+	return modelListingSource(service.PlatformGemini,
+		h.geminiUpstreamAvailableModelIDsForGroup(ctx, group),
+		defaultModelIDsForPlatform(service.PlatformGemini))
+}
 
+// geminiUpstreamAvailableModelIDsForGroup excludes fallback catalogue IDs so
+// callers can distinguish real group availability from display defaults.
+func (h *GatewayHandler) geminiUpstreamAvailableModelIDsForGroup(ctx context.Context, group *service.Group) []string {
+	if group == nil {
+		return nil
+	}
 	var availableModels []string
 	if h != nil && h.gatewayService != nil {
 		groupID := group.ID
@@ -1387,12 +1401,16 @@ func (h *GatewayHandler) geminiAvailableModelIDsForGroup(ctx context.Context, gr
 		}
 	}
 
-	modelIDs := modelListingSource(
-		service.PlatformGemini,
-		availableModels,
-		defaultModelIDsForPlatform(service.PlatformGemini),
-	)
-	return modelIDs
+	return availableModels
+}
+
+func geminiPublicModelListing(availableModels, fallbackModels []string, group *service.Group) []string {
+	models := modelListingSource(service.PlatformGemini, availableModels, fallbackModels)
+	withAliases := appendAvailableGroupModelAliases(availableModels, group)
+	if len(withAliases) <= len(availableModels) {
+		return models
+	}
+	return mergeModelIDs(models, withAliases[len(availableModels):])
 }
 
 // SystemCustomCodexModels serves the local Codex manifest for a system custom

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/stretchr/testify/require"
 )
@@ -22,11 +23,16 @@ func TestGetByKeyForAuthCarriesGroupModelAllowlist(t *testing.T) {
 			Enabled: true,
 			Models:  []string{"gpt-5.4", "gpt-5.5-*"},
 		},
+		ModelAliases: []domain.ModelAlias{{Alias: "fast", UpstreamModel: "gpt-5.4"}},
 		ModelStatusVisibility: service.GroupModelStatusVisibility{
 			Enabled: true,
 			Models:  []string{"gpt-image-1"},
 		},
 	})
+	_, err := integrationEntClient.Group.UpdateOneID(group.ID).
+		SetModelAliases([]domain.ModelAlias{{Alias: "fast", UpstreamModel: "gpt-5.4"}}).
+		Save(ctx)
+	require.NoError(t, err)
 	user := mustCreateUser(t, integrationEntClient, &service.User{
 		Email: fmt.Sprintf("model-allowlist-proj-%d@example.com", suffix), Concurrency: 5,
 	})
@@ -51,6 +57,8 @@ func TestGetByKeyForAuthCarriesGroupModelAllowlist(t *testing.T) {
 	require.NotNil(t, got.Group)
 	require.True(t, got.Group.ModelAllowlist.Enabled, "model_allowlist 必须进入认证投影（投影漏列会让分组级准入静默失效）")
 	require.Equal(t, []string{"gpt-5.4", "gpt-5.5-*"}, got.Group.ModelAllowlist.Models)
+	require.Equal(t, []domain.ModelAlias{{Alias: "fast", UpstreamModel: "gpt-5.4"}}, got.Group.ModelAliases,
+		"model_aliases must enter the API-key auth projection so gateway alias routing and policies can take effect")
 	require.True(t, got.Group.ModelStatusVisibility.Enabled)
 	require.Equal(t, []string{"gpt-image-1"}, got.Group.ModelStatusVisibility.Models)
 }

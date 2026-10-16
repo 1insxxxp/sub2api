@@ -98,6 +98,28 @@ func TestOrdinaryPinnedModelsUsesSelectedAccountsAndFinalETag(t *testing.T) {
 	require.Equal(t, []int64{2, 3}, upstream.accountIDs())
 }
 
+func TestOrdinaryPinnedModelsListsAliasWhenAllowlistOnlyAllowsAlias(t *testing.T) {
+	accounts := []service.Account{newPinnedCodexAccount(1, service.StatusActive, true, false)}
+	upstream := &codexModelsPinnedHTTPUpstream{bodies: map[int64]string{
+		1: `{"data":[{"id":"gpt-5.4","owned_by":"openai"}]}`,
+	}}
+	h := newPinnedCodexTestHandler(accounts, upstream, 3)
+	group := &service.Group{ID: 92, Platform: service.PlatformOpenAI,
+		ModelAliases:              []domain.ModelAlias{{Alias: "fast", UpstreamModel: "gpt-5.4"}},
+		ModelAllowlist:            service.GroupModelAllowlist{Enabled: true, Models: []string{"fast"}},
+		CodexModelsManifestConfig: service.GroupCodexModelsManifestConfig{Enabled: true, AccountIDs: []int64{1}},
+	}
+	response := performOrdinaryPinnedModelsRequest(t, h, group, "/v1/models", "")
+	require.Equal(t, http.StatusOK, response.Code, response.Body.String())
+	require.Equal(t, []string{"fast"}, ordinaryPinnedModelIDs(t, response))
+	etag := response.Header().Get("ETag")
+	require.NotEmpty(t, etag)
+	notModified := performOrdinaryPinnedModelsRequest(t, h, group, "/v1/models", etag)
+	require.Equal(t, http.StatusNotModified, notModified.Code)
+	require.Empty(t, notModified.Body.String())
+	require.Equal(t, etag, notModified.Header().Get("ETag"))
+}
+
 func TestOrdinaryPinnedModelsFailureAndEmptyPolicies(t *testing.T) {
 	for _, tc := range []struct {
 		name       string

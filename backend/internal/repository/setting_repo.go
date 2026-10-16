@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -19,6 +20,34 @@ const checkinCampaignConfigAdvisoryLockKey int64 = 0x43484b43414d50
 
 type settingRepository struct {
 	client *ent.Client
+}
+
+// SetContentModerationConfig holds live group rows until the setting is written.
+// Deletion takes FOR UPDATE on the group before cleaning this setting, so both
+// operations follow the same lock order: groups, then settings.
+func (r *settingRepository) SetContentModerationConfig(ctx context.Context, value string, groupIDs []int64) error {
+	tx, err := r.client.Tx(ctx)
+	if err != nil && !errors.Is(err, ent.ErrTxStarted) {
+		return err
+	}
+	client := r.client
+	if err == nil {
+		defer func() { _ = tx.Rollback() }()
+		client = tx.Client()
+	}
+	if err := lockLiveGroups(ctx, client, groupIDs); err != nil {
+		return err
+	}
+	now := time.Now()
+	if err := client.Setting.Create().SetKey(service.SettingKeyContentModerationConfig).
+		SetValue(value).SetUpdatedAt(now).OnConflictColumns(setting.FieldKey).
+		UpdateNewValues().Exec(ctx); err != nil {
+		return err
+	}
+	if tx != nil {
+		return tx.Commit()
+	}
+	return nil
 }
 
 func NewSettingRepository(client *ent.Client) service.SettingRepository {

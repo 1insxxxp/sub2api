@@ -98,6 +98,7 @@ func cloneGroupForDuplicate(source *Group, operationID string) *Group {
 	return &Group{
 		Name:                             duplicateGroupName(source.Name, 1),
 		Description:                      source.Description,
+		I18n:                             cloneGroupI18nForDuplicate(source.I18n),
 		Tag:                              source.Tag,
 		TagColor:                         source.TagColor,
 		KeyDisplayCategory:               source.KeyDisplayCategory,

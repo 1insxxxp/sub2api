@@ -7,7 +7,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -77,9 +76,13 @@ func TestModerationConfigWriteRejectsGroupDeletedAfterValidation(t *testing.T) {
 	defer func() { _ = tx.Rollback() }()
 	var id int64
 	require.NoError(t, tx.QueryRowContext(ctx, "SELECT id FROM groups WHERE id=$1 FOR UPDATE", group.ID).Scan(&id))
+	groupIDs := []int64{group.ID}
+	allGroups := false
+	moderation := service.NewContentModerationService(settings, nil, nil, repo, nil, nil, nil, nil)
 	finished := make(chan error, 1)
 	go func() {
-		finished <- settings.SetContentModerationConfig(ctx, `{"all_groups":false,"group_ids":[`+fmt.Sprint(group.ID)+`]}`, []int64{group.ID})
+		_, err := moderation.UpdateConfig(ctx, service.UpdateContentModerationConfigInput{AllGroups: &allGroups, GroupIDs: &groupIDs})
+		finished <- err
 	}()
 	select {
 	case err := <-finished:
@@ -91,7 +94,7 @@ func TestModerationConfigWriteRejectsGroupDeletedAfterValidation(t *testing.T) {
 	require.NoError(t, tx.Commit())
 	select {
 	case err := <-finished:
-		require.ErrorIs(t, err, service.ErrGroupNotFound)
+		require.ErrorContains(t, err, "审计分组不存在")
 	case <-time.After(5 * time.Second):
 		t.Fatal("config write did not finish after deletion")
 	}
@@ -117,10 +120,17 @@ func (s *GroupRepoSuite) TestCreate() {
 	err := s.repo.Create(s.ctx, group)
 	s.Require().NoError(err, "Create")
 	s.Require().NotZero(group.ID, "expected ID to be set")
+	var modelAliases string
+	s.Require().NoError(scanSingleRow(s.ctx, s.tx, "SELECT model_aliases::text FROM groups WHERE id = $1", []any{group.ID}, &modelAliases))
+	s.Require().Equal("[]", modelAliases)
 
 	got, err := s.repo.GetByID(s.ctx, group.ID)
 	s.Require().NoError(err, "GetByID")
 	s.Require().Equal("test-create", got.Name)
+	got.ModelAliases = nil
+	s.Require().NoError(s.repo.Update(s.ctx, got))
+	s.Require().NoError(scanSingleRow(s.ctx, s.tx, "SELECT model_aliases::text FROM groups WHERE id = $1", []any{group.ID}, &modelAliases))
+	s.Require().Equal("[]", modelAliases)
 	s.Require().Equal(group.Tag, got.Tag)
 	s.Require().Equal(group.TagColor, got.TagColor)
 	for _, tag := range []string{"image", "airp", ""} {

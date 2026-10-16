@@ -317,7 +317,28 @@ func (s *OpenAIGatewayService) FetchPinnedOpenAIModelsList(ctx context.Context, 
 		}
 	}
 	if group.ModelAllowlistEnabled() {
-		models = selectModelCatalogEntries(byID, group.ModelAllowlist.FilterForListing(modelIDs))
+		publicIDs := group.EffectiveModelAllowlist().FilterForListing(modelIDs)
+		selected := make(map[string]struct{}, len(publicIDs)+len(group.ModelAliases))
+		selectedIDs := make([]string, 0, len(publicIDs)+len(group.ModelAliases))
+		for _, id := range publicIDs {
+			selected[id] = struct{}{}
+			selectedIDs = append(selectedIDs, id)
+		}
+		// Keep allowed aliases' real upstream entries available until the handler
+		// creates the alias representation. The handler applies the public
+		// allowlist again after alias creation, so hidden targets stay hidden.
+		for _, alias := range group.ModelAliases {
+			if group.EffectiveModelAllowlist().Allows(alias.Alias) {
+				if _, targetAvailable := byID[alias.UpstreamModel]; targetAvailable {
+					if _, alreadySelected := selected[alias.UpstreamModel]; alreadySelected {
+						continue
+					}
+					selected[alias.UpstreamModel] = struct{}{}
+					selectedIDs = append(selectedIDs, alias.UpstreamModel)
+				}
+			}
+		}
+		models = selectModelCatalogEntries(byID, selectedIDs)
 	}
 	body, err := json.Marshal(struct {
 		Object string            `json:"object"`

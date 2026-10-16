@@ -391,7 +391,7 @@ func normalizeCreateGroupInputForSimpleMode(input *CreateGroupInput) {
 		return
 	}
 	*input = CreateGroupInput{
-		Name: input.Name, Description: input.Description, Tag: input.Tag, TagColor: input.TagColor, KeyDisplayCategory: input.KeyDisplayCategory, Platform: input.Platform,
+		Name: input.Name, Description: input.Description, I18n: input.I18n, Tag: input.Tag, TagColor: input.TagColor, KeyDisplayCategory: input.KeyDisplayCategory, Platform: input.Platform,
 		RateMultiplier: 1, SubscriptionType: SubscriptionTypeStandard,
 	}
 }
@@ -400,7 +400,7 @@ func normalizeUpdateGroupInputForSimpleMode(input *UpdateGroupInput) {
 	if input == nil {
 		return
 	}
-	*input = UpdateGroupInput{Name: input.Name, Description: input.Description, Tag: input.Tag, TagColor: input.TagColor, KeyDisplayCategory: input.KeyDisplayCategory}
+	*input = UpdateGroupInput{Name: input.Name, Description: input.Description, I18n: input.I18n, Tag: input.Tag, TagColor: input.TagColor, KeyDisplayCategory: input.KeyDisplayCategory}
 }
 
 func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupInput) (*Group, error) {
@@ -419,6 +419,10 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 	}
 	if input.RateMultiplier <= 0 {
 		return nil, errors.New("rate_multiplier must be > 0")
+	}
+	i18n, err := normalizeGroupI18n(input.I18n)
+	if err != nil {
+		return nil, err
 	}
 
 	platform := NormalizeGroupPlatform(input.Platform)
@@ -599,6 +603,7 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 	group := &Group{
 		Name:                             input.Name,
 		Description:                      input.Description,
+		I18n:                             i18n,
 		Tag:                              tag,
 		TagColor:                         tagColor,
 		KeyDisplayCategory:               input.KeyDisplayCategory,
@@ -822,6 +827,13 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	if group.SystemCustomRoutingEnabled {
 		return nil, ErrSystemCustomGroupManagedOnly
 	}
+	var i18n GroupI18n
+	if input.I18n != nil {
+		i18n, err = normalizeGroupI18n(*input.I18n)
+		if err != nil {
+			return nil, err
+		}
+	}
 	previousGroup := *group
 	previousGroup.ModelAllowlist.Models = append([]string(nil), group.ModelAllowlist.Models...)
 
@@ -833,6 +845,9 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	}
 	if input.Description != nil {
 		group.Description = *input.Description
+	}
+	if input.I18n != nil {
+		group.I18n = i18n
 	}
 	if err := updateGroupTag(group, input.Tag, input.TagColor); err != nil {
 		return nil, err
