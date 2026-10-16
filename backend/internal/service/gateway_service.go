@@ -20,7 +20,9 @@ import (
 	"unsafe"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
 	"github.com/cespare/xxhash/v2"
@@ -216,7 +218,7 @@ func anthropicStreamEventIsTerminal(eventName, data string) bool {
 }
 
 func cloneStringSlice(src []string) []string {
-	if len(src) == 0 {
+	if src == nil {
 		return nil
 	}
 	dst := make([]string, len(src))
@@ -1487,6 +1489,12 @@ func availableModelsForAccounts(accounts []Account, platform string) []string {
 	}
 
 	// If no account has model_mapping, return nil (use default)
+	if !hasAnyMapping && platform == PlatformOpenAI {
+		models := filterRetiredOpenAIModelIDs(accounts, openai.DefaultModelIDs())
+		if len(models) != len(openai.DefaultModels) {
+			return models
+		}
+	}
 	if !hasAnyMapping {
 		return nil
 	}
@@ -1500,6 +1508,12 @@ func availableModelsForAccounts(accounts []Account, platform string) []string {
 
 	if platform == PlatformOpenAI {
 		models = supplementUnmappedOpenAIModels(accounts, models)
+		models = filterRetiredOpenAIModelIDs(accounts, models)
+		// nil means "use defaults" to listing callers; an empty filtered catalog
+		// must remain authoritative instead of resurrecting retired defaults.
+		if len(models) == 0 {
+			return models
+		}
 	}
 
 	return models
@@ -1540,21 +1554,23 @@ func (s *GatewayService) resolveCompositeModelOwnership(ctx context.Context, gro
 		}
 	}
 
-	accounts, err := s.accountRepo.ListSchedulableByGroupID(ctx, groupID)
+	// 归属取决于配置而非运行时健康：限流/临时不可调度不应让同一模型在
+	// 「唯一归属」与「歧义」之间来回翻转，否则配置错误只会间歇暴露。
+	accounts, err := s.accountRepo.ListModelAvailabilityCandidates(ctx, &groupID, domain.ConcretePlatformIDs(), false)
 	if err != nil {
 		return CompositeModelOwnership{}, err
 	}
 
 	platforms := make(map[string]struct{})
+	ownership := CompositeModelOwnership{}
 	for _, account := range accounts {
-		platform := strings.TrimSpace(account.Platform)
-		if !isConcreteRequestPlatform(platform) || !explicitModelMappingClaims(account, model) {
-			continue
+		if explicitModelMappingClaims(account, model) {
+			platforms[account.Platform] = struct{}{}
+			ownership.OpenAIGatewayOAuthClaimed = ownership.OpenAIGatewayOAuthClaimed ||
+				(account.IsOAuth() && domain.UsesOpenAIGateway(account.Platform))
 		}
-		platforms[platform] = struct{}{}
 	}
 
-	ownership := CompositeModelOwnership{}
 	if len(platforms) == 1 {
 		for platform := range platforms {
 			ownership.TargetPlatform = platform

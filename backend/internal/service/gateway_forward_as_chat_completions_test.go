@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
@@ -320,4 +321,18 @@ func TestHandleCCStreamingFromAnthropic_ClientDisconnectStopsBeforeFinalUsage(t 
 	require.False(t, result.Outcome.StreamCompleted)
 	require.Equal(t, DisconnectSourceClient, result.Outcome.DisconnectSource)
 	require.True(t, result.ClientDisconnect)
+}
+
+// handleCCStreamingFromAnthropic reads Anthropic SSE events, converts each
+// to Responses events, then to Chat Completions chunks, and writes them.
+func (s *GatewayService) handleCCStreamingFromAnthropic(
+	resp *http.Response,
+	c *gin.Context,
+	originalModel string,
+	mappedModel string,
+	cacheCreationTTLTarget string,
+	reasoningEffort *string,
+	startTime time.Time,
+) (*ForwardResult, error) {
+	return s.handleCCStreamingFromAnthropicWithContinuation(resp, c, originalModel, mappedModel, cacheCreationTTLTarget, reasoningEffort, startTime, domain.AntiTruncationPolicy{}, nil)
 }

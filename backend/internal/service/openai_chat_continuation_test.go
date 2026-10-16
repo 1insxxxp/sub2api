@@ -42,6 +42,43 @@ func TestRawChatContinuationDeadlineCancelsInitialHeaderWait(t *testing.T) {
 	}
 }
 
+func TestStreamRawChatWithoutContinuationHasNoAntiTruncationDeadline(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	reader, writer := io.Pipe()
+	defer func() { _ = reader.Close() }()
+	defer func() { _ = writer.Close() }()
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"ordinary-model"}`))
+	done := make(chan error, 1)
+	go func() {
+		_, err := (&OpenAIGatewayService{}).streamRawChatCompletions(
+			c, &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: reader},
+			&Account{ID: 1, Platform: PlatformOpenAI}, "ordinary-model", "ordinary-model", "ordinary-model",
+			nil, nil, time.Now().Add(-181*time.Second), 32, domain.AntiTruncationPolicy{}, nil,
+		)
+		done <- err
+	}()
+	go func() {
+		_, _ = io.WriteString(writer, "data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"normal long answer\"},\"finish_reason\":null}]}\n\n")
+	}()
+	select {
+	case err := <-done:
+		t.Fatalf("disabled anti-truncation must not stop an ordinary long-running stream: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+	_, err := io.WriteString(writer, "data: {\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n")
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(time.Second):
+		t.Fatal("ordinary stream did not finish after the upstream completed")
+	}
+	require.Contains(t, recorder.Body.String(), "normal long answer")
+}
+
 func TestBuildRawChatContinuationBodyAppendsAssistantAndPrompt(t *testing.T) {
 	body := []byte(`{"model":"public","stream":true,"max_tokens":100,"messages":[{"role":"user","content":"question"}]}`)
 	got, err := buildRawChatContinuationBody(body, "partial answer", 42)
@@ -86,7 +123,7 @@ func TestStreamRawChatCompletionsContinuesLengthRoundWithoutIntermediateTerminal
 	var continuationBody []byte
 	round := 0
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer r.Body.Close()
+		defer func() { _ = r.Body.Close() }()
 		if round == 1 {
 			continuationBody, _ = io.ReadAll(r.Body)
 		}
@@ -111,7 +148,7 @@ func TestStreamRawChatCompletionsContinuesLengthRoundWithoutIntermediateTerminal
 	require.NoError(t, err)
 	initialResp, err := http.DefaultClient.Do(initialReq)
 	require.NoError(t, err)
-	defer initialResp.Body.Close()
+	defer func() { _ = initialResp.Body.Close() }()
 
 	recorder := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(recorder)
@@ -330,7 +367,7 @@ func TestStreamRawChatContinuationDeadlineClosesStalledCurrentAndNextRounds(t *t
 		serverDone := make(chan struct{})
 		upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"partial\"},\"finish_reason\":null}]}\n\n"))
-			w.(http.Flusher).Flush()
+			require.NoError(t, http.NewResponseController(w).Flush())
 			<-r.Context().Done()
 			close(serverDone)
 		}))
@@ -367,7 +404,7 @@ func TestStreamRawChatContinuationDeadlineClosesStalledCurrentAndNextRounds(t *t
 			}
 			w.Header().Set("Content-Type", "text/event-stream")
 			w.WriteHeader(http.StatusOK)
-			w.(http.Flusher).Flush()
+			require.NoError(t, http.NewResponseController(w).Flush())
 			<-r.Context().Done()
 			close(secondRoundCanceled)
 		}))

@@ -491,7 +491,7 @@ func TestGeminiForwardAsChatCompletions_StreamWhitespaceOnlyTerminalFailsOver(t 
 	require.False(t, c.Writer.Written())
 }
 
-func TestGeminiForwardAsChatCompletions_StreamSkipsThoughtBeforeVisibleText(t *testing.T) {
+func TestGeminiForwardAsChatCompletions_StreamEmitsThoughtBeforeVisibleText(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	upstreamBody := `data: {"candidates":[{"content":{"parts":[{"text":"hidden reasoning","thought":true}]}}]}` + "\n\n" +
@@ -516,8 +516,11 @@ func TestGeminiForwardAsChatCompletions_StreamSkipsThoughtBeforeVisibleText(t *t
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	out := rec.Body.String()
-	require.NotContains(t, out, "hidden reasoning")
+	require.Contains(t, out, `"reasoning_content":"hidden reasoning"`)
+	require.NotContains(t, out, `"content":"hidden reasoning"`)
+	require.Equal(t, 1, strings.Count(out, `"reasoning_content":"hidden reasoning"`))
 	require.Contains(t, out, `"content":"visible answer"`)
+	require.Less(t, strings.Index(out, `"reasoning_content":"hidden reasoning"`), strings.Index(out, `"content":"visible answer"`))
 	require.Contains(t, out, "data: [DONE]")
 }
 

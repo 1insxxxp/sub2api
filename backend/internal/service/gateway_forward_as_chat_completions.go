@@ -56,7 +56,7 @@ func (s *GatewayService) ForwardAsChatCompletions(
 	}
 
 	// 2. Convert CC → Responses → Anthropic (chained conversion)
-	responsesReq, err := apicompat.ChatCompletionsToResponses(&ccReq)
+	responsesReq, err := chatCompletionsToResponses(s.cfg, &ccReq)
 	if err != nil {
 		return nil, fmt.Errorf("convert chat completions to responses: %w", err)
 	}
@@ -472,20 +472,6 @@ type anthropicBufferedEvent struct {
 	payload string
 }
 
-// handleCCStreamingFromAnthropic reads Anthropic SSE events, converts each
-// to Responses events, then to Chat Completions chunks, and writes them.
-func (s *GatewayService) handleCCStreamingFromAnthropic(
-	resp *http.Response,
-	c *gin.Context,
-	originalModel string,
-	mappedModel string,
-	cacheCreationTTLTarget string,
-	reasoningEffort *string,
-	startTime time.Time,
-) (*ForwardResult, error) {
-	return s.handleCCStreamingFromAnthropicWithContinuation(resp, c, originalModel, mappedModel, cacheCreationTTLTarget, reasoningEffort, startTime, domain.AntiTruncationPolicy{}, nil)
-}
-
 func (s *GatewayService) handleCCStreamingFromAnthropicWithContinuation(
 	resp *http.Response,
 	c *gin.Context,
@@ -708,8 +694,8 @@ func (s *GatewayService) handleCCStreamingFromAnthropicWithContinuation(
 					continuationSafe = false
 				} else if event.Delta.Text != "" {
 					sawSemanticText = true
-					assistantText.WriteString(event.Delta.Text)
-					roundAssistantText.WriteString(event.Delta.Text)
+					_, _ = assistantText.WriteString(event.Delta.Text)
+					_, _ = roundAssistantText.WriteString(event.Delta.Text)
 				}
 			case "message_delta":
 				if event.Delta != nil {
@@ -775,7 +761,7 @@ func (s *GatewayService) handleCCStreamingFromAnthropicWithContinuation(
 				if nextResp != nil && nextResp.Body != nil {
 					_ = nextResp.Body.Close()
 				}
-				streamErr = fmt.Errorf("Anthropic continuation request failed")
+				streamErr = fmt.Errorf("anthropic continuation request failed")
 				finalTerminal = roundTerminal
 				break
 			}
@@ -796,7 +782,10 @@ func (s *GatewayService) handleCCStreamingFromAnthropicWithContinuation(
 		break
 	}
 	for _, terminal := range finalTerminal {
-		if processAnthropicEvent(&terminal.event, terminal.payload, false) {
+		// Deferred message_delta usage was already merged while scanning. A
+		// failed continuation has also moved that round into completedUsage;
+		// merging it again here would charge the first round's output twice.
+		if processAnthropicEvent(&terminal.event, terminal.payload, true) {
 			clientDisconnected = true
 			break
 		}

@@ -1307,10 +1307,10 @@ func (s *PricingService) buildModelLookupCandidates(modelLower string) []string 
 	normalized := normalizeModelNameForPricing(modelLower)
 
 	// A tier-specific entry should take precedence when the pricing catalog gains
-	// one later. Antigravity's Gemini Flash thinking tiers share the base rate,
+	// one later. Antigravity's Gemini thinking tiers share the base rate,
 	// so the normalized base remains the fallback after the exact aliases.
 	candidates := rawCandidates
-	if normalizeGeminiPricingAlias(lastSegment(modelLower)) != lastSegment(modelLower) {
+	if isAntigravityThinkingTierAlias(lastSegment(modelLower)) {
 		candidates = append(candidates, normalized)
 	} else {
 		// Prefer canonical model names for all other aliases (including models/xxx).
@@ -1366,7 +1366,7 @@ func normalizeModelNameForPricing(model string) string {
 		}
 		return canonical
 	}
-	return normalizeGeminiPricingAlias(model)
+	return normalizeAntigravityClaudeTierAlias(normalizeGeminiPricingAlias(model))
 }
 
 // normalizeGeminiPricingAlias maps Antigravity behavior/tier aliases to the
@@ -1388,7 +1388,37 @@ func normalizeGeminiPricingAlias(model string) string {
 		return "gemini-3-pro-preview"
 	}
 
-	for _, baseModel := range []string{"gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.8-flash"} {
+	return normalizeGeminiThinkingTierAlias(model)
+}
+
+// normalizeAntigravityClaudeTierAlias maps Antigravity's Claude 5.5 thinking-tier
+// model IDs (claude-opus-5-5-high, claude-sonnet-5-5-low, ...) to the public base
+// model. Like the Gemini tiers, the suffix selects reasoning depth rather than a
+// separate token rate; without this the IDs fall into substring family matching
+// and are billed as claude-opus-5 / claude-sonnet-4-5.
+func normalizeAntigravityClaudeTierAlias(model string) string {
+	for _, baseModel := range []string{"claude-opus-5-5", "claude-sonnet-5-5"} {
+		for _, tier := range []string{"-high", "-low", "-medium"} {
+			if model == baseModel+tier {
+				return baseModel
+			}
+		}
+	}
+	return model
+}
+
+// isAntigravityThinkingTierAlias reports whether model is an Antigravity
+// Gemini behavior/tier alias or Claude thinking-tier alias of a priced base model.
+func isAntigravityThinkingTierAlias(model string) bool {
+	return normalizeGeminiPricingAlias(model) != model || normalizeAntigravityClaudeTierAlias(model) != model
+}
+
+// normalizeGeminiThinkingTierAlias maps Antigravity's Gemini thinking-tier
+// model IDs to the public base model. The tier controls reasoning behavior, not
+// the published token rate, so this keeps -high/-low/-medium and -tiered
+// requests on the corresponding base model's price card.
+func normalizeGeminiThinkingTierAlias(model string) string {
+	for _, baseModel := range []string{"gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.8-flash", "gemini-4-argon"} {
 		for _, tier := range []string{"-high", "-low", "-medium", "-tiered"} {
 			if model == baseModel+tier {
 				return baseModel
@@ -1426,6 +1456,7 @@ func (s *PricingService) extractBaseName(model string) string {
 
 // matchByModelFamily 基于模型系列匹配
 func (s *PricingService) matchByModelFamily(model string) *LiteLLMModelPricing {
+	model = normalizeAntigravityClaudeTierAlias(model)
 	if claude.IsOpus55(model) {
 		if pricing, ok := s.pricingData["claude-opus-5-5"]; ok {
 			return pricing

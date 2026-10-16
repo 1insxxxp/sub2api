@@ -308,7 +308,7 @@ func TestChannelMonitorV2HealthRequiresRequestSamples(t *testing.T) {
 			health := ChannelMonitorV2HealthForWithThresholds(metrics, thresholds)
 			require.Equal(t, ChannelMonitorV2Health{
 				Overall: "unknown", ErrorRate: "unknown", TTFT: "unknown", Cache: "unknown",
-				LowSample: requestCount > 0,
+				LowSample:     requestCount > 0,
 				MinimumSample: 50, Thresholds: NormalizeChannelMonitorV2HealthThresholds(thresholds),
 			}, health)
 		})
@@ -341,7 +341,7 @@ func TestChannelMonitorV2HealthMinimumSampleBoundaries(t *testing.T) {
 			health := ChannelMonitorV2HealthForWithThresholds(metrics, thresholds)
 			require.Equal(t, ChannelMonitorV2Health{
 				Overall: "unknown", ErrorRate: "unknown", TTFT: "unknown", Cache: "unknown",
-				LowSample: test.wantMinimum > 1,
+				LowSample:     test.wantMinimum > 1,
 				MinimumSample: test.wantMinimum, Thresholds: NormalizeChannelMonitorV2HealthThresholds(thresholds),
 			}, health)
 

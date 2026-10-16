@@ -381,7 +381,11 @@ func (s *OpenAIGatewayService) streamRawChatCompletions(
 		maxDuration = 180 * time.Second
 	}
 	maxOutputTokens := antiTruncationPolicy.MaxOutputTokens
-	deadlineCtx, deadlineCancel := context.WithDeadline(c.Request.Context(), startTime.Add(maxDuration))
+	deadlineCtx := c.Request.Context()
+	deadlineCancel := func() {}
+	if continueRequest != nil {
+		deadlineCtx, deadlineCancel = context.WithDeadline(deadlineCtx, startTime.Add(maxDuration))
+	}
 	defer deadlineCancel()
 	var responseBodyMu sync.Mutex
 	stopCloseOnDeadline := context.AfterFunc(deadlineCtx, func() {
@@ -483,7 +487,7 @@ func (s *OpenAIGatewayService) streamRawChatCompletions(
 						}
 						delta := choice.Get("delta")
 						if content := delta.Get("content"); content.Type == gjson.String && content.String() != "" {
-							roundAssistant.WriteString(content.String())
+							_, _ = roundAssistant.WriteString(content.String())
 							semanticOutput = true
 						}
 						if delta.Get("tool_calls").Exists() || delta.Get("function_call").Exists() {
@@ -544,14 +548,12 @@ func (s *OpenAIGatewayService) streamRawChatCompletions(
 				writeLine(line)
 				writeLine("")
 			}
-			assistantText.WriteString(roundAssistant.String())
+			_, _ = assistantText.WriteString(roundAssistant.String())
 			remaining := 0
 			if maxOutputTokens > 0 {
 				remaining = maxOutputTokens - budgetOutputTokens
 			}
-			if maxOutputTokens > 0 && remaining <= 0 {
-				shouldContinue = false
-			} else {
+			if maxOutputTokens <= 0 || remaining > 0 {
 				_ = resp.Body.Close()
 				nextResp, nextErr := continueRequest(deadlineCtx, assistantText.String(), remaining)
 				if nextErr != nil {

@@ -13,7 +13,7 @@ import (
 func TestHydrateUsageLogCompensationLoadsAntiTruncationRounds(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	repo := newUsageLogRepositoryWithSQL(nil, db)
 	mock.ExpectQuery(regexp.QuoteMeta("SELECT ul.id, erc.id, erc.status, erc.reason_code")).
 		WithArgs("{42}").

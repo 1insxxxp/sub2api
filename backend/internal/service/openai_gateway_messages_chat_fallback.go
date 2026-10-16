@@ -54,7 +54,10 @@ func (s *OpenAIGatewayService) forwardAnthropicViaRawChatCompletions(
 	clientStream := anthropicReq.Stream
 
 	// 2. Anthropic → Chat Completions (direct, no Responses intermediary)
-	chatReq, err := apicompat.AnthropicToChatCompletionsRequest(&anthropicReq)
+	chatReq, err := apicompat.AnthropicToChatCompletionsRequestWithMinOutputTokens(
+		&anthropicReq,
+		configuredMinOutputTokens(s.cfg),
+	)
 	if err != nil {
 		writeAnthropicError(c, http.StatusBadRequest, "invalid_request_error", err.Error())
 		return nil, fmt.Errorf("convert anthropic to chat completions: %w", err)
@@ -326,7 +329,7 @@ func (s *OpenAIGatewayService) streamChatCompletionsAsAnthropic(
 					finishReason, terminal = *choice.FinishReason, true
 				}
 				if choice.Delta.Content != nil && *choice.Delta.Content != "" {
-					roundAssistant.WriteString(*choice.Delta.Content)
+					_, _ = roundAssistant.WriteString(*choice.Delta.Content)
 					semanticOutput = true
 				}
 				if choice.Delta.Refusal != nil && *choice.Delta.Refusal != "" {
@@ -374,7 +377,7 @@ func (s *OpenAIGatewayService) streamChatCompletionsAsAnthropic(
 					emitChunk(chunk)
 				}
 			}
-			fullAssistantText.WriteString(roundAssistant.String())
+			_, _ = fullAssistantText.WriteString(roundAssistant.String())
 			remaining := 0
 			if maxOutputTokens > 0 {
 				remaining = maxOutputTokens - outputBudget

@@ -103,7 +103,7 @@ import { paymentAPI } from '@/api/payment'
 import { extractI18nErrorMessage } from '@/utils/apiError'
 import { isMobileDevice } from '@/utils/device'
 import { formatPaymentAmount, normalizePaymentCurrency } from '@/components/payment/currency'
-import { getPaymentRecoveryStorageKey, readPaymentRecoverySnapshot } from '@/components/payment/paymentFlow'
+import { getPaymentRecoveryStorageKey, PAYMENT_RECOVERY_STORAGE_KEY, readPaymentRecoverySnapshot } from '@/components/payment/paymentFlow'
 import type { PaymentOrder } from '@/types/payment'
 import type { Stripe, StripeElements } from '@stripe/stripe-js'
 import AppLayout from '@/components/layout/AppLayout.vue'
@@ -138,9 +138,18 @@ let redirectTimer: ReturnType<typeof setTimeout> | null = null
 
 onMounted(async () => {
   const orderId = Number(route.query.order_id)
-  const clientSecret = String(route.query.client_secret || '')
   const method = String(route.query.method || '')
   const resumeToken = typeof route.query.resume_token === 'string' ? route.query.resume_token : undefined
+  // client_secret 只从本浏览器下单时写入的恢复快照读取，且快照订单必须与 URL 订单一致：
+  // 不信任 URL 中的 client_secret，避免页面展示的订单与实际收款的 PaymentIntent 被拼接错绑。
+  const restored = (() => {
+    if (typeof window === 'undefined') return null
+    const userSnapshot = window.localStorage.getItem(getPaymentRecoveryStorageKey(authStore.user?.id))
+    // Continue to accept snapshots written by the shared-key payment flow.
+    const rawSnapshot = userSnapshot || window.localStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY)
+    return readPaymentRecoverySnapshot(rawSnapshot, { resumeToken })
+  })()
+  const clientSecret = orderId && restored?.orderId === orderId ? restored.clientSecret : ''
 
   if (!orderId || !clientSecret) {
     loading.value = false
@@ -149,15 +158,7 @@ onMounted(async () => {
   }
 
   try {
-    if (typeof window !== 'undefined') {
-      const restored = readPaymentRecoverySnapshot(
-        window.localStorage.getItem(getPaymentRecoveryStorageKey(authStore.user?.id)),
-        { resumeToken },
-      )
-      if (restored?.orderId === orderId) {
-        currency.value = normalizePaymentCurrency(restored.currency)
-      }
-    }
+    currency.value = normalizePaymentCurrency(restored?.currency)
     const res = await paymentAPI.getOrder(orderId)
     order.value = res.data
     if (res.data.currency) {

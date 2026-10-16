@@ -416,7 +416,7 @@ func TestGatewayBuildDynamicSystemCustomGroupCatalogFallsBackWhenOpenAIRuntimeBl
 
 func TestGatewaySystemCustomCompactTicketGateUsesOutboundModel(t *testing.T) {
 	openAI := &OpenAIGatewayService{cfg: &config.Config{Gateway: config.GatewayConfig{
-		OpenAICompactModel: "gpt-5.5",
+		OpenAICompactModel: "gpt-6.1-sol",
 		OpenAICodexTicket: config.OpenAICodexTicketConfig{
 			Enabled: true, TargetLength: 292, TTLSeconds: 3600, FailClosed: true,
 			Models: []string{"gpt-6-astra"},

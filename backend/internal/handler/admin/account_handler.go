@@ -127,46 +127,46 @@ func NewAccountHandler(
 
 // CreateAccountRequest represents create account request
 type CreateAccountRequest struct {
-	Name                    string         `json:"name" binding:"required"`
-	Notes                   *string        `json:"notes"`
-	Platform                string         `json:"platform" binding:"required"`
-	Type                    string         `json:"type" binding:"required,oneof=oauth setup-token apikey upstream bedrock service_account"`
-	Credentials             map[string]any `json:"credentials" binding:"required"`
+	Name                    string            `json:"name" binding:"required"`
+	Notes                   *string           `json:"notes"`
+	Platform                string            `json:"platform" binding:"required"`
+	Type                    string            `json:"type" binding:"required,oneof=oauth setup-token apikey upstream bedrock service_account"`
+	Credentials             map[string]any    `json:"credentials" binding:"required"`
 	Extra                   map[string]any    `json:"extra"`
 	ModelSystemPrompts      map[string]string `json:"model_system_prompts"`
-	ProxyID                 *int64         `json:"proxy_id"`
-	Concurrency             int            `json:"concurrency"`
-	Priority                int            `json:"priority"`
-	RateMultiplier          *float64       `json:"rate_multiplier"`
-	LoadFactor              *int           `json:"load_factor"`
-	GroupIDs                []int64        `json:"group_ids"`
-	ExpiresAt               *int64         `json:"expires_at"`
-	AutoPauseOnExpired      *bool          `json:"auto_pause_on_expired"`
-	ProbeEnabled            *bool          `json:"upstream_billing_probe_enabled"`
-	ConfirmMixedChannelRisk *bool          `json:"confirm_mixed_channel_risk"` // 用户确认混合渠道风险
+	ProxyID                 *int64            `json:"proxy_id"`
+	Concurrency             int               `json:"concurrency"`
+	Priority                int               `json:"priority"`
+	RateMultiplier          *float64          `json:"rate_multiplier"`
+	LoadFactor              *int              `json:"load_factor"`
+	GroupIDs                []int64           `json:"group_ids"`
+	ExpiresAt               *int64            `json:"expires_at"`
+	AutoPauseOnExpired      *bool             `json:"auto_pause_on_expired"`
+	ProbeEnabled            *bool             `json:"upstream_billing_probe_enabled"`
+	ConfirmMixedChannelRisk *bool             `json:"confirm_mixed_channel_risk"` // 用户确认混合渠道风险
 }
 
 // UpdateAccountRequest represents update account request
 // 使用指针类型来区分"未提供"和"设置为0"
 type UpdateAccountRequest struct {
-	Name                    string         `json:"name"`
-	Notes                   *string        `json:"notes"`
-	Type                    string         `json:"type" binding:"omitempty,oneof=oauth setup-token apikey upstream bedrock service_account"`
-	Credentials             map[string]any `json:"credentials"`
+	Name                    string             `json:"name"`
+	Notes                   *string            `json:"notes"`
+	Type                    string             `json:"type" binding:"omitempty,oneof=oauth setup-token apikey upstream bedrock service_account"`
+	Credentials             map[string]any     `json:"credentials"`
 	Extra                   map[string]any     `json:"extra"`
 	ModelSystemPrompts      *map[string]string `json:"model_system_prompts"`
-	ProxyID                 *int64         `json:"proxy_id"`
-	Concurrency             *int           `json:"concurrency"`
-	Priority                *int           `json:"priority"`
-	RateMultiplier          *float64       `json:"rate_multiplier"`
-	LoadFactor              *int           `json:"load_factor"`
-	Status                  string         `json:"status" binding:"omitempty,oneof=active inactive error"`
-	GroupIDs                *[]int64       `json:"group_ids"`
-	ExpiresAt               *int64         `json:"expires_at"`
-	AutoPauseOnExpired      *bool          `json:"auto_pause_on_expired"`
-	ProbeEnabled            *bool          `json:"upstream_billing_probe_enabled"`
-	RateSyncEnabled         *bool          `json:"upstream_billing_rate_sync_enabled"`
-	ConfirmMixedChannelRisk *bool          `json:"confirm_mixed_channel_risk"` // 用户确认混合渠道风险
+	ProxyID                 *int64             `json:"proxy_id"`
+	Concurrency             *int               `json:"concurrency"`
+	Priority                *int               `json:"priority"`
+	RateMultiplier          *float64           `json:"rate_multiplier"`
+	LoadFactor              *int               `json:"load_factor"`
+	Status                  string             `json:"status" binding:"omitempty,oneof=active inactive error"`
+	GroupIDs                *[]int64           `json:"group_ids"`
+	ExpiresAt               *int64             `json:"expires_at"`
+	AutoPauseOnExpired      *bool              `json:"auto_pause_on_expired"`
+	ProbeEnabled            *bool              `json:"upstream_billing_probe_enabled"`
+	RateSyncEnabled         *bool              `json:"upstream_billing_rate_sync_enabled"`
+	ConfirmMixedChannelRisk *bool              `json:"confirm_mixed_channel_risk"` // 用户确认混合渠道风险
 }
 
 // BulkUpdateAccountsRequest represents the payload for bulk editing accounts
@@ -3030,13 +3030,13 @@ func antigravityAccountTestModels(rawMapping any) []antigravity.ClaudeModel {
 	switch mapping := rawMapping.(type) {
 	case map[string]any:
 		for id := range mapping {
-			if strings.TrimSpace(id) != "" {
+			if strings.TrimSpace(id) != "" && !strings.Contains(id, "*") {
 				mappedIDs = append(mappedIDs, id)
 			}
 		}
 	case map[string]string:
 		for id := range mapping {
-			if strings.TrimSpace(id) != "" {
+			if strings.TrimSpace(id) != "" && !strings.Contains(id, "*") {
 				mappedIDs = append(mappedIDs, id)
 			}
 		}

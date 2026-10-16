@@ -6,8 +6,10 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -29,7 +31,8 @@ import (
 const geminiTransportTestNativeBody = `{"contents":[{"role":"user","parts":[{"text":"hi"}]}]}`
 
 type geminiFirstOutputTimeoutUpstreamStub struct {
-	calls int
+	calls   int
+	prelude string
 }
 
 func (s *geminiFirstOutputTimeoutUpstreamStub) Do(req *http.Request, _ string, _ int64, _ int) (*http.Response, error) {
@@ -37,7 +40,7 @@ func (s *geminiFirstOutputTimeoutUpstreamStub) Do(req *http.Request, _ string, _
 	return &http.Response{
 		StatusCode: http.StatusOK,
 		Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
-		Body:       geminiContextBlockingReader{ctx: req.Context()},
+		Body:       io.NopCloser(io.MultiReader(strings.NewReader(s.prelude), geminiContextBlockingReader{ctx: req.Context()})),
 	}, nil
 }
 
@@ -163,8 +166,23 @@ func TestGeminiForward_UpstreamContextCanceledWithLiveRequestFailsOver(t *testin
 
 func TestGeminiForwardAsChatCompletions_FirstOutputTimeoutFailsOver(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	for _, tc := range []struct {
+		name    string
+		prelude string
+	}{
+		{name: "no_events"},
+		{name: "thought_only", prelude: `data: {"candidates":[{"content":{"parts":[{"text":"still thinking","thought":true}]}}]}` + "\n\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			testGeminiChatFirstOutputTimeout(t, tc.prelude)
+		})
+	}
+}
+
+func testGeminiChatFirstOutputTimeout(t *testing.T, prelude string) {
+	t.Helper()
 	settings := &SettingService{settingRepo: &modelFirstOutputSettingRepo{value: `{"enabled":true,"default":{"enabled":true,"target_seconds":1,"switch_seconds":1,"hard_cap_seconds":5}}`}}
-	httpStub := &geminiFirstOutputTimeoutUpstreamStub{}
+	httpStub := &geminiFirstOutputTimeoutUpstreamStub{prelude: prelude}
 	svc := &GeminiMessagesCompatService{
 		httpUpstream:   httpStub,
 		cfg:            &config.Config{},
