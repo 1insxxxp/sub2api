@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -21,6 +22,25 @@ func TestGeminiV1BetaListModels_AllowlistFiltersNativeResponse(t *testing.T) {
 	require.True(t, ok)
 	require.True(t, dropped)
 	require.JSONEq(t, `{"models":[{"name":"models/gemini-2.5-pro"}],"nextPageToken":"next"}`, string(filtered))
+}
+
+func TestAppendGeminiModelAliasesRequiresAvailableTargetAndPublicAllowlist(t *testing.T) {
+	group := &service.Group{
+		ModelAliases: []domain.ModelAlias{
+			{Alias: "fast", UpstreamModel: "gemini-2.5-pro"},
+			{Alias: "missing", UpstreamModel: "gemini-3-pro"},
+		},
+		ModelAllowlist: service.GroupModelAllowlist{Enabled: true, Models: []string{"fast"}},
+	}
+	body := []byte(`{"models":[{"name":"models/gemini-2.5-pro","version":"v1"}]}`)
+	aliased, changed := appendGeminiModelAliasesBody(body, group)
+	require.True(t, changed)
+	require.JSONEq(t, `{"models":[{"name":"models/gemini-2.5-pro","version":"v1"},{"name":"models/fast","version":"v1"}]}`, string(aliased))
+
+	filtered, dropped, ok := filterUpstreamGeminiModelsBody(aliased, group.EffectiveModelAllowlist())
+	require.True(t, ok)
+	require.True(t, dropped)
+	require.JSONEq(t, `{"models":[{"name":"models/fast","version":"v1"}]}`, string(filtered))
 }
 
 func TestGeminiV1BetaListModels_ForcedAntigravityAppliesAllowlist(t *testing.T) {

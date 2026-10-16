@@ -4,6 +4,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
@@ -21,6 +22,21 @@ func TestCompositeTargetPlatformAllowedResolvesKnownAllowedModel(t *testing.T) {
 	platform, ok := service.ResolvedTargetPlatformFromContext(c.Request.Context())
 	require.True(t, ok)
 	require.Equal(t, service.PlatformOpenAI, platform)
+}
+
+func TestCompositeTargetPlatformAllowedResolvesModelAliasTarget(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest("POST", "/v1/messages", nil)
+	apiKey := &service.APIKey{Group: &service.Group{
+		Platform:     service.PlatformComposite,
+		ModelAliases: []domain.ModelAlias{{Alias: "long-answer", UpstreamModel: "claude-sonnet-4-6"}},
+	}}
+
+	require.True(t, compositeTargetPlatformResolved(c, apiKey, "long-answer"))
+	platform, ok := service.ResolvedTargetPlatformFromContext(c.Request.Context())
+	require.True(t, ok)
+	require.Equal(t, service.PlatformAnthropic, platform)
 }
 
 func TestOpenAICompatibleTextTargetAllowsCompositeProviders(t *testing.T) {

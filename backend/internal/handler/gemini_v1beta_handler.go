@@ -77,7 +77,7 @@ func (h *GatewayHandler) GeminiV1BetaListModels(c *gin.Context) {
 		}
 		filtered := make([]gemini.Model, 0, len(models))
 		for _, model := range models {
-			if apiKey.Group.ModelAllowlist.Allows(model.Name) {
+			if apiKey.Group.EffectiveModelAllowlist().Allows(model.Name) {
 				filtered = append(filtered, model)
 			}
 		}
@@ -93,6 +93,7 @@ func (h *GatewayHandler) GeminiV1BetaListModels(c *gin.Context) {
 	for _, id := range agModelIDs {
 		agModels = append(agModels, gemini.FallbackModel(id))
 	}
+	agModels = appendGeminiModelAliases(agModels, apiKey.Group)
 	if forcePlatform == service.PlatformAntigravity {
 		c.JSON(http.StatusOK, gemini.ModelsListResponse{Models: filterGeminiModels(agModels)})
 		return
@@ -124,8 +125,15 @@ func (h *GatewayHandler) GeminiV1BetaListModels(c *gin.Context) {
 		}
 	}
 	if apiKey.Group != nil && apiKey.Group.ModelAllowlistEnabled() {
-		if filtered, dropped, ok := filterUpstreamGeminiModelsBody(res.Body, apiKey.Group.ModelAllowlist); ok && dropped {
+		if aliased, changed := appendGeminiModelAliasesBody(res.Body, apiKey.Group); changed {
+			res.Body = aliased
+		}
+		if filtered, dropped, ok := filterUpstreamGeminiModelsBody(res.Body, apiKey.Group.EffectiveModelAllowlist()); ok && dropped {
 			res.Body = filtered
+		}
+	} else if apiKey.Group != nil {
+		if aliased, changed := appendGeminiModelAliasesBody(res.Body, apiKey.Group); changed {
+			res.Body = aliased
 		}
 	}
 	writeUpstreamResponse(c, res)
@@ -167,6 +175,99 @@ func appendUpstreamGeminiModels(body []byte, extra []gemini.Model) ([]byte, bool
 	}
 	if !changed {
 		return body, true
+	}
+	envelope["models"], _ = json.Marshal(models)
+	merged, err := json.Marshal(envelope)
+	return merged, err == nil
+}
+
+func appendGeminiModelAliases(models []gemini.Model, group *service.Group) []gemini.Model {
+	if group == nil || len(models) == 0 || len(group.ModelAliases) == 0 {
+		return models
+	}
+	available := make(map[string]struct{}, len(models))
+	seen := make(map[string]struct{}, len(models)+len(group.ModelAliases))
+	for _, model := range models {
+		name := strings.TrimPrefix(model.Name, "models/")
+		available[strings.ToLower(name)] = struct{}{}
+		seen[strings.ToLower(model.Name)] = struct{}{}
+		seen[strings.ToLower(name)] = struct{}{}
+	}
+	for _, alias := range group.ModelAliases {
+		aliasName := strings.TrimPrefix(alias.Alias, "models/")
+		if group.ModelAllowlistEnabled() && !group.EffectiveModelAllowlist().Allows(aliasName) {
+			continue
+		}
+		if _, ok := available[strings.ToLower(strings.TrimPrefix(alias.UpstreamModel, "models/"))]; !ok {
+			continue
+		}
+		key := strings.ToLower(aliasName)
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		models = append(models, gemini.FallbackModel(aliasName))
+		seen[key] = struct{}{}
+	}
+	return models
+}
+
+// appendGeminiModelAliasesBody preserves upstream model metadata while adding
+// public aliases only when their target is present in the same catalogue.
+func appendGeminiModelAliasesBody(body []byte, group *service.Group) ([]byte, bool) {
+	if group == nil || len(group.ModelAliases) == 0 {
+		return body, false
+	}
+	var envelope map[string]json.RawMessage
+	if json.Unmarshal(body, &envelope) != nil || envelope == nil {
+		return body, false
+	}
+	var models []json.RawMessage
+	if raw, ok := envelope["models"]; !ok || json.Unmarshal(raw, &models) != nil {
+		return body, false
+	}
+	available := make(map[string]json.RawMessage, len(models))
+	seen := make(map[string]struct{}, len(models)+len(group.ModelAliases))
+	for _, raw := range models {
+		var model struct {
+			Name string `json:"name"`
+		}
+		if json.Unmarshal(raw, &model) != nil || model.Name == "" {
+			continue
+		}
+		name := strings.TrimPrefix(model.Name, "models/")
+		available[strings.ToLower(name)] = raw
+		seen[strings.ToLower(name)] = struct{}{}
+	}
+	changed := false
+	for _, alias := range group.ModelAliases {
+		aliasName := strings.TrimPrefix(alias.Alias, "models/")
+		if group.ModelAllowlistEnabled() && !group.EffectiveModelAllowlist().Allows(aliasName) {
+			continue
+		}
+		target, ok := available[strings.ToLower(strings.TrimPrefix(alias.UpstreamModel, "models/"))]
+		if !ok {
+			continue
+		}
+		key := strings.ToLower(aliasName)
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		var item map[string]json.RawMessage
+		if json.Unmarshal(target, &item) != nil {
+			continue
+		}
+		name, _ := json.Marshal("models/" + aliasName)
+		item["name"] = name
+		encoded, err := json.Marshal(item)
+		if err != nil {
+			continue
+		}
+		models = append(models, encoded)
+		seen[key] = struct{}{}
+		changed = true
+	}
+	if !changed {
+		return body, false
 	}
 	envelope["models"], _ = json.Marshal(models)
 	merged, err := json.Marshal(envelope)
@@ -250,8 +351,14 @@ func (h *GatewayHandler) GeminiV1BetaGetModel(c *gin.Context) {
 		googleError(c, http.StatusBadRequest, "Invalid model in URL")
 		return
 	}
+	publicModel := modelName
 	if resolvedModel, ok := service.ResolvedUpstreamModelFromContext(c.Request.Context()); ok && strings.TrimSpace(resolvedModel) != "" {
 		modelName = strings.TrimSpace(resolvedModel)
+	} else {
+		publicModel, modelName = resolveGroupModelRoute(apiKey.Group, modelName)
+		if publicModel != modelName {
+			c.Request = c.Request.WithContext(service.WithGatewayPublicModel(c.Request.Context(), publicModel))
+		}
 	}
 
 	// 强制 antigravity 模式：返回 antigravity 模型信息
@@ -351,12 +458,20 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 		googleError(c, http.StatusBadRequest, "Invalid model in URL")
 		return
 	}
+	publicModel := modelName
+	groupAliasResolved := false
 	if resolvedModel, ok := service.ResolvedUpstreamModelFromContext(c.Request.Context()); ok && strings.TrimSpace(resolvedModel) != "" {
 		modelName = strings.TrimSpace(resolvedModel)
+	} else {
+		publicModel, modelName = resolveGroupModelRoute(apiKey.Group, modelName)
+		groupAliasResolved = publicModel != modelName
+		if publicModel != modelName {
+			c.Request = c.Request.WithContext(service.WithGatewayPublicModel(c.Request.Context(), publicModel))
+		}
 	}
 
 	stream := action == "streamGenerateContent"
-	reqLog = reqLog.With(zap.String("model", modelName), zap.String("action", action), zap.Bool("stream", stream))
+	reqLog = reqLog.With(zap.String("model", publicModel), zap.String("action", action), zap.Bool("stream", stream))
 
 	body, err := pkghttputil.ReadRequestBodyWithPrealloc(c.Request)
 	if err != nil {
@@ -373,19 +488,19 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 		return
 	}
 
-	setOpsRequestContext(c, modelName, stream)
+	setOpsRequestContext(c, publicModel, stream)
 	setOpsEndpointContext(c, "", int16(service.RequestTypeFromLegacy(stream, false)))
 	pricingCtx, pricingAt := service.WithGatewayTokenRequestPricing(c.Request.Context())
 	c.Request = c.Request.WithContext(pricingCtx)
 
-	if decision := h.checkSecurityAudit(c, reqLog, apiKey, authSubject, service.ContentModerationProtocolGemini, modelName, body); decision != nil && !decision.AllowNextStage {
+	if decision := h.checkSecurityAudit(c, reqLog, apiKey, authSubject, service.ContentModerationProtocolGemini, publicModel, body); decision != nil && !decision.AllowNextStage {
 		googleSecurityAuditError(c, decision)
 		return
 	}
 
 	// 解析渠道级模型映射
 	channelMapping, _ := h.gatewayService.ResolveChannelMappingAndRestrict(c.Request.Context(), apiKey.GroupID, modelName)
-	reqModel := modelName // 保存映射前的原始模型名
+	reqModel := publicModel // 保留客户端请求的公开模型名用于用量记录
 	if channelMapping.Mapped {
 		modelName = channelMapping.MappedModel
 	}
@@ -811,6 +926,9 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 			failoverClientGone(c)
 			reqLog.Error("gemini.forward_failed", zap.Int64("account_id", account.ID), zap.Error(err))
 			return
+		}
+		if result != nil && groupAliasResolved {
+			result.Model = publicModel
 		}
 
 		// 捕获请求信息（用于异步记录，避免在 goroutine 中访问 gin.Context）
