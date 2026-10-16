@@ -79,6 +79,23 @@ func (s *OpenAIGatewayService) forwardAnthropicViaRawChatCompletions(
 	}
 
 	serviceTier := extractOpenAIServiceTierFromBody(body)
+	var antiTruncationPolicy domain.AntiTruncationPolicy
+	requestCtx := ctx
+	var cancelRequest context.CancelFunc
+	if clientStream {
+		if key := getAPIKeyFromContext(c); key != nil {
+			policyCtx := WithGroupAliasRawChatAntiTruncationPolicy(ctx, key.Group, originalModel)
+			antiTruncationPolicy, _ = RawChatAntiTruncationPolicyFromContext(policyCtx)
+		}
+		if antiTruncationPolicy.Enabled {
+			seconds := antiTruncationPolicy.MaxDurationSeconds
+			if seconds <= 0 {
+				seconds = 180
+			}
+			requestCtx, cancelRequest = context.WithTimeout(ctx, time.Duration(seconds)*time.Second)
+			defer cancelRequest()
+		}
+	}
 
 	chatBody, err := json.Marshal(chatReq)
 	if err != nil {
@@ -127,7 +144,7 @@ func (s *OpenAIGatewayService) forwardAnthropicViaRawChatCompletions(
 	if err != nil {
 		return nil, err
 	}
-	resp, err := s.sendCCUpstreamRequest(ctx, c, account, targetURL, chatBody, clientStream, apiKey, account.GetOpenAIUserAgent(), "")
+	resp, err := s.sendCCUpstreamRequest(requestCtx, c, account, targetURL, chatBody, clientStream, apiKey, account.GetOpenAIUserAgent(), "")
 	if err != nil {
 		return nil, err
 	}
@@ -146,22 +163,17 @@ func (s *OpenAIGatewayService) forwardAnthropicViaRawChatCompletions(
 
 	// 5. Convert response
 	if clientStream {
-		policyCtx := ctx
-		if key := getAPIKeyFromContext(c); key != nil {
-			policyCtx = WithGroupAliasRawChatAntiTruncationPolicy(ctx, key.Group, originalModel)
-		}
-		policy, _ := RawChatAntiTruncationPolicyFromContext(policyCtx)
 		var continueRequest func(string, int) (*http.Response, error)
-		if policy.Enabled {
+		if antiTruncationPolicy.Enabled && rawChatContinuationAllowed(chatBody) {
 			continueRequest = func(assistantText string, remaining int) (*http.Response, error) {
 				continuedBody, buildErr := buildRawChatContinuationBody(chatBody, assistantText, remaining)
 				if buildErr != nil {
 					return nil, fmt.Errorf("build continuation request: %w", buildErr)
 				}
-				return s.sendCCUpstreamRequest(ctx, c, account, targetURL, continuedBody, true, apiKey, account.GetOpenAIUserAgent(), "")
+				return s.sendCCUpstreamRequest(requestCtx, c, account, targetURL, continuedBody, true, apiKey, account.GetOpenAIUserAgent(), "")
 			}
 		}
-		return s.streamChatCompletionsAsAnthropic(c, resp, originalModel, billingModel, upstreamModel, reasoningEffort, serviceTier, startTime, policy, continueRequest)
+		return s.streamChatCompletionsAsAnthropic(c, resp, originalModel, billingModel, upstreamModel, reasoningEffort, serviceTier, startTime, antiTruncationPolicy, continueRequest)
 	}
 	return s.bufferChatCompletionsAsAnthropic(c, resp, originalModel, billingModel, upstreamModel, reasoningEffort, serviceTier, startTime)
 }
@@ -257,12 +269,9 @@ func (s *OpenAIGatewayService) streamChatCompletionsAsAnthropic(
 	}
 	maxDuration := time.Duration(antitruncationPolicy.MaxDurationSeconds) * time.Second
 	if maxDuration <= 0 {
-		maxDuration = 30 * time.Second
+		maxDuration = 180 * time.Second
 	}
 	maxOutputTokens := antitruncationPolicy.MaxOutputTokens
-	if maxOutputTokens <= 0 {
-		maxOutputTokens = 8192
-	}
 	resultWithUsage := func() *OpenAIForwardResult {
 		return &OpenAIForwardResult{RequestID: requestID, UpstreamHeaders: initialHeaders, Usage: usage,
 			Model: originalModel, BillingModel: billingModel, UpstreamModel: upstreamModel,
@@ -275,6 +284,7 @@ func (s *OpenAIGatewayService) streamChatCompletionsAsAnthropic(
 		var roundUsage OpenAIUsage
 		var roundAssistant strings.Builder
 		finishReason, toolCallSeen, semanticOutput, sawDone := "", false, false, false
+		continuationSafe := continueRequest != nil
 		terminalChunks := make([]*apicompat.ChatCompletionsChunk, 0, 3)
 		scanner := s.newUpstreamSSEScanner(resp.Body)
 		for scanner.Scan() {
@@ -297,8 +307,14 @@ func (s *OpenAIGatewayService) streamChatCompletionsAsAnthropic(
 			if json.Unmarshal([]byte(payload), &chunk) != nil {
 				continue
 			}
+			if len(chunk.Choices) > 1 {
+				continuationSafe = false
+			}
 			terminal := false
 			for _, choice := range chunk.Choices {
+				if choice.Index != 0 {
+					continuationSafe = false
+				}
 				if choice.FinishReason != nil && *choice.FinishReason != "" {
 					finishReason, terminal = *choice.FinishReason, true
 				}
@@ -308,6 +324,9 @@ func (s *OpenAIGatewayService) streamChatCompletionsAsAnthropic(
 				}
 				if choice.Delta.Refusal != nil && *choice.Delta.Refusal != "" {
 					semanticOutput = true
+				}
+				if choice.Delta.ReasoningContent != nil || choice.Delta.Reasoning != nil {
+					continuationSafe = false
 				}
 				if len(choice.Delta.ToolCalls) > 0 {
 					toolCallSeen = true
@@ -331,14 +350,17 @@ func (s *OpenAIGatewayService) streamChatCompletionsAsAnthropic(
 			roundTokens = (len([]rune(roundAssistant.String())) + 3) / 4
 		}
 		outputBudget += roundTokens
-		shouldContinue := continueRequest != nil && !clientDisconnected && !toolCallSeen && semanticOutput &&
+		shouldContinue := continueRequest != nil && continuationSafe && !clientDisconnected && c.Request.Context().Err() == nil && !toolCallSeen && semanticOutput &&
 			!errors.Is(scanErr, context.Canceled) && !errors.Is(scanErr, context.DeadlineExceeded) &&
 			(finishReason == "length" || (scanErr == nil && !sawDone)) && continuationRounds < maxRounds &&
-			time.Since(startTime) < maxDuration && outputBudget < maxOutputTokens
+			time.Since(startTime) < maxDuration && (maxOutputTokens <= 0 || outputBudget < maxOutputTokens)
 		if shouldContinue {
 			fullAssistantText.WriteString(roundAssistant.String())
-			remaining := maxOutputTokens - outputBudget
-			if remaining > 0 {
+			remaining := 0
+			if maxOutputTokens > 0 {
+				remaining = maxOutputTokens - outputBudget
+			}
+			if maxOutputTokens <= 0 || remaining > 0 {
 				next, err := continueRequest(fullAssistantText.String(), remaining)
 				if err != nil {
 					return resultWithUsage(), err
@@ -369,6 +391,12 @@ func (s *OpenAIGatewayService) streamChatCompletionsAsAnthropic(
 	}
 
 	// Finalize: close open blocks + emit message_delta/message_stop.
+	// Anthropic exposes one stream-level usage value, so report the sum across
+	// continuation requests rather than only the last upstream round.
+	anthropicState.InputTokens = usage.InputTokens
+	anthropicState.OutputTokens = usage.OutputTokens
+	anthropicState.CacheReadInputTokens = usage.CacheReadInputTokens
+	anthropicState.CacheCreationInputTokens = usage.CacheCreationInputTokens
 	finalEvents := apicompat.FinalizeChatCompletionsAnthropicStream(anthropicState)
 	if !clientDisconnected {
 		for _, aEvt := range finalEvents {

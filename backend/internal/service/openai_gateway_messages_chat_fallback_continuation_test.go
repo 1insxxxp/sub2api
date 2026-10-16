@@ -43,7 +43,7 @@ func TestStreamChatCompletionsAsAnthropicContinuesWithoutRepeatedTerminalEvents(
 	c, _ := gin.CreateTestContext(recorder)
 	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
 	svc := &OpenAIGatewayService{}
-	policy := domain.AntiTruncationPolicy{Enabled: true, MaxRounds: 1, MaxOutputTokens: 20, MaxDurationSeconds: 30}
+	policy := domain.AntiTruncationPolicy{Enabled: true, MaxRounds: 1, MaxDurationSeconds: 30}
 	result, err := svc.streamChatCompletionsAsAnthropic(c, initial, "alias", "alias", "upstream", nil, nil, time.Now(), policy, func(assistant string, remaining int) (*http.Response, error) {
 		continuationPrompt = assistant
 		return http.Get(upstream.URL)
@@ -58,6 +58,7 @@ func TestStreamChatCompletionsAsAnthropicContinuesWithoutRepeatedTerminalEvents(
 	require.Contains(t, body, "partial")
 	require.Contains(t, body, " continued")
 	require.Equal(t, 2, calls)
+	require.Contains(t, body, "\"output_tokens\":7")
 }
 
 func TestStreamChatCompletionsAsAnthropicDoesNotContinueToolCalls(t *testing.T) {
