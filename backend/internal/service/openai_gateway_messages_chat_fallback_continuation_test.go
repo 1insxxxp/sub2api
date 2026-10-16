@@ -4,6 +4,7 @@ package service
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -81,4 +82,38 @@ func TestStreamChatCompletionsAsAnthropicDoesNotContinueToolCalls(t *testing.T) 
 	})
 	require.NoError(t, err)
 	require.Equal(t, 1, calls)
+}
+
+func TestStreamChatCompletionsAsAnthropicPreservesTerminalDeltaAndStopsNormalFinish(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Run("preserves content on length terminal chunk", func(t *testing.T) {
+		firstBody := "data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"terminal text\"},\"finish_reason\":\"length\"}]}\n\n"
+		initial := &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(firstBody))}
+		recorder := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(recorder)
+		c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+		called := false
+		_, err := (&OpenAIGatewayService{}).streamChatCompletionsAsAnthropic(c, initial, "alias", "alias", "upstream", nil, nil, time.Now(), domain.AntiTruncationPolicy{Enabled: true, MaxRounds: 1}, func(string, int) (*http.Response, error) {
+			called = true
+			return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader("data: {\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n" + "data: [DONE]\n\n"))}, nil
+		})
+		require.NoError(t, err)
+		require.True(t, called)
+		body := recorder.Body.String()
+		require.Contains(t, body, "terminal text")
+		require.Equal(t, 1, strings.Count(body, "event: message_stop"))
+	})
+	t.Run("normal stop does not continue without done marker", func(t *testing.T) {
+		initial := &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader("data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"done\"},\"finish_reason\":\"stop\"}]}\n\n"))}
+		recorder := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(recorder)
+		c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+		calls := 0
+		_, err := (&OpenAIGatewayService{}).streamChatCompletionsAsAnthropic(c, initial, "alias", "alias", "upstream", nil, nil, time.Now(), domain.AntiTruncationPolicy{Enabled: true, MaxRounds: 2}, func(string, int) (*http.Response, error) {
+			calls++
+			return nil, nil
+		})
+		require.NoError(t, err)
+		require.Zero(t, calls)
+	})
 }

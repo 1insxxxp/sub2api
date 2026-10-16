@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/domain"
@@ -82,9 +83,6 @@ func (s *OpenAIGatewayService) forwardAsRawChatCompletionsWithStartTime(
 	}
 	clientStream := gjson.GetBytes(body, "stream").Bool()
 	antiTruncationPolicy, antiTruncationEnabled := RawChatAntiTruncationPolicyFromContext(ctx)
-	if antiTruncationEnabled && antiTruncationPolicy.MaxOutputTokens <= 0 {
-		antiTruncationPolicy.MaxOutputTokens = 8192
-	}
 
 	// 2. Resolve model mapping (same as ForwardAsChatCompletions)
 	billingModel := resolveOpenAIForwardModel(account, originalModel, defaultMappedModel)
@@ -232,8 +230,11 @@ func (s *OpenAIGatewayService) forwardAsRawChatCompletionsWithStartTime(
 	reasoningEffort := extractOpenAIReasoningEffortFromBody(upstreamBody, upstreamModel, billingModel, originalModel)
 	reasoningEffort = ApplyThinkingEnabledFallback(reasoningEffort, upstreamBody, upstreamModel)
 	upstreamCtx, releaseUpstreamCtx := detachUpstreamContext(ctx)
+	if antiTruncationEnabled && clientStream && rawChatContinuationAllowed(upstreamBody) {
+		upstreamCtx, releaseUpstreamCtx = withRawChatContinuationDeadline(ctx, antiTruncationPolicy, startTime)
+	}
+	defer releaseUpstreamCtx()
 	resp, err := s.sendCCUpstreamRequest(upstreamCtx, c, account, targetURL, upstreamBody, clientStream, token, customUA, grokCacheIdentity)
-	releaseUpstreamCtx()
 	if err != nil {
 		return nil, err
 	}
@@ -291,14 +292,14 @@ func (s *OpenAIGatewayService) forwardAsRawChatCompletionsWithStartTime(
 	var result *OpenAIForwardResult
 	var forwardErr error
 	if clientStream {
-		var continueRequest func(string, int) (*http.Response, error)
-		if antiTruncationEnabled {
-			continueRequest = func(assistantText string, remainingOutputTokens int) (*http.Response, error) {
+		var continueRequest func(context.Context, string, int) (*http.Response, error)
+		if antiTruncationEnabled && rawChatContinuationAllowed(upstreamBody) {
+			continueRequest = func(continuationCtx context.Context, assistantText string, remainingOutputTokens int) (*http.Response, error) {
 				continuedBody, buildErr := buildRawChatContinuationBody(upstreamBody, assistantText, remainingOutputTokens)
 				if buildErr != nil {
 					return nil, fmt.Errorf("build continuation request: %w", buildErr)
 				}
-				return s.sendCCUpstreamRequest(ctx, c, account, targetURL, continuedBody, true, token, customUA, grokCacheIdentity)
+				return s.sendCCUpstreamRequest(continuationCtx, c, account, targetURL, continuedBody, true, token, customUA, grokCacheIdentity)
 			}
 		}
 		result, forwardErr = s.streamRawChatCompletions(c, resp, account, originalModel, billingModel, upstreamModel, reasoningEffort, serviceTier, startTime, len(body), antiTruncationPolicy, continueRequest)
@@ -342,7 +343,7 @@ func (s *OpenAIGatewayService) streamRawChatCompletions(
 	startTime time.Time,
 	requestBodyLen int,
 	antiTruncationPolicy domain.AntiTruncationPolicy,
-	continueRequest func(string, int) (*http.Response, error),
+	continueRequest func(context.Context, string, int) (*http.Response, error),
 ) (*OpenAIForwardResult, error) {
 	observer := upstreamResponseModelObserverFromContext(c)
 	if observer == nil {
@@ -367,18 +368,28 @@ func (s *OpenAIGatewayService) streamRawChatCompletions(
 	var antiTruncationRounds int
 	var budgetOutputTokens int
 	var assistantText strings.Builder
+	continuationSafe := continueRequest != nil
 	maxRounds := antiTruncationPolicy.MaxRounds
 	if maxRounds <= 0 {
 		maxRounds = 1
 	}
 	maxDuration := time.Duration(antiTruncationPolicy.MaxDurationSeconds) * time.Second
 	if maxDuration <= 0 {
-		maxDuration = 30 * time.Second
+		maxDuration = 180 * time.Second
 	}
 	maxOutputTokens := antiTruncationPolicy.MaxOutputTokens
-	if maxOutputTokens <= 0 {
-		maxOutputTokens = 8192
-	}
+	deadlineCtx, deadlineCancel := context.WithDeadline(c.Request.Context(), startTime.Add(maxDuration))
+	defer deadlineCancel()
+	var responseBodyMu sync.Mutex
+	stopCloseOnDeadline := context.AfterFunc(deadlineCtx, func() {
+		responseBodyMu.Lock()
+		body := resp.Body
+		responseBodyMu.Unlock()
+		if body != nil {
+			_ = body.Close()
+		}
+	})
+	defer stopCloseOnDeadline()
 
 	writeLine := func(line string) {
 		if clientDisconnected {
@@ -440,6 +451,7 @@ func (s *OpenAIGatewayService) streamRawChatCompletions(
 		toolCallSeen := false
 		semanticOutput := false
 		terminalLines := make([]string, 0, 4)
+		terminalContentLines := make([]string, 0, 1)
 		scanner := s.newUpstreamSSEScanner(resp.Body)
 		for scanner.Scan() {
 			line := scanner.Text()
@@ -454,7 +466,14 @@ func (s *OpenAIGatewayService) streamRawChatCompletions(
 					if u := extractCCStreamUsage(payload); u != nil {
 						roundUsage = *u
 					}
-					for _, choice := range gjson.Get(payload, "choices").Array() {
+					choices := gjson.Get(payload, "choices").Array()
+					if len(choices) > 1 {
+						continuationSafe = false
+					}
+					for _, choice := range choices {
+						if choice.Get("index").Exists() && choice.Get("index").Int() != 0 {
+							continuationSafe = false
+						}
 						if reason := strings.TrimSpace(choice.Get("finish_reason").String()); reason != "" {
 							finishReason = reason
 							terminalLine = true
@@ -466,6 +485,9 @@ func (s *OpenAIGatewayService) streamRawChatCompletions(
 						}
 						if delta.Get("tool_calls").Exists() || delta.Get("function_call").Exists() {
 							toolCallSeen = true
+						}
+						if delta.Get("reasoning_content").Exists() || delta.Get("reasoning").Exists() {
+							continuationSafe = false
 						}
 					}
 					if firstTokenMs == nil && !usageOnlyChunk {
@@ -482,7 +504,12 @@ func (s *OpenAIGatewayService) streamRawChatCompletions(
 			line = applyOllamaCloudRawChatCompletionsSSELine(account, line)
 			line = stripEmptyChatToolCallIdentityFromSSELine(line)
 			line = s.replaceModelInSSELine(line, upstreamModel, originalModel)
+			if terminalLine && strings.Contains(line, `"finish_reason"`) && strings.Contains(line, `"content"`) {
+				terminalContentLines = append(terminalContentLines, stripChatFinishReasonFromSSELine(line))
+			}
 			if terminalLine && continueRequest != nil {
+				terminalLines = append(terminalLines, line)
+			} else if line == "" && len(terminalLines) > 0 {
 				terminalLines = append(terminalLines, line)
 			} else {
 				writeLine(line)
@@ -505,18 +532,25 @@ func (s *OpenAIGatewayService) streamRawChatCompletions(
 		}
 		budgetOutputTokens += roundBudgetTokens
 		cleanEOF := scanErr == nil && !terminal.Terminated()
-		shouldContinue := continueRequest != nil && !clientDisconnected && !toolCallSeen && finishReason != "tool_calls" && semanticOutput &&
+		shouldContinue := continueRequest != nil && continuationSafe && !clientDisconnected && c.Request.Context().Err() == nil && deadlineCtx.Err() == nil && !toolCallSeen && finishReason != "tool_calls" && semanticOutput &&
 			!errors.Is(scanErr, context.Canceled) && !errors.Is(scanErr, context.DeadlineExceeded) &&
-			(finishReason == "length" || cleanEOF) && antiTruncationRounds < maxRounds &&
-			time.Since(startTime) < maxDuration && budgetOutputTokens < maxOutputTokens
+			(finishReason == "length" || (finishReason == "" && cleanEOF)) && antiTruncationRounds < maxRounds &&
+			time.Since(startTime) < maxDuration && (maxOutputTokens <= 0 || budgetOutputTokens < maxOutputTokens)
 		if shouldContinue {
+			for _, line := range terminalContentLines {
+				writeLine(line)
+				writeLine("")
+			}
 			assistantText.WriteString(roundAssistant.String())
-			remaining := maxOutputTokens - budgetOutputTokens
-			if remaining <= 0 {
+			remaining := 0
+			if maxOutputTokens > 0 {
+				remaining = maxOutputTokens - budgetOutputTokens
+			}
+			if maxOutputTokens > 0 && remaining <= 0 {
 				shouldContinue = false
 			} else {
 				_ = resp.Body.Close()
-				nextResp, nextErr := continueRequest(assistantText.String(), remaining)
+				nextResp, nextErr := continueRequest(deadlineCtx, assistantText.String(), remaining)
 				if nextErr != nil {
 					return resultWithUsage(), nextErr
 				}
@@ -528,7 +562,9 @@ func (s *OpenAIGatewayService) streamRawChatCompletions(
 					}
 					return resultWithUsage(), fmt.Errorf("continuation upstream request returned no response")
 				}
+				responseBodyMu.Lock()
 				resp = nextResp
+				responseBodyMu.Unlock()
 				if nextID := strings.TrimSpace(resp.Header.Get("x-request-id")); nextID != "" {
 					requestID = nextID
 				}
@@ -536,8 +572,22 @@ func (s *OpenAIGatewayService) streamRawChatCompletions(
 				continue
 			}
 		}
+		usageLinePresent := hasCCStreamUsageLine(terminalLines)
+		syntheticUsageWritten := false
 		for _, line := range terminalLines {
+			if payload, ok := extractOpenAISSEDataLine(line); ok && strings.TrimSpace(payload) == "[DONE]" && antiTruncationRounds > 0 && !usageLinePresent && !syntheticUsageWritten && (usage.InputTokens > 0 || usage.OutputTokens > 0) {
+				writeLine(buildCCStreamUsageSSELine(usage))
+				writeLine("")
+				syntheticUsageWritten = true
+			}
+			if payload, ok := extractOpenAISSEDataLine(line); ok && gjson.Get(payload, "usage").Exists() {
+				line = aggregateCCStreamUsageSSELine(line, usage)
+			}
 			writeLine(line)
+		}
+		if antiTruncationRounds > 0 && (usage.InputTokens > 0 || usage.OutputTokens > 0) && !usageLinePresent && !syntheticUsageWritten {
+			writeLine(buildCCStreamUsageSSELine(usage))
+			writeLine("")
 		}
 		break
 	}
@@ -552,6 +602,7 @@ func (s *OpenAIGatewayService) streamRawChatCompletions(
 	// 客户端取消/断开后上游读失败与上游截断不可区分（取消会连带取消上游请求），
 	// 沿用既有语义：按已收到的用量正常收尾计费，不判为上游故障。
 	clientAborted := clientDisconnected ||
+		c.Request.Context().Err() != nil ||
 		errors.Is(scanErr, context.Canceled) ||
 		errors.Is(scanErr, context.DeadlineExceeded)
 

@@ -88,11 +88,7 @@ func (s *OpenAIGatewayService) forwardAnthropicViaRawChatCompletions(
 			antiTruncationPolicy, _ = RawChatAntiTruncationPolicyFromContext(policyCtx)
 		}
 		if antiTruncationPolicy.Enabled {
-			seconds := antiTruncationPolicy.MaxDurationSeconds
-			if seconds <= 0 {
-				seconds = 180
-			}
-			requestCtx, cancelRequest = context.WithTimeout(ctx, time.Duration(seconds)*time.Second)
+			requestCtx, cancelRequest = withRawChatContinuationDeadline(ctx, antiTruncationPolicy, startTime)
 			defer cancelRequest()
 		}
 	}
@@ -122,6 +118,14 @@ func (s *OpenAIGatewayService) forwardAnthropicViaRawChatCompletions(
 			chatBody = policyBody
 		}
 	}
+	continuationEligible := antiTruncationPolicy.Enabled && clientStream && len(anthropicReq.Tools) == 0 && rawChatContinuationAllowed(chatBody)
+	if continuationEligible {
+		chatBody, err = clampRawChatOutputTokens(chatBody, antiTruncationPolicy.MaxOutputTokens)
+		if err != nil {
+			return nil, fmt.Errorf("clamp anti-truncation output tokens: %w", err)
+		}
+	}
+
 	// Provider normalization and policy caps can both change the converted effort.
 	// Use the final outbound value for usage logs and billing.
 	reasoningEffort := extractOpenAIReasoningEffortFromBody(chatBody, upstreamModel, billingModel, originalModel)
@@ -164,7 +168,7 @@ func (s *OpenAIGatewayService) forwardAnthropicViaRawChatCompletions(
 	// 5. Convert response
 	if clientStream {
 		var continueRequest func(string, int) (*http.Response, error)
-		if antiTruncationPolicy.Enabled && rawChatContinuationAllowed(chatBody) {
+		if continuationEligible {
 			continueRequest = func(assistantText string, remaining int) (*http.Response, error) {
 				continuedBody, buildErr := buildRawChatContinuationBody(chatBody, assistantText, remaining)
 				if buildErr != nil {
@@ -352,9 +356,21 @@ func (s *OpenAIGatewayService) streamChatCompletionsAsAnthropic(
 		outputBudget += roundTokens
 		shouldContinue := continueRequest != nil && continuationSafe && !clientDisconnected && c.Request.Context().Err() == nil && !toolCallSeen && semanticOutput &&
 			!errors.Is(scanErr, context.Canceled) && !errors.Is(scanErr, context.DeadlineExceeded) &&
-			(finishReason == "length" || (scanErr == nil && !sawDone)) && continuationRounds < maxRounds &&
+			(finishReason == "length" || (finishReason == "" && scanErr == nil && !sawDone)) && continuationRounds < maxRounds &&
 			time.Since(startTime) < maxDuration && (maxOutputTokens <= 0 || outputBudget < maxOutputTokens)
 		if shouldContinue {
+			for _, chunk := range terminalChunks {
+				hasContent := false
+				for i := range chunk.Choices {
+					if chunk.Choices[i].Delta.Content != nil && *chunk.Choices[i].Delta.Content != "" {
+						hasContent = true
+						chunk.Choices[i].FinishReason = nil
+					}
+				}
+				if hasContent {
+					emitChunk(chunk)
+				}
+			}
 			fullAssistantText.WriteString(roundAssistant.String())
 			remaining := 0
 			if maxOutputTokens > 0 {

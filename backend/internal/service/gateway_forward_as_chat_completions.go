@@ -10,8 +10,10 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/apicompat"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
@@ -40,8 +42,11 @@ func (s *GatewayService) ForwardAsChatCompletions(
 	if err := json.Unmarshal(body, &ccReq); err != nil {
 		return nil, fmt.Errorf("parse chat completions request: %w", err)
 	}
-	originalModel := ccReq.Model
+	routeModel := ccReq.Model
+	originalModel := gatewayPublicModel(c.Request.Context(), routeModel)
 	clientStream := ccReq.Stream
+	antiTruncationPolicy, antiTruncationEnabled := RawChatAntiTruncationPolicyFromContext(ctx)
+	antiTruncationEnabled = antiTruncationEnabled && clientStream && anthropicChatContinuationAllowed(body)
 	var group *Group
 	if parsed != nil {
 		group = s.groupForReasoningEffort(ctx, parsed.GroupID)
@@ -54,18 +59,18 @@ func (s *GatewayService) ForwardAsChatCompletions(
 	}
 
 	// Resolve the final upstream model before model-specific conversion.
-	mappedModel := originalModel
+	mappedModel := routeModel
 	if account.Type == AccountTypeAPIKey || account.Type == AccountTypeServiceAccount {
-		mappedModel = account.GetMappedModel(originalModel)
+		mappedModel = account.GetMappedModel(routeModel)
 	}
-	if mappedModel == originalModel && account.Platform == PlatformAnthropic && account.Type == AccountTypeServiceAccount {
-		normalized := normalizeVertexAnthropicModelID(claude.NormalizeModelID(originalModel))
-		if normalized != originalModel {
+	if mappedModel == routeModel && account.Platform == PlatformAnthropic && account.Type == AccountTypeServiceAccount {
+		normalized := normalizeVertexAnthropicModelID(claude.NormalizeModelID(routeModel))
+		if normalized != routeModel {
 			mappedModel = normalized
 		}
-	} else if mappedModel == originalModel && account.Platform == PlatformAnthropic && account.Type != AccountTypeAPIKey {
-		normalized := claude.NormalizeModelID(originalModel)
-		if normalized != originalModel {
+	} else if mappedModel == routeModel && account.Platform == PlatformAnthropic && account.Type != AccountTypeAPIKey {
+		normalized := claude.NormalizeModelID(routeModel)
+		if normalized != routeModel {
 			mappedModel = normalized
 		}
 	}
@@ -119,6 +124,12 @@ func (s *GatewayService) ForwardAsChatCompletions(
 
 	// 7. Enforce cache_control block limit
 	anthropicBody = enforceCacheControlLimit(anthropicBody)
+	if antiTruncationEnabled {
+		anthropicBody, err = clampAnthropicChatOutputTokens(anthropicBody, antiTruncationPolicy.MaxOutputTokens)
+		if err != nil {
+			return nil, fmt.Errorf("clamp anti-truncation output tokens: %w", err)
+		}
+	}
 
 	// 8. Token acquisition and generation share the caller lifetime.
 	if err := ctx.Err(); err != nil {
@@ -137,6 +148,9 @@ func (s *GatewayService) ForwardAsChatCompletions(
 
 	// 10. Build upstream request
 	upstreamCtx, releaseUpstreamCtx := context.WithCancel(ctx)
+	if antiTruncationEnabled {
+		upstreamCtx, releaseUpstreamCtx = withRawChatContinuationDeadline(ctx, antiTruncationPolicy, startTime)
+	}
 	defer releaseUpstreamCtx()
 	upstreamReq, forwardedBody, err := s.buildUpstreamRequest(upstreamCtx, c, account, anthropicBody, token, tokenType, mappedModel, reqStream, shouldMimicClaudeCode)
 	if err != nil {
@@ -214,7 +228,21 @@ func (s *GatewayService) ForwardAsChatCompletions(
 	var result *ForwardResult
 	var handleErr error
 	if clientStream {
-		result, handleErr = s.handleCCStreamingFromAnthropic(resp, c, originalModel, mappedModel, cacheCreationTTLTarget, reasoningEffort, startTime)
+		var continueRequest func(context.Context, string, int) (*http.Response, error)
+		if antiTruncationEnabled {
+			continueRequest = func(continuationCtx context.Context, assistantText string, remainingOutputTokens int) (*http.Response, error) {
+				continuedBody, buildErr := buildAnthropicChatContinuationBody(forwardedBody, assistantText, remainingOutputTokens)
+				if buildErr != nil {
+					return nil, fmt.Errorf("build Anthropic continuation request: %w", buildErr)
+				}
+				req := upstreamReq.Clone(continuationCtx)
+				req.Body = io.NopCloser(bytes.NewReader(continuedBody))
+				req.ContentLength = int64(len(continuedBody))
+				req.GetBody = func() (io.ReadCloser, error) { return io.NopCloser(bytes.NewReader(continuedBody)), nil }
+				return s.httpUpstream.DoWithTLS(req, proxyURL, account.ID, account.Concurrency, s.tlsFPProfileService.ResolveTLSProfile(account))
+			}
+		}
+		result, handleErr = s.handleCCStreamingFromAnthropicWithContinuation(resp, c, originalModel, mappedModel, cacheCreationTTLTarget, reasoningEffort, startTime, antiTruncationPolicy, continueRequest)
 	} else {
 		result, handleErr = s.handleCCBufferedFromAnthropic(resp, c, originalModel, mappedModel, cacheCreationTTLTarget, reasoningEffort, startTime)
 	}
@@ -436,6 +464,11 @@ func (s *GatewayService) handleCCBufferedFromAnthropic(
 	return resultWithUsage(false), nil
 }
 
+type anthropicBufferedEvent struct {
+	event   apicompat.AnthropicStreamEvent
+	payload string
+}
+
 // handleCCStreamingFromAnthropic reads Anthropic SSE events, converts each
 // to Responses events, then to Chat Completions chunks, and writes them.
 func (s *GatewayService) handleCCStreamingFromAnthropic(
@@ -446,6 +479,20 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 	cacheCreationTTLTarget string,
 	reasoningEffort *string,
 	startTime time.Time,
+) (*ForwardResult, error) {
+	return s.handleCCStreamingFromAnthropicWithContinuation(resp, c, originalModel, mappedModel, cacheCreationTTLTarget, reasoningEffort, startTime, domain.AntiTruncationPolicy{}, nil)
+}
+
+func (s *GatewayService) handleCCStreamingFromAnthropicWithContinuation(
+	resp *http.Response,
+	c *gin.Context,
+	originalModel string,
+	mappedModel string,
+	cacheCreationTTLTarget string,
+	reasoningEffort *string,
+	startTime time.Time,
+	antiTruncationPolicy domain.AntiTruncationPolicy,
+	continueRequest func(context.Context, string, int) (*http.Response, error),
 ) (*ForwardResult, error) {
 	requestID := resp.Header.Get("x-request-id")
 	outcomeCollector := NewResponseOutcomeCollector(http.StatusOK, resp.StatusCode)
@@ -466,16 +513,38 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 	ccState.Model = originalModel
 
 	var usage ClaudeUsage
+	var completedUsage ClaudeUsage
+	var roundUsage ClaudeUsage
 	var firstTokenMs *int
 	firstChunk := true
 	clientDisconnected := false
-
-	scanner := bufio.NewScanner(resp.Body)
-	maxLineSize := defaultMaxLineSize
-	if s.cfg != nil && s.cfg.Gateway.MaxLineSize > 0 {
-		maxLineSize = s.cfg.Gateway.MaxLineSize
+	antiTruncationRounds := 0
+	var assistantText strings.Builder
+	maxRounds := antiTruncationPolicy.MaxRounds
+	if maxRounds <= 0 {
+		maxRounds = 1
 	}
-	scanner.Buffer(make([]byte, 0, 64*1024), maxLineSize)
+	maxDuration := time.Duration(antiTruncationPolicy.MaxDurationSeconds) * time.Second
+	if maxDuration <= 0 {
+		maxDuration = 180 * time.Second
+	}
+	maxOutputTokens := antiTruncationPolicy.MaxOutputTokens
+	deadlineCtx := c.Request.Context()
+	deadlineCancel := func() {}
+	if continueRequest != nil {
+		deadlineCtx, deadlineCancel = context.WithDeadline(c.Request.Context(), startTime.Add(maxDuration))
+	}
+	defer deadlineCancel()
+	var responseBodyMu sync.Mutex
+	stopCloseOnCancel := context.AfterFunc(deadlineCtx, func() {
+		responseBodyMu.Lock()
+		body := resp.Body
+		responseBodyMu.Unlock()
+		if body != nil {
+			_ = body.Close()
+		}
+	})
+	defer stopCloseOnCancel()
 
 	resultWithUsage := func() *ForwardResult {
 		outcome := outcomeCollector.Snapshot()
@@ -489,6 +558,7 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 			Stream:                 true,
 			Duration:               time.Since(startTime),
 			FirstTokenMs:           firstTokenMs,
+			AntiTruncationRounds:   antiTruncationRounds,
 			ClientDisconnect:       clientDisconnected,
 			Outcome:                &outcome,
 		}
@@ -516,10 +586,15 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 		return false
 	}
 
-	processAnthropicEvent := func(event *apicompat.AnthropicStreamEvent) bool {
+	refreshUsage := func() {
+		usage = completedUsage
+		addClaudeUsage(&usage, roundUsage)
+	}
+	processAnthropicEvent := func(event *apicompat.AnthropicStreamEvent, payload string, usageAlreadyMerged bool) bool {
 		if event == nil {
 			return false
 		}
+		outcomeCollector.ObserveAnthropicSSEData(payload)
 		if event.Type == "ping" {
 			if _, err := fmt.Fprint(c.Writer, ": ping\n\n"); err != nil {
 				return true
@@ -534,12 +609,14 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 		}
 
 		// Extract usage from message_delta
-		if event.Type == "message_delta" && event.Usage != nil {
-			mergeAnthropicUsage(&usage, *event.Usage)
+		if !usageAlreadyMerged && event.Type == "message_delta" && event.Usage != nil {
+			mergeAnthropicUsage(&roundUsage, *event.Usage)
+			refreshUsage()
 		}
 		// Also capture usage from message_start (carries cache fields)
-		if event.Type == "message_start" && event.Message != nil {
-			mergeAnthropicUsage(&usage, event.Message.Usage)
+		if !usageAlreadyMerged && event.Type == "message_start" && event.Message != nil {
+			mergeAnthropicUsage(&roundUsage, event.Message.Usage)
+			refreshUsage()
 		}
 		if clientDisconnected || ccRequestCanceled(c) {
 			clientDisconnected = true
@@ -576,37 +653,135 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 		return false
 	}
 
-	for !ccRequestCanceled(c) && scanner.Scan() {
-		if ccRequestCanceled(c) {
+	var streamErr error
+	var finalTerminal []anthropicBufferedEvent
+	continuationSafe := continueRequest != nil
+	for {
+		scanner := bufio.NewScanner(resp.Body)
+		maxLineSize := defaultMaxLineSize
+		if s.cfg != nil && s.cfg.Gateway.MaxLineSize > 0 {
+			maxLineSize = s.cfg.Gateway.MaxLineSize
+		}
+		scanner.Buffer(make([]byte, 0, 64*1024), maxLineSize)
+		roundTerminal := make([]anthropicBufferedEvent, 0, 2)
+		roundStopReason := ""
+		sawSemanticText := false
+		for !ccRequestCanceled(c) && scanner.Scan() {
+			if deadlineCtx.Err() != nil {
+				streamErr = deadlineCtx.Err()
+				break
+			}
+			line := scanner.Text()
+			if _, ok := extractOpenAISSEEventLine(line); !ok {
+				continue
+			}
+			if !scanner.Scan() || ccRequestCanceled(c) {
+				break
+			}
+			payload, ok := extractOpenAISSEDataLine(scanner.Text())
+			if !ok {
+				continue
+			}
+			var event apicompat.AnthropicStreamEvent
+			if err := json.Unmarshal([]byte(payload), &event); err != nil {
+				continue
+			}
+			ccState.IncludeUsage = ccState.IncludeUsage || anthropicChatStreamHasUsage(&event, payload)
+
+			switch event.Type {
+			case "content_block_start":
+				if event.ContentBlock != nil && event.ContentBlock.Type != "text" {
+					continuationSafe = false
+				}
+			case "content_block_delta":
+				if event.Delta == nil || event.Delta.Type != "text_delta" {
+					continuationSafe = false
+				} else if event.Delta.Text != "" {
+					sawSemanticText = true
+					assistantText.WriteString(event.Delta.Text)
+				}
+			case "message_delta":
+				if event.Delta != nil {
+					roundStopReason = event.Delta.StopReason
+				}
+				if continueRequest != nil {
+					if event.Usage != nil {
+						mergeAnthropicUsage(&roundUsage, *event.Usage)
+						refreshUsage()
+					}
+					roundTerminal = append(roundTerminal, anthropicBufferedEvent{event: event, payload: payload})
+					continue
+				}
+			case "message_stop":
+				if continueRequest != nil {
+					roundTerminal = append(roundTerminal, anthropicBufferedEvent{event: event, payload: payload})
+					continue
+				}
+			}
+			if processAnthropicEvent(&event, payload, false) {
+				outcomeCollector.MarkStreamError(errors.New("client disconnected"), true)
+				return resultWithUsage(), nil
+			}
+		}
+		if scanner.Err() != nil {
+			streamErr = scanner.Err()
+		}
+		if deadlineCtx.Err() != nil {
+			streamErr = deadlineCtx.Err()
+		}
+		cleanEOF := streamErr == nil && !ccRequestCanceled(c)
+		shouldContinue := continuationSafe && cleanEOF && sawSemanticText &&
+			(roundStopReason == "max_tokens" || roundStopReason == "") &&
+			antiTruncationRounds < maxRounds && deadlineCtx.Err() == nil &&
+			c.Request.Context().Err() == nil
+		if shouldContinue && maxOutputTokens > 0 {
+			remaining := maxOutputTokens - usage.OutputTokens
+			if remaining <= 0 {
+				shouldContinue = false
+			}
+		}
+		if shouldContinue {
+			remaining := 0
+			if maxOutputTokens > 0 {
+				remaining = maxOutputTokens - usage.OutputTokens
+			}
+			completedUsage = usage
+			roundUsage = ClaudeUsage{}
+			refreshUsage()
+			nextResp, err := continueRequest(deadlineCtx, assistantText.String(), remaining)
+			if err != nil {
+				streamErr = err
+				finalTerminal = roundTerminal
+				break
+			}
+			if nextResp == nil || nextResp.Body == nil || nextResp.StatusCode >= 400 {
+				if nextResp != nil && nextResp.Body != nil {
+					_ = nextResp.Body.Close()
+				}
+				streamErr = fmt.Errorf("Anthropic continuation request failed")
+				finalTerminal = roundTerminal
+				break
+			}
+			antiTruncationRounds++
+			requestID = firstNonEmpty(nextResp.Header.Get("x-request-id"), requestID)
+			responseBodyMu.Lock()
+			oldBody := resp.Body
+			resp = nextResp
+			responseBodyMu.Unlock()
+			if oldBody != nil {
+				_ = oldBody.Close()
+			}
+			outcomeCollector = NewResponseOutcomeCollector(http.StatusOK, nextResp.StatusCode)
+			firstChunk = false
+			continue
+		}
+		finalTerminal = roundTerminal
+		break
+	}
+	for _, terminal := range finalTerminal {
+		if processAnthropicEvent(&terminal.event, terminal.payload, false) {
+			clientDisconnected = true
 			break
-		}
-		line := scanner.Text()
-		// 与缓冲路径一致：接受 SSE 紧凑格式（冒号后无空格，#4653 同根因）。
-		if _, ok := extractOpenAISSEEventLine(line); !ok {
-			continue
-		}
-
-		if !scanner.Scan() || ccRequestCanceled(c) {
-			break
-		}
-		payload, ok := extractOpenAISSEDataLine(scanner.Text())
-		if !ok {
-			continue
-		}
-		outcomeCollector.ObserveAnthropicSSEData(payload)
-
-		var event apicompat.AnthropicStreamEvent
-		if err := json.Unmarshal([]byte(payload), &event); err != nil {
-			continue
-		}
-
-		// Forward received usage regardless of the client stream_options.
-		// The intermediate Responses converter synthesizes usage even when absent.
-		ccState.IncludeUsage = ccState.IncludeUsage || anthropicChatStreamHasUsage(&event, payload)
-
-		if processAnthropicEvent(&event) {
-			outcomeCollector.MarkStreamError(errors.New("client disconnected"), true)
-			return resultWithUsage(), nil
 		}
 	}
 
@@ -617,11 +792,11 @@ func (s *GatewayService) handleCCStreamingFromAnthropic(
 		return resultWithUsage(), nil
 	}
 
-	if err := scanner.Err(); err != nil {
-		outcomeCollector.MarkStreamError(err, clientDisconnected)
-		if !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+	if streamErr != nil {
+		outcomeCollector.MarkStreamError(streamErr, clientDisconnected)
+		if !errors.Is(streamErr, context.Canceled) && !errors.Is(streamErr, context.DeadlineExceeded) {
 			logger.L().Warn("forward_as_cc stream: read error",
-				zap.Error(err),
+				zap.Error(streamErr),
 				zap.String("request_id", requestID),
 			)
 		}
