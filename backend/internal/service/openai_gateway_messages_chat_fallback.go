@@ -3,11 +3,13 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/apicompat"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
@@ -144,7 +146,22 @@ func (s *OpenAIGatewayService) forwardAnthropicViaRawChatCompletions(
 
 	// 5. Convert response
 	if clientStream {
-		return s.streamChatCompletionsAsAnthropic(c, resp, originalModel, billingModel, upstreamModel, reasoningEffort, serviceTier, startTime)
+		policyCtx := ctx
+		if key := getAPIKeyFromContext(c); key != nil {
+			policyCtx = WithGroupAliasRawChatAntiTruncationPolicy(ctx, key.Group, originalModel)
+		}
+		policy, _ := RawChatAntiTruncationPolicyFromContext(policyCtx)
+		var continueRequest func(string, int) (*http.Response, error)
+		if policy.Enabled {
+			continueRequest = func(assistantText string, remaining int) (*http.Response, error) {
+				continuedBody, buildErr := buildRawChatContinuationBody(chatBody, assistantText, remaining)
+				if buildErr != nil {
+					return nil, fmt.Errorf("build continuation request: %w", buildErr)
+				}
+				return s.sendCCUpstreamRequest(ctx, c, account, targetURL, continuedBody, true, apiKey, account.GetOpenAIUserAgent(), "")
+			}
+		}
+		return s.streamChatCompletionsAsAnthropic(c, resp, originalModel, billingModel, upstreamModel, reasoningEffort, serviceTier, startTime, policy, continueRequest)
 	}
 	return s.bufferChatCompletionsAsAnthropic(c, resp, originalModel, billingModel, upstreamModel, reasoningEffort, serviceTier, startTime)
 }
@@ -195,9 +212,12 @@ func (s *OpenAIGatewayService) streamChatCompletionsAsAnthropic(
 	reasoningEffort *string,
 	serviceTier *string,
 	startTime time.Time,
+	antitruncationPolicy domain.AntiTruncationPolicy,
+	continueRequest func(string, int) (*http.Response, error),
 ) (*OpenAIForwardResult, error) {
 	requestID := resp.Header.Get("x-request-id")
-	writeStreamHeaders := s.newStreamHeaderWriter(c, resp.Header)
+	initialHeaders := resp.Header
+	writeStreamHeaders := s.newStreamHeaderWriter(c, initialHeaders)
 
 	anthropicState := apicompat.NewChatCompletionsToAnthropicStreamState(originalModel)
 	clientDisconnected := false
@@ -226,28 +246,126 @@ func (s *OpenAIGatewayService) streamChatCompletionsAsAnthropic(
 		}
 	}
 
-	scan := s.scanCCStream(c, resp, "openai messages chat fallback", requestID, startTime, emitChunk)
-	usage := scan.Usage
-
-	if scan.Err != nil {
-		// Broken upstream read: skip finalization so no synthetic message_stop
-		// masks the truncation, and surface the error to flag usage incomplete
-		// (mirrors forwardResponsesViaRawChatCompletions).
-		return &OpenAIForwardResult{
-			RequestID:                   requestID,
-			UpstreamHeaders:             resp.Header,
-			Usage:                       usage,
-			Model:                       originalModel,
-			BillingModel:                billingModel,
-			UpstreamModel:               upstreamModel,
-			ReasoningEffort:             reasoningEffort,
-			UpstreamResponseServiceTier: observedUpstreamResponseServiceTier(c),
-			ServiceTier:                 resolvedOpenAIUpstreamServiceTier(c, serviceTier),
-			Stream:                      true,
-			Duration:                    time.Since(startTime),
-			FirstTokenMs:                scan.FirstTokenMs,
-			ClientDisconnect:            clientDisconnected,
-		}, fmt.Errorf("stream usage incomplete: %w", scan.Err)
+	var usage OpenAIUsage
+	var firstTokenMs *int
+	var scanErr error
+	continuationRounds, outputBudget := 0, 0
+	var fullAssistantText strings.Builder
+	maxRounds := antitruncationPolicy.MaxRounds
+	if maxRounds <= 0 {
+		maxRounds = 1
+	}
+	maxDuration := time.Duration(antitruncationPolicy.MaxDurationSeconds) * time.Second
+	if maxDuration <= 0 {
+		maxDuration = 30 * time.Second
+	}
+	maxOutputTokens := antitruncationPolicy.MaxOutputTokens
+	if maxOutputTokens <= 0 {
+		maxOutputTokens = 8192
+	}
+	resultWithUsage := func() *OpenAIForwardResult {
+		return &OpenAIForwardResult{RequestID: requestID, UpstreamHeaders: initialHeaders, Usage: usage,
+			Model: originalModel, BillingModel: billingModel, UpstreamModel: upstreamModel,
+			ReasoningEffort: reasoningEffort, UpstreamResponseServiceTier: observedUpstreamResponseServiceTier(c),
+			ServiceTier: resolvedOpenAIUpstreamServiceTier(c, serviceTier), Stream: true,
+			Duration: time.Since(startTime), FirstTokenMs: firstTokenMs, ClientDisconnect: clientDisconnected,
+			AntiTruncationRounds: continuationRounds}
+	}
+	for {
+		var roundUsage OpenAIUsage
+		var roundAssistant strings.Builder
+		finishReason, toolCallSeen, semanticOutput, sawDone := "", false, false, false
+		terminalChunks := make([]*apicompat.ChatCompletionsChunk, 0, 3)
+		scanner := s.newUpstreamSSEScanner(resp.Body)
+		for scanner.Scan() {
+			payload, ok := extractOpenAISSEDataLine(scanner.Text())
+			if !ok {
+				continue
+			}
+			payload = strings.TrimSpace(payload)
+			if payload == "[DONE]" {
+				sawDone = true
+				break
+			}
+			if observer := upstreamResponseModelObserverFromContext(c); observer != nil {
+				observer.ObserveOpenAI([]byte(payload), "")
+			}
+			if current := extractCCStreamUsage(payload); current != nil {
+				roundUsage = *current
+			}
+			var chunk apicompat.ChatCompletionsChunk
+			if json.Unmarshal([]byte(payload), &chunk) != nil {
+				continue
+			}
+			terminal := false
+			for _, choice := range chunk.Choices {
+				if choice.FinishReason != nil && *choice.FinishReason != "" {
+					finishReason, terminal = *choice.FinishReason, true
+				}
+				if choice.Delta.Content != nil && *choice.Delta.Content != "" {
+					roundAssistant.WriteString(*choice.Delta.Content)
+					semanticOutput = true
+				}
+				if choice.Delta.Refusal != nil && *choice.Delta.Refusal != "" {
+					semanticOutput = true
+				}
+				if len(choice.Delta.ToolCalls) > 0 {
+					toolCallSeen = true
+				}
+			}
+			if firstTokenMs == nil && !isOpenAIChatUsageOnlyStreamChunk(payload) && chatChunkStartsResponsesOutput(&chunk) {
+				ms := int(time.Since(startTime).Milliseconds())
+				firstTokenMs = &ms
+			}
+			if terminal || isOpenAIChatUsageOnlyStreamChunk(payload) {
+				terminalChunks = append(terminalChunks, &chunk)
+			} else {
+				emitChunk(&chunk)
+			}
+		}
+		scanErr = scanner.Err()
+		_ = resp.Body.Close()
+		addOpenAIUsage(&usage, roundUsage)
+		roundTokens := roundUsage.OutputTokens
+		if roundTokens <= 0 && roundAssistant.Len() > 0 {
+			roundTokens = (len([]rune(roundAssistant.String())) + 3) / 4
+		}
+		outputBudget += roundTokens
+		shouldContinue := continueRequest != nil && !clientDisconnected && !toolCallSeen && semanticOutput &&
+			!errors.Is(scanErr, context.Canceled) && !errors.Is(scanErr, context.DeadlineExceeded) &&
+			(finishReason == "length" || (scanErr == nil && !sawDone)) && continuationRounds < maxRounds &&
+			time.Since(startTime) < maxDuration && outputBudget < maxOutputTokens
+		if shouldContinue {
+			fullAssistantText.WriteString(roundAssistant.String())
+			remaining := maxOutputTokens - outputBudget
+			if remaining > 0 {
+				next, err := continueRequest(fullAssistantText.String(), remaining)
+				if err != nil {
+					return resultWithUsage(), err
+				}
+				if next == nil || next.StatusCode >= http.StatusBadRequest {
+					if next != nil {
+						_, message := s.readOpenAIUpstreamError(next)
+						_ = next.Body.Close()
+						return resultWithUsage(), fmt.Errorf("continuation upstream request failed: %s", message)
+					}
+					return resultWithUsage(), fmt.Errorf("continuation upstream request returned no response")
+				}
+				resp = next
+				if id := strings.TrimSpace(resp.Header.Get("x-request-id")); id != "" {
+					requestID = id
+				}
+				continuationRounds++
+				continue
+			}
+		}
+		for _, chunk := range terminalChunks {
+			emitChunk(chunk)
+		}
+		break
+	}
+	if scanErr != nil && !errors.Is(scanErr, context.Canceled) && !errors.Is(scanErr, context.DeadlineExceeded) {
+		return resultWithUsage(), fmt.Errorf("stream usage incomplete: %w", scanErr)
 	}
 
 	// Finalize: close open blocks + emit message_delta/message_stop.
@@ -266,23 +384,6 @@ func (s *OpenAIGatewayService) streamChatCompletionsAsAnthropic(
 		}
 		c.Writer.Flush()
 	}
-	if !scan.SawDone {
-		logCCStreamMissingDoneSentinel("openai messages chat fallback", requestID)
-	}
 
-	return &OpenAIForwardResult{
-		RequestID:                   requestID,
-		UpstreamHeaders:             resp.Header,
-		Usage:                       usage,
-		Model:                       originalModel,
-		BillingModel:                billingModel,
-		UpstreamModel:               upstreamModel,
-		ReasoningEffort:             reasoningEffort,
-		UpstreamResponseServiceTier: observedUpstreamResponseServiceTier(c),
-		ServiceTier:                 resolvedOpenAIUpstreamServiceTier(c, serviceTier),
-		Stream:                      true,
-		Duration:                    time.Since(startTime),
-		FirstTokenMs:                scan.FirstTokenMs,
-		ClientDisconnect:            clientDisconnected,
-	}, nil
+	return resultWithUsage(), nil
 }
