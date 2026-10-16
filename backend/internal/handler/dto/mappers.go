@@ -751,6 +751,7 @@ func usageLogFromServiceUser(l *service.UsageLog) UsageLog {
 		SubscriptionID:            l.SubscriptionID,
 		InputTokens:               l.InputTokens,
 		OutputTokens:              l.OutputTokens,
+		AntiTruncationRounds:      l.AntiTruncationRounds,
 		CacheCreationTokens:       l.CacheCreationTokens,
 		CacheReadTokens:           l.CacheReadTokens,
 		CacheCreation5mTokens:     l.CacheCreation5mTokens,

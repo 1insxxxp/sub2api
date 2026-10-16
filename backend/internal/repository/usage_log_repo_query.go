@@ -198,7 +198,7 @@ func (r *usageLogRepository) hydrateUsageLogCompensation(ctx context.Context, lo
 			uro.http_status, uro.upstream_status, uro.has_text, uro.has_tool_call,
 			uro.has_reasoning, uro.has_media, uro.output_bytes, uro.event_count,
 			uro.stream_completed, uro.finish_reason, uro.disconnect_source,
-			uro.upstream_error_kind, uro.collector_version
+			uro.upstream_error_kind, uro.collector_version, uro.anti_truncation_rounds
 		FROM usage_logs ul
 		LEFT JOIN empty_response_claims erc ON erc.usage_log_id = ul.id
 		LEFT JOIN usage_response_outcomes uro ON uro.usage_log_id = ul.id
@@ -214,7 +214,7 @@ func (r *usageLogRepository) hydrateUsageLogCompensation(ctx context.Context, lo
 	}()
 	for rows.Next() {
 		var usageID int64
-		var claimID, httpStatus, upstreamStatus, outputBytes, eventCount, collectorVersion sql.NullInt64
+		var claimID, httpStatus, upstreamStatus, outputBytes, eventCount, collectorVersion, antiTruncationRounds sql.NullInt64
 		var claimStatus, reasonCode, finishReason, disconnectSource, upstreamErrorKind sql.NullString
 		var hasText, hasToolCall, hasReasoning, hasMedia, streamCompleted sql.NullBool
 		if err := rows.Scan(
@@ -222,7 +222,7 @@ func (r *usageLogRepository) hydrateUsageLogCompensation(ctx context.Context, lo
 			&httpStatus, &upstreamStatus, &hasText, &hasToolCall,
 			&hasReasoning, &hasMedia, &outputBytes, &eventCount,
 			&streamCompleted, &finishReason, &disconnectSource,
-			&upstreamErrorKind, &collectorVersion,
+			&upstreamErrorKind, &collectorVersion, &antiTruncationRounds,
 		); err != nil {
 			return err
 		}
@@ -235,6 +235,9 @@ func (r *usageLogRepository) hydrateUsageLogCompensation(ctx context.Context, lo
 			log.EmptyResponseClaimID = &id
 			log.EmptyResponseClaimStatus = claimStatus.String
 			log.CompensationReasonCode = reasonCode.String
+		}
+		if antiTruncationRounds.Valid {
+			log.AntiTruncationRounds = int(antiTruncationRounds.Int64)
 		}
 		if collectorVersion.Valid {
 			log.Outcome = &service.ResponseOutcome{

@@ -140,3 +140,37 @@ func TestEnsureResponseOutcomeCollectorAcceptsNilContextWithRequestCollector(t *
 	require.NotNil(t, ctx)
 	require.Same(t, collector, ensured)
 }
+
+func TestEnsureResponseOutcomeForUsageLogCreatesOutcomeForContinuation(t *testing.T) {
+	original := &ResponseOutcome{HTTPStatus: 200, StreamCompleted: true, CollectorVersion: 1}
+	require.Same(t, original, ensureResponseOutcomeForUsageLog(original, 2))
+	require.Same(t, original, ensureResponseOutcomeForUsageLog(original, 0))
+	created := ensureResponseOutcomeForUsageLog(nil, 1)
+	require.NotNil(t, created)
+	require.Equal(t, ResponseOutcomeCollectorVersion, created.CollectorVersion)
+	require.Nil(t, ensureResponseOutcomeForUsageLog(nil, 0))
+}
+
+func TestBuildRecordUsageLogCarriesAntiTruncationRounds(t *testing.T) {
+	result := &ForwardResult{Model: "alias", AntiTruncationRounds: 2}
+	log := (&GatewayService{}).buildRecordUsageLog(
+		context.Background(),
+		&recordUsageCoreInput{},
+		result,
+		&APIKey{ID: 1},
+		&User{ID: 2},
+		&Account{ID: 3},
+		nil,
+		"alias",
+		1,
+		1,
+		1,
+		BillingTypeBalance,
+		false,
+		nil,
+		&recordUsageOpts{},
+	)
+	require.Equal(t, 2, log.AntiTruncationRounds)
+	require.NotNil(t, log.Outcome)
+	require.Equal(t, ResponseOutcomeCollectorVersion, log.Outcome.CollectorVersion)
+}

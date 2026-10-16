@@ -203,6 +203,8 @@ type UsageLog struct {
 	// Outcome is privacy-safe server-derived response evidence. It is persisted
 	// after the usage row and is not a usage_logs table column.
 	Outcome *ResponseOutcome
+	// AntiTruncationRounds is the number of continuation requests made for this usage row.
+	AntiTruncationRounds int
 
 	// Cache TTL Override 标记（管理员强制替换了缓存 TTL 计费）
 	CacheTTLOverridden bool

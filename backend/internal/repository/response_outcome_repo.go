@@ -39,13 +39,13 @@ func (r *usageLogRepository) upsertResponseOutcome(ctx context.Context, log *ser
 			usage_log_id, request_id, api_key_id, user_id, account_id, group_id,
 			http_status, upstream_status, has_text, has_tool_call, has_reasoning,
 			has_media, output_bytes, event_count, stream_completed, finish_reason,
-			disconnect_source, upstream_error_kind, collector_version
+			disconnect_source, upstream_error_kind, collector_version, anti_truncation_rounds
 		)
 		SELECT
 			ul.id, $1::varchar(64), $2, $3, $4, $5,
 			$6, $7, $8, $9, $10,
 			$11, $12, $13, $14, $15,
-			$16, $17, $18
+			$16, $17, $18, $19
 		FROM usage_logs ul
 		WHERE ul.request_id = $1::varchar(64) AND ul.api_key_id = $2
 		ON CONFLICT (request_id, api_key_id) DO UPDATE SET
@@ -65,7 +65,8 @@ func (r *usageLogRepository) upsertResponseOutcome(ctx context.Context, log *ser
 			finish_reason = EXCLUDED.finish_reason,
 			disconnect_source = EXCLUDED.disconnect_source,
 			upstream_error_kind = EXCLUDED.upstream_error_kind,
-			collector_version = EXCLUDED.collector_version
+			collector_version = EXCLUDED.collector_version,
+			anti_truncation_rounds = EXCLUDED.anti_truncation_rounds
 	`
 	result, err := r.sql.ExecContext(ctx, query,
 		requestID,
@@ -86,6 +87,7 @@ func (r *usageLogRepository) upsertResponseOutcome(ctx context.Context, log *ser
 		string(outcome.DisconnectSource),
 		string(outcome.UpstreamErrorKind),
 		int16(outcome.CollectorVersion),
+		log.AntiTruncationRounds,
 	)
 	if err != nil {
 		return fmt.Errorf("upsert response outcome: %w", err)

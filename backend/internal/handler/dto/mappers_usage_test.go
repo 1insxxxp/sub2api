@@ -321,14 +321,15 @@ func TestUsageLogFromService_IncludesImageBillingMetadataForUserAndAdmin(t *test
 	outputSize := "3840x2160"
 	source := "output"
 	log := &service.UsageLog{
-		RequestID:          "req_image_metadata",
-		Model:              "gpt-image-2",
-		ImageCount:         2,
-		ImageSize:          &imageSize,
-		ImageInputSize:     &inputSize,
-		ImageOutputSize:    &outputSize,
-		ImageSizeSource:    &source,
-		ImageSizeBreakdown: map[string]int{"4K": 2},
+		RequestID:            "req_image_metadata",
+		AntiTruncationRounds: 2,
+		Model:                "gpt-image-2",
+		ImageCount:           2,
+		ImageSize:            &imageSize,
+		ImageInputSize:       &inputSize,
+		ImageOutputSize:      &outputSize,
+		ImageSizeSource:      &source,
+		ImageSizeBreakdown:   map[string]int{"4K": 2},
 	}
 
 	userDTO := UsageLogFromService(log)
@@ -345,6 +346,7 @@ func TestUsageLogFromService_IncludesImageBillingMetadataForUserAndAdmin(t *test
 		require.NotNil(t, got.ImageSizeSource)
 		require.Equal(t, source, *got.ImageSizeSource)
 		require.Equal(t, map[string]int{"4K": 2}, got.ImageSizeBreakdown)
+		require.Equal(t, 2, got.AntiTruncationRounds)
 	}
 }
 

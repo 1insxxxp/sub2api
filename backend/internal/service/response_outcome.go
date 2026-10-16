@@ -49,6 +49,16 @@ type ResponseOutcome struct {
 	CollectorVersion  int               `json:"collector_version"`
 }
 
+// ensureResponseOutcomeForUsageLog creates a minimal outcome row when a
+// continuation occurred without a collector snapshot, so its round count can
+// still be persisted beside the single usage record.
+func ensureResponseOutcomeForUsageLog(outcome *ResponseOutcome, rounds int) *ResponseOutcome {
+	if outcome != nil || rounds <= 0 {
+		return outcome
+	}
+	return &ResponseOutcome{CollectorVersion: ResponseOutcomeCollectorVersion}
+}
+
 // UsageOutcomeStatus is the privacy-safe classification exposed to admin
 // usage consumers. It intentionally contains no provider message or endpoint.
 type UsageOutcomeStatus string

@@ -20,11 +20,12 @@ func TestUsageLogRepositoryUpsertResponseOutcomeLinksExistingUsageRow(t *testing
 	repo := newUsageLogRepositoryWithSQL(nil, db)
 	groupID := int64(40)
 	log := &service.UsageLog{
-		RequestID: "req-outcome-1",
-		APIKeyID:  20,
-		UserID:    10,
-		AccountID: 30,
-		GroupID:   &groupID,
+		RequestID:            "req-outcome-1",
+		AntiTruncationRounds: 2,
+		APIKeyID:             20,
+		UserID:               10,
+		AccountID:            30,
+		GroupID:              &groupID,
 		Outcome: &service.ResponseOutcome{
 			HTTPStatus:        200,
 			UpstreamStatus:    200,
@@ -43,7 +44,7 @@ func TestUsageLogRepositoryUpsertResponseOutcomeLinksExistingUsageRow(t *testing
 		WithArgs(
 			log.RequestID, log.APIKeyID, log.UserID, log.AccountID, log.GroupID,
 			200, 200, true, false, false, false, int64(12), 2, true, "stop",
-			string(service.DisconnectSourceNone), string(service.UpstreamErrorNone), int16(1),
+			string(service.DisconnectSourceNone), string(service.UpstreamErrorNone), int16(1), 2,
 		).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
@@ -70,7 +71,7 @@ func TestUsageLogRepositoryUpsertResponseOutcomeRequiresLinkedUsageRow(t *testin
 		WithArgs(
 			log.RequestID, log.APIKeyID, log.UserID, log.AccountID, log.GroupID,
 			0, 0, false, false, false, false, int64(0), 0, false, "",
-			string(service.DisconnectSourceNone), string(service.UpstreamErrorNone), int16(1),
+			string(service.DisconnectSourceNone), string(service.UpstreamErrorNone), int16(1), 0,
 		).
 		WillReturnResult(sqlmock.NewResult(0, 0))
 
