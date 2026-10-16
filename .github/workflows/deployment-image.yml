@@ -1,6 +1,7 @@
 name: Build deployment image
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - dev
