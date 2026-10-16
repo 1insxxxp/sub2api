@@ -239,6 +239,16 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		result.UpstreamModel,
 		result.Model,
 	)
+	if apiKey.Group != nil && len(apiKey.Group.ModelAliases) > 0 {
+		for i, model := range billingModels {
+			billingModels[i] = groupAliasBillingModel(apiKey.Group, model, func(alias string) bool {
+				return s.resolver.hasConfiguredModelPricing(ctx, PricingInput{Model: alias, GroupID: apiKey.GroupID, Group: apiKey.Group})
+			})
+		}
+		if len(billingModels) > 0 {
+			billingModels = usageBillingModelCandidates(billingModels[0], billingModels[1:]...)
+		}
+	}
 	// 映射后的上游模型可能先命中模糊 token 兜底价，从而抢在公开请求模型的
 	// 明确渠道按次价之前完成结算。管理员显式配置的分组/渠道价格必须优先于
 	// LiteLLM/系列兜底；显式候选之间、兜底候选之间仍保持原有计费源顺序。
@@ -400,6 +410,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		// Keep the image cache split in the existing usage_logs JSONB payload.
 		imageSizeBreakdown["image_cache_read_tokens"] = result.Usage.ImageCacheReadTokens
 	}
+	usageOutcome := ensureResponseOutcomeForUsageLog(result.Outcome, result.AntiTruncationRounds)
 	usageLog := &UsageLog{
 		UserID:                   user.ID,
 		APIKeyID:                 apiKey.ID,
@@ -429,7 +440,8 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		ImageOutputSize:          optionalTrimmedStringPtr(result.ImageOutputSize),
 		ImageSizeSource:          optionalTrimmedStringPtr(result.ImageSizeSource),
 		ImageSizeBreakdown:       imageSizeBreakdown,
-		Outcome:                  result.Outcome,
+		Outcome:                  usageOutcome,
+		AntiTruncationRounds:     result.AntiTruncationRounds,
 		NativeCompactionV2:       input.NativeCompactionV2,
 	}
 	isVideoUsage := isGrokVideoUsageResult(result, billingModels)

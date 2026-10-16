@@ -116,6 +116,7 @@ type GroupPricingCoverageRequest struct {
 	Platform     string                         `json:"platform" binding:"omitempty,oneof=anthropic openai gemini antigravity grok kimi zhipu deepseek minimax composite"`
 	Models       []string                       `json:"models"`
 	ModelPricing *[]service.ChannelModelPricing `json:"model_pricing"`
+	ModelAliases *[]domain.ModelAlias           `json:"model_aliases"`
 }
 
 func (h *GroupHandler) PricingCoverage(c *gin.Context) {
@@ -144,6 +145,19 @@ func (h *GroupHandler) PricingCoverage(c *gin.Context) {
 			return
 		}
 		existing = group
+	}
+	if req.ModelAliases != nil {
+		aliases, err := domain.NormalizeModelAliases(*req.ModelAliases)
+		if err != nil {
+			response.BadRequest(c, err.Error())
+			return
+		}
+		prospective := service.Group{}
+		if existing != nil {
+			prospective = *existing
+		}
+		prospective.ModelAliases = aliases
+		existing = &prospective
 	}
 	result := h.pricingCoverage.Preview(c.Request.Context(), service.GroupPricingCoverageInput{
 		GroupID:          req.GroupID,

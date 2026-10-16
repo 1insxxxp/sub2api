@@ -78,3 +78,20 @@ func TestGroupPricingCoverageEndpointUsesExistingGroupPricing(t *testing.T) {
 }
 
 func coverageHandlerPrice(value float64) *float64 { return &value }
+
+func TestGroupPricingCoverageEndpointPreviewsUnsavedAliasTargetPrice(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	billing := service.NewBillingService(&config.Config{}, nil)
+	coverage := service.NewGroupPricingCoverageService(service.NewModelPricingResolver(nil, billing))
+	handler := NewGroupHandler(nil, nil, nil, coverage)
+	router := gin.New()
+	router.POST("/pricing-coverage", handler.PricingCoverage)
+	body := []byte(`{"platform":"anthropic","models":["long-answer"],"model_aliases":[{"alias":"long-answer","upstream_model":"target-model"}],"model_pricing":[{"models":["target-model"],"billing_mode":"per_request","per_request_price":0.04}]}`)
+	req := httptest.NewRequest(http.MethodPost, "/pricing-coverage", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, req)
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Contains(t, recorder.Body.String(), `"status":"priced"`)
+	require.Contains(t, recorder.Body.String(), `"model":"long-answer"`)
+}

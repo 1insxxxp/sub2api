@@ -41,3 +41,23 @@ export const modelAliasesToAPI = (rows: ModelAliasFormRow[]): ModelAlias[] => ro
 
 const positiveInteger = (value: number | null): number | undefined =>
   value !== null && Number.isInteger(value) && value > 0 ? value : undefined
+
+export function validateModelAliases(rows: ModelAliasFormRow[]): string | null {
+  const seen = new Set<string>()
+  for (const row of rows) {
+    const alias = row.alias.trim()
+    const upstream = row.upstream_model.trim()
+    if (!alias || !upstream) return 'modelAliasRequired'
+    if ([...alias].length > 100 || [...upstream].length > 200 || /\s/.test(alias) || /\s/.test(upstream)) return 'modelAliasNameInvalid'
+    if (alias.toLowerCase() === upstream.toLowerCase()) return 'modelAliasSameTarget'
+    if (seen.has(alias.toLowerCase())) return 'modelAliasDuplicate'
+    seen.add(alias.toLowerCase())
+    if (!row.anti_truncation.enabled) continue
+    for (const [key, max] of [['max_rounds', 3], ['max_duration_seconds', 300], ['max_output_tokens', 32768]] as const) {
+      const value = row.anti_truncation[key]
+      if (value !== null && String(value) !== '' && (!Number.isInteger(value) || value < 0 || value > max)) return 'modelAliasLimitsInvalid'
+    }
+  }
+  if (rows.some((row) => seen.has(row.upstream_model.trim().toLowerCase()))) return 'modelAliasTargetConflict'
+  return null
+}

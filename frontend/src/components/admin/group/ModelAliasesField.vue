@@ -11,7 +11,7 @@
       <div class="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr_auto]">
         <div>
           <label class="input-label" :for="`${idPrefix}-${index}-alias`">{{ t('admin.groups.form.modelAlias') }}</label>
-          <input :id="`${idPrefix}-${index}-alias`" v-model="row.alias" class="input font-mono" maxlength="200" autocomplete="off" />
+          <input :id="`${idPrefix}-${index}-alias`" v-model="row.alias" class="input font-mono" maxlength="100" autocomplete="off" />
         </div>
         <div>
           <label class="input-label" :for="`${idPrefix}-${index}-upstream`">{{ t('admin.groups.form.modelAliasUpstream') }}</label>
@@ -26,9 +26,10 @@
       <div v-if="row.anti_truncation.enabled" class="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <label v-for="limit in limits" :key="limit.key" class="block">
           <span class="input-label">{{ t(limit.label) }}</span>
-          <input v-model.number="row.anti_truncation[limit.key]" type="number" min="1" step="1" class="input" />
+          <input v-model.number="row.anti_truncation[limit.key]" type="number" min="0" :max="limit.max" :placeholder="limit.placeholder" step="1" class="input" />
         </label>
       </div>
+      <p v-if="row.anti_truncation.enabled" class="input-hint">{{ t('admin.groups.form.antiTruncationHint') }}</p>
     </div>
   </section>
 </template>
@@ -46,9 +47,9 @@ const modelValue = computed({
   set: (value: ModelAliasFormRow[]) => emit('update:modelValue', value),
 })
 const limits = [
-  { key: 'max_rounds', label: 'admin.groups.form.antiTruncationMaxRounds' },
-  { key: 'max_output_tokens', label: 'admin.groups.form.antiTruncationMaxOutputTokens' },
-  { key: 'max_duration_seconds', label: 'admin.groups.form.antiTruncationMaxDuration' },
+  { key: 'max_rounds', label: 'admin.groups.form.antiTruncationMaxRounds', max: 3, placeholder: '1' },
+  { key: 'max_output_tokens', label: 'admin.groups.form.antiTruncationMaxOutputTokens', max: 32768, placeholder: '0' },
+  { key: 'max_duration_seconds', label: 'admin.groups.form.antiTruncationMaxDuration', max: 300, placeholder: '180' },
 ] as const
 const addAlias = () => { modelValue.value = [...modelValue.value, createModelAliasFormRow()] }
 const removeAlias = (index: number) => { modelValue.value = modelValue.value.filter((_, i) => i !== index) }

@@ -3,6 +3,7 @@ package domain
 import (
 	"fmt"
 	"strings"
+	"unicode"
 )
 
 type AntiTruncationPolicy struct {
@@ -32,6 +33,12 @@ func NormalizeModelAliases(in []ModelAlias) ([]ModelAlias, error) {
 		if len([]rune(a.Alias)) > 100 || len([]rune(a.UpstreamModel)) > 200 {
 			return nil, fmt.Errorf("model alias or upstream model is too long")
 		}
+		if strings.IndexFunc(a.Alias, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) >= 0 || strings.IndexFunc(a.UpstreamModel, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) >= 0 {
+			return nil, fmt.Errorf("model names cannot contain whitespace or control characters")
+		}
+		if strings.EqualFold(a.Alias, a.UpstreamModel) {
+			return nil, fmt.Errorf("model alias must differ from its upstream model")
+		}
 		key := strings.ToLower(a.Alias)
 		if _, ok := seen[key]; ok {
 			return nil, fmt.Errorf("duplicate model alias %q", a.Alias)
@@ -50,6 +57,11 @@ func NormalizeModelAliases(in []ModelAlias) ([]ModelAlias, error) {
 		}
 		seen[key] = struct{}{}
 		out = append(out, a)
+	}
+	for _, a := range out {
+		if _, exists := seen[strings.ToLower(a.UpstreamModel)]; exists {
+			return nil, fmt.Errorf("upstream model %q cannot be another configured alias", a.UpstreamModel)
+		}
 	}
 	return out, nil
 }

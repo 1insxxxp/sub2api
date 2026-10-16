@@ -1089,6 +1089,9 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	if apiKey.Group != nil && apiKey.Group.Platform == PlatformComposite {
 		billingModel = s.compositeBillableModel(ctx, apiKey, billingModel, concreteBillingModel)
 	}
+	billingModel = groupAliasBillingModel(apiKey.Group, billingModel, func(alias string) bool {
+		return s.resolver.hasConfiguredModelPricing(ctx, PricingInput{Model: alias, GroupID: apiKey.GroupID, Group: apiKey.Group})
+	})
 	// 通用兜底（与 OpenAI 路径的 usageBillingModelCandidates 语义对齐）：
 	// 选定模型查不到任何价格时回退到实际转发的具体模型。已定价流量不受影响。
 	billingModel = s.billableModelWithFallback(ctx, apiKey, billingModel, result.UpstreamModel, result.Model)
@@ -1641,6 +1644,7 @@ func (s *GatewayService) buildRecordUsageLog(
 			"selected_response_model", strings.TrimSpace(result.UpstreamResponseModel),
 		)
 	}
+	usageOutcome := ensureResponseOutcomeForUsageLog(result.Outcome, result.AntiTruncationRounds)
 	usageLog := &UsageLog{
 		UserID:                   user.ID,
 		APIKeyID:                 apiKey.ID,
@@ -1684,7 +1688,8 @@ func (s *GatewayService) buildRecordUsageLog(
 		UserAgent:                optionalTrimmedStringPtr(input.UserAgent),
 		IPAddress:                optionalTrimmedStringPtr(input.IPAddress),
 		SessionID:                optionalTrimmedStringPtr(input.SessionID),
-		Outcome:                  result.Outcome,
+		Outcome:                  usageOutcome,
+		AntiTruncationRounds:     result.AntiTruncationRounds,
 		GroupID:                  apiKey.GroupID,
 		CustomGroupID:            apiKey.CustomGroupID,
 		SubscriptionID:           optionalSubscriptionID(subscription),

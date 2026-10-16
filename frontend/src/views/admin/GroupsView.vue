@@ -4702,7 +4702,7 @@ import {
   type ReusableGroupTagOption,
 } from "@/utils/groupTagOptions";
 import { normalizeSupportedModelScopesForPlatform } from "./groupsSupportedModelScopes";
-import { createModelAliasFormRow, modelAliasesToAPI, type ModelAliasFormRow } from "@/utils/groupModelAliases";
+import { createModelAliasFormRow, modelAliasesToAPI, validateModelAliases, type ModelAliasFormRow } from "@/utils/groupModelAliases";
 import {
   advertisedModelsForCoverage,
   appendPendingPricingEntries,
@@ -5933,6 +5933,7 @@ const refreshPricingCoverage = async (mode: PricingCoverageMode) => {
       platform: form.platform,
       models,
       model_pricing: coveragePricingFor(mode),
+      model_aliases: modelAliasesToAPI(form.model_aliases),
     });
     if (!isCurrentCoverageRequest(mode, requestID)) return false;
     setPricingCoverage(mode, coverage);
@@ -6578,6 +6579,11 @@ const handleCreateGroup = async () => {
     return;
   }
   if (!validateGroupReasoningMultipliers(createForm.model_pricing)) return;
+  const aliasError = validateModelAliases(createForm.model_aliases);
+  if (aliasError) {
+    appStore.showError(t(`admin.groups.form.${aliasError}`));
+    return;
+  }
   // 模型白名单：开启且没有任何条目时阻止提交，与后端 400 对齐。
   if (
     createModelAllowlistState.enabled &&
@@ -6950,6 +6956,11 @@ const handleUpdateGroup = async () => {
     return;
   }
   if (!validateGroupReasoningMultipliers(editForm.model_pricing)) return;
+  const aliasError = validateModelAliases(editForm.model_aliases);
+  if (aliasError) {
+    appStore.showError(t(`admin.groups.form.${aliasError}`));
+    return;
+  }
   // 模型白名单：开启且没有任何条目时阻止提交，与后端 400 对齐。
   if (
     editModelAllowlistState.enabled &&
@@ -7602,6 +7613,7 @@ watch(
   [
     () => createForm.platform,
     () => createForm.model_pricing,
+    () => createForm.model_aliases,
     () => createModelAllowlistState.enabled,
     () => createModelAllowlistState.items,
     () => createModelAllowlistState.savedModels,
@@ -7614,6 +7626,7 @@ watch(
   [
     () => editForm.platform,
     () => editForm.model_pricing,
+    () => editForm.model_aliases,
     () => editModelAllowlistState.enabled,
     () => editModelAllowlistState.items,
     () => editModelAllowlistState.savedModels,

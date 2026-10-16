@@ -44,3 +44,31 @@ func TestModelAliasesJSONRoundTripAndResolve(t *testing.T) {
 		t.Fatalf("resolve = %q, %v", resolved, ok)
 	}
 }
+
+func TestModelAliasesRejectUnsafeNamesAndInvalidLimits(t *testing.T) {
+	for _, alias := range []ModelAlias{
+		{Alias: "same", UpstreamModel: "SAME"},
+		{Alias: "with space", UpstreamModel: "model"},
+		{Alias: "public", UpstreamModel: "bad\nmodel"},
+		{Alias: "public", UpstreamModel: "model", AntiTruncation: AntiTruncationPolicy{MaxRounds: 4}},
+		{Alias: "public", UpstreamModel: "model", AntiTruncation: AntiTruncationPolicy{MaxDurationSeconds: 301}},
+	} {
+		if _, err := NormalizeModelAliases([]ModelAlias{alias}); err == nil {
+			t.Fatalf("expected invalid alias: %#v", alias)
+		}
+	}
+	aliases, err := NormalizeModelAliases([]ModelAlias{{Alias: "public", UpstreamModel: "model", AntiTruncation: AntiTruncationPolicy{Enabled: true}}})
+	if err != nil || aliases[0].AntiTruncation.MaxOutputTokens != 0 {
+		t.Fatalf("zero output budget must not impose a cap: %#v, %v", aliases, err)
+	}
+}
+
+func TestModelAliasesRejectAliasTargetChains(t *testing.T) {
+	_, err := NormalizeModelAliases([]ModelAlias{
+		{Alias: "long", UpstreamModel: "claude-opus-4-6"},
+		{Alias: "CLAUDE-OPUS-4-6", UpstreamModel: "other-model"},
+	})
+	if err == nil {
+		t.Fatal("alias targets must remain real upstream names, not another alias")
+	}
+}

@@ -7,6 +7,7 @@ import { apiClient } from '../client'
 import type { ChannelModelPricing } from './channels'
 import type {
   AdminGroup,
+  ModelAlias,
   GroupPlatform,
   CompositeModelRoute,
   CompositeModelRouteInput,
@@ -44,6 +45,7 @@ export interface GroupPricingCoverageRequest {
   platform: string
   models: string[]
   model_pricing?: ChannelModelPricing[]
+  model_aliases?: ModelAlias[]
 }
 
 export interface GroupPricingCoverageResponse {

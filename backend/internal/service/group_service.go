@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+
 	"github.com/Wei-Shaw/sub2api/internal/domain"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -97,16 +98,16 @@ type CreateGroupRequest struct {
 
 // UpdateGroupRequest 更新分组请求
 type UpdateGroupRequest struct {
-	KeyDisplayCategory   *string             `json:"key_display_category"`
-	Name                 *string             `json:"name"`
-	Description          *string             `json:"description"`
-	RateMultiplier       *float64            `json:"rate_multiplier"`
-	IsExclusive          *bool               `json:"is_exclusive"`
-	Status               *string             `json:"status"`
-	AllowImageGeneration *bool               `json:"allow_image_generation"`
-	ImageRateIndependent *bool               `json:"image_rate_independent"`
-	ImageRateMultiplier  *float64            `json:"image_rate_multiplier"`
-	ModelAliases         []domain.ModelAlias `json:"model_aliases"`
+	KeyDisplayCategory   *string              `json:"key_display_category"`
+	Name                 *string              `json:"name"`
+	Description          *string              `json:"description"`
+	RateMultiplier       *float64             `json:"rate_multiplier"`
+	IsExclusive          *bool                `json:"is_exclusive"`
+	Status               *string              `json:"status"`
+	AllowImageGeneration *bool                `json:"allow_image_generation"`
+	ImageRateIndependent *bool                `json:"image_rate_independent"`
+	ImageRateMultiplier  *float64             `json:"image_rate_multiplier"`
+	ModelAliases         *[]domain.ModelAlias `json:"model_aliases"`
 }
 
 // GroupService 分组管理服务
@@ -144,9 +145,15 @@ func (s *GroupService) Create(ctx context.Context, req CreateGroupRequest) (*Gro
 		return nil, ErrGroupExists
 	}
 
+	aliases, err := domain.NormalizeModelAliases(req.ModelAliases)
+	if err != nil {
+		return nil, infraerrors.BadRequest("INVALID_MODEL_ALIASES", err.Error())
+	}
+
 	// 创建分组
 	group := &Group{
 		Name:                 req.Name,
+		ModelAliases:         aliases,
 		Description:          req.Description,
 		Platform:             PlatformAnthropic,
 		KeyDisplayCategory:   req.KeyDisplayCategory,
@@ -203,6 +210,14 @@ func (s *GroupService) Update(ctx context.Context, id int64, req UpdateGroupRequ
 	group, err := s.groupRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("get group: %w", err)
+	}
+
+	if req.ModelAliases != nil {
+		aliases, err := domain.NormalizeModelAliases(*req.ModelAliases)
+		if err != nil {
+			return nil, infraerrors.BadRequest("INVALID_MODEL_ALIASES", err.Error())
+		}
+		group.ModelAliases = aliases
 	}
 
 	// 更新字段

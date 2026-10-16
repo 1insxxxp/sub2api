@@ -72,6 +72,13 @@ type PricingInput struct {
 // 1. 获取基础定价（LiteLLM → Fallback）
 // 2. 如果指定了 GroupID，查找渠道定价并覆盖
 func (r *ModelPricingResolver) Resolve(ctx context.Context, input PricingInput) *ResolvedPricing {
+	baseModel, _ := input.Group.ResolveModelAlias(input.Model)
+	// Aliases inherit their target's price unless an administrator explicitly
+	// configured pricing for the public name. Resolve only once: aliases are
+	// routing names, not another fuzzy catalog model family.
+	input.Model = groupAliasBillingModel(input.Group, input.Model, func(alias string) bool {
+		return r.hasConfiguredModelPricing(ctx, PricingInput{Model: alias, GroupID: input.GroupID, Group: input.Group})
+	})
 	longContextPricingEnabled := input.Group == nil || input.Group.LongContextPricingEnabled
 	if groupPricing := matchGroupModelPricing(input.Group, input.Model); groupPricing != nil {
 		// Group token cards only override the first-tier / flat rates.
@@ -81,7 +88,7 @@ func (r *ModelPricingResolver) Resolve(ctx context.Context, input PricingInput) 
 			stripped.Intervals = nil
 			groupPricing = &stripped
 		}
-		resolved := r.resolveConfiguredPricing(groupPricing, input.Model, PricingSourceGroup)
+		resolved := r.resolveConfiguredPricing(groupPricing, baseModel, PricingSourceGroup)
 		resolved.longContextPricingEnabled = longContextPricingEnabled
 		return resolved
 	}
@@ -108,7 +115,7 @@ func (r *ModelPricingResolver) Resolve(ctx context.Context, input PricingInput) 
 	}
 
 	// 1. 获取基础定价
-	basePricing, baseSource := r.resolveBasePricing(input.Model)
+	basePricing, baseSource := r.resolveBasePricing(baseModel)
 	legacySource := PricingSourceFallback
 	if basePricing != nil {
 		legacySource = PricingSourceLiteLLM
@@ -133,6 +140,14 @@ func (r *ModelPricingResolver) Resolve(ctx context.Context, input PricingInput) 
 	}
 
 	return resolved
+}
+
+func (r *ModelPricingResolver) hasConfiguredModelPricing(ctx context.Context, input PricingInput) bool {
+	if matchGroupModelPricing(input.Group, input.Model) != nil {
+		return true
+	}
+	return input.GroupID != nil && r != nil && r.channelService != nil &&
+		r.lookupChannelPricingNormalized(ctx, *input.GroupID, input.Model) != nil
 }
 
 func (r *ModelPricingResolver) resolveConfiguredPricing(config *ChannelModelPricing, model, source string) *ResolvedPricing {

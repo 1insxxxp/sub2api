@@ -33,9 +33,9 @@ func TestAppendOpenAIManifestModelAliasesRequiresAvailableTargetAndPublicAllowli
 	require.Equal(t, "fast", response.Data[1]["id"])
 	require.Equal(t, "openai", response.Data[1]["owned_by"])
 
-	unchanged, changed := appendOpenAIManifestModelAliases([]byte(`{"data":[{"id":"gpt-5.4"}]}`), &service.Group{ModelAliases: group.ModelAliases})
+	unchanged, changed := appendOpenAIManifestModelAliases([]byte(`{"data":[{"id":"gpt-5.6"}]}`), &service.Group{ModelAliases: group.ModelAliases})
 	require.False(t, changed)
-	require.JSONEq(t, `{"data":[{"id":"gpt-5.4"}]}`, string(unchanged))
+	require.JSONEq(t, `{"data":[{"id":"gpt-5.6"}]}`, string(unchanged))
 }
 
 func performOrdinaryPinnedModelsRequest(t *testing.T, codex *OpenAIGatewayHandler, group *service.Group, path, etag string) *httptest.ResponseRecorder {
