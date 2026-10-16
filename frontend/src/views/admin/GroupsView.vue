@@ -608,6 +608,7 @@
           />
           <p class="input-hint">{{ t("admin.groups.platformHint") }}</p>
         </div>
+        <ModelAliasesField v-model="createForm.model_aliases" id-prefix="create-model-alias" />
         <div>
           <label class="input-label" for="create-group-key-display-category">{{
             t("admin.groups.form.keyDisplayCategory")
@@ -2375,6 +2376,7 @@
           />
           <p class="input-hint">{{ t("admin.groups.platformNotEditable") }}</p>
         </div>
+        <ModelAliasesField v-model="editForm.model_aliases" id-prefix="edit-model-alias" />
         <div>
           <label class="input-label" for="edit-group-key-display-category">{{
             t("admin.groups.form.keyDisplayCategory")
@@ -4646,6 +4648,7 @@ import { platformLabel } from "@/utils/platformColors";
 import Icon from "@/components/icons/Icon.vue";
 import GroupRateMultipliersModal from "@/components/admin/group/GroupRateMultipliersModal.vue";
 import GroupTagField from "@/components/admin/group/GroupTagField.vue";
+import ModelAliasesField from "@/components/admin/group/ModelAliasesField.vue";
 import GroupTagBadge from "@/components/common/GroupTagBadge.vue";
 import GroupModelStatusVisibilityField from "@/components/admin/group/GroupModelStatusVisibilityField.vue";
 import CodexManifestAccountsField from "@/components/admin/group/CodexManifestAccountsField.vue";
@@ -4699,6 +4702,7 @@ import {
   type ReusableGroupTagOption,
 } from "@/utils/groupTagOptions";
 import { normalizeSupportedModelScopesForPlatform } from "./groupsSupportedModelScopes";
+import { createModelAliasFormRow, modelAliasesToAPI, type ModelAliasFormRow } from "@/utils/groupModelAliases";
 import {
   advertisedModelsForCoverage,
   appendPendingPricingEntries,
@@ -5430,6 +5434,7 @@ const createForm = reactive({
   max_reasoning_effort: "",
   max_reasoning_effort_over_limit: reasoningEffortOverLimitDowngrade,
   reasoning_effort_mappings: [] as ReasoningEffortMappingRow[],
+  model_aliases: [] as ModelAliasFormRow[],
 });
 
 // 简单账号类型（用于模型路由选择）
@@ -5845,6 +5850,7 @@ const editForm = reactive({
   max_reasoning_effort: "",
   max_reasoning_effort_over_limit: reasoningEffortOverLimitDowngrade,
   reasoning_effort_mappings: [] as ReasoningEffortMappingRow[],
+  model_aliases: [] as ModelAliasFormRow[],
 });
 
 type PricingCoverageMode = "create" | "edit";
@@ -6497,6 +6503,7 @@ const closeCreateModal = () => {
   createForm.max_reasoning_effort = "";
   createForm.max_reasoning_effort_over_limit = reasoningEffortOverLimitDowngrade;
   createForm.reasoning_effort_mappings = [];
+  createForm.model_aliases = [];
   createReasoningEffortPolicyRef.value?.resetValidation();
   resetModelAllowlistState(createModelAllowlistState);
   createModelRoutingRules.value = [];
@@ -6601,6 +6608,7 @@ const handleCreateGroup = async () => {
     // 构建请求数据，包含模型路由配置
     const requestData = {
       ...createGroupForm,
+      model_aliases: modelAliasesToAPI(createForm.model_aliases),
       force_openai_fast: normalizeGroupOpenAIFast(
         createForm.platform,
         createForm.force_openai_fast,
@@ -6834,6 +6842,7 @@ const handleEdit = async (group: AdminGroup) => {
     group.reasoning_effort_mappings,
     group.platform,
   );
+  editForm.model_aliases = (group.model_aliases ?? []).map((alias) => createModelAliasFormRow(alias));
   resetModelAllowlistState(editModelAllowlistState, group.model_allowlist);
   editForm.model_status_visibility = normalizeModelStatusVisibility(group.model_status_visibility);
   editModelStatusVisibilityCandidates.value = [];
@@ -6885,6 +6894,7 @@ const closeEditModal = () => {
   editForm.max_reasoning_effort = "";
   editForm.max_reasoning_effort_over_limit = reasoningEffortOverLimitDowngrade;
   editForm.reasoning_effort_mappings = [];
+  editForm.model_aliases = [];
   editReasoningEffortPolicyRef.value?.resetValidation();
   editModelRoutingRules.value = [];
   editForm.copy_accounts_from_group_ids = [];
@@ -6974,6 +6984,7 @@ const handleUpdateGroup = async () => {
     // 转换 fallback_group_id: null -> 0 (后端使用 0 表示清除)
     const payload = {
       ...editForm,
+      model_aliases: modelAliasesToAPI(editForm.model_aliases),
       // 显式保留标签，确保高级模式完整表单提交时不会遗漏该字段。
       tag: editForm.tag,
       tag_color: editForm.tag_color,
