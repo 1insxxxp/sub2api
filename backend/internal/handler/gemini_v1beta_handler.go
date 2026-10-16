@@ -360,10 +360,14 @@ func (h *GatewayHandler) GeminiV1BetaGetModel(c *gin.Context) {
 			c.Request = c.Request.WithContext(service.WithGatewayPublicModel(c.Request.Context(), publicModel))
 		}
 	}
+	if !service.IsSafeGeminiModelPathSegment(modelName) {
+		googleError(c, http.StatusBadRequest, "Invalid model in URL")
+		return
+	}
 
 	// 强制 antigravity 模式：返回 antigravity 模型信息
 	if forcePlatform == service.PlatformAntigravity {
-		c.JSON(http.StatusOK, antigravity.FallbackGeminiModel(modelName))
+		c.JSON(http.StatusOK, antigravity.FallbackGeminiModel(publicModel))
 		return
 	}
 
@@ -373,7 +377,7 @@ func (h *GatewayHandler) GeminiV1BetaGetModel(c *gin.Context) {
 		hasAntigravity, _ := h.geminiCompatService.HasAntigravityAccounts(c.Request.Context(), apiKey.GroupID)
 		if hasAntigravity {
 			// antigravity 账户使用静态模型信息
-			c.JSON(http.StatusOK, gemini.FallbackModel(modelName))
+			c.JSON(http.StatusOK, gemini.FallbackModel(publicModel))
 			return
 		}
 		markOpsRoutingCapacityLimitedIfNoAvailable(c, err)
@@ -387,10 +391,30 @@ func (h *GatewayHandler) GeminiV1BetaGetModel(c *gin.Context) {
 		return
 	}
 	if shouldFallbackGeminiModel(modelName, res) {
-		c.JSON(http.StatusOK, gemini.FallbackModel(modelName))
+		c.JSON(http.StatusOK, gemini.FallbackModel(publicModel))
 		return
 	}
+	if publicModel != modelName {
+		if body, changed := rewriteGeminiModelMetadataName(res.Body, publicModel); changed {
+			res.Body = body
+		}
+	}
 	writeUpstreamResponse(c, res)
+}
+
+func rewriteGeminiModelMetadataName(body []byte, publicModel string) ([]byte, bool) {
+	var model map[string]json.RawMessage
+	if json.Unmarshal(body, &model) != nil || model == nil {
+		return body, false
+	}
+	name, _ := json.Marshal("models/" + strings.TrimPrefix(publicModel, "models/"))
+	model["name"] = name
+	if _, exists := model["displayName"]; exists {
+		displayName, _ := json.Marshal(strings.TrimPrefix(publicModel, "models/"))
+		model["displayName"] = displayName
+	}
+	rewritten, err := json.Marshal(model)
+	return rewritten, err == nil
 }
 
 func customGroupGeminiModels(models []string) gemini.ModelsListResponse {
@@ -468,6 +492,10 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 		if publicModel != modelName {
 			c.Request = c.Request.WithContext(service.WithGatewayPublicModel(c.Request.Context(), publicModel))
 		}
+	}
+	if !service.IsSafeGeminiModelPathSegment(modelName) {
+		googleError(c, http.StatusBadRequest, "Invalid model in URL")
+		return
 	}
 
 	stream := action == "streamGenerateContent"

@@ -43,6 +43,32 @@ func TestAppendGeminiModelAliasesRequiresAvailableTargetAndPublicAllowlist(t *te
 	require.JSONEq(t, `{"models":[{"name":"models/fast","version":"v1"}]}`, string(filtered))
 }
 
+func TestGeminiV1BetaGetModelAliasUsesPublicNameForFallback(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodGet, "/antigravity/v1beta/models/fast", nil)
+	c.Params = gin.Params{{Key: "model", Value: "fast"}}
+	c.Set(string(middleware.ContextKeyAPIKey), &service.APIKey{Group: &service.Group{
+		Platform:     service.PlatformGemini,
+		ModelAliases: []domain.ModelAlias{{Alias: "fast", UpstreamModel: "gemini-2.5-pro"}},
+	}})
+	c.Set(string(middleware.ContextKeyForcePlatform), service.PlatformAntigravity)
+
+	(&GatewayHandler{}).GeminiV1BetaGetModel(c)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	var got antigravity.GeminiModel
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	require.Equal(t, "models/fast", got.Name)
+}
+
+func TestRewriteGeminiModelMetadataNamePreservesFields(t *testing.T) {
+	body, changed := rewriteGeminiModelMetadataName([]byte(`{"name":"models/gemini-2.5-pro","displayName":"Gemini Pro","version":"v1"}`), "fast")
+	require.True(t, changed)
+	require.JSONEq(t, `{"name":"models/fast","displayName":"fast","version":"v1"}`, string(body))
+}
+
 func TestGeminiV1BetaListModels_ForcedAntigravityAppliesAllowlist(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	rec := httptest.NewRecorder()
