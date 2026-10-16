@@ -85,6 +85,7 @@ export const useAuthStore = defineStore('auth', () => {
   const pendingAuthSession = ref<PendingAuthSessionSummary | null>(null)
   let refreshIntervalId: ReturnType<typeof setInterval> | null = null
   let tokenRefreshTimeoutId: ReturnType<typeof setTimeout> | null = null
+  let visibilityChangeHandler: (() => void) | null = null
 
   // ==================== Computed ====================
 
@@ -158,12 +159,21 @@ export const useAuthStore = defineStore('auth', () => {
     stopAutoRefresh()
 
     refreshIntervalId = setInterval(() => {
-      if (token.value) {
+      if (token.value && !document.hidden) {
         refreshUser().catch((error) => {
           console.error('Auto-refresh user failed:', error)
         })
       }
     }, AUTO_REFRESH_INTERVAL)
+
+    visibilityChangeHandler = () => {
+      if (document.hidden || !token.value) return
+
+      refreshUser().catch((error) => {
+        console.error('Refresh user after visibility change failed:', error)
+      })
+    }
+    document.addEventListener('visibilitychange', visibilityChangeHandler)
   }
 
   /**
@@ -173,6 +183,10 @@ export const useAuthStore = defineStore('auth', () => {
     if (refreshIntervalId) {
       clearInterval(refreshIntervalId)
       refreshIntervalId = null
+    }
+    if (visibilityChangeHandler) {
+      document.removeEventListener('visibilitychange', visibilityChangeHandler)
+      visibilityChangeHandler = null
     }
   }
 

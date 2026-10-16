@@ -45,6 +45,7 @@ const createMockRouter = (): Router => {
 describe('useRoutePrefetch', () => {
   let originalRequestIdleCallback: typeof window.requestIdleCallback
   let originalCancelIdleCallback: typeof window.cancelIdleCallback
+  let originalConnectionDescriptor: PropertyDescriptor | undefined
   let mockRouter: Router
 
   beforeEach(() => {
@@ -53,6 +54,7 @@ describe('useRoutePrefetch', () => {
     // 保存原始函数
     originalRequestIdleCallback = window.requestIdleCallback
     originalCancelIdleCallback = window.cancelIdleCallback
+    originalConnectionDescriptor = Object.getOwnPropertyDescriptor(navigator, 'connection')
 
     // Mock requestIdleCallback 立即执行
     vi.stubGlobal('requestIdleCallback', (cb: IdleRequestCallback) => {
@@ -67,6 +69,11 @@ describe('useRoutePrefetch', () => {
     // 恢复原始函数
     window.requestIdleCallback = originalRequestIdleCallback
     window.cancelIdleCallback = originalCancelIdleCallback
+    if (originalConnectionDescriptor) {
+      Object.defineProperty(navigator, 'connection', originalConnectionDescriptor)
+    } else {
+      delete (navigator as Navigator & { connection?: unknown }).connection
+    }
   })
 
   describe('_isAdminRoute', () => {
@@ -112,6 +119,42 @@ describe('useRoutePrefetch', () => {
   })
 
   describe('triggerPrefetch', () => {
+    it.each([
+      ['save-data is enabled', { saveData: true, effectiveType: '4g' }],
+      ['the connection is slow-2g', { saveData: false, effectiveType: 'slow-2g' }],
+      ['the connection is 2g', { saveData: false, effectiveType: '2g' }]
+    ])('应该在网络状态为 %s 时跳过空闲预加载', async (_label, connection) => {
+      Object.defineProperty(navigator, 'connection', {
+        configurable: true,
+        value: connection
+      })
+
+      const { triggerPrefetch, prefetchedRoutes } = useRoutePrefetch(mockRouter)
+      triggerPrefetch(createMockRoute('/admin/dashboard'))
+
+      await new Promise((resolve) => setTimeout(resolve, 100))
+
+      expect(prefetchedRoutes.value.size).toBe(0)
+    })
+
+    it.each([
+      ['the connection is 3g', { saveData: false, effectiveType: '3g' }],
+      ['the connection is 4g', { saveData: false, effectiveType: '4g' }],
+      ['save-data is disabled with an unknown type', { saveData: false, effectiveType: 'unknown' }]
+    ])('保留 %s 时的空闲预加载', async (_label, connection) => {
+      Object.defineProperty(navigator, 'connection', {
+        configurable: true,
+        value: connection
+      })
+
+      const { triggerPrefetch, prefetchedRoutes } = useRoutePrefetch(mockRouter)
+      triggerPrefetch(createMockRoute('/admin/dashboard'))
+
+      await new Promise((resolve) => setTimeout(resolve, 100))
+
+      expect(prefetchedRoutes.value.has('/admin/dashboard')).toBe(true)
+    })
+
     it('应该在浏览器空闲时触发预加载', async () => {
       const { triggerPrefetch, prefetchedRoutes } = useRoutePrefetch(mockRouter)
       const route = createMockRoute('/admin/dashboard')

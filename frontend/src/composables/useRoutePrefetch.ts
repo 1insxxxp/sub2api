@@ -39,6 +39,27 @@ const PREFETCH_ADJACENCY: Record<string, string[]> = {
  */
 type IdleCallbackHandle = number | ReturnType<typeof setTimeout>
 
+type NetworkInformationLike = {
+  saveData?: boolean
+  effectiveType?: string
+}
+
+/**
+ * Avoid spending bandwidth on speculative chunks when the browser reports a
+ * data-saving or very slow connection. Browsers without Network Information
+ * support keep the existing prefetch behavior.
+ */
+const shouldSkipIdlePrefetch = (): boolean => {
+  if (typeof navigator === 'undefined') return false
+
+  const connection = (navigator as Navigator & { connection?: NetworkInformationLike }).connection
+  return (
+    connection?.saveData === true ||
+    connection?.effectiveType === 'slow-2g' ||
+    connection?.effectiveType === '2g'
+  )
+}
+
 /**
  * requestIdleCallback polyfill (Safari < 15)
  */
@@ -129,6 +150,8 @@ export function useRoutePrefetch(router?: Router) {
    */
   const triggerPrefetch = (route: RouteLocationNormalized): void => {
     cancelPendingPrefetch()
+
+    if (shouldSkipIdlePrefetch()) return
 
     const prefetchPaths = getPrefetchPaths(route)
     if (prefetchPaths.length === 0) return

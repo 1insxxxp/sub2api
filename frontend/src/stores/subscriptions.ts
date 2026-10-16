@@ -26,6 +26,7 @@ export const useSubscriptionStore = defineStore('subscriptions', () => {
 
   // Auto-refresh interval
   let pollerInterval: ReturnType<typeof setInterval> | null = null
+  let visibilityChangeHandler: (() => void) | null = null
 
   // Computed
   const hasActiveSubscriptions = computed(() => activeSubscriptions.value.length > 0)
@@ -89,10 +90,21 @@ export const useSubscriptionStore = defineStore('subscriptions', () => {
     if (pollerInterval) return
 
     pollerInterval = setInterval(() => {
+      if (document.hidden) return
+
       fetchActiveSubscriptions(true).catch((error) => {
         console.error('Subscription polling failed:', error)
       })
     }, 5 * 60 * 1000)
+
+    visibilityChangeHandler = () => {
+      if (document.hidden) return
+
+      fetchActiveSubscriptions(true).catch((error) => {
+        console.error('Subscription refresh after visibility change failed:', error)
+      })
+    }
+    document.addEventListener('visibilitychange', visibilityChangeHandler)
   }
 
   /**
@@ -102,6 +114,10 @@ export const useSubscriptionStore = defineStore('subscriptions', () => {
     if (pollerInterval) {
       clearInterval(pollerInterval)
       pollerInterval = null
+    }
+    if (visibilityChangeHandler) {
+      document.removeEventListener('visibilitychange', visibilityChangeHandler)
+      visibilityChangeHandler = null
     }
   }
 

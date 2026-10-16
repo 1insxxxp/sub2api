@@ -45,14 +45,20 @@ const fakeSubscriptions = [
 ]
 
 describe('useSubscriptionStore', () => {
+  const originalHiddenDescriptor = Object.getOwnPropertyDescriptor(document, 'hidden')
+
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.useFakeTimers()
     vi.clearAllMocks()
+    Object.defineProperty(document, 'hidden', { configurable: true, value: false })
   })
 
   afterEach(() => {
     vi.useRealTimers()
+    if (originalHiddenDescriptor) {
+      Object.defineProperty(document, 'hidden', originalHiddenDescriptor)
+    }
   })
 
   // --- fetchActiveSubscriptions ---
@@ -211,6 +217,35 @@ describe('useSubscriptionStore', () => {
   // --- polling ---
 
   describe('startPolling / stopPolling', () => {
+    it('hidden documents skip subscription refreshes', async () => {
+      const store = useSubscriptionStore()
+      mockGetActiveSubscriptions.mockResolvedValue([])
+
+      store.startPolling()
+      Object.defineProperty(document, 'hidden', { configurable: true, value: true })
+      vi.advanceTimersByTime(5 * 60 * 1000)
+      await Promise.resolve()
+
+      expect(mockGetActiveSubscriptions).not.toHaveBeenCalled()
+      store.stopPolling()
+    })
+
+    it('refreshes subscriptions once when the document becomes visible', async () => {
+      const store = useSubscriptionStore()
+      mockGetActiveSubscriptions.mockResolvedValue([])
+
+      store.startPolling()
+      Object.defineProperty(document, 'hidden', { configurable: true, value: true })
+      vi.advanceTimersByTime(5 * 60 * 1000)
+
+      Object.defineProperty(document, 'hidden', { configurable: true, value: false })
+      document.dispatchEvent(new Event('visibilitychange'))
+      await Promise.resolve()
+
+      expect(mockGetActiveSubscriptions).toHaveBeenCalledTimes(1)
+      store.stopPolling()
+    })
+
     it('startPolling 不会创建重复 interval', () => {
       const store = useSubscriptionStore()
       mockGetActiveSubscriptions.mockResolvedValue([])
