@@ -120,6 +120,8 @@ type Group struct {
 	FallbackGroupIDOnInvalidRequest *int64 `json:"fallback_group_id_on_invalid_request,omitempty"`
 	// 默认推理/思维强度：空=不注入；low/medium/high/xhigh 仅用于 Anthropic Messages 路径
 	DefaultReasoningEffort string `json:"default_reasoning_effort,omitempty"`
+	// group-level public model aliases and continuation policy
+	ModelAliases []domain.ModelAlias `json:"model_aliases,omitempty"`
 	// model routing config: pattern -> account ids
 	ModelRouting map[string][]int64 `json:"model_routing,omitempty"`
 	// whether model routing is enabled
@@ -331,7 +333,7 @@ func (*Group) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case group.FieldI18n, group.FieldVideoModelPrices, group.FieldModelPricing, group.FieldModelRouting, group.FieldSupportedModelScopes, group.FieldMessagesDispatchModelConfig, group.FieldModelAllowlist, group.FieldModelStatusVisibility, group.FieldCodexModelsManifestConfig, group.FieldReasoningEffortMappings:
+		case group.FieldI18n, group.FieldVideoModelPrices, group.FieldModelPricing, group.FieldModelAliases, group.FieldModelRouting, group.FieldSupportedModelScopes, group.FieldMessagesDispatchModelConfig, group.FieldModelAllowlist, group.FieldModelStatusVisibility, group.FieldCodexModelsManifestConfig, group.FieldReasoningEffortMappings:
 			values[i] = new([]byte)
 		case group.FieldEmptyResponseCompensationEnabled, group.FieldPeakRateEnabled, group.FieldIsExclusive, group.FieldSystemCustomRoutingEnabled, group.FieldAllowImageGeneration, group.FieldAllowBatchImageGeneration, group.FieldImageRateIndependent, group.FieldVideoRateIndependent, group.FieldLongContextPricingEnabled, group.FieldClaudeCodeOnly, group.FieldModelRoutingEnabled, group.FieldMcpXMLInject, group.FieldAllowMessagesDispatch, group.FieldAllowLive, group.FieldForceOpenaiFast, group.FieldFreeOpenaiFast, group.FieldRequireOauthOnly, group.FieldRequirePrivacySet, group.FieldSimulateClaudeMaxEnabled, group.FieldProfitControlEnabled:
 			values[i] = new(sql.NullBool)
@@ -688,6 +690,14 @@ func (_m *Group) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field default_reasoning_effort", values[i])
 			} else if value.Valid {
 				_m.DefaultReasoningEffort = value.String
+			}
+		case group.FieldModelAliases:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field model_aliases", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.ModelAliases); err != nil {
+					return fmt.Errorf("unmarshal field model_aliases: %w", err)
+				}
 			}
 		case group.FieldModelRouting:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -1141,6 +1151,9 @@ func (_m *Group) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("default_reasoning_effort=")
 	builder.WriteString(_m.DefaultReasoningEffort)
+	builder.WriteString(", ")
+	builder.WriteString("model_aliases=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ModelAliases))
 	builder.WriteString(", ")
 	builder.WriteString("model_routing=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ModelRouting))

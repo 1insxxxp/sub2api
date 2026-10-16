@@ -221,6 +221,11 @@ func (Group) Fields() []ent.Field {
 			Default("").
 			Comment("默认推理/思维强度：空=不注入；low/medium/high/xhigh 仅用于 Anthropic Messages 路径"),
 
+		field.JSON("model_aliases", []domain.ModelAlias{}).
+			Optional().
+			SchemaType(map[string]string{dialect.Postgres: "jsonb"}).
+			Comment("group-level public model aliases and continuation policy"),
+
 		field.JSON("model_routing", map[string][]int64{}).
 			Optional().
 			SchemaType(map[string]string{dialect.Postgres: "jsonb"}).

@@ -650,6 +650,16 @@ func DescriptionContainsFold(v string) predicate.Group {
 	return predicate.Group(sql.FieldContainsFold(FieldDescription, v))
 }
 
+// I18nIsNil applies the IsNil predicate on the "i18n" field.
+func I18nIsNil() predicate.Group {
+	return predicate.Group(sql.FieldIsNull(FieldI18n))
+}
+
+// I18nNotNil applies the NotNil predicate on the "i18n" field.
+func I18nNotNil() predicate.Group {
+	return predicate.Group(sql.FieldNotNull(FieldI18n))
+}
+
 // TagEQ applies the EQ predicate on the "tag" field.
 func TagEQ(v string) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldTag, v))
@@ -2443,6 +2453,16 @@ func DefaultReasoningEffortEqualFold(v string) predicate.Group {
 // DefaultReasoningEffortContainsFold applies the ContainsFold predicate on the "default_reasoning_effort" field.
 func DefaultReasoningEffortContainsFold(v string) predicate.Group {
 	return predicate.Group(sql.FieldContainsFold(FieldDefaultReasoningEffort, v))
+}
+
+// ModelAliasesIsNil applies the IsNil predicate on the "model_aliases" field.
+func ModelAliasesIsNil() predicate.Group {
+	return predicate.Group(sql.FieldIsNull(FieldModelAliases))
+}
+
+// ModelAliasesNotNil applies the NotNil predicate on the "model_aliases" field.
+func ModelAliasesNotNil() predicate.Group {
+	return predicate.Group(sql.FieldNotNull(FieldModelAliases))
 }
 
 // ModelRoutingIsNil applies the IsNil predicate on the "model_routing" field.

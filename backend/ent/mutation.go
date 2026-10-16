@@ -25433,6 +25433,8 @@ type GroupMutation struct {
 	fallback_group_id_on_invalid_request    *int64
 	addfallback_group_id_on_invalid_request *int64
 	default_reasoning_effort                *string
+	model_aliases                           *[]domain.ModelAlias
+	appendmodel_aliases                     []domain.ModelAlias
 	model_routing                           *map[string][]int64
 	model_routing_enabled                   *bool
 	mcp_xml_inject                          *bool
@@ -28179,6 +28181,71 @@ func (m *GroupMutation) ResetDefaultReasoningEffort() {
 	m.default_reasoning_effort = nil
 }
 
+// SetModelAliases sets the "model_aliases" field.
+func (m *GroupMutation) SetModelAliases(da []domain.ModelAlias) {
+	m.model_aliases = &da
+	m.appendmodel_aliases = nil
+}
+
+// ModelAliases returns the value of the "model_aliases" field in the mutation.
+func (m *GroupMutation) ModelAliases() (r []domain.ModelAlias, exists bool) {
+	v := m.model_aliases
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldModelAliases returns the old "model_aliases" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldModelAliases(ctx context.Context) (v []domain.ModelAlias, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldModelAliases is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldModelAliases requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldModelAliases: %w", err)
+	}
+	return oldValue.ModelAliases, nil
+}
+
+// AppendModelAliases adds da to the "model_aliases" field.
+func (m *GroupMutation) AppendModelAliases(da []domain.ModelAlias) {
+	m.appendmodel_aliases = append(m.appendmodel_aliases, da...)
+}
+
+// AppendedModelAliases returns the list of values that were appended to the "model_aliases" field in this mutation.
+func (m *GroupMutation) AppendedModelAliases() ([]domain.ModelAlias, bool) {
+	if len(m.appendmodel_aliases) == 0 {
+		return nil, false
+	}
+	return m.appendmodel_aliases, true
+}
+
+// ClearModelAliases clears the value of the "model_aliases" field.
+func (m *GroupMutation) ClearModelAliases() {
+	m.model_aliases = nil
+	m.appendmodel_aliases = nil
+	m.clearedFields[group.FieldModelAliases] = struct{}{}
+}
+
+// ModelAliasesCleared returns if the "model_aliases" field was cleared in this mutation.
+func (m *GroupMutation) ModelAliasesCleared() bool {
+	_, ok := m.clearedFields[group.FieldModelAliases]
+	return ok
+}
+
+// ResetModelAliases resets all changes to the "model_aliases" field.
+func (m *GroupMutation) ResetModelAliases() {
+	m.model_aliases = nil
+	m.appendmodel_aliases = nil
+	delete(m.clearedFields, group.FieldModelAliases)
+}
+
 // SetModelRouting sets the "model_routing" field.
 func (m *GroupMutation) SetModelRouting(value map[string][]int64) {
 	m.model_routing = &value
@@ -29830,7 +29897,7 @@ func (m *GroupMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GroupMutation) Fields() []string {
-	fields := make([]string, 0, 75)
+	fields := make([]string, 0, 76)
 	if m.created_at != nil {
 		fields = append(fields, group.FieldCreatedAt)
 	}
@@ -29980,6 +30047,9 @@ func (m *GroupMutation) Fields() []string {
 	}
 	if m.default_reasoning_effort != nil {
 		fields = append(fields, group.FieldDefaultReasoningEffort)
+	}
+	if m.model_aliases != nil {
+		fields = append(fields, group.FieldModelAliases)
 	}
 	if m.model_routing != nil {
 		fields = append(fields, group.FieldModelRouting)
@@ -30164,6 +30234,8 @@ func (m *GroupMutation) Field(name string) (ent.Value, bool) {
 		return m.FallbackGroupIDOnInvalidRequest()
 	case group.FieldDefaultReasoningEffort:
 		return m.DefaultReasoningEffort()
+	case group.FieldModelAliases:
+		return m.ModelAliases()
 	case group.FieldModelRouting:
 		return m.ModelRouting()
 	case group.FieldModelRoutingEnabled:
@@ -30323,6 +30395,8 @@ func (m *GroupMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldFallbackGroupIDOnInvalidRequest(ctx)
 	case group.FieldDefaultReasoningEffort:
 		return m.OldDefaultReasoningEffort(ctx)
+	case group.FieldModelAliases:
+		return m.OldModelAliases(ctx)
 	case group.FieldModelRouting:
 		return m.OldModelRouting(ctx)
 	case group.FieldModelRoutingEnabled:
@@ -30731,6 +30805,13 @@ func (m *GroupMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetDefaultReasoningEffort(v)
+		return nil
+	case group.FieldModelAliases:
+		v, ok := value.([]domain.ModelAlias)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetModelAliases(v)
 		return nil
 	case group.FieldModelRouting:
 		v, ok := value.(map[string][]int64)
@@ -31330,6 +31411,9 @@ func (m *GroupMutation) ClearedFields() []string {
 	if m.FieldCleared(group.FieldFallbackGroupIDOnInvalidRequest) {
 		fields = append(fields, group.FieldFallbackGroupIDOnInvalidRequest)
 	}
+	if m.FieldCleared(group.FieldModelAliases) {
+		fields = append(fields, group.FieldModelAliases)
+	}
 	if m.FieldCleared(group.FieldModelRouting) {
 		fields = append(fields, group.FieldModelRouting)
 	}
@@ -31412,6 +31496,9 @@ func (m *GroupMutation) ClearField(name string) error {
 		return nil
 	case group.FieldFallbackGroupIDOnInvalidRequest:
 		m.ClearFallbackGroupIDOnInvalidRequest()
+		return nil
+	case group.FieldModelAliases:
+		m.ClearModelAliases()
 		return nil
 	case group.FieldModelRouting:
 		m.ClearModelRouting()
@@ -31573,6 +31660,9 @@ func (m *GroupMutation) ResetField(name string) error {
 		return nil
 	case group.FieldDefaultReasoningEffort:
 		m.ResetDefaultReasoningEffort()
+		return nil
+	case group.FieldModelAliases:
+		m.ResetModelAliases()
 		return nil
 	case group.FieldModelRouting:
 		m.ResetModelRouting()

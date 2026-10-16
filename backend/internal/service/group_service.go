@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
@@ -83,27 +84,29 @@ type GroupSortOrderUpdate struct {
 
 // CreateGroupRequest 创建分组请求
 type CreateGroupRequest struct {
-	KeyDisplayCategory   string   `json:"key_display_category"`
-	Name                 string   `json:"name"`
-	Description          string   `json:"description"`
-	RateMultiplier       float64  `json:"rate_multiplier"`
-	IsExclusive          bool     `json:"is_exclusive"`
-	AllowImageGeneration bool     `json:"allow_image_generation"`
-	ImageRateIndependent bool     `json:"image_rate_independent"`
-	ImageRateMultiplier  *float64 `json:"image_rate_multiplier"`
+	KeyDisplayCategory   string              `json:"key_display_category"`
+	Name                 string              `json:"name"`
+	Description          string              `json:"description"`
+	RateMultiplier       float64             `json:"rate_multiplier"`
+	IsExclusive          bool                `json:"is_exclusive"`
+	AllowImageGeneration bool                `json:"allow_image_generation"`
+	ImageRateIndependent bool                `json:"image_rate_independent"`
+	ImageRateMultiplier  *float64            `json:"image_rate_multiplier"`
+	ModelAliases         []domain.ModelAlias `json:"model_aliases"`
 }
 
 // UpdateGroupRequest 更新分组请求
 type UpdateGroupRequest struct {
-	KeyDisplayCategory   *string  `json:"key_display_category"`
-	Name                 *string  `json:"name"`
-	Description          *string  `json:"description"`
-	RateMultiplier       *float64 `json:"rate_multiplier"`
-	IsExclusive          *bool    `json:"is_exclusive"`
-	Status               *string  `json:"status"`
-	AllowImageGeneration *bool    `json:"allow_image_generation"`
-	ImageRateIndependent *bool    `json:"image_rate_independent"`
-	ImageRateMultiplier  *float64 `json:"image_rate_multiplier"`
+	KeyDisplayCategory   *string             `json:"key_display_category"`
+	Name                 *string             `json:"name"`
+	Description          *string             `json:"description"`
+	RateMultiplier       *float64            `json:"rate_multiplier"`
+	IsExclusive          *bool               `json:"is_exclusive"`
+	Status               *string             `json:"status"`
+	AllowImageGeneration *bool               `json:"allow_image_generation"`
+	ImageRateIndependent *bool               `json:"image_rate_independent"`
+	ImageRateMultiplier  *float64            `json:"image_rate_multiplier"`
+	ModelAliases         []domain.ModelAlias `json:"model_aliases"`
 }
 
 // GroupService 分组管理服务

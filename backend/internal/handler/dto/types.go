@@ -99,18 +99,18 @@ type APIKey struct {
 }
 
 type Group struct {
-	ID                               int64   `json:"id"`
-	Name                             string  `json:"name"`
-	Description                      string  `json:"description"`
+	ID                               int64             `json:"id"`
+	Name                             string            `json:"name"`
+	Description                      string            `json:"description"`
 	I18n                             service.GroupI18n `json:"i18n,omitempty"`
-	Tag                              string  `json:"tag"`
-	TagColor                         string  `json:"tag_color"`
-	KeyDisplayCategory               string  `json:"key_display_category"`
-	Platform                         string  `json:"platform"`
-	RateMultiplier                   float64 `json:"rate_multiplier"`
-	EmptyResponseCompensationEnabled bool    `json:"empty_response_compensation_enabled"`
-	IsExclusive                      bool    `json:"is_exclusive"`
-	Status                           string  `json:"status"`
+	Tag                              string            `json:"tag"`
+	TagColor                         string            `json:"tag_color"`
+	KeyDisplayCategory               string            `json:"key_display_category"`
+	Platform                         string            `json:"platform"`
+	RateMultiplier                   float64           `json:"rate_multiplier"`
+	EmptyResponseCompensationEnabled bool              `json:"empty_response_compensation_enabled"`
+	IsExclusive                      bool              `json:"is_exclusive"`
+	Status                           string            `json:"status"`
 
 	SubscriptionType           string   `json:"subscription_type"`
 	SystemCustomRoutingEnabled bool     `json:"system_custom_routing_enabled"`
@@ -209,11 +209,12 @@ type AdminGroup struct {
 	CodexModelsManifestConfig domain.GroupCodexModelsManifestConfig `json:"codex_models_manifest_config"`
 
 	// 支持的模型系列（仅 antigravity 平台使用）
-	SupportedModelScopes    []string       `json:"supported_model_scopes"`
-	AccountGroups           []AccountGroup `json:"account_groups,omitempty"`
-	AccountCount            int64          `json:"account_count,omitempty"`
-	ActiveAccountCount      int64          `json:"active_account_count,omitempty"`
-	RateLimitedAccountCount int64          `json:"rate_limited_account_count,omitempty"`
+	SupportedModelScopes    []string            `json:"supported_model_scopes"`
+	ModelAliases            []domain.ModelAlias `json:"model_aliases,omitempty"`
+	AccountGroups           []AccountGroup      `json:"account_groups,omitempty"`
+	AccountCount            int64               `json:"account_count,omitempty"`
+	ActiveAccountCount      int64               `json:"active_account_count,omitempty"`
+	RateLimitedAccountCount int64               `json:"rate_limited_account_count,omitempty"`
 
 	// 分组排序
 	SortOrder int `json:"sort_order"`

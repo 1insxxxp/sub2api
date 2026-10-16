@@ -26,6 +26,7 @@ const (
 	FieldName = "name"
 	// FieldDescription holds the string denoting the description field in the database.
 	FieldDescription = "description"
+	// FieldI18n holds the string denoting the i18n field in the database.
 	FieldI18n = "i18n"
 	// FieldTag holds the string denoting the tag field in the database.
 	FieldTag = "tag"
@@ -115,6 +116,8 @@ const (
 	FieldFallbackGroupIDOnInvalidRequest = "fallback_group_id_on_invalid_request"
 	// FieldDefaultReasoningEffort holds the string denoting the default_reasoning_effort field in the database.
 	FieldDefaultReasoningEffort = "default_reasoning_effort"
+	// FieldModelAliases holds the string denoting the model_aliases field in the database.
+	FieldModelAliases = "model_aliases"
 	// FieldModelRouting holds the string denoting the model_routing field in the database.
 	FieldModelRouting = "model_routing"
 	// FieldModelRoutingEnabled holds the string denoting the model_routing_enabled field in the database.
@@ -335,6 +338,7 @@ var Columns = []string{
 	FieldFallbackGroupID,
 	FieldFallbackGroupIDOnInvalidRequest,
 	FieldDefaultReasoningEffort,
+	FieldModelAliases,
 	FieldModelRouting,
 	FieldModelRoutingEnabled,
 	FieldMcpXMLInject,
@@ -363,7 +367,6 @@ var Columns = []string{
 }
 
 var (
-	DefaultI18n domain.GroupI18n
 	// AccountsPrimaryKey and AccountsColumn2 are the table columns denoting the
 	// primary key for the accounts relation (M2M).
 	AccountsPrimaryKey = []string{"account_id", "group_id"}
@@ -398,6 +401,8 @@ var (
 	UpdateDefaultUpdatedAt func() time.Time
 	// NameValidator is a validator for the "name" field. It is called by the builders before save.
 	NameValidator func(string) error
+	// DefaultI18n holds the default value on creation for the "i18n" field.
+	DefaultI18n domain.GroupI18n
 	// DefaultTag holds the default value on creation for the "tag" field.
 	DefaultTag string
 	// TagValidator is a validator for the "tag" field. It is called by the builders before save.

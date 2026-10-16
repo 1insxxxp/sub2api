@@ -658,6 +658,9 @@ export interface ReasoningEffortMapping {
 
 export type GroupTag = string
 
+export interface ModelAlias { alias: string; upstream_model: string; anti_truncation?: { enabled: boolean; max_rounds?: number; max_output_tokens?: number; max_duration_seconds?: number } }
+
+
 export type KeyDisplayCategory = '' | 'anthropic' | 'openai' | 'domestic' | 'other'
 
 export interface Group {
@@ -716,6 +719,7 @@ export interface Group {
   fallback_group_id: number | null
   fallback_group_id_on_invalid_request: number | null
   default_reasoning_effort: '' | 'low' | 'medium' | 'high' | 'xhigh'
+  model_aliases?: ModelAlias[]
   // OpenAI Messages 调度开关（用户侧需要此字段判断是否展示 Claude Code 教程）
   allow_messages_dispatch?: boolean
   // OpenAI Live 接口开关
@@ -1117,6 +1121,7 @@ export interface CreateGroupRequest {
   mcp_xml_inject?: boolean
   simulate_claude_max_enabled?: boolean
   supported_model_scopes?: string[]
+  model_aliases?: ModelAlias[]
   model_allowlist?: ModelAllowlist
   model_status_visibility?: ModelStatusVisibility
   codex_models_manifest_config?: CodexModelsManifestConfig
@@ -1190,6 +1195,7 @@ export interface UpdateGroupRequest {
   mcp_xml_inject?: boolean
   simulate_claude_max_enabled?: boolean
   supported_model_scopes?: string[]
+  model_aliases?: ModelAlias[]
   model_allowlist?: ModelAllowlist
   model_status_visibility?: ModelStatusVisibility
   codex_models_manifest_config?: CodexModelsManifestConfig

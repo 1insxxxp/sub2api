@@ -171,6 +171,7 @@ func GroupFromServiceAdmin(g *service.Group) *AdminGroup {
 		ModelStatusVisibility:       g.ModelStatusVisibility,
 		CodexModelsManifestConfig:   g.CodexModelsManifestConfig,
 		SupportedModelScopes:        g.SupportedModelScopes,
+		ModelAliases:                g.ModelAliases,
 		AccountCount:                g.AccountCount,
 		ActiveAccountCount:          g.ActiveAccountCount,
 		RateLimitedAccountCount:     g.RateLimitedAccountCount,

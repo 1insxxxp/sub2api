@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"strconv"
 	"strings"
 	"time"
@@ -142,6 +143,7 @@ func cloneGroupForDuplicate(source *Group, operationID string) *Group {
 		FallbackGroupID:                  cloneGroupValuePointer(source.FallbackGroupID),
 		FallbackGroupIDOnInvalidRequest:  cloneGroupValuePointer(source.FallbackGroupIDOnInvalidRequest),
 		DefaultReasoningEffort:           source.DefaultReasoningEffort,
+		ModelAliases:                     append([]domain.ModelAlias(nil), source.ModelAliases...),
 		ModelRouting:                     cloneGroupModelRouting(source.ModelRouting),
 		ModelRoutingEnabled:              source.ModelRoutingEnabled,
 		MCPXMLInject:                     source.MCPXMLInject,

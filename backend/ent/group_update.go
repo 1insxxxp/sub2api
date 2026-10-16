@@ -973,6 +973,24 @@ func (_u *GroupUpdate) SetNillableDefaultReasoningEffort(v *string) *GroupUpdate
 	return _u
 }
 
+// SetModelAliases sets the "model_aliases" field.
+func (_u *GroupUpdate) SetModelAliases(v []domain.ModelAlias) *GroupUpdate {
+	_u.mutation.SetModelAliases(v)
+	return _u
+}
+
+// AppendModelAliases appends value to the "model_aliases" field.
+func (_u *GroupUpdate) AppendModelAliases(v []domain.ModelAlias) *GroupUpdate {
+	_u.mutation.AppendModelAliases(v)
+	return _u
+}
+
+// ClearModelAliases clears the value of the "model_aliases" field.
+func (_u *GroupUpdate) ClearModelAliases() *GroupUpdate {
+	_u.mutation.ClearModelAliases()
+	return _u
+}
+
 // SetModelRouting sets the "model_routing" field.
 func (_u *GroupUpdate) SetModelRouting(v map[string][]int64) *GroupUpdate {
 	_u.mutation.SetModelRouting(v)
@@ -2173,6 +2191,17 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.DefaultReasoningEffort(); ok {
 		_spec.SetField(group.FieldDefaultReasoningEffort, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ModelAliases(); ok {
+		_spec.SetField(group.FieldModelAliases, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedModelAliases(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, group.FieldModelAliases, value)
+		})
+	}
+	if _u.mutation.ModelAliasesCleared() {
+		_spec.ClearField(group.FieldModelAliases, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.ModelRouting(); ok {
 		_spec.SetField(group.FieldModelRouting, field.TypeJSON, value)
@@ -3746,6 +3775,24 @@ func (_u *GroupUpdateOne) SetNillableDefaultReasoningEffort(v *string) *GroupUpd
 	return _u
 }
 
+// SetModelAliases sets the "model_aliases" field.
+func (_u *GroupUpdateOne) SetModelAliases(v []domain.ModelAlias) *GroupUpdateOne {
+	_u.mutation.SetModelAliases(v)
+	return _u
+}
+
+// AppendModelAliases appends value to the "model_aliases" field.
+func (_u *GroupUpdateOne) AppendModelAliases(v []domain.ModelAlias) *GroupUpdateOne {
+	_u.mutation.AppendModelAliases(v)
+	return _u
+}
+
+// ClearModelAliases clears the value of the "model_aliases" field.
+func (_u *GroupUpdateOne) ClearModelAliases() *GroupUpdateOne {
+	_u.mutation.ClearModelAliases()
+	return _u
+}
+
 // SetModelRouting sets the "model_routing" field.
 func (_u *GroupUpdateOne) SetModelRouting(v map[string][]int64) *GroupUpdateOne {
 	_u.mutation.SetModelRouting(v)
@@ -4976,6 +5023,17 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if value, ok := _u.mutation.DefaultReasoningEffort(); ok {
 		_spec.SetField(group.FieldDefaultReasoningEffort, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ModelAliases(); ok {
+		_spec.SetField(group.FieldModelAliases, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedModelAliases(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, group.FieldModelAliases, value)
+		})
+	}
+	if _u.mutation.ModelAliasesCleared() {
+		_spec.ClearField(group.FieldModelAliases, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.ModelRouting(); ok {
 		_spec.SetField(group.FieldModelRouting, field.TypeJSON, value)

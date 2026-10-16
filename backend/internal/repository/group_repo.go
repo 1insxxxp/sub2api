@@ -174,6 +174,7 @@ func createGroupRecord(ctx context.Context, client *dbent.Client, groupIn *servi
 	if groupIn.ModelRouting != nil {
 		builder = builder.SetModelRouting(groupIn.ModelRouting)
 	}
+	builder = builder.SetModelAliases(groupIn.ModelAliases)
 
 	// 设置支持的模型系列（始终设置，空数组表示不限制）
 	builder = builder.SetSupportedModelScopes(groupIn.SupportedModelScopes)
@@ -450,8 +451,15 @@ func (r *groupRepository) Update(ctx context.Context, groupIn *service.Group) er
 		builder = builder.ClearModelRouting()
 	}
 
+	if groupIn.ModelAliases != nil {
+		builder = builder.SetModelAliases(groupIn.ModelAliases)
+	} else {
+		builder = builder.ClearModelAliases()
+	}
+
 	// 处理 SupportedModelScopes（始终设置，空数组表示不限制）
 	builder = builder.SetSupportedModelScopes(groupIn.SupportedModelScopes)
+	builder = builder.SetModelAliases(groupIn.ModelAliases)
 
 	i18n := groupIn.I18n
 	if i18n == nil {

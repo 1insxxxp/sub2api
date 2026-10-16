@@ -1063,6 +1063,7 @@ func groupEntityToService(g *dbent.Group) *service.Group {
 		FallbackGroupID:                  g.FallbackGroupID,
 		FallbackGroupIDOnInvalidRequest:  g.FallbackGroupIDOnInvalidRequest,
 		DefaultReasoningEffort:           g.DefaultReasoningEffort,
+		ModelAliases:                     g.ModelAliases,
 		ModelRouting:                     g.ModelRouting,
 		ModelRoutingEnabled:              g.ModelRoutingEnabled,
 		MCPXMLInject:                     g.McpXMLInject,

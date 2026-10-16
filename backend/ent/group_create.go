@@ -701,6 +701,12 @@ func (_c *GroupCreate) SetNillableDefaultReasoningEffort(v *string) *GroupCreate
 	return _c
 }
 
+// SetModelAliases sets the "model_aliases" field.
+func (_c *GroupCreate) SetModelAliases(v []domain.ModelAlias) *GroupCreate {
+	_c.mutation.SetModelAliases(v)
+	return _c
+}
+
 // SetModelRouting sets the "model_routing" field.
 func (_c *GroupCreate) SetModelRouting(v map[string][]int64) *GroupCreate {
 	_c.mutation.SetModelRouting(v)
@@ -1921,6 +1927,10 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 		_spec.SetField(group.FieldDefaultReasoningEffort, field.TypeString, value)
 		_node.DefaultReasoningEffort = value
 	}
+	if value, ok := _c.mutation.ModelAliases(); ok {
+		_spec.SetField(group.FieldModelAliases, field.TypeJSON, value)
+		_node.ModelAliases = value
+	}
 	if value, ok := _c.mutation.ModelRouting(); ok {
 		_spec.SetField(group.FieldModelRouting, field.TypeJSON, value)
 		_node.ModelRouting = value
@@ -3094,6 +3104,24 @@ func (u *GroupUpsert) SetDefaultReasoningEffort(v string) *GroupUpsert {
 // UpdateDefaultReasoningEffort sets the "default_reasoning_effort" field to the value that was provided on create.
 func (u *GroupUpsert) UpdateDefaultReasoningEffort() *GroupUpsert {
 	u.SetExcluded(group.FieldDefaultReasoningEffort)
+	return u
+}
+
+// SetModelAliases sets the "model_aliases" field.
+func (u *GroupUpsert) SetModelAliases(v []domain.ModelAlias) *GroupUpsert {
+	u.Set(group.FieldModelAliases, v)
+	return u
+}
+
+// UpdateModelAliases sets the "model_aliases" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateModelAliases() *GroupUpsert {
+	u.SetExcluded(group.FieldModelAliases)
+	return u
+}
+
+// ClearModelAliases clears the value of the "model_aliases" field.
+func (u *GroupUpsert) ClearModelAliases() *GroupUpsert {
+	u.SetNull(group.FieldModelAliases)
 	return u
 }
 
@@ -4452,6 +4480,27 @@ func (u *GroupUpsertOne) SetDefaultReasoningEffort(v string) *GroupUpsertOne {
 func (u *GroupUpsertOne) UpdateDefaultReasoningEffort() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateDefaultReasoningEffort()
+	})
+}
+
+// SetModelAliases sets the "model_aliases" field.
+func (u *GroupUpsertOne) SetModelAliases(v []domain.ModelAlias) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetModelAliases(v)
+	})
+}
+
+// UpdateModelAliases sets the "model_aliases" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateModelAliases() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateModelAliases()
+	})
+}
+
+// ClearModelAliases clears the value of the "model_aliases" field.
+func (u *GroupUpsertOne) ClearModelAliases() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.ClearModelAliases()
 	})
 }
 
@@ -6031,6 +6080,27 @@ func (u *GroupUpsertBulk) SetDefaultReasoningEffort(v string) *GroupUpsertBulk {
 func (u *GroupUpsertBulk) UpdateDefaultReasoningEffort() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateDefaultReasoningEffort()
+	})
+}
+
+// SetModelAliases sets the "model_aliases" field.
+func (u *GroupUpsertBulk) SetModelAliases(v []domain.ModelAlias) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetModelAliases(v)
+	})
+}
+
+// UpdateModelAliases sets the "model_aliases" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateModelAliases() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateModelAliases()
+	})
+}
+
+// ClearModelAliases clears the value of the "model_aliases" field.
+func (u *GroupUpsertBulk) ClearModelAliases() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.ClearModelAliases()
 	})
 }
 
