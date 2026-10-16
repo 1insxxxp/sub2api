@@ -14,7 +14,7 @@ import (
 	"github.com/dgraph-io/ristretto"
 )
 
-const apiKeyAuthSnapshotVersion = 25 // v25: preserve group default_reasoning_effort in auth snapshots
+const apiKeyAuthSnapshotVersion = 26 // v26: preserve group model aliases in auth snapshots
 
 type apiKeyAuthCacheConfig struct {
 	l1Size        int
@@ -421,6 +421,7 @@ func (s *APIKeyService) snapshotFromAPIKey(ctx context.Context, apiKey *APIKey) 
 			FallbackGroupIDOnInvalidRequest: apiKey.Group.FallbackGroupIDOnInvalidRequest,
 			DefaultReasoningEffort:          apiKey.Group.DefaultReasoningEffort,
 			ModelRouting:                    apiKey.Group.ModelRouting,
+			ModelAliases:                    apiKey.Group.ModelAliases,
 			ModelRoutingEnabled:             apiKey.Group.ModelRoutingEnabled,
 			MCPXMLInject:                    apiKey.Group.MCPXMLInject,
 			SimulateClaudeMaxEnabled:        apiKey.Group.SimulateClaudeMaxEnabled,
@@ -532,6 +533,7 @@ func (s *APIKeyService) snapshotToAPIKey(key string, snapshot *APIKeyAuthSnapsho
 			FallbackGroupIDOnInvalidRequest: snapshot.Group.FallbackGroupIDOnInvalidRequest,
 			DefaultReasoningEffort:          snapshot.Group.DefaultReasoningEffort,
 			ModelRouting:                    snapshot.Group.ModelRouting,
+			ModelAliases:                    snapshot.Group.ModelAliases,
 			ModelRoutingEnabled:             snapshot.Group.ModelRoutingEnabled,
 			MCPXMLInject:                    snapshot.Group.MCPXMLInject,
 			SimulateClaudeMaxEnabled:        snapshot.Group.SimulateClaudeMaxEnabled,

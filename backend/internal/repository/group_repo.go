@@ -459,7 +459,6 @@ func (r *groupRepository) Update(ctx context.Context, groupIn *service.Group) er
 
 	// 处理 SupportedModelScopes（始终设置，空数组表示不限制）
 	builder = builder.SetSupportedModelScopes(groupIn.SupportedModelScopes)
-	builder = builder.SetModelAliases(groupIn.ModelAliases)
 
 	i18n := groupIn.I18n
 	if i18n == nil {

@@ -422,6 +422,10 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 	}
 
 	platform := NormalizeGroupPlatform(input.Platform)
+	modelAliases, err := domain.NormalizeModelAliases(input.ModelAliases)
+	if err != nil {
+		return nil, infraerrors.BadRequest("INVALID_MODEL_ALIASES", err.Error())
+	}
 	// 固定账号 manifest 配置：账号绑定发生在创建之后，创建时无法校验成员关系，
 	// 拒绝开启并在创建后的编辑里配置。
 	if normalizeCodexModelsManifestConfig(platform, input.CodexModelsManifestConfig).Enabled {
@@ -641,6 +645,7 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		FallbackGroupIDOnInvalidRequest:  fallbackOnInvalidRequest,
 		DefaultReasoningEffort:           normalizeDefaultReasoningEffortSetting(input.DefaultReasoningEffort),
 		ModelRouting:                     input.ModelRouting,
+		ModelAliases:                     modelAliases,
 		MCPXMLInject:                     mcpXMLInject,
 		SupportedModelScopes:             input.SupportedModelScopes,
 		AllowMessagesDispatch:            input.AllowMessagesDispatch,
@@ -1031,6 +1036,13 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	}
 
 	// 模型路由配置
+	if input.ModelAliases != nil {
+		aliases, err := domain.NormalizeModelAliases(*input.ModelAliases)
+		if err != nil {
+			return nil, infraerrors.BadRequest("INVALID_MODEL_ALIASES", err.Error())
+		}
+		group.ModelAliases = aliases
+	}
 	if input.ModelRouting != nil {
 		group.ModelRouting = input.ModelRouting
 	}

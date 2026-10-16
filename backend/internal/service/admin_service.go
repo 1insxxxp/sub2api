@@ -7,6 +7,7 @@ import (
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
 
@@ -238,6 +239,7 @@ type AdminBoundAuthIdentityChannel struct {
 }
 
 type CreateGroupInput struct {
+	ModelAliases                     []domain.ModelAlias
 	KeyDisplayCategory               string
 	Name                             string
 	Description                      string
@@ -326,6 +328,7 @@ type CreateGroupInput struct {
 }
 
 type UpdateGroupInput struct {
+	ModelAliases                     *[]domain.ModelAlias
 	KeyDisplayCategory               *string
 	Name                             string
 	Description                      *string

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/stretchr/testify/require"
@@ -16,6 +17,23 @@ import (
 func ptrString[T ~string](v T) *string {
 	s := string(v)
 	return &s
+}
+
+func TestAdminService_ModelAliasesCreateAndUpdate(t *testing.T) {
+	repo := &groupRepoStubForAdmin{createID: 12, getByID: &Group{ID: 12, Platform: PlatformAnthropic, RateMultiplier: 1}}
+	svc := &adminServiceImpl{groupRepo: repo}
+	created, err := svc.CreateGroup(context.Background(), &CreateGroupInput{
+		Name: "aliases", Platform: PlatformAnthropic, RateMultiplier: 1,
+		ModelAliases: []domain.ModelAlias{{Alias: " fast ", UpstreamModel: " claude-sonnet "}},
+	})
+	require.NoError(t, err)
+	require.Equal(t, []domain.ModelAlias{{Alias: "fast", UpstreamModel: "claude-sonnet"}}, created.ModelAliases)
+
+	updated, err := svc.UpdateGroup(context.Background(), 12, &UpdateGroupInput{
+		ModelAliases: &[]domain.ModelAlias{{Alias: "smart", UpstreamModel: "claude-opus"}},
+	})
+	require.NoError(t, err)
+	require.Equal(t, "smart", updated.ModelAliases[0].Alias)
 }
 
 // groupRepoStubForAdmin 用于测试 AdminService 的 GroupRepository Stub

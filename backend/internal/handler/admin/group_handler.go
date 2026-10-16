@@ -731,6 +731,7 @@ func (h *GroupHandler) Create(c *gin.Context) {
 	}
 
 	group, err := h.adminService.CreateGroup(c.Request.Context(), &service.CreateGroupInput{
+		ModelAliases:                     req.ModelAliases,
 		Name:                             req.Name,
 		Description:                      req.Description,
 		Tag:                              req.Tag,
@@ -882,6 +883,7 @@ func (h *GroupHandler) Update(c *gin.Context) {
 	}
 
 	group, err := h.adminService.UpdateGroup(c.Request.Context(), groupID, &service.UpdateGroupInput{
+		ModelAliases:                     req.ModelAliases,
 		Name:                             req.Name,
 		Description:                      req.Description,
 		Tag:                              req.Tag,
