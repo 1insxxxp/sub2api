@@ -49,6 +49,7 @@ func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context,
 	}
 
 	originalModel := claudeReq.Model
+	responseModel := gatewayPublicModel(ctx, originalModel)
 	mappedModel := s.getMappedModelForThinkingLevel(
 		account,
 		claudeReq.Model,
@@ -448,7 +449,7 @@ func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context,
 	var outcome *ResponseOutcome
 	if claudeReq.Stream {
 		// 客户端要求流式，直接透传转换
-		streamRes, err := s.handleClaudeStreamingResponse(c, resp, startTime, originalModel)
+		streamRes, err := s.handleClaudeStreamingResponse(c, resp, startTime, responseModel)
 		if err != nil {
 			logger.LegacyPrintf("service.antigravity_gateway", "%s status=stream_error error=%v", prefix, err)
 			return nil, err
@@ -459,7 +460,7 @@ func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context,
 		outcome = &streamRes.outcome
 	} else {
 		// 客户端要求非流式，收集流式响应后转换返回
-		streamRes, err := s.handleClaudeStreamToNonStreaming(c, resp, startTime, originalModel, account.ID)
+		streamRes, err := s.handleClaudeStreamToNonStreaming(c, resp, startTime, responseModel, account.ID)
 		if err != nil {
 			logger.LegacyPrintf("service.antigravity_gateway", "%s status=stream_collect_error error=%v", prefix, err)
 			return nil, err
@@ -473,7 +474,7 @@ func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context,
 		RequestID:                     requestID,
 		UpstreamHeaders:               resp.Header,
 		Usage:                         *usage,
-		Model:                         originalModel,
+		Model:                         responseModel,
 		UpstreamModel:                 billingModel,
 		UpstreamResponseModel:         observedUpstreamResponseModel(c),
 		UpstreamResponseModelConflict: observedUpstreamResponseModelConflict(c),

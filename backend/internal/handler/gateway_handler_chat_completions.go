@@ -84,7 +84,11 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 		return
 	}
 	reqModel := modelResult.String()
-	routeModel, _ := resolveGroupModelAlias(apiKey.Group, reqModel)
+	publicModel, routeModel := resolveGroupModelRoute(apiKey.Group, reqModel)
+	c.Request = c.Request.WithContext(service.WithGroupAliasRawChatAntiTruncationPolicy(c.Request.Context(), apiKey.Group, reqModel))
+	if routeModel != publicModel {
+		c.Request = c.Request.WithContext(service.WithGatewayPublicModel(c.Request.Context(), publicModel))
+	}
 	bindRequestedReasoningEffort(c, body, reqModel)
 	ensureCompositeTargetPlatform(c, apiKey, reqModel)
 	if !compositeTargetPlatformResolved(c, apiKey, reqModel) {

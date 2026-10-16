@@ -39,3 +39,15 @@ func TestAppendAvailableGroupModelAliasesRequiresAvailableTarget(t *testing.T) {
 	require.Equal(t, []string{"claude-sonnet-4-6", "already-listed", "sonnet-fast"}, got)
 	require.Equal(t, []string{"claude-sonnet-4-6"}, appendAvailableGroupModelAliases([]string{"claude-sonnet-4-6"}, nil))
 }
+
+func TestAppendAvailableGroupModelAliasesRespectsEffectiveAllowlist(t *testing.T) {
+	group := &service.Group{
+		ModelAliases:   []domain.ModelAlias{{Alias: "sonnet-fast", UpstreamModel: "claude-sonnet-4-6"}},
+		ModelAllowlist: service.GroupModelAllowlist{Enabled: true, Models: []string{"sonnet-fast"}},
+	}
+	models := appendAvailableGroupModelAliases([]string{"claude-sonnet-4-6"}, group)
+	require.Equal(t, []string{"sonnet-fast"}, group.EffectiveModelAllowlist().FilterForListing(models))
+
+	group.ModelAllowlist.Models = []string{"claude-sonnet-4-6"}
+	require.Equal(t, []string{"claude-sonnet-4-6"}, appendAvailableGroupModelAliases([]string{"claude-sonnet-4-6"}, group))
+}

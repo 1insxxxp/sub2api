@@ -41,6 +41,7 @@ func (s *AntigravityGatewayService) ForwardUpstream(ctx context.Context, c *gin.
 		return nil, fmt.Errorf("missing model")
 	}
 	originalModel := claudeReq.Model
+	responseModel := gatewayPublicModel(ctx, originalModel)
 
 	// 构建上游请求 URL
 	upstreamURL := baseURL + "/v1/messages"
@@ -101,7 +102,7 @@ func (s *AntigravityGatewayService) ForwardUpstream(ctx context.Context, c *gin.
 		_, _ = c.Writer.Write(respBody)
 
 		return &ForwardResult{
-			Model: originalModel,
+			Model: responseModel,
 		}, nil
 	}
 
@@ -143,7 +144,7 @@ func (s *AntigravityGatewayService) ForwardUpstream(ctx context.Context, c *gin.
 	logger.LegacyPrintf("service.antigravity_gateway", "%s status=success duration_ms=%d", prefix, duration.Milliseconds())
 
 	return &ForwardResult{
-		Model:                         originalModel,
+		Model:                         responseModel,
 		UpstreamResponseModel:         observedUpstreamResponseModel(c),
 		UpstreamResponseModelConflict: observedUpstreamResponseModelConflict(c),
 		Stream:                        claudeReq.Stream,

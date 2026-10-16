@@ -194,7 +194,11 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		reqModel = parsedReq.Model
 		reqStream = parsedReq.Stream
 	}
-	routeModel, _ := resolveGroupModelAlias(apiKey.Group, reqModel)
+	publicModel, routeModel := resolveGroupModelRoute(apiKey.Group, reqModel)
+	c.Request = c.Request.WithContext(service.WithGroupAliasRawChatAntiTruncationPolicy(c.Request.Context(), apiKey.Group, reqModel))
+	if routeModel != publicModel {
+		c.Request = c.Request.WithContext(service.WithGatewayPublicModel(c.Request.Context(), publicModel))
+	}
 	reqLog = reqLog.With(zap.String("model", reqModel), zap.Bool("stream", reqStream))
 
 	// 解析渠道级模型映射
@@ -1089,6 +1093,10 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 						c.Request = c.Request.WithContext(ctx)
 						currentAPIKey = fallbackAPIKey
 						currentSubscription = nil
+						publicModel, routeModel = resolveGroupModelRoute(fallbackGroup, reqModel)
+						c.Request = c.Request.WithContext(service.WithGroupAliasRawChatAntiTruncationPolicy(c.Request.Context(), fallbackGroup, reqModel))
+						channelMapping, _ = h.gatewayService.ResolveChannelMappingAndRestrict(c.Request.Context(), currentAPIKey.GroupID, routeModel)
+						c.Request = c.Request.WithContext(service.WithGatewayPublicModel(c.Request.Context(), publicModel))
 						fallbackUsed = true
 						retryWithFallback = true
 						// 原分组账号已确定性失败（prompt too long），先释放其会话注册再走兜底分组
@@ -1257,7 +1265,11 @@ func (h *GatewayHandler) Models(c *gin.Context) {
 	// the native Gemini endpoint. Do not let /v1/models drift with whichever
 	// upstream Gemini account happens to be selected for discovery.
 	if platform == service.PlatformGemini && apiKey != nil && apiKey.Group != nil {
-		writeModelsList(c, platform, appendAvailableGroupModelAliases(h.geminiModelIDsForGroup(c.Request.Context(), apiKey.Group), apiKey.Group))
+		availableModels := appendAvailableGroupModelAliases(h.geminiAvailableModelIDsForGroup(c.Request.Context(), apiKey.Group), apiKey.Group)
+		if apiKey.Group.ModelAllowlistEnabled() {
+			availableModels = apiKey.Group.EffectiveModelAllowlist().FilterForListing(availableModels)
+		}
+		writeModelsList(c, platform, availableModels)
 		return
 	}
 
@@ -1330,6 +1342,9 @@ func appendAvailableGroupModelAliases(models []string, group *service.Group) []s
 	}
 	out := append([]string(nil), models...)
 	for _, alias := range group.ModelAliases {
+		if group.ModelAllowlistEnabled() && !group.EffectiveModelAllowlist().Allows(alias.Alias) {
+			continue
+		}
 		if _, ok := available[alias.UpstreamModel]; !ok {
 			continue
 		}
@@ -1348,6 +1363,14 @@ func appendAvailableGroupModelAliases(models []string, group *service.Group) []s
 // call an upstream /v1beta/models endpoint because that endpoint can expose a
 // different account's capabilities on each request.
 func (h *GatewayHandler) geminiModelIDsForGroup(ctx context.Context, group *service.Group) []string {
+	modelIDs := h.geminiAvailableModelIDsForGroup(ctx, group)
+	if group != nil && group.ModelAllowlistEnabled() {
+		modelIDs = group.EffectiveModelAllowlist().FilterForListing(modelIDs)
+	}
+	return modelIDs
+}
+
+func (h *GatewayHandler) geminiAvailableModelIDsForGroup(ctx context.Context, group *service.Group) []string {
 	if group == nil {
 		return nil
 	}
@@ -1369,9 +1392,6 @@ func (h *GatewayHandler) geminiModelIDsForGroup(ctx context.Context, group *serv
 		availableModels,
 		defaultModelIDsForPlatform(service.PlatformGemini),
 	)
-	if group.ModelAllowlistEnabled() {
-		modelIDs = group.EffectiveModelAllowlist().FilterForListing(modelIDs)
-	}
 	return modelIDs
 }
 

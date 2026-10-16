@@ -56,7 +56,8 @@ func (s *GatewayService) ForwardAsResponses(
 	if err := json.Unmarshal(adaptedBody, &responsesReq); err != nil {
 		return nil, fmt.Errorf("parse responses request: %w", err)
 	}
-	originalModel := responsesReq.Model
+	routeModel := responsesReq.Model
+	originalModel := gatewayPublicModel(c.Request.Context(), routeModel)
 	clientStream := responsesReq.Stream
 	var group *Group
 	if parsed != nil {
@@ -65,18 +66,18 @@ func (s *GatewayService) ForwardAsResponses(
 
 	// 3. Convert Responses → Anthropic
 	// Resolve the final upstream model before model-specific conversion.
-	mappedModel := originalModel
+	mappedModel := routeModel
 	if account.Type == AccountTypeAPIKey || account.Type == AccountTypeServiceAccount {
-		mappedModel = account.GetMappedModel(originalModel)
+		mappedModel = account.GetMappedModel(routeModel)
 	}
-	if mappedModel == originalModel && account.Platform == PlatformAnthropic && account.Type == AccountTypeServiceAccount {
-		normalized := normalizeVertexAnthropicModelID(claude.NormalizeModelID(originalModel))
-		if normalized != originalModel {
+	if mappedModel == routeModel && account.Platform == PlatformAnthropic && account.Type == AccountTypeServiceAccount {
+		normalized := normalizeVertexAnthropicModelID(claude.NormalizeModelID(routeModel))
+		if normalized != routeModel {
 			mappedModel = normalized
 		}
-	} else if mappedModel == originalModel && account.Platform == PlatformAnthropic && account.Type != AccountTypeAPIKey {
-		normalized := claude.NormalizeModelID(originalModel)
-		if normalized != originalModel {
+	} else if mappedModel == routeModel && account.Platform == PlatformAnthropic && account.Type != AccountTypeAPIKey {
+		normalized := claude.NormalizeModelID(routeModel)
+		if normalized != routeModel {
 			mappedModel = normalized
 		}
 	}

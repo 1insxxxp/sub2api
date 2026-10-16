@@ -84,6 +84,10 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 		return
 	}
 	reqModel := modelResult.String()
+	publicModel, routeModel := resolveGroupModelRoute(apiKey.Group, reqModel)
+	if routeModel != publicModel {
+		c.Request = c.Request.WithContext(service.WithGatewayPublicModel(c.Request.Context(), publicModel))
+	}
 	bindRequestedReasoningEffort(c, body, reqModel)
 	ensureCompositeTargetPlatform(c, apiKey, reqModel)
 	if !compositeTargetPlatformResolved(c, apiKey, reqModel) {
@@ -121,7 +125,7 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 	}
 
 	// 解析渠道级模型映射
-	channelMapping, _ := h.gatewayService.ResolveChannelMappingAndRestrict(requestCtx, apiKey.GroupID, reqModel)
+	channelMapping, _ := h.gatewayService.ResolveChannelMappingAndRestrict(requestCtx, apiKey.GroupID, routeModel)
 
 	// Claude Code only restriction: /v1/responses is never a Claude Code
 	// endpoint. With a fallback group the request continues and account selection
@@ -186,7 +190,14 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 	bodyRef := service.NewRequestBodyRef(body)
 	parsedReq, _ := service.ParseGatewayRequest(bodyRef, "responses")
 	if parsedReq == nil {
-		parsedReq = &service.ParsedRequest{Model: reqModel, Stream: reqStream, Body: bodyRef}
+		parsedReq = &service.ParsedRequest{Model: routeModel, Stream: reqStream, Body: bodyRef}
+	}
+	if routeModel != reqModel {
+		parsedReq.Model = routeModel
+		if err := parsedReq.ReplaceBody(h.gatewayService.ReplaceModelInBody(parsedReq.Body.Bytes(), routeModel)); err != nil {
+			h.responsesErrorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to parse request body")
+			return
+		}
 	}
 	parsedReq.GroupID = apiKey.GroupID
 	parsedReq.SessionContext = &service.SessionContext{
@@ -203,7 +214,7 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 		if failoverClientGone(c) {
 			return
 		}
-		selection, err := h.gatewayService.SelectAccountWithLoadAwareness(requestCtx, apiKey.GroupID, sessionHash, reqModel, fs.FailedAccountIDs, "", int64(0))
+		selection, err := h.gatewayService.SelectAccountWithLoadAwareness(requestCtx, apiKey.GroupID, sessionHash, routeModel, fs.FailedAccountIDs, "", int64(0))
 		if err != nil {
 			if failoverClientGone(c) {
 				reqLog.Info("gateway.responses.account_select_aborted_client_disconnected", zap.Error(err))
@@ -292,8 +303,11 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 		// 5. Forward request
 		writerSizeBeforeForward := c.Writer.Size()
 		forwardBody := body
+		if routeModel != reqModel {
+			forwardBody = h.gatewayService.ReplaceModelInBody(forwardBody, routeModel)
+		}
 		if channelMapping.Mapped {
-			forwardBody = h.gatewayService.ReplaceModelInBody(body, channelMapping.MappedModel)
+			forwardBody = h.gatewayService.ReplaceModelInBody(forwardBody, channelMapping.MappedModel)
 		}
 		var result *service.ForwardResult
 		setActualUpstreamEndpoint(c, "")

@@ -76,7 +76,7 @@ func appendOpenAIManifestModelAliases(body []byte, group *service.Group) ([]byte
 	}
 	changed := false
 	for _, alias := range group.ModelAliases {
-		if group.ModelAllowlistEnabled() && !group.ModelAllowlist.Allows(alias.Alias) {
+		if group.ModelAllowlistEnabled() && !group.EffectiveModelAllowlist().Allows(alias.Alias) {
 			continue
 		}
 		if _, exists := models[alias.Alias]; exists {

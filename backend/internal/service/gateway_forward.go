@@ -152,7 +152,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 			Body:          passthroughBody,
 			Parsed:        parsed,
 			RequestModel:  passthroughModel,
-			OriginalModel: parsed.Model,
+			OriginalModel: gatewayPublicModel(ctx, parsed.Model),
 			RequestStream: parsed.Stream,
 			StartTime:     startTime,
 		})
@@ -186,7 +186,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 	}
 	reqModel := parsed.Model
 	reqStream := parsed.Stream
-	originalModel := reqModel
+	originalModel := gatewayPublicModel(ctx, reqModel)
 	requestContext := ctx
 	var firstOutputGuard *modelFirstOutputGuard
 	firstOutputPolicy := ModelFirstOutputTimeoutPolicy{}
