@@ -22,6 +22,13 @@ func TestResolveGroupModelAlias(t *testing.T) {
 	require.Equal(t, "other", model)
 }
 
+func TestResolveGroupModelRouteKeepsPublicModelAndResolvesTarget(t *testing.T) {
+	group := &service.Group{ModelAliases: []domain.ModelAlias{{Alias: "fast", UpstreamModel: "gpt-5.4"}}}
+	publicModel, routeModel := resolveGroupModelRoute(group, "fast")
+	require.Equal(t, "fast", publicModel)
+	require.Equal(t, "gpt-5.4", routeModel)
+}
+
 func TestAppendAvailableGroupModelAliasesRequiresAvailableTarget(t *testing.T) {
 	group := &service.Group{ModelAliases: []domain.ModelAlias{
 		{Alias: "sonnet-fast", UpstreamModel: "claude-sonnet-4-6"},

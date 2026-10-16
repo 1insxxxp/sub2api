@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -20,6 +21,11 @@ func (h *GatewayHandler) pinnedOpenAIModels(c *gin.Context, group *service.Group
 		return
 	}
 	etag := c.GetHeader("If-None-Match")
+	if len(group.ModelAliases) > 0 {
+		// The remote catalogue ETag does not account for local group aliases.
+		// Fetch the catalogue body so aliases can be added and a final ETag built.
+		etag = ""
+	}
 	if c.Param("model") != "" {
 		etag = "" // A collection ETag cannot validate a single-model representation.
 	}
@@ -38,7 +44,74 @@ func (h *GatewayHandler) pinnedOpenAIModels(c *gin.Context, group *service.Group
 		return
 	}
 	setOpsSelectedAccount(c, account.ID, account.Platform)
+	if body, changed := appendOpenAIManifestModelAliases(response.Body, group); changed {
+		response.Body = body
+		response.ETag = service.CodexModelsManifestETag(body)
+		response.NotModified = false
+	}
 	writeOpenAIModelsResponse(c, response)
+}
+
+func appendOpenAIManifestModelAliases(body []byte, group *service.Group) ([]byte, bool) {
+	if group == nil || len(group.ModelAliases) == 0 {
+		return body, false
+	}
+	var manifest struct {
+		Object string            `json:"object"`
+		Data   []json.RawMessage `json:"data"`
+	}
+	if json.Unmarshal(body, &manifest) != nil {
+		return body, false
+	}
+	models := make(map[string]struct{}, len(manifest.Data))
+	entries := make(map[string]json.RawMessage, len(manifest.Data))
+	for _, raw := range manifest.Data {
+		var item struct {
+			ID string `json:"id"`
+		}
+		if json.Unmarshal(raw, &item) == nil && strings.TrimSpace(item.ID) != "" {
+			models[item.ID] = struct{}{}
+			entries[item.ID] = raw
+		}
+	}
+	changed := false
+	for _, alias := range group.ModelAliases {
+		if group.ModelAllowlistEnabled() && !group.ModelAllowlist.Allows(alias.Alias) {
+			continue
+		}
+		if _, exists := models[alias.Alias]; exists {
+			continue
+		}
+		target, available := entries[alias.UpstreamModel]
+		if !available {
+			continue
+		}
+		var item map[string]json.RawMessage
+		if json.Unmarshal(target, &item) != nil {
+			continue
+		}
+		id, _ := json.Marshal(alias.Alias)
+		item["id"] = id
+		if _, ok := item["display_name"]; ok {
+			name, _ := json.Marshal(alias.Alias)
+			item["display_name"] = name
+		}
+		encoded, err := json.Marshal(item)
+		if err != nil {
+			continue
+		}
+		manifest.Data = append(manifest.Data, encoded)
+		models[alias.Alias] = struct{}{}
+		changed = true
+	}
+	if !changed {
+		return body, false
+	}
+	encoded, err := json.Marshal(manifest)
+	if err != nil {
+		return body, false
+	}
+	return encoded, true
 }
 
 func writeOpenAIModelsError(c *gin.Context, status int, errorType, message string) {

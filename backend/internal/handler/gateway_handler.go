@@ -1306,6 +1306,14 @@ func resolveGroupModelAlias(group *service.Group, requested string) (string, boo
 	return group.ResolveModelAlias(requested)
 }
 
+// resolveGroupModelRoute keeps the caller-visible model beside its routing
+// target, so forwarding can rewrite upstream selection without losing the
+// public model identity used in responses and usage records.
+func resolveGroupModelRoute(group *service.Group, publicModel string) (string, string) {
+	routeModel, _ := resolveGroupModelAlias(group, publicModel)
+	return publicModel, routeModel
+}
+
 // appendAvailableGroupModelAliases exposes an alias only when its target is
 // present in the group's currently available upstream model catalogue.
 func appendAvailableGroupModelAliases(models []string, group *service.Group) []string {

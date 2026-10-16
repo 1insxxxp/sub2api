@@ -7,11 +7,36 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
+
+func TestAppendOpenAIManifestModelAliasesRequiresAvailableTargetAndPublicAllowlist(t *testing.T) {
+	group := &service.Group{
+		ModelAliases: []domain.ModelAlias{
+			{Alias: "fast", UpstreamModel: "gpt-5.4"},
+			{Alias: "missing", UpstreamModel: "gpt-5.5"},
+			{Alias: "hidden", UpstreamModel: "gpt-5.4"},
+		},
+		ModelAllowlist: service.GroupModelAllowlist{Enabled: true, Models: []string{"fast", "gpt-5.4"}},
+	}
+	body, changed := appendOpenAIManifestModelAliases([]byte(`{"object":"list","data":[{"id":"gpt-5.4","owned_by":"openai","created":10}]}`), group)
+	require.True(t, changed)
+	var response struct {
+		Data []map[string]any `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(body, &response))
+	require.Len(t, response.Data, 2)
+	require.Equal(t, "fast", response.Data[1]["id"])
+	require.Equal(t, "openai", response.Data[1]["owned_by"])
+
+	unchanged, changed := appendOpenAIManifestModelAliases([]byte(`{"data":[{"id":"gpt-5.4"}]}`), &service.Group{ModelAliases: group.ModelAliases})
+	require.False(t, changed)
+	require.JSONEq(t, `{"data":[{"id":"gpt-5.4"}]}`, string(unchanged))
+}
 
 func performOrdinaryPinnedModelsRequest(t *testing.T, codex *OpenAIGatewayHandler, group *service.Group, path, etag string) *httptest.ResponseRecorder {
 	t.Helper()
