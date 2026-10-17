@@ -104,18 +104,18 @@ func sanitizeEmbeddedUpstreamErrorJSON(message string) string {
 		if start < 0 {
 			break
 		}
-		out.WriteString(message[:start])
+		_, _ = out.WriteString(message[:start])
 		message = message[start:]
 		sanitized, consumed := sanitizeUpstreamErrorJSONFragment(message)
 		if consumed == 0 {
-			out.WriteByte(message[0])
+			_ = out.WriteByte(message[0])
 			message = message[1:]
 			continue
 		}
-		out.WriteString(sanitized)
+		_, _ = out.WriteString(sanitized)
 		message = message[consumed:]
 	}
-	out.WriteString(message)
+	_, _ = out.WriteString(message)
 	return out.String()
 }
 
