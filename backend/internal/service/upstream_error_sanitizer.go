@@ -147,16 +147,16 @@ func sanitizeUpstreamErrorPayloadText(message string) string {
 		if label == nil {
 			break
 		}
-		out.WriteString(message[:label[1]])
+		_, _ = out.WriteString(message[:label[1]])
 		message = message[label[1]:]
 		if message == "" || !strings.ContainsRune(`{["'`, rune(message[0])) {
 			continue
 		}
 		consumed := upstreamPayloadValueLength(message)
-		out.WriteString(`"[REDACTED]"`)
+		_, _ = out.WriteString(`"[REDACTED]"`)
 		message = message[consumed:]
 	}
-	out.WriteString(message)
+	_, _ = out.WriteString(message)
 	return out.String()
 }
 
@@ -181,16 +181,16 @@ func sanitizeNamedUpstreamCredentials(message string) string {
 		if label == nil {
 			break
 		}
-		out.WriteString(message[:label[1]])
+		_, _ = out.WriteString(message[:label[1]])
 		message = message[label[1]:]
 		consumed := upstreamCredentialValueLength(message)
 		if consumed == 0 {
 			continue
 		}
-		out.WriteString(redactUpstreamCredentialValue(message[:consumed]))
+		_, _ = out.WriteString(redactUpstreamCredentialValue(message[:consumed]))
 		message = message[consumed:]
 	}
-	out.WriteString(message)
+	_, _ = out.WriteString(message)
 	return out.String()
 }
 
