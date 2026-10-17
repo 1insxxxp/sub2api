@@ -918,6 +918,7 @@ var (
 		{Name: "user_reason", Type: field.TypeString, Size: 255, Default: ""},
 		{Name: "admin_note", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "text"}},
 		{Name: "original_actual_cost", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,10)"}},
+		{Name: "compensation_amount", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,10)"}},
 		{Name: "balance_refund", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,10)"}},
 		{Name: "subscription_refund", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,10)"}},
 		{Name: "api_key_quota_refund", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,10)"}},
@@ -943,22 +944,22 @@ var (
 			{
 				Name:    "emptyresponseclaim_status_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{EmptyResponseClaimsColumns[8], EmptyResponseClaimsColumns[21]},
+				Columns: []*schema.Column{EmptyResponseClaimsColumns[8], EmptyResponseClaimsColumns[22]},
 			},
 			{
 				Name:    "emptyresponseclaim_user_id_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{EmptyResponseClaimsColumns[3], EmptyResponseClaimsColumns[21]},
+				Columns: []*schema.Column{EmptyResponseClaimsColumns[3], EmptyResponseClaimsColumns[22]},
 			},
 			{
 				Name:    "emptyresponseclaim_group_id_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{EmptyResponseClaimsColumns[6], EmptyResponseClaimsColumns[21]},
+				Columns: []*schema.Column{EmptyResponseClaimsColumns[6], EmptyResponseClaimsColumns[22]},
 			},
 			{
 				Name:    "emptyresponseclaim_account_id_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{EmptyResponseClaimsColumns[5], EmptyResponseClaimsColumns[21]},
+				Columns: []*schema.Column{EmptyResponseClaimsColumns[5], EmptyResponseClaimsColumns[22]},
 			},
 		},
 	}

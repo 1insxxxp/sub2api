@@ -34,6 +34,7 @@ func RegisterUserRoutes(
 		user := authenticated.Group("/user")
 		{
 			user.GET("/profile", h.User.GetProfile)
+			registerIPGeoRoute(user, h.User, panelRateLimiter.Heavy())
 			user.PUT("/password", h.User.ChangePassword)
 			user.DELETE("/account", h.User.DeleteOwnAccount)
 			user.PUT("", h.User.UpdateProfile)

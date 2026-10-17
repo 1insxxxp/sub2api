@@ -1,4 +1,5 @@
 import { reactive } from 'vue'
+import apiClient from '@/api/client'
 
 export type IpGeoStatus = 'idle' | 'loading' | 'success' | 'error' | 'private'
 
@@ -11,6 +12,7 @@ export interface IpGeoDetail {
   accuracy?: number
   latitude?: string
   longitude?: string
+  source?: 'dbip' | 'maxmind'
 }
 
 export interface IpGeoEntry {
@@ -20,100 +22,9 @@ export interface IpGeoEntry {
   fetchedAt?: number
 }
 
-const IDLE_ENTRY: IpGeoEntry = { status: 'idle' }
-const CACHE_STORAGE_KEY = 'sub2api:ip-geo-cache:v1'
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000
-const BATCH_CHUNK_SIZE = 50
-const GEO_SINGLE_URL = 'https://get.geojs.io/v1/ip/geo'
-const GEO_BATCH_URL = 'https://get.geojs.io/v1/ip/geo.json'
-
-interface StoredEntry {
-  label: string
-  detail?: IpGeoDetail
-  fetchedAt: number
-}
-
-const cache = reactive(new Map<string, IpGeoEntry>())
-
-function isFreshSuccess(entry: IpGeoEntry | undefined): entry is IpGeoEntry & { status: 'success'; fetchedAt: number } {
-  return entry?.status === 'success' && typeof entry.fetchedAt === 'number' && Date.now() - entry.fetchedAt <= CACHE_TTL_MS
-}
-
-function getFreshEntry(ip: string): IpGeoEntry | undefined {
-  const entry = cache.get(ip)
-  if (entry?.status === 'success' && !isFreshSuccess(entry)) {
-    cache.delete(ip)
-    persistToStorage()
-    return undefined
-  }
-  return entry
-}
-
-export function isPrivateIp(ip: string): boolean {
-  const v4 = ip.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
-  if (v4) {
-    const a = Number(v4[1])
-    const b = Number(v4[2])
-    if (a === 10) return true
-    if (a === 127) return true
-    if (a === 169 && b === 254) return true
-    if (a === 172 && b >= 16 && b <= 31) return true
-    if (a === 192 && b === 168) return true
-    return false
-  }
-  const lower = ip.toLowerCase()
-  if (lower === '::1') return true
-  const firstSegment = lower.split(':', 1)[0]
-  if (/^fe[89ab][0-9a-f]$/.test(firstSegment)) return true
-  if (/^f[cd][0-9a-f]{2}$/.test(firstSegment)) return true
-  return false
-}
-
-function loadFromStorage(): void {
-  try {
-    const raw = localStorage.getItem(CACHE_STORAGE_KEY)
-    if (!raw) return
-    const parsed = JSON.parse(raw) as Record<string, StoredEntry>
-    const now = Date.now()
-    for (const [ip, stored] of Object.entries(parsed)) {
-      if (!stored || typeof stored.fetchedAt !== 'number') continue
-      if (now - stored.fetchedAt > CACHE_TTL_MS) continue
-      cache.set(ip, { status: 'success', label: stored.label, detail: stored.detail, fetchedAt: stored.fetchedAt })
-    }
-  } catch {
-    // 忽略损坏的本地缓存
-  }
-}
-
-function persistToStorage(): void {
-  try {
-    const toStore: Record<string, StoredEntry> = {}
-    for (const [ip, entry] of cache.entries()) {
-      if (entry.status === 'success' && entry.label && entry.fetchedAt) {
-        toStore[ip] = { label: entry.label, detail: entry.detail, fetchedAt: entry.fetchedAt }
-      }
-    }
-    localStorage.setItem(CACHE_STORAGE_KEY, JSON.stringify(toStore))
-  } catch {
-    // 存储写入失败（如隐私模式禁用 localStorage）不影响功能
-  }
-}
-
-loadFromStorage()
-
-export function getEntry(ip: string): IpGeoEntry {
-  return getFreshEntry(ip) ?? IDLE_ENTRY
-}
-
-export function formatGeoLabel(detail: IpGeoDetail): string {
-  const parts = [detail.countryCode, detail.region, detail.city].filter(
-    (part): part is string => Boolean(part && part.trim())
-  )
-  return parts.join(' · ')
-}
-
 interface RawGeoResponse {
   ip: string
+  private?: boolean
   country_code?: string
   region?: string
   city?: string
@@ -122,93 +33,138 @@ interface RawGeoResponse {
   accuracy?: number
   latitude?: string
   longitude?: string
+  source?: IpGeoDetail['source']
+}
+
+const IDLE_ENTRY: IpGeoEntry = { status: 'idle' }
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000
+const BATCH_CHUNK_SIZE = 50
+const cache = reactive(new Map<string, IpGeoEntry>())
+let cacheOwner = ''
+let cacheGeneration = 0
+
+// Remove the old persistent customer-IP cache without reading its contents.
+try {
+  localStorage.removeItem('sub2api:ip-geo-cache:v1')
+} catch {
+  // Private browsing can disable storage; lookups still work in memory.
+}
+
+function currentOwner(): string {
+  try {
+    const user = JSON.parse(localStorage.getItem('auth_user') || 'null')
+    return user?.id == null ? '' : String(user.id)
+  } catch {
+    return ''
+  }
+}
+
+function ensureSession(): number {
+  const owner = currentOwner()
+  if (owner !== cacheOwner) {
+    cache.clear()
+    cacheOwner = owner
+    cacheGeneration++
+  }
+  return cacheGeneration
+}
+
+function isFreshSuccess(entry: IpGeoEntry | undefined): boolean {
+  return entry?.status === 'success' && typeof entry.fetchedAt === 'number' && Date.now() - entry.fetchedAt <= CACHE_TTL_MS
+}
+
+export function getEntry(ip: string): IpGeoEntry {
+  ensureSession()
+  const entry = cache.get(ip)
+  if (entry?.status === 'success' && !isFreshSuccess(entry)) {
+    cache.delete(ip)
+    return IDLE_ENTRY
+  }
+  return entry ?? IDLE_ENTRY
+}
+
+export function isPrivateIp(ip: string): boolean {
+  const lower = ip.toLowerCase()
+  const mapped = lower.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/)
+  if (mapped) return isPrivateIp(mapped[1])
+  const v4 = lower.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+  if (v4) {
+    const [a, b] = [Number(v4[1]), Number(v4[2])]
+    return a === 0 || a === 10 || a === 127 || a >= 224 || (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)
+  }
+  if (lower === '::' || lower === '::1') return true
+  const firstSegment = lower.split(':', 1)[0]
+  return /^fe[89ab][0-9a-f]$/.test(firstSegment) || /^f[cd][0-9a-f]{2}$/.test(firstSegment) || /^ff[0-9a-f]{2}$/.test(firstSegment)
+}
+
+export function formatGeoLabel(detail: IpGeoDetail): string {
+  return [detail.countryCode, detail.region, detail.city]
+    .filter((part): part is string => Boolean(part?.trim()))
+    .join(' · ')
 }
 
 function toDetail(raw: RawGeoResponse): IpGeoDetail {
   return {
-    countryCode: raw.country_code,
-    region: raw.region,
-    city: raw.city,
-    organization: raw.organization,
-    timezone: raw.timezone,
-    accuracy: raw.accuracy,
-    latitude: raw.latitude,
-    longitude: raw.longitude,
+    countryCode: raw.country_code, region: raw.region, city: raw.city,
+    organization: raw.organization, timezone: raw.timezone, accuracy: raw.accuracy,
+    latitude: raw.latitude, longitude: raw.longitude, source: raw.source,
   }
 }
 
 function applyResult(ip: string, raw: RawGeoResponse | undefined): void {
-  if (!raw || !raw.country_code) {
+  if (raw?.private) {
+    cache.set(ip, { status: 'private' })
+  } else if (!raw?.country_code) {
     cache.set(ip, { status: 'error' })
-    return
+  } else {
+    const detail = toDetail(raw)
+    cache.set(ip, { status: 'success', label: formatGeoLabel(detail), detail, fetchedAt: Date.now() })
   }
-  const detail = toDetail(raw)
-  cache.set(ip, {
-    status: 'success',
-    label: formatGeoLabel(detail),
-    detail,
-    fetchedAt: Date.now(),
-  })
+}
+
+async function fetchChunk(ips: string[], generation: number): Promise<boolean> {
+  try {
+    // Customer IPs stay in the authenticated request body, never a URL or third-party request.
+    const { data } = await apiClient.post<RawGeoResponse[]>('/user/ip-geo', { ips })
+    if (ensureSession() !== generation) return false
+    const byIp = new Map(data.map((item) => [item.ip, item]))
+    ips.forEach((ip) => applyResult(ip, byIp.get(ip)))
+    return true
+  } catch {
+    if (ensureSession() === generation) ips.forEach((ip) => cache.set(ip, { status: 'error' }))
+    return false
+  }
 }
 
 export async function fetchOne(ip: string, force = false): Promise<void> {
+  const generation = ensureSession()
   if (isPrivateIp(ip)) {
     cache.set(ip, { status: 'private' })
     return
   }
-  const existing = getFreshEntry(ip)
-  if (!force && (isFreshSuccess(existing) || existing?.status === 'loading')) {
-    return
-  }
+  const existing = getEntry(ip)
+  if (!force && (isFreshSuccess(existing) || existing.status === 'loading')) return
   cache.set(ip, { status: 'loading' })
-  try {
-    const response = await fetch(`${GEO_SINGLE_URL}/${encodeURIComponent(ip)}.json`)
-    if (!response.ok) {
-      cache.set(ip, { status: 'error' })
-      return
-    }
-    const raw = (await response.json()) as RawGeoResponse
-    applyResult(ip, raw)
-    persistToStorage()
-  } catch {
-    cache.set(ip, { status: 'error' })
-  }
+  await fetchChunk([ip], generation)
 }
 
 export async function fetchBatch(ips: string[]): Promise<boolean> {
-  const unique = Array.from(new Set(ips))
+  const generation = ensureSession()
   const targets: string[] = []
-  for (const ip of unique) {
+  for (const ip of new Set(ips)) {
     if (isPrivateIp(ip)) {
       cache.set(ip, { status: 'private' })
       continue
     }
-    const existing = cache.get(ip)
-    if (isFreshSuccess(existing) || existing?.status === 'loading') continue
-    targets.push(ip)
+    const existing = getEntry(ip)
+    if (!isFreshSuccess(existing) && existing.status !== 'loading') targets.push(ip)
   }
-  if (targets.length === 0) return true
-
   targets.forEach((ip) => cache.set(ip, { status: 'loading' }))
-
-  let allChunksOk = true
+  let success = true
   for (let i = 0; i < targets.length; i += BATCH_CHUNK_SIZE) {
-    const chunk = targets.slice(i, i + BATCH_CHUNK_SIZE)
-    try {
-      const response = await fetch(`${GEO_BATCH_URL}?ip=${chunk.map(encodeURIComponent).join(',')}`)
-      if (!response.ok) {
-        chunk.forEach((ip) => cache.set(ip, { status: 'error' }))
-        allChunksOk = false
-        continue
-      }
-      const results = (await response.json()) as RawGeoResponse[]
-      const byIp = new Map(results.map((r) => [r.ip, r]))
-      chunk.forEach((ip) => applyResult(ip, byIp.get(ip)))
-      persistToStorage()
-    } catch {
-      chunk.forEach((ip) => cache.set(ip, { status: 'error' }))
-      allChunksOk = false
-    }
+    if (ensureSession() !== generation) return false
+    if (!await fetchChunk(targets.slice(i, i + BATCH_CHUNK_SIZE), generation)) success = false
   }
-  return allChunksOk
+  return success
 }

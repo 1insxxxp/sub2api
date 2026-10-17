@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 
+import EmptyResponseClaimDetails from '../EmptyResponseClaimDetails.vue'
 import EmptyResponseClaimsPanel from '../EmptyResponseClaimsPanel.vue'
 
 const { listClaims, getClaimMetrics, approveClaim, rejectClaim, batchClaims, showError, showSuccess } = vi.hoisted(() => ({
@@ -109,6 +110,15 @@ describe('EmptyResponseClaimsPanel', () => {
     batchClaims.mockReset().mockResolvedValue({ succeeded: [1], failed: {}, claims: [] })
     showError.mockReset()
     showSuccess.mockReset()
+  })
+
+  it.each([5, 8.75])('shows the frozen server refund %s without tier fields or recapping legacy claims', (amount) => {
+    const wrapper = mount(EmptyResponseClaimDetails, {
+      props: { claim: { ...claim, actual_cost: 12.5, estimated_refund: amount } as any },
+    })
+    expect(wrapper.find('[data-testid="claim-compensation-rate"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="claim-compensation-input"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="claim-compensation-estimate"]').text()).toContain(`$${amount.toFixed(6)}`)
   })
 
   it('renders desktop table, mobile cards, structured evidence and metrics', async () => {

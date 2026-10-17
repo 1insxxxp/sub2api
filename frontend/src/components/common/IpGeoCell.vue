@@ -24,23 +24,35 @@
     {{ t('usage.ipGeo.fetching') }}
   </div>
 
-  <div v-else-if="entry.status === 'success'" class="mt-0.5 flex items-center gap-1 text-xs">
-    <button
-      type="button"
-      class="truncate text-gray-500 underline decoration-dotted underline-offset-2 hover:text-primary-600 dark:text-gray-400 dark:hover:text-primary-400"
-      :title="tooltipText"
-      @click="handleOpenDetail"
-    >
-      {{ entry.label }}
-    </button>
-    <button
-      type="button"
-      class="text-gray-400 hover:text-primary-600 dark:hover:text-primary-400"
-      :title="t('usage.ipGeo.refreshTitle')"
-      @click="handleRefresh"
-    >
-      <Icon name="refresh" size="xs" />
-    </button>
+  <div v-else-if="entry.status === 'success'" class="mt-0.5 text-xs">
+    <div class="flex items-center gap-1">
+      <button
+        type="button"
+        class="truncate text-gray-500 underline decoration-dotted underline-offset-2 hover:text-primary-600 dark:text-gray-400 dark:hover:text-primary-400"
+        :title="tooltipText"
+        :aria-expanded="detailsOpen"
+        @click="detailsOpen = !detailsOpen"
+      >
+        {{ entry.label }}
+      </button>
+      <button
+        type="button"
+        class="text-gray-400 hover:text-primary-600 dark:hover:text-primary-400"
+        :title="t('usage.ipGeo.refreshTitle')"
+        @click="handleRefresh"
+      >
+        <Icon name="refresh" size="xs" />
+      </button>
+    </div>
+    <p v-if="detailsOpen" class="mt-1 whitespace-pre-line break-words text-gray-500 dark:text-gray-400">{{ tooltipText || t('usage.ipGeo.offlineHint') }}</p>
+    <a
+      v-if="provider"
+      :href="provider.url"
+      target="_blank"
+      rel="noopener noreferrer"
+      referrerpolicy="no-referrer"
+      class="mt-0.5 inline-block text-[10px] text-gray-400 hover:underline dark:text-gray-500"
+    >{{ provider.label }}</a>
   </div>
 
   <div v-else-if="entry.status === 'error'" class="mt-0.5 text-xs">
@@ -59,7 +71,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
 import { fetchOne, getEntry } from '@/utils/ipGeoLookup'
@@ -68,6 +80,15 @@ const props = defineProps<{ ip: string }>()
 const { t } = useI18n()
 
 const entry = computed(() => getEntry(props.ip))
+const detailsOpen = ref(false)
+watch(() => props.ip, () => { detailsOpen.value = false })
+
+const provider = computed(() => {
+  const source = entry.value.detail?.source
+  if (source === 'dbip') return { url: 'https://db-ip.com', label: t('usage.ipGeo.dbipAttribution') }
+  if (source === 'maxmind') return { url: 'https://www.maxmind.com', label: t('usage.ipGeo.maxmindAttribution') }
+  return null
+})
 
 const tooltipText = computed(() => {
   const detail = entry.value.detail
@@ -91,11 +112,4 @@ const handleRefresh = () => {
   void fetchOne(props.ip, true)
 }
 
-const handleOpenDetail = () => {
-  window.open(
-    `https://www.iplocation.net/ip-lookup?query=${encodeURIComponent(props.ip)}`,
-    '_blank',
-    'noopener,noreferrer'
-  )
-}
 </script>

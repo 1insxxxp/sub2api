@@ -4,6 +4,22 @@ import en from '../locales/en'
 import zh from '../locales/zh'
 
 describe('empty response compensation locale copy', () => {
+  it('explains the single-claim site-credit cap without input tiers in both languages', () => {
+    for (const locale of [zh, en]) {
+      const copy = locale.usage.emptyResponse as any
+      expect(copy.capTitle).toBeTruthy()
+      expect(copy.capHint).toContain('5')
+      expect(copy.tiers).toBeUndefined()
+      expect(copy.compensationRate).toBeUndefined()
+      expect(copy.compensationInputTokens).toBeUndefined()
+      expect(copy.inputTokenBasisHint).toBeUndefined()
+      expect(copy.reasonCode.input_token_limit).toBeUndefined()
+      expect(copy.reasonCode.refund_amount_zero).toBeTruthy()
+    }
+    expect(zh.usage.emptyResponse.capHint).toContain('不足 5')
+    expect(en.usage.emptyResponse.capHint).toContain('actual charge')
+  })
+
   it('labels the admin entry as a compensation record list instead of a claim queue', () => {
     expect(zh.admin.usage.emptyResponseClaims.tab).toBe('空回补偿列表')
     expect(zh.admin.usage.emptyResponseClaims.claims).toBe('补偿记录数')

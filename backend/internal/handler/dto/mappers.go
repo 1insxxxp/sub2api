@@ -116,7 +116,7 @@ func APIKeyFromService(k *service.APIKey) *APIKey {
 		Window7dStart:      k.Window7dStart,
 		User:               UserFromServiceShallow(k.User),
 		Group:              GroupFromServiceShallow(k.Group),
-		CustomGroup:        k.CustomGroup,
+		CustomGroup:        UserCustomGroupFromService(k.CustomGroup),
 	}
 	if k.Window5hStart != nil && !service.IsWindowExpired(k.Window5hStart, service.RateLimitWindow5h) {
 		t := k.Window5hStart.Add(service.RateLimitWindow5h)
@@ -798,6 +798,8 @@ func usageLogFromServiceUser(l *service.UsageLog) UsageLog {
 		APIKey:                    APIKeyFromService(l.APIKey),
 		Group:                     GroupFromServiceShallow(l.Group),
 		Subscription:              UserSubscriptionFromService(l.Subscription),
+
+		CompensationEstimatedRefund: l.CompensationEstimatedRefund,
 	}
 }
 
@@ -867,7 +869,7 @@ func EmptyResponseClaimFromService(claim *service.EmptyResponseClaim) *EmptyResp
 		UsageLogID:      claim.UsageLogID,
 		Status:          claim.Status,
 		ReasonCode:      claim.ReasonCode,
-		EstimatedRefund: claim.OriginalActualCost,
+		EstimatedRefund: claim.ExpectedRefund(),
 		RefundedAmount:  refunded,
 		CreatedAt:       claim.CreatedAt,
 		UpdatedAt:       claim.UpdatedAt,
@@ -892,6 +894,7 @@ func EmptyResponseRecordFromService(record *service.EmptyResponseRecord) *EmptyR
 		CacheTokens:     record.CacheTokens,
 		TotalTokens:     record.TotalTokens,
 		RefundedAmount:  record.RefundedAmount,
+		EstimatedRefund: record.EstimatedRefund,
 		Status:          record.Status,
 		ReasonCode:      record.ReasonCode,
 		CreatedAt:       record.CreatedAt,

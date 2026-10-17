@@ -335,9 +335,7 @@
               <thead>
                 <tr class="border-b border-gray-200 text-gray-500 dark:border-dark-700 dark:text-dark-400">
                   <th class="px-3 py-2 font-medium">{{ t('affiliate.invitees.columns.email') }}</th>
-                  <th class="px-3 py-2 font-medium">{{ t('affiliate.invitees.columns.username') }}</th>
-                  <th class="px-3 py-2 font-medium">{{ t('affiliate.invitees.columns.paymentProgress') }}</th>
-                  <th class="px-3 py-2 font-medium text-right">{{ t('affiliate.invitees.columns.rebate') }}</th>
+                  <th class="px-3 py-2 font-medium">{{ t('affiliate.invitees.columns.status') }}</th>
                   <th class="px-3 py-2 font-medium">{{ t('affiliate.invitees.columns.joinedAt') }}</th>
                 </tr>
               </thead>
@@ -348,14 +346,11 @@
                   class="border-b border-gray-100 last:border-b-0 dark:border-dark-800"
                 >
                   <td class="break-all px-3 py-3 text-gray-900 dark:text-white">{{ item.email || '-' }}</td>
-                  <td class="break-all px-3 py-3 text-gray-700 dark:text-gray-300">{{ item.username || '-' }}</td>
                   <td class="px-3 py-3">
-                    <p class="font-medium text-gray-800 dark:text-gray-200">{{ formatCurrency(item.qualifying_payment_amount) }} / {{ formatCurrency(detail.qualification_amount) }}</p>
-                    <p :class="item.qualified ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'" class="mt-0.5 text-xs">
-                      {{ item.qualified ? t('affiliate.invitees.qualified') : t('affiliate.invitees.inProgress') }}
+                    <p :class="item.qualified ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'" class="text-xs font-medium">
+                      {{ item.qualified ? t('affiliate.invitees.qualified') : t('affiliate.invitees.notQualified') }}
                     </p>
                   </td>
-                  <td class="px-3 py-3 text-right font-medium text-emerald-600 dark:text-emerald-400">{{ formatCurrency(item.total_rebate) }}</td>
                   <td class="px-3 py-3 text-gray-700 dark:text-gray-300">{{ formatDateTime(item.created_at) || '-' }}</td>
                 </tr>
               </tbody>
@@ -367,21 +362,10 @@
                 <div class="flex min-w-0 items-start justify-between gap-3">
                   <div class="min-w-0">
                     <p class="break-all text-sm font-medium text-gray-900 dark:text-white">{{ item.email || '-' }}</p>
-                    <p class="mt-0.5 break-all text-xs text-gray-500 dark:text-dark-400">{{ item.username || '-' }}</p>
                   </div>
                   <span :class="item.qualified ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'" class="shrink-0 rounded-md px-2 py-1 text-xs font-medium">
-                    {{ item.qualified ? t('affiliate.invitees.qualified') : t('affiliate.invitees.inProgress') }}
+                    {{ item.qualified ? t('affiliate.invitees.qualified') : t('affiliate.invitees.notQualified') }}
                   </span>
-                </div>
-                <div class="mt-3 flex min-w-0 flex-wrap items-end justify-between gap-x-3 gap-y-2 text-xs">
-                  <div class="min-w-0">
-                    <p class="text-gray-500 dark:text-dark-400">{{ t('affiliate.invitees.columns.paymentProgress') }}</p>
-                    <p class="mt-0.5 font-medium text-gray-800 dark:text-gray-200">{{ formatCurrency(item.qualifying_payment_amount) }} / {{ formatCurrency(detail.qualification_amount) }}</p>
-                  </div>
-                  <div class="text-right">
-                    <p class="text-gray-500 dark:text-dark-400">{{ t('affiliate.invitees.columns.rebate') }}</p>
-                    <p class="mt-0.5 font-medium text-emerald-600 dark:text-emerald-400">{{ formatCurrency(item.total_rebate) }}</p>
-                  </div>
                 </div>
                 <p class="mt-2 text-xs text-gray-400 dark:text-dark-500">{{ formatDateTime(item.created_at) || '-' }}</p>
               </article>

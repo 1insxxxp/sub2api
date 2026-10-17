@@ -2062,9 +2062,17 @@ func sanitizeUpstreamErrorMessage(msg string) string {
 	if msg == "" {
 		return msg
 	}
+	msg = sanitizeEmbeddedUpstreamErrorJSON(msg)
+	msg = sanitizeUpstreamErrorPayloadText(msg)
 	msg = upstreamURLRegex.ReplaceAllString(msg, "[upstream-url]")
 	msg = upstreamBracketedAddressRegex.ReplaceAllString(msg, "[upstream]")
-	return sensitiveQueryParamRegex.ReplaceAllString(msg, `$1***`)
+	msg = sensitiveQueryParamRegex.ReplaceAllString(msg, `$1***`)
+	msg = upstreamPrivateHeaderRegex.ReplaceAllString(msg, `$1[REDACTED]`)
+	msg = sanitizeNamedUpstreamCredentials(msg)
+	msg = upstreamAuthValueRegex.ReplaceAllString(msg, `$1[REDACTED]`)
+	msg = upstreamAPIKeyRegex.ReplaceAllString(msg, "[REDACTED]")
+	msg = upstreamJWTRegex.ReplaceAllString(msg, "[REDACTED]")
+	return upstreamEmailRegex.ReplaceAllString(msg, "[email]")
 }
 
 func (s *GeminiMessagesCompatService) writeGeminiMappedError(c *gin.Context, account *Account, upstreamStatus int, upstreamRequestID string, body []byte) error {

@@ -233,6 +233,38 @@ describe('user UsageView', () => {
     getAvailable.mockResolvedValue([{ id: 1, name: 'default' }])
   })
 
+  it('shows capped server quotes on mobile and desktop without input tiers or refund fallbacks', async () => {
+    const quoted = {
+      usage_log_id: 42, model: 'claude-opus-4-6', api_key_name: 'cc-key', group_name: 'cc',
+      inbound_endpoint: '/v1/messages', actual_cost: 12.5, input_tokens: 1234,
+      output_tokens: 0, cache_tokens: 278766, total_tokens: 280000, refunded_amount: 0,
+      status: 'claimable', reason_code: 'pure_empty', created_at: '2026-10-17T00:00:00Z',
+      estimated_refund: 5,
+    }
+    listRecentEmptyResponses.mockResolvedValue({
+      items: [quoted, { ...quoted, usage_log_id: 43, estimated_refund: undefined },
+        { ...quoted, usage_log_id: 44, estimated_refund: 0 },
+        { ...quoted, usage_log_id: 45, status: 'compensated', estimated_refund: 8.75, refunded_amount: 8.75 }],
+      total: 4, page: 1, page_size: 20, pages: 1,
+    })
+    const wrapper = mountUsageView()
+    await flushPromises()
+    await wrapper.get('[data-testid="empty-response-tab"]').trigger('click')
+    await flushPromises()
+
+    const mobile = wrapper.get('[data-testid="empty-response-mobile-card-42"]')
+    expect(mobile.text()).toContain('$5.000000')
+    expect(mobile.text()).not.toContain('usage.emptyResponse.compensationRate')
+    expect(mobile.text()).not.toContain('usage.emptyResponse.compensationInputTokens')
+    expect(wrapper.get('[data-testid="empty-response-table"]').text()).toContain('$5.000000')
+    expect(wrapper.get('[data-testid="empty-response-cap-rules"]').text()).toContain('usage.emptyResponse.capHint')
+    expect(wrapper.get('[data-testid="claim-empty-response-mobile-42"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="claim-empty-response-mobile-43"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="claim-empty-response-mobile-44"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="empty-response-mobile-card-45"]').text()).toContain('$8.750000')
+    expect(wrapper.get('[data-testid="empty-response-table"]').text()).toContain('$8.750000')
+  })
+
   it('loads logs, stats, model stats, and snapshot on first render', async () => {
     const wrapper = mountUsageView()
     await flushPromises()

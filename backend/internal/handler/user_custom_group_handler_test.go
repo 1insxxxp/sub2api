@@ -30,7 +30,12 @@ func (customGroupCandidateUserRepoStub) GetByID(context.Context, int64) (*servic
 type customGroupCandidateGroupRepoStub struct{ service.GroupRepository }
 
 func (customGroupCandidateGroupRepoStub) ListActive(context.Context) ([]service.Group, error) {
-	return []service.Group{{ID: 11, Name: "Empty source", Platform: service.PlatformAnthropic, Status: service.StatusActive}}, nil
+	return []service.Group{{
+		ID: 11, Name: "Empty source", Platform: service.PlatformAnthropic, Status: service.StatusActive,
+		ModelRouting:              map[string][]int64{"model": {90001}},
+		CodexModelsManifestConfig: service.GroupCodexModelsManifestConfig{Enabled: true, AccountIDs: []int64{90002}},
+		ProfitMinMargin:           .37, DuplicateOperationID: "synthetic-private-operation",
+	}}, nil
 }
 
 type customGroupCandidateSubscriptionRepoStub struct {
@@ -147,4 +152,11 @@ func TestUserCustomGroupHandlerCandidatesSerializesEmptyModelsAsArray(t *testing
 	require.Len(t, body.Data, 1)
 	require.NotNil(t, body.Data[0].Models)
 	require.Empty(t, body.Data[0].Models)
+	var fields struct {
+		Data []map[string]any `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &fields))
+	require.Equal(t, map[string]any{
+		"id": float64(11), "name": "Empty source", "platform": service.PlatformAnthropic, "models": []any{},
+	}, fields.Data[0])
 }

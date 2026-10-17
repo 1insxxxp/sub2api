@@ -114,6 +114,11 @@ func OriginalActualCost(v float64) predicate.EmptyResponseClaim {
 	return predicate.EmptyResponseClaim(sql.FieldEQ(FieldOriginalActualCost, v))
 }
 
+// CompensationAmount applies equality check predicate on the "compensation_amount" field. It's identical to CompensationAmountEQ.
+func CompensationAmount(v float64) predicate.EmptyResponseClaim {
+	return predicate.EmptyResponseClaim(sql.FieldEQ(FieldCompensationAmount, v))
+}
+
 // BalanceRefund applies equality check predicate on the "balance_refund" field. It's identical to BalanceRefundEQ.
 func BalanceRefund(v float64) predicate.EmptyResponseClaim {
 	return predicate.EmptyResponseClaim(sql.FieldEQ(FieldBalanceRefund, v))
@@ -767,6 +772,56 @@ func OriginalActualCostLT(v float64) predicate.EmptyResponseClaim {
 // OriginalActualCostLTE applies the LTE predicate on the "original_actual_cost" field.
 func OriginalActualCostLTE(v float64) predicate.EmptyResponseClaim {
 	return predicate.EmptyResponseClaim(sql.FieldLTE(FieldOriginalActualCost, v))
+}
+
+// CompensationAmountEQ applies the EQ predicate on the "compensation_amount" field.
+func CompensationAmountEQ(v float64) predicate.EmptyResponseClaim {
+	return predicate.EmptyResponseClaim(sql.FieldEQ(FieldCompensationAmount, v))
+}
+
+// CompensationAmountNEQ applies the NEQ predicate on the "compensation_amount" field.
+func CompensationAmountNEQ(v float64) predicate.EmptyResponseClaim {
+	return predicate.EmptyResponseClaim(sql.FieldNEQ(FieldCompensationAmount, v))
+}
+
+// CompensationAmountIn applies the In predicate on the "compensation_amount" field.
+func CompensationAmountIn(vs ...float64) predicate.EmptyResponseClaim {
+	return predicate.EmptyResponseClaim(sql.FieldIn(FieldCompensationAmount, vs...))
+}
+
+// CompensationAmountNotIn applies the NotIn predicate on the "compensation_amount" field.
+func CompensationAmountNotIn(vs ...float64) predicate.EmptyResponseClaim {
+	return predicate.EmptyResponseClaim(sql.FieldNotIn(FieldCompensationAmount, vs...))
+}
+
+// CompensationAmountGT applies the GT predicate on the "compensation_amount" field.
+func CompensationAmountGT(v float64) predicate.EmptyResponseClaim {
+	return predicate.EmptyResponseClaim(sql.FieldGT(FieldCompensationAmount, v))
+}
+
+// CompensationAmountGTE applies the GTE predicate on the "compensation_amount" field.
+func CompensationAmountGTE(v float64) predicate.EmptyResponseClaim {
+	return predicate.EmptyResponseClaim(sql.FieldGTE(FieldCompensationAmount, v))
+}
+
+// CompensationAmountLT applies the LT predicate on the "compensation_amount" field.
+func CompensationAmountLT(v float64) predicate.EmptyResponseClaim {
+	return predicate.EmptyResponseClaim(sql.FieldLT(FieldCompensationAmount, v))
+}
+
+// CompensationAmountLTE applies the LTE predicate on the "compensation_amount" field.
+func CompensationAmountLTE(v float64) predicate.EmptyResponseClaim {
+	return predicate.EmptyResponseClaim(sql.FieldLTE(FieldCompensationAmount, v))
+}
+
+// CompensationAmountIsNil applies the IsNil predicate on the "compensation_amount" field.
+func CompensationAmountIsNil() predicate.EmptyResponseClaim {
+	return predicate.EmptyResponseClaim(sql.FieldIsNull(FieldCompensationAmount))
+}
+
+// CompensationAmountNotNil applies the NotNil predicate on the "compensation_amount" field.
+func CompensationAmountNotNil() predicate.EmptyResponseClaim {
+	return predicate.EmptyResponseClaim(sql.FieldNotNull(FieldCompensationAmount))
 }
 
 // BalanceRefundEQ applies the EQ predicate on the "balance_refund" field.

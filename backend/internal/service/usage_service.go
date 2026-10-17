@@ -497,9 +497,12 @@ func projectUsageLogCompensation(log *UsageLog, now time.Time) {
 	if log == nil {
 		return
 	}
+	quote := QuoteEmptyResponseCompensation(*log)
+	log.CompensationEstimatedRefund = quote.Amount
 	if log.EmptyResponseClaimStatus != "" {
 		log.CompensationEligible = false
 		log.CompensationEligibility = UsageCompensationClaimed
+		log.CompensationEstimatedRefund = 0
 		return
 	}
 	group := Group{}
@@ -518,6 +521,7 @@ func projectUsageLogCompensation(log *UsageLog, now time.Time) {
 	default:
 		log.CompensationEligible = false
 		log.CompensationEligibility = UsageCompensationUnavailable
+		log.CompensationEstimatedRefund = 0
 	}
 }
 

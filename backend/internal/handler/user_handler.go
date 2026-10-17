@@ -8,6 +8,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
 	"github.com/Wei-Shaw/sub2api/internal/handler/quotaview"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/geoip"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -17,6 +18,7 @@ import (
 
 // UserHandler handles user-related requests
 type UserHandler struct {
+	ipGeoLookup           func([]string) ([]geoip.Result, error)
 	userService           *service.UserService
 	authService           *service.AuthService
 	emailService          *service.EmailService

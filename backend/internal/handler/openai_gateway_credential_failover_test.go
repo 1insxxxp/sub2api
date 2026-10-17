@@ -158,12 +158,14 @@ func TestOpenAIManagedModelNotFoundExhaustionSanitizesMessage(t *testing.T) {
 	}, false)
 
 	require.Equal(t, http.StatusBadRequest, recorder.Code)
-	require.NotContains(t, recorder.Body.String(), "super-secret-value")
-	require.Contains(t, gjson.Get(recorder.Body.String(), "error.message").String(), "access_token=***")
+	require.Equal(t, "Model not found; inspect [upstream-url]", gjson.Get(recorder.Body.String(), "error.message").String())
 	recorded, ok := c.Get(service.OpsUpstreamErrorMessageKey)
 	require.True(t, ok)
-	require.NotContains(t, recorded, "super-secret-value")
-	require.Contains(t, recorded, "access_token=***")
+	require.Equal(t, "Model not found; inspect [upstream-url]", recorded)
+	for _, private := range []string{"upstream.example", "/debug", "access_token", "super-secret-value"} {
+		require.NotContains(t, recorder.Body.String(), private)
+		require.NotContains(t, recorded, private)
+	}
 }
 
 func TestResponsesFailoverExhaustedAfterForwardedTerminalMarksOpsWithoutDuplicateFrame(t *testing.T) {

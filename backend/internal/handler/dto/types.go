@@ -93,9 +93,9 @@ type APIKey struct {
 	Reset1dAt     *time.Time `json:"reset_1d_at,omitempty"`
 	Reset7dAt     *time.Time `json:"reset_7d_at,omitempty"`
 
-	User        *User                    `json:"user,omitempty"`
-	Group       *Group                   `json:"group,omitempty"`
-	CustomGroup *service.UserCustomGroup `json:"custom_group,omitempty"`
+	User        *User            `json:"user,omitempty"`
+	Group       *Group           `json:"group,omitempty"`
+	CustomGroup *UserCustomGroup `json:"custom_group,omitempty"`
 }
 
 type Group struct {
@@ -657,6 +657,8 @@ type UsageLog struct {
 	RateMultiplier            float64 `json:"rate_multiplier"`
 	LongContextBillingApplied bool    `json:"long_context_billing_applied"`
 
+	CompensationEstimatedRefund float64 `json:"compensation_estimated_refund"`
+
 	BillingType  int8   `json:"billing_type"`
 	RequestType  string `json:"request_type"`
 	Stream       bool   `json:"stream"`
@@ -770,6 +772,7 @@ type EmptyResponseRecord struct {
 	CacheTokens     int       `json:"cache_tokens"`
 	TotalTokens     int       `json:"total_tokens"`
 	RefundedAmount  float64   `json:"refunded_amount"`
+	EstimatedRefund float64   `json:"estimated_refund"`
 	Status          string    `json:"status"`
 	ReasonCode      string    `json:"reason_code"`
 	CreatedAt       time.Time `json:"created_at"`

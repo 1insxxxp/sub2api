@@ -528,6 +528,9 @@ func TestAffiliateDetailJSONExposesTierProgressWithoutInternalRecoveryFields(t *
 	customRate := 18.0
 	qualifiedAt := time.Now()
 	payload, err := json.Marshal(AffiliateDetail{
+		AffQuota:                   12,
+		AffFrozenQuota:             3,
+		AffHistoryQuota:            45,
 		AutomaticLevel:             AffiliateTierBronze,
 		AutomaticRebateRatePercent: 10,
 		EffectiveRebateRatePercent: 18,
@@ -543,7 +546,9 @@ func TestAffiliateDetailJSONExposesTierProgressWithoutInternalRecoveryFields(t *
 		Tiers:                      []AffiliateTierDefinition{{Level: AffiliateTierStandard, MinQualifiedInvitees: 0, RatePercent: 8}},
 		Invitees: []AffiliateInvitee{{
 			UserID:                  1,
-			QualifyingPaymentAmount: 50,
+			Username:                "Private Customer synthetic-owner@example.test",
+			TotalRebate:             30,
+			QualifyingPaymentAmount: 500,
 			Qualified:               true,
 			QualifiedAt:             &qualifiedAt,
 		}},
@@ -551,7 +556,14 @@ func TestAffiliateDetailJSONExposesTierProgressWithoutInternalRecoveryFields(t *
 	require.NoError(t, err)
 	require.Contains(t, string(payload), `"automatic_level":"bronze"`)
 	require.Contains(t, string(payload), `"custom_rebate_rate_percent":18`)
-	require.Contains(t, string(payload), `"qualifying_payment_amount":50`)
+	require.Contains(t, string(payload), `"aff_quota":12`)
+	require.Contains(t, string(payload), `"aff_frozen_quota":3`)
+	require.Contains(t, string(payload), `"aff_history_quota":45`)
+	require.NotContains(t, string(payload), `"qualifying_payment_amount"`)
+	require.NotContains(t, string(payload), `"total_rebate"`)
+	require.NotContains(t, string(payload), `"username"`)
+	require.NotContains(t, string(payload), "Private Customer")
+	require.NotContains(t, string(payload), "synthetic-owner@example.test")
 	require.Contains(t, string(payload), `"rebate_freeze_hours":12`)
 	require.Contains(t, string(payload), `"rebate_duration_days":30`)
 	require.Contains(t, string(payload), `"rebate_per_invitee_cap":200`)
@@ -568,6 +580,37 @@ func TestAffiliateDetailJSONExposesTierProgressWithoutInternalRecoveryFields(t *
 	})
 	require.NoError(t, err)
 	require.Equal(t, `{}`, string(qualificationPayload))
+}
+
+func TestAffiliateAdminRecordsJSONRetainsFinancialAmounts(t *testing.T) {
+	orderAmount, payAmount := 500.0, 48.0
+	tests := []struct {
+		name    string
+		record  any
+		amounts map[string]float64
+	}{
+		{
+			name:    "invite record",
+			record:  AffiliateInviteRecord{QualifyingPaymentAmount: 500, TotalRebate: 30},
+			amounts: map[string]float64{"qualifying_payment_amount": 500, "total_rebate": 30},
+		},
+		{
+			name:    "rebate record",
+			record:  AffiliateRebateRecord{OrderAmount: &orderAmount, PayAmount: &payAmount, RebateAmount: 30},
+			amounts: map[string]float64{"order_amount": 500, "pay_amount": 48, "rebate_amount": 30},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			payload, err := json.Marshal(tt.record)
+			require.NoError(t, err)
+			var decoded map[string]any
+			require.NoError(t, json.Unmarshal(payload, &decoded))
+			for key, amount := range tt.amounts {
+				require.Equal(t, amount, decoded[key])
+			}
+		})
+	}
 }
 
 func TestAffiliateService_GetDetailRequiresStrictTierConfig(t *testing.T) {

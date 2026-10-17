@@ -111,9 +111,9 @@ vi.mock('vue-i18n', async (importOriginal) => {
           'affiliate.rewards.claimFailed': 'Failed to claim milestone reward',
           'affiliate.rewards.copyCode': 'Copy code',
           'affiliate.rewards.codeCopied': 'Redeem code copied',
-          'affiliate.invitees.columns.paymentProgress': 'Cumulative paid',
+          'affiliate.invitees.columns.status': 'Invitation status',
           'affiliate.invitees.qualified': 'Qualified',
-          'affiliate.invitees.inProgress': 'In progress'
+          'affiliate.invitees.notQualified': 'Not qualified'
         }
         return (messages[key] ?? key).replace(/\{(\w+)\}/g, (_, name: string) => String(params?.[name] ?? ''))
       }
@@ -210,9 +210,6 @@ function makeDetail(overrides: Partial<UserAffiliateDetail> = {}): UserAffiliate
       {
         user_id: 2,
         email: 'invitee-with-a-long-address@example.com',
-        username: 'long-invitee-name',
-        total_rebate: 2.8,
-        qualifying_payment_amount: 35,
         qualified: false,
         qualified_at: null,
         created_at: '2026-07-12T00:00:00Z'
@@ -220,9 +217,6 @@ function makeDetail(overrides: Partial<UserAffiliateDetail> = {}): UserAffiliate
       {
         user_id: 3,
         email: 'qualified@example.com',
-        username: 'qualified-user',
-        total_rebate: 4,
-        qualifying_payment_amount: 50,
         qualified: true,
         qualified_at: '2026-07-12T00:00:00Z',
         created_at: '2026-07-11T00:00:00Z'
@@ -560,15 +554,51 @@ describe('AffiliateView promotion tiers', () => {
     expect(wrapper.get('[data-testid="tier-rule"][data-current="true"]').text()).toContain('Core')
   })
 
+
+  it('uses qualification status instead of invitee payment or rebate detail in both locales', () => {
+    expect(zhDashboard.affiliate.invitees.columns.status).toBe('邀请状态')
+    expect(zhDashboard.affiliate.invitees.qualified).toBe('已达标')
+    expect(zhDashboard.affiliate.invitees.notQualified).toBe('未达标')
+    expect(enDashboard.affiliate.invitees.columns.status).toBe('Invitation status')
+    expect(enDashboard.affiliate.invitees.notQualified).toBe('Not qualified')
+    for (const locale of [zhDashboard, enDashboard]) {
+      expect(locale.affiliate.invitees.columns).not.toHaveProperty('paymentProgress')
+      expect(locale.affiliate.invitees.columns).not.toHaveProperty('rebate')
+    }
+  })
+
+  it('shows only qualification status for each invitee even when a legacy server sends financial fields', async () => {
+    const legacyInvitees = [
+      { user_id: 2, email: 'inv***@example.com', username: 'invited-user', qualified: false, qualified_at: null,
+        created_at: '2026-07-12T00:00:00Z', qualifying_payment_amount: 123.45, total_rebate: 67.89 },
+      { user_id: 3, email: 'qua***@example.com', username: 'qualified-user', qualified: true,
+        qualified_at: '2026-07-12T00:00:00Z', created_at: '2026-07-11T00:00:00Z',
+        qualifying_payment_amount: 456.78, total_rebate: 91.23 },
+    ]
+    const wrapper = await mountView(makeDetail({ invitees: legacyInvitees }))
+    const desktop = wrapper.get('[data-testid="invitees-desktop"]')
+    expect(desktop.findAll('th')).toHaveLength(3)
+    expect(desktop.text()).toContain('Invitation status')
+    for (const list of [desktop, wrapper.get('[data-testid="invitees-mobile"]')]) {
+      expect(list.text()).toContain('inv***@example.com')
+      expect(list.text()).toContain('Not qualified')
+      expect(list.text()).toContain('Qualified')
+      for (const amount of ['$123.45', '$67.89', '$456.78', '$91.23']) expect(list.text()).not.toContain(amount)
+    }
+    expect(wrapper.get('[data-stat="available"]').text()).toContain('$12.00')
+    expect(wrapper.get('[data-stat="history"]').text()).toContain('$20.00')
+    expect(wrapper.get('[data-testid="affiliate-milestone-rewards"]').text()).toContain('Starter bonus')
+  })
+
   it('declares separate desktop and wrapping mobile invitee layouts without fixed minimum width', async () => {
     const wrapper = await mountView(makeDetail())
 
     expect(wrapper.get('[data-testid="invitees-desktop"]').classes()).toContain('hidden')
     const mobile = wrapper.get('[data-testid="invitees-mobile"]')
     expect(mobile.classes()).toContain('md:hidden')
-    expect(mobile.text()).toContain('$35.00 / $50.00')
-    expect(mobile.text()).toContain('In progress')
-    expect(mobile.text()).toContain('$50.00 / $50.00')
+    expect(mobile.text()).not.toContain('$35.00 / $50.00')
+    expect(mobile.text()).toContain('Not qualified')
+    expect(mobile.text()).not.toContain('$50.00 / $50.00')
     expect(mobile.text()).toContain('Qualified')
     expect(wrapper.text()).toContain('AFF123')
     expect(wrapper.text()).toContain('/register?aff=AFF123')

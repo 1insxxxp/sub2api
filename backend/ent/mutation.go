@@ -22027,6 +22027,8 @@ type EmptyResponseClaimMutation struct {
 	admin_note              *string
 	original_actual_cost    *float64
 	addoriginal_actual_cost *float64
+	compensation_amount     *float64
+	addcompensation_amount  *float64
 	balance_refund          *float64
 	addbalance_refund       *float64
 	subscription_refund     *float64
@@ -22780,6 +22782,76 @@ func (m *EmptyResponseClaimMutation) ResetOriginalActualCost() {
 	m.addoriginal_actual_cost = nil
 }
 
+// SetCompensationAmount sets the "compensation_amount" field.
+func (m *EmptyResponseClaimMutation) SetCompensationAmount(f float64) {
+	m.compensation_amount = &f
+	m.addcompensation_amount = nil
+}
+
+// CompensationAmount returns the value of the "compensation_amount" field in the mutation.
+func (m *EmptyResponseClaimMutation) CompensationAmount() (r float64, exists bool) {
+	v := m.compensation_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCompensationAmount returns the old "compensation_amount" field's value of the EmptyResponseClaim entity.
+// If the EmptyResponseClaim object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EmptyResponseClaimMutation) OldCompensationAmount(ctx context.Context) (v *float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCompensationAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCompensationAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCompensationAmount: %w", err)
+	}
+	return oldValue.CompensationAmount, nil
+}
+
+// AddCompensationAmount adds f to the "compensation_amount" field.
+func (m *EmptyResponseClaimMutation) AddCompensationAmount(f float64) {
+	if m.addcompensation_amount != nil {
+		*m.addcompensation_amount += f
+	} else {
+		m.addcompensation_amount = &f
+	}
+}
+
+// AddedCompensationAmount returns the value that was added to the "compensation_amount" field in this mutation.
+func (m *EmptyResponseClaimMutation) AddedCompensationAmount() (r float64, exists bool) {
+	v := m.addcompensation_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearCompensationAmount clears the value of the "compensation_amount" field.
+func (m *EmptyResponseClaimMutation) ClearCompensationAmount() {
+	m.compensation_amount = nil
+	m.addcompensation_amount = nil
+	m.clearedFields[emptyresponseclaim.FieldCompensationAmount] = struct{}{}
+}
+
+// CompensationAmountCleared returns if the "compensation_amount" field was cleared in this mutation.
+func (m *EmptyResponseClaimMutation) CompensationAmountCleared() bool {
+	_, ok := m.clearedFields[emptyresponseclaim.FieldCompensationAmount]
+	return ok
+}
+
+// ResetCompensationAmount resets all changes to the "compensation_amount" field.
+func (m *EmptyResponseClaimMutation) ResetCompensationAmount() {
+	m.compensation_amount = nil
+	m.addcompensation_amount = nil
+	delete(m.clearedFields, emptyresponseclaim.FieldCompensationAmount)
+}
+
 // SetBalanceRefund sets the "balance_refund" field.
 func (m *EmptyResponseClaimMutation) SetBalanceRefund(f float64) {
 	m.balance_refund = &f
@@ -23327,7 +23399,7 @@ func (m *EmptyResponseClaimMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *EmptyResponseClaimMutation) Fields() []string {
-	fields := make([]string, 0, 22)
+	fields := make([]string, 0, 23)
 	if m.usage_log_id != nil {
 		fields = append(fields, emptyresponseclaim.FieldUsageLogID)
 	}
@@ -23363,6 +23435,9 @@ func (m *EmptyResponseClaimMutation) Fields() []string {
 	}
 	if m.original_actual_cost != nil {
 		fields = append(fields, emptyresponseclaim.FieldOriginalActualCost)
+	}
+	if m.compensation_amount != nil {
+		fields = append(fields, emptyresponseclaim.FieldCompensationAmount)
 	}
 	if m.balance_refund != nil {
 		fields = append(fields, emptyresponseclaim.FieldBalanceRefund)
@@ -23426,6 +23501,8 @@ func (m *EmptyResponseClaimMutation) Field(name string) (ent.Value, bool) {
 		return m.AdminNote()
 	case emptyresponseclaim.FieldOriginalActualCost:
 		return m.OriginalActualCost()
+	case emptyresponseclaim.FieldCompensationAmount:
+		return m.CompensationAmount()
 	case emptyresponseclaim.FieldBalanceRefund:
 		return m.BalanceRefund()
 	case emptyresponseclaim.FieldSubscriptionRefund:
@@ -23479,6 +23556,8 @@ func (m *EmptyResponseClaimMutation) OldField(ctx context.Context, name string) 
 		return m.OldAdminNote(ctx)
 	case emptyresponseclaim.FieldOriginalActualCost:
 		return m.OldOriginalActualCost(ctx)
+	case emptyresponseclaim.FieldCompensationAmount:
+		return m.OldCompensationAmount(ctx)
 	case emptyresponseclaim.FieldBalanceRefund:
 		return m.OldBalanceRefund(ctx)
 	case emptyresponseclaim.FieldSubscriptionRefund:
@@ -23592,6 +23671,13 @@ func (m *EmptyResponseClaimMutation) SetField(name string, value ent.Value) erro
 		}
 		m.SetOriginalActualCost(v)
 		return nil
+	case emptyresponseclaim.FieldCompensationAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCompensationAmount(v)
+		return nil
 	case emptyresponseclaim.FieldBalanceRefund:
 		v, ok := value.(float64)
 		if !ok {
@@ -23694,6 +23780,9 @@ func (m *EmptyResponseClaimMutation) AddedFields() []string {
 	if m.addoriginal_actual_cost != nil {
 		fields = append(fields, emptyresponseclaim.FieldOriginalActualCost)
 	}
+	if m.addcompensation_amount != nil {
+		fields = append(fields, emptyresponseclaim.FieldCompensationAmount)
+	}
 	if m.addbalance_refund != nil {
 		fields = append(fields, emptyresponseclaim.FieldBalanceRefund)
 	}
@@ -23733,6 +23822,8 @@ func (m *EmptyResponseClaimMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedSubscriptionID()
 	case emptyresponseclaim.FieldOriginalActualCost:
 		return m.AddedOriginalActualCost()
+	case emptyresponseclaim.FieldCompensationAmount:
+		return m.AddedCompensationAmount()
 	case emptyresponseclaim.FieldBalanceRefund:
 		return m.AddedBalanceRefund()
 	case emptyresponseclaim.FieldSubscriptionRefund:
@@ -23808,6 +23899,13 @@ func (m *EmptyResponseClaimMutation) AddField(name string, value ent.Value) erro
 		}
 		m.AddOriginalActualCost(v)
 		return nil
+	case emptyresponseclaim.FieldCompensationAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCompensationAmount(v)
+		return nil
 	case emptyresponseclaim.FieldBalanceRefund:
 		v, ok := value.(float64)
 		if !ok {
@@ -23860,6 +23958,9 @@ func (m *EmptyResponseClaimMutation) ClearedFields() []string {
 	if m.FieldCleared(emptyresponseclaim.FieldSubscriptionID) {
 		fields = append(fields, emptyresponseclaim.FieldSubscriptionID)
 	}
+	if m.FieldCleared(emptyresponseclaim.FieldCompensationAmount) {
+		fields = append(fields, emptyresponseclaim.FieldCompensationAmount)
+	}
 	if m.FieldCleared(emptyresponseclaim.FieldEvidence) {
 		fields = append(fields, emptyresponseclaim.FieldEvidence)
 	}
@@ -23894,6 +23995,9 @@ func (m *EmptyResponseClaimMutation) ClearField(name string) error {
 		return nil
 	case emptyresponseclaim.FieldSubscriptionID:
 		m.ClearSubscriptionID()
+		return nil
+	case emptyresponseclaim.FieldCompensationAmount:
+		m.ClearCompensationAmount()
 		return nil
 	case emptyresponseclaim.FieldEvidence:
 		m.ClearEvidence()
@@ -23950,6 +24054,9 @@ func (m *EmptyResponseClaimMutation) ResetField(name string) error {
 		return nil
 	case emptyresponseclaim.FieldOriginalActualCost:
 		m.ResetOriginalActualCost()
+		return nil
+	case emptyresponseclaim.FieldCompensationAmount:
+		m.ResetCompensationAmount()
 		return nil
 	case emptyresponseclaim.FieldBalanceRefund:
 		m.ResetBalanceRefund()

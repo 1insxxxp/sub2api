@@ -3,6 +3,7 @@ package handler
 import (
 	"strconv"
 
+	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -47,7 +48,11 @@ func (h *UserCustomGroupHandler) List(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
-	response.Success(c, items)
+	out := make([]dto.UserCustomGroup, 0, len(items))
+	for i := range items {
+		out = append(out, *dto.UserCustomGroupFromService(&items[i]))
+	}
+	response.Success(c, out)
 }
 
 func (h *UserCustomGroupHandler) Get(c *gin.Context) {
@@ -64,7 +69,7 @@ func (h *UserCustomGroupHandler) Get(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
-	response.Success(c, item)
+	response.Success(c, dto.UserCustomGroupFromService(item))
 }
 
 func (h *UserCustomGroupHandler) Create(c *gin.Context) {
@@ -82,7 +87,7 @@ func (h *UserCustomGroupHandler) Create(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
-	response.Success(c, item)
+	response.Success(c, dto.UserCustomGroupFromService(item))
 }
 
 func (h *UserCustomGroupHandler) Update(c *gin.Context) {
@@ -104,7 +109,7 @@ func (h *UserCustomGroupHandler) Update(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
-	response.Success(c, item)
+	response.Success(c, dto.UserCustomGroupFromService(item))
 }
 
 func (h *UserCustomGroupHandler) Delete(c *gin.Context) {

@@ -35,6 +35,7 @@ func (EmptyResponseClaim) Fields() []ent.Field {
 		field.String("user_reason").MaxLen(255).Default(""),
 		field.String("admin_note").Default("").SchemaType(map[string]string{dialect.Postgres: "text"}),
 		money("original_actual_cost"),
+		field.Float("compensation_amount").Optional().Nillable().SchemaType(map[string]string{dialect.Postgres: "decimal(20,10)"}),
 		money("balance_refund"),
 		money("subscription_refund"),
 		money("api_key_quota_refund"),

@@ -2,6 +2,8 @@ package provider
 
 import (
 	"context"
+	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -119,7 +121,7 @@ func TestEasyPayConfirmNotification(t *testing.T) {
 			body:        `<html>502 Bad Gateway</html>`,
 			status:      http.StatusBadGateway,
 			notifyTrade: "2026101600001",
-			wantErr:     "parse query",
+			wantErr:     "HTTP 502",
 		},
 	}
 	for _, tt := range tests {
@@ -148,6 +150,46 @@ func TestEasyPayConfirmNotification(t *testing.T) {
 			}
 			if n.TradeNo != tt.wantTradeNo {
 				t.Fatalf("trade_no = %q, want %q", n.TradeNo, tt.wantTradeNo)
+			}
+		})
+	}
+}
+
+func TestEasyPayConfirmRejectsInvalidAmounts(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct {
+		money  string
+		amount float64
+	}{
+		{"NaN", 10},
+		{"+Inf", math.Inf(1)},
+		{"-Inf", math.Inf(-1)},
+		{"0", 0},
+		{"-1", -1},
+	} {
+		t.Run(tt.money, func(t *testing.T) {
+			t.Parallel()
+			body := fmt.Sprintf(`{"code":1,"money":%q,"status":1}`, tt.money)
+			provider, _ := newConfirmTestEasyPay(t, body, http.StatusOK)
+			n := confirmTestNotification()
+			n.Amount = tt.amount
+			if err := provider.ConfirmNotification(context.Background(), n); err == nil {
+				t.Fatalf("ConfirmNotification accepted invalid upstream amount %q", tt.money)
+			}
+		})
+	}
+}
+
+func TestEasyPayConfirmRejectsInvalidNotifiedAmounts(t *testing.T) {
+	t.Parallel()
+	for _, amount := range []float64{math.NaN(), math.Inf(1), math.Inf(-1), 0, -1} {
+		t.Run(fmt.Sprint(amount), func(t *testing.T) {
+			t.Parallel()
+			provider, _ := newConfirmTestEasyPay(t, `{"code":1,"money":"10.00","status":1}`, http.StatusOK)
+			n := confirmTestNotification()
+			n.Amount = amount
+			if err := provider.ConfirmNotification(context.Background(), n); err == nil {
+				t.Fatalf("ConfirmNotification accepted invalid notified amount %v", amount)
 			}
 		})
 	}

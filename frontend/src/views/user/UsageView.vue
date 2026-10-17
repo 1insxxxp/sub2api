@@ -181,6 +181,7 @@
                 {{ t('usage.emptyResponse.claimRules.tokenLimit') }}
               </span>
             </div>
+            <EmptyResponseCompensationRules class="mt-3 max-w-2xl" />
           </div>
 
           <div class="usage-record-actions flex w-full flex-wrap items-center gap-2">
@@ -320,6 +321,10 @@
                   <p class="text-emerald-700 dark:text-emerald-300">{{ t('usage.emptyResponse.refunded') }}</p>
                   <p class="mt-1 font-mono font-semibold text-emerald-700 dark:text-emerald-300">{{ formatMoney(row.refunded_amount) }}</p>
                 </div>
+                <div class="col-span-2 rounded-md bg-gray-50 px-2.5 py-2 dark:bg-dark-900/60">
+                  <p class="text-gray-500 dark:text-gray-400">{{ t('usage.emptyResponse.expectedRefund') }}</p>
+                  <p class="mt-1 font-mono font-semibold text-gray-900 dark:text-white">{{ Number.isFinite(row.estimated_refund) ? formatMoney(row.estimated_refund!) : '—' }}</p>
+                </div>
               </div>
 
               <div
@@ -382,7 +387,8 @@
               <col class="w-[200px]" />
               <col class="w-[112px]" />
               <col class="w-[112px]" />
-              <col class="w-[108px]" />
+              <col class="w-[128px]" />
+              <col class="w-[112px]" />
             </colgroup>
             <thead class="bg-gray-50 text-xs uppercase tracking-wider text-gray-500 dark:bg-dark-900/60 dark:text-gray-400">
               <tr>
@@ -395,6 +401,7 @@
                 <th class="whitespace-nowrap px-4 py-3 text-left font-medium">{{ t('usage.emptyResponse.tokens') }}</th>
                 <th class="whitespace-nowrap px-4 py-3 text-left font-medium">{{ t('usage.emptyResponse.originalCharge') }}</th>
                 <th class="whitespace-nowrap px-4 py-3 text-left font-medium">{{ t('usage.emptyResponse.refunded') }}</th>
+                <th class="whitespace-nowrap px-4 py-3 text-left font-medium">{{ t('usage.emptyResponse.expectedRefund') }}</th>
                 <th class="whitespace-nowrap px-4 py-3 text-left font-medium">{{ t('usage.emptyResponse.statusLabel') }}</th>
               </tr>
             </thead>
@@ -463,6 +470,7 @@
                 </td>
                 <td class="whitespace-nowrap px-4 py-3 font-mono font-semibold text-gray-800 dark:text-gray-100">{{ formatMoney(row.actual_cost) }}</td>
                 <td class="whitespace-nowrap px-4 py-3 font-mono font-semibold text-emerald-600 dark:text-emerald-300">{{ formatMoney(row.refunded_amount) }}</td>
+                <td class="whitespace-nowrap px-4 py-3 font-mono font-semibold text-gray-800 dark:text-gray-100">{{ Number.isFinite(row.estimated_refund) ? formatMoney(row.estimated_refund!) : '—' }}</td>
                 <td class="px-4 py-3">
                   <span class="inline-flex whitespace-nowrap rounded-full bg-primary-50 px-2.5 py-1 text-xs font-semibold text-primary-700 dark:bg-primary-500/10 dark:text-primary-300">
                     {{ t(`usage.emptyResponse.status.${row.status}`) }}
@@ -535,6 +543,7 @@ import TokenUsageTrend from '@/components/charts/TokenUsageTrend.vue'
 import Icon from '@/components/icons/Icon.vue'
 import UserErrorRequestsTable from '@/components/user/UserErrorRequestsTable.vue'
 import EmptyResponseClaimDialog from '@/components/usage/EmptyResponseClaimDialog.vue'
+import EmptyResponseCompensationRules from '@/components/usage/EmptyResponseCompensationRules.vue'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 import { formatReasoningEffort } from '@/utils/format'
 import { getBillingModeLabel, getDisplayBillingMode as resolveDisplayBillingMode } from '@/utils/billingMode'
@@ -825,6 +834,7 @@ const loadEmptyResponses = async () => {
 
 const canClaimEmptyResponseRow = (row: EmptyResponseRecord) =>
   row.status === 'claimable' && emptyResponseDailyRemaining.value !== 0
+    && Number.isFinite(row.estimated_refund) && row.estimated_refund! > 0
 
 const markEmptyResponseRowDailyLimited = (row: EmptyResponseRecord) => {
   row.status = 'daily_limited'
@@ -841,6 +851,7 @@ const claimEmptyResponseRow = async (row: EmptyResponseRecord) => {
     row.status = claim.status
     row.reason_code = claim.reason_code
     row.refunded_amount = claim.refunded_amount
+    row.estimated_refund = claim.estimated_refund
     if (emptyResponseDailyRemaining.value !== null) {
       emptyResponseDailyRemaining.value = Math.max(0, emptyResponseDailyRemaining.value - 1)
     }

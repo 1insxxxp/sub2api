@@ -158,6 +158,20 @@ func (_c *EmptyResponseClaimCreate) SetNillableOriginalActualCost(v *float64) *E
 	return _c
 }
 
+// SetCompensationAmount sets the "compensation_amount" field.
+func (_c *EmptyResponseClaimCreate) SetCompensationAmount(v float64) *EmptyResponseClaimCreate {
+	_c.mutation.SetCompensationAmount(v)
+	return _c
+}
+
+// SetNillableCompensationAmount sets the "compensation_amount" field if the given value is not nil.
+func (_c *EmptyResponseClaimCreate) SetNillableCompensationAmount(v *float64) *EmptyResponseClaimCreate {
+	if v != nil {
+		_c.SetCompensationAmount(*v)
+	}
+	return _c
+}
+
 // SetBalanceRefund sets the "balance_refund" field.
 func (_c *EmptyResponseClaimCreate) SetBalanceRefund(v float64) *EmptyResponseClaimCreate {
 	_c.mutation.SetBalanceRefund(v)
@@ -508,6 +522,10 @@ func (_c *EmptyResponseClaimCreate) createSpec() (*EmptyResponseClaim, *sqlgraph
 		_spec.SetField(emptyresponseclaim.FieldOriginalActualCost, field.TypeFloat64, value)
 		_node.OriginalActualCost = value
 	}
+	if value, ok := _c.mutation.CompensationAmount(); ok {
+		_spec.SetField(emptyresponseclaim.FieldCompensationAmount, field.TypeFloat64, value)
+		_node.CompensationAmount = &value
+	}
 	if value, ok := _c.mutation.BalanceRefund(); ok {
 		_spec.SetField(emptyresponseclaim.FieldBalanceRefund, field.TypeFloat64, value)
 		_node.BalanceRefund = value
@@ -807,6 +825,30 @@ func (u *EmptyResponseClaimUpsert) UpdateOriginalActualCost() *EmptyResponseClai
 // AddOriginalActualCost adds v to the "original_actual_cost" field.
 func (u *EmptyResponseClaimUpsert) AddOriginalActualCost(v float64) *EmptyResponseClaimUpsert {
 	u.Add(emptyresponseclaim.FieldOriginalActualCost, v)
+	return u
+}
+
+// SetCompensationAmount sets the "compensation_amount" field.
+func (u *EmptyResponseClaimUpsert) SetCompensationAmount(v float64) *EmptyResponseClaimUpsert {
+	u.Set(emptyresponseclaim.FieldCompensationAmount, v)
+	return u
+}
+
+// UpdateCompensationAmount sets the "compensation_amount" field to the value that was provided on create.
+func (u *EmptyResponseClaimUpsert) UpdateCompensationAmount() *EmptyResponseClaimUpsert {
+	u.SetExcluded(emptyresponseclaim.FieldCompensationAmount)
+	return u
+}
+
+// AddCompensationAmount adds v to the "compensation_amount" field.
+func (u *EmptyResponseClaimUpsert) AddCompensationAmount(v float64) *EmptyResponseClaimUpsert {
+	u.Add(emptyresponseclaim.FieldCompensationAmount, v)
+	return u
+}
+
+// ClearCompensationAmount clears the value of the "compensation_amount" field.
+func (u *EmptyResponseClaimUpsert) ClearCompensationAmount() *EmptyResponseClaimUpsert {
+	u.SetNull(emptyresponseclaim.FieldCompensationAmount)
 	return u
 }
 
@@ -1259,6 +1301,34 @@ func (u *EmptyResponseClaimUpsertOne) AddOriginalActualCost(v float64) *EmptyRes
 func (u *EmptyResponseClaimUpsertOne) UpdateOriginalActualCost() *EmptyResponseClaimUpsertOne {
 	return u.Update(func(s *EmptyResponseClaimUpsert) {
 		s.UpdateOriginalActualCost()
+	})
+}
+
+// SetCompensationAmount sets the "compensation_amount" field.
+func (u *EmptyResponseClaimUpsertOne) SetCompensationAmount(v float64) *EmptyResponseClaimUpsertOne {
+	return u.Update(func(s *EmptyResponseClaimUpsert) {
+		s.SetCompensationAmount(v)
+	})
+}
+
+// AddCompensationAmount adds v to the "compensation_amount" field.
+func (u *EmptyResponseClaimUpsertOne) AddCompensationAmount(v float64) *EmptyResponseClaimUpsertOne {
+	return u.Update(func(s *EmptyResponseClaimUpsert) {
+		s.AddCompensationAmount(v)
+	})
+}
+
+// UpdateCompensationAmount sets the "compensation_amount" field to the value that was provided on create.
+func (u *EmptyResponseClaimUpsertOne) UpdateCompensationAmount() *EmptyResponseClaimUpsertOne {
+	return u.Update(func(s *EmptyResponseClaimUpsert) {
+		s.UpdateCompensationAmount()
+	})
+}
+
+// ClearCompensationAmount clears the value of the "compensation_amount" field.
+func (u *EmptyResponseClaimUpsertOne) ClearCompensationAmount() *EmptyResponseClaimUpsertOne {
+	return u.Update(func(s *EmptyResponseClaimUpsert) {
+		s.ClearCompensationAmount()
 	})
 }
 
@@ -1904,6 +1974,34 @@ func (u *EmptyResponseClaimUpsertBulk) AddOriginalActualCost(v float64) *EmptyRe
 func (u *EmptyResponseClaimUpsertBulk) UpdateOriginalActualCost() *EmptyResponseClaimUpsertBulk {
 	return u.Update(func(s *EmptyResponseClaimUpsert) {
 		s.UpdateOriginalActualCost()
+	})
+}
+
+// SetCompensationAmount sets the "compensation_amount" field.
+func (u *EmptyResponseClaimUpsertBulk) SetCompensationAmount(v float64) *EmptyResponseClaimUpsertBulk {
+	return u.Update(func(s *EmptyResponseClaimUpsert) {
+		s.SetCompensationAmount(v)
+	})
+}
+
+// AddCompensationAmount adds v to the "compensation_amount" field.
+func (u *EmptyResponseClaimUpsertBulk) AddCompensationAmount(v float64) *EmptyResponseClaimUpsertBulk {
+	return u.Update(func(s *EmptyResponseClaimUpsert) {
+		s.AddCompensationAmount(v)
+	})
+}
+
+// UpdateCompensationAmount sets the "compensation_amount" field to the value that was provided on create.
+func (u *EmptyResponseClaimUpsertBulk) UpdateCompensationAmount() *EmptyResponseClaimUpsertBulk {
+	return u.Update(func(s *EmptyResponseClaimUpsert) {
+		s.UpdateCompensationAmount()
+	})
+}
+
+// ClearCompensationAmount clears the value of the "compensation_amount" field.
+func (u *EmptyResponseClaimUpsertBulk) ClearCompensationAmount() *EmptyResponseClaimUpsertBulk {
+	return u.Update(func(s *EmptyResponseClaimUpsert) {
+		s.ClearCompensationAmount()
 	})
 }
 

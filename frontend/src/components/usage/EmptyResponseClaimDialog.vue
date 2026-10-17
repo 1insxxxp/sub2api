@@ -52,13 +52,14 @@
               </div>
               <div class="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-3 dark:border-emerald-500/20 dark:bg-emerald-500/10">
                 <p class="text-xs text-emerald-700 dark:text-emerald-300">{{ t('usage.emptyResponse.expectedRefund') }}</p>
-                <p class="mt-1 font-mono text-base font-semibold text-emerald-700 dark:text-emerald-300">${{ log.net_actual_cost.toFixed(6) }}</p>
+                <p data-testid="compensation-estimated-refund" class="mt-1 font-mono text-base font-semibold text-emerald-700 dark:text-emerald-300">{{ Number.isFinite(log.compensation_estimated_refund) ? `$${log.compensation_estimated_refund!.toFixed(6)}` : '—' }}</p>
               </div>
             </div>
 
             <div class="rounded-2xl border border-sky-200 bg-sky-50/70 p-4 text-sm leading-6 text-sky-900 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-100">
               {{ t('usage.emptyResponse.rules') }}
             </div>
+            <EmptyResponseCompensationRules />
 
             <label class="block">
               <span class="mb-2 block text-sm font-medium text-slate-800 dark:text-slate-200">{{ t('usage.emptyResponse.reason') }}</span>
@@ -81,8 +82,8 @@
               data-testid="submit-empty-response-claim"
               type="button"
               class="btn btn-primary flex-[1.4]"
-              :disabled="submitting"
-              @click="emit('submit', reason.trim())"
+              :disabled="submitting || !canSubmit"
+              @click="submitClaim"
             >
               {{ submitting ? t('usage.emptyResponse.submitting') : t('usage.emptyResponse.submit') }}
             </button>
@@ -94,14 +95,23 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { UsageLog } from '@/types'
+import EmptyResponseCompensationRules from './EmptyResponseCompensationRules.vue'
 
 const props = defineProps<{ show: boolean; log: UsageLog | null; submitting: boolean }>()
 const emit = defineEmits<{ close: []; submit: [reason: string] }>()
 const { t } = useI18n()
 const reason = ref('')
+const canSubmit = computed(() => {
+  const log = props.log
+  return !!log?.compensation_eligible
+    && Number.isFinite(log.compensation_estimated_refund) && log.compensation_estimated_refund! > 0
+})
+const submitClaim = () => {
+  if (canSubmit.value && !props.submitting) emit('submit', reason.value.trim())
+}
 
 watch(() => props.show, (show) => {
   if (show) reason.value = ''

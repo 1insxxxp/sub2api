@@ -29,3 +29,14 @@ func TestEmptyResponseCompensationMigration(t *testing.T) {
 		require.NotContains(t, strings.ToLower(sql), forbidden)
 	}
 }
+
+func TestEmptyResponseCompensationCapMigrationPreservesLegacySnapshots(t *testing.T) {
+	raw, err := FS.ReadFile("248_empty_response_compensation_cap.sql")
+	require.NoError(t, err)
+	sql := string(raw)
+	require.Contains(t, sql, "compensation_amount DECIMAL(20,10)")
+	require.NotContains(t, sql, "compensation_rate")
+	require.NotContains(t, sql, "compensation_input_tokens")
+	require.NotContains(t, strings.ToUpper(sql), "UPDATE EMPTY_RESPONSE_CLAIMS")
+	require.NotContains(t, sql, "compensation_amount DECIMAL(20,10) NOT NULL")
+}

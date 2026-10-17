@@ -2,6 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import AffiliateView from '../AffiliateView.vue'
+import { formatDateTime } from '@/utils/format'
 
 const { copyToClipboard, getAffiliateDetail } = vi.hoisted(() => ({
   copyToClipboard: vi.fn(),
@@ -59,6 +60,54 @@ describe('AffiliateView', () => {
       effective_rebate_rate_percent: 10,
       invitees: [],
     })
+  })
+
+
+  it('hides legacy private invitee names and financial values while preserving masked email, qualification and own quota', async () => {
+    const joinedAt = '2026-07-12T00:00:00Z'
+    getAffiliateDetail.mockResolvedValue({
+      user_id: 1,
+      aff_code: affiliateCode,
+      inviter_id: null,
+      aff_count: 1,
+      aff_quota: 8.76,
+      aff_frozen_quota: 0,
+      aff_history_quota: 12.34,
+      effective_rebate_rate_percent: 10,
+      qualification_amount: 50,
+      invitees: [{
+        user_id: 2,
+        email: 'inv***@example.com',
+        username: 'Private Customer synthetic-owner@example.test',
+        created_at: joinedAt,
+        qualified: true,
+        qualified_at: joinedAt,
+        qualifying_payment_amount: 123.45,
+        total_rebate: 67.89,
+      }],
+    })
+    const wrapper = mount(AffiliateView, {
+      global: { stubs: { AppLayout: { template: '<main><slot /></main>' }, Icon: true } },
+    })
+    await flushPromises()
+
+    for (const selector of ['invitees-desktop', 'invitees-mobile']) {
+      const list = wrapper.get(`[data-testid="${selector}"]`)
+      expect(list.text()).toContain('inv***@example.com')
+      expect(list.text()).not.toContain('Private Customer')
+      expect(list.text()).not.toContain('synthetic-owner@example.test')
+      expect(list.text()).not.toContain('affiliate.invitees.columns.username')
+      expect(list.text()).toContain('affiliate.invitees.qualified')
+      expect(list.text()).toContain(formatDateTime(joinedAt))
+      expect(list.text()).not.toContain('$123.45')
+      expect(list.text()).not.toContain('$67.89')
+      expect(list.text()).not.toContain('affiliate.invitees.columns.paymentProgress')
+      expect(list.text()).not.toContain('affiliate.invitees.columns.rebate')
+    }
+    expect(wrapper.get('[data-stat="available"]').text()).toContain('$8.76')
+    expect(wrapper.get('[data-stat="history"]').text()).toContain('$12.34')
+    const transfer = wrapper.findAll('button').find((button) => button.text() === 'affiliate.transfer.button')
+    expect(transfer?.attributes('disabled')).toBeUndefined()
   })
 
   it('stacks long values and copy controls on mobile while retaining desktop rows', async () => {

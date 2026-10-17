@@ -90,13 +90,14 @@ type AffiliateSummary struct {
 	UpdatedAt               time.Time  `json:"updated_at"`
 }
 
+// AffiliateInvitee exposes qualification status without private names or financial amounts.
 type AffiliateInvitee struct {
 	UserID                  int64      `json:"user_id"`
 	Email                   string     `json:"email"`
-	Username                string     `json:"username"`
+	Username                string     `json:"-"`
 	CreatedAt               *time.Time `json:"created_at,omitempty"`
-	TotalRebate             float64    `json:"total_rebate"`
-	QualifyingPaymentAmount float64    `json:"qualifying_payment_amount"`
+	TotalRebate             float64    `json:"-"`
+	QualifyingPaymentAmount float64    `json:"-"`
 	Qualified               bool       `json:"qualified"`
 	QualifiedAt             *time.Time `json:"qualified_at"`
 }

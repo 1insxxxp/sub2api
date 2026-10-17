@@ -270,6 +270,33 @@ func (_u *EmptyResponseClaimUpdate) AddOriginalActualCost(v float64) *EmptyRespo
 	return _u
 }
 
+// SetCompensationAmount sets the "compensation_amount" field.
+func (_u *EmptyResponseClaimUpdate) SetCompensationAmount(v float64) *EmptyResponseClaimUpdate {
+	_u.mutation.ResetCompensationAmount()
+	_u.mutation.SetCompensationAmount(v)
+	return _u
+}
+
+// SetNillableCompensationAmount sets the "compensation_amount" field if the given value is not nil.
+func (_u *EmptyResponseClaimUpdate) SetNillableCompensationAmount(v *float64) *EmptyResponseClaimUpdate {
+	if v != nil {
+		_u.SetCompensationAmount(*v)
+	}
+	return _u
+}
+
+// AddCompensationAmount adds value to the "compensation_amount" field.
+func (_u *EmptyResponseClaimUpdate) AddCompensationAmount(v float64) *EmptyResponseClaimUpdate {
+	_u.mutation.AddCompensationAmount(v)
+	return _u
+}
+
+// ClearCompensationAmount clears the value of the "compensation_amount" field.
+func (_u *EmptyResponseClaimUpdate) ClearCompensationAmount() *EmptyResponseClaimUpdate {
+	_u.mutation.ClearCompensationAmount()
+	return _u
+}
+
 // SetBalanceRefund sets the "balance_refund" field.
 func (_u *EmptyResponseClaimUpdate) SetBalanceRefund(v float64) *EmptyResponseClaimUpdate {
 	_u.mutation.ResetBalanceRefund()
@@ -580,6 +607,15 @@ func (_u *EmptyResponseClaimUpdate) sqlSave(ctx context.Context) (_node int, err
 	}
 	if value, ok := _u.mutation.AddedOriginalActualCost(); ok {
 		_spec.AddField(emptyresponseclaim.FieldOriginalActualCost, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.CompensationAmount(); ok {
+		_spec.SetField(emptyresponseclaim.FieldCompensationAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedCompensationAmount(); ok {
+		_spec.AddField(emptyresponseclaim.FieldCompensationAmount, field.TypeFloat64, value)
+	}
+	if _u.mutation.CompensationAmountCleared() {
+		_spec.ClearField(emptyresponseclaim.FieldCompensationAmount, field.TypeFloat64)
 	}
 	if value, ok := _u.mutation.BalanceRefund(); ok {
 		_spec.SetField(emptyresponseclaim.FieldBalanceRefund, field.TypeFloat64, value)
@@ -894,6 +930,33 @@ func (_u *EmptyResponseClaimUpdateOne) SetNillableOriginalActualCost(v *float64)
 // AddOriginalActualCost adds value to the "original_actual_cost" field.
 func (_u *EmptyResponseClaimUpdateOne) AddOriginalActualCost(v float64) *EmptyResponseClaimUpdateOne {
 	_u.mutation.AddOriginalActualCost(v)
+	return _u
+}
+
+// SetCompensationAmount sets the "compensation_amount" field.
+func (_u *EmptyResponseClaimUpdateOne) SetCompensationAmount(v float64) *EmptyResponseClaimUpdateOne {
+	_u.mutation.ResetCompensationAmount()
+	_u.mutation.SetCompensationAmount(v)
+	return _u
+}
+
+// SetNillableCompensationAmount sets the "compensation_amount" field if the given value is not nil.
+func (_u *EmptyResponseClaimUpdateOne) SetNillableCompensationAmount(v *float64) *EmptyResponseClaimUpdateOne {
+	if v != nil {
+		_u.SetCompensationAmount(*v)
+	}
+	return _u
+}
+
+// AddCompensationAmount adds value to the "compensation_amount" field.
+func (_u *EmptyResponseClaimUpdateOne) AddCompensationAmount(v float64) *EmptyResponseClaimUpdateOne {
+	_u.mutation.AddCompensationAmount(v)
+	return _u
+}
+
+// ClearCompensationAmount clears the value of the "compensation_amount" field.
+func (_u *EmptyResponseClaimUpdateOne) ClearCompensationAmount() *EmptyResponseClaimUpdateOne {
+	_u.mutation.ClearCompensationAmount()
 	return _u
 }
 
@@ -1237,6 +1300,15 @@ func (_u *EmptyResponseClaimUpdateOne) sqlSave(ctx context.Context) (_node *Empt
 	}
 	if value, ok := _u.mutation.AddedOriginalActualCost(); ok {
 		_spec.AddField(emptyresponseclaim.FieldOriginalActualCost, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.CompensationAmount(); ok {
+		_spec.SetField(emptyresponseclaim.FieldCompensationAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedCompensationAmount(); ok {
+		_spec.AddField(emptyresponseclaim.FieldCompensationAmount, field.TypeFloat64, value)
+	}
+	if _u.mutation.CompensationAmountCleared() {
+		_spec.ClearField(emptyresponseclaim.FieldCompensationAmount, field.TypeFloat64)
 	}
 	if value, ok := _u.mutation.BalanceRefund(); ok {
 		_spec.SetField(emptyresponseclaim.FieldBalanceRefund, field.TypeFloat64, value)

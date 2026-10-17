@@ -42,6 +42,8 @@ type EmptyResponseClaim struct {
 	AdminNote string `json:"admin_note,omitempty"`
 	// OriginalActualCost holds the value of the "original_actual_cost" field.
 	OriginalActualCost float64 `json:"original_actual_cost,omitempty"`
+	// CompensationAmount holds the value of the "compensation_amount" field.
+	CompensationAmount *float64 `json:"compensation_amount,omitempty"`
 	// BalanceRefund holds the value of the "balance_refund" field.
 	BalanceRefund float64 `json:"balance_refund,omitempty"`
 	// SubscriptionRefund holds the value of the "subscription_refund" field.
@@ -72,7 +74,7 @@ func (*EmptyResponseClaim) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case emptyresponseclaim.FieldEvidence:
 			values[i] = new([]byte)
-		case emptyresponseclaim.FieldOriginalActualCost, emptyresponseclaim.FieldBalanceRefund, emptyresponseclaim.FieldSubscriptionRefund, emptyresponseclaim.FieldAPIKeyQuotaRefund:
+		case emptyresponseclaim.FieldOriginalActualCost, emptyresponseclaim.FieldCompensationAmount, emptyresponseclaim.FieldBalanceRefund, emptyresponseclaim.FieldSubscriptionRefund, emptyresponseclaim.FieldAPIKeyQuotaRefund:
 			values[i] = new(sql.NullFloat64)
 		case emptyresponseclaim.FieldID, emptyresponseclaim.FieldUsageLogID, emptyresponseclaim.FieldOutcomeID, emptyresponseclaim.FieldUserID, emptyresponseclaim.FieldAPIKeyID, emptyresponseclaim.FieldAccountID, emptyresponseclaim.FieldGroupID, emptyresponseclaim.FieldSubscriptionID, emptyresponseclaim.FieldRuleVersion, emptyresponseclaim.FieldReviewedBy:
 			values[i] = new(sql.NullInt64)
@@ -175,6 +177,13 @@ func (_m *EmptyResponseClaim) assignValues(columns []string, values []any) error
 				return fmt.Errorf("unexpected type %T for field original_actual_cost", values[i])
 			} else if value.Valid {
 				_m.OriginalActualCost = value.Float64
+			}
+		case emptyresponseclaim.FieldCompensationAmount:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field compensation_amount", values[i])
+			} else if value.Valid {
+				_m.CompensationAmount = new(float64)
+				*_m.CompensationAmount = value.Float64
 			}
 		case emptyresponseclaim.FieldBalanceRefund:
 			if value, ok := values[i].(*sql.NullFloat64); !ok {
@@ -318,6 +327,11 @@ func (_m *EmptyResponseClaim) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("original_actual_cost=")
 	builder.WriteString(fmt.Sprintf("%v", _m.OriginalActualCost))
+	builder.WriteString(", ")
+	if v := _m.CompensationAmount; v != nil {
+		builder.WriteString("compensation_amount=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
 	builder.WriteString(", ")
 	builder.WriteString("balance_refund=")
 	builder.WriteString(fmt.Sprintf("%v", _m.BalanceRefund))

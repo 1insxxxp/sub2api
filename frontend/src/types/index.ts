@@ -175,10 +175,7 @@ export interface AffiliateTierProgress {
 export interface AffiliateInvitee {
   user_id: number
   email: string
-  username: string
   created_at?: string
-  total_rebate: number
-  qualifying_payment_amount: number
   qualified: boolean
   qualified_at: string | null
 }
@@ -1040,13 +1037,20 @@ export interface UpdateApiKeyRequest {
   reset_rate_limit_usage?: boolean
 }
 
+export interface UserCustomGroupSource {
+  id: number
+  name: string
+  platform: GroupPlatform
+  status: Group['status']
+}
+
 export interface UserCustomGroupModel {
   id: number
   custom_group_id: number
   public_model: string
   source_group_id: number
   source_model: string
-  source_group?: Group
+  source_group?: UserCustomGroupSource
   source_available?: boolean
   source_issue?: 'source_group_unavailable' | 'source_group_not_allowed' | 'source_model_unavailable'
 }
@@ -2094,6 +2098,7 @@ export interface UsageLog {
   compensated_cost: number
   net_actual_cost: number
   compensation_eligible: boolean
+  compensation_estimated_refund?: number
   compensation_eligibility: 'eligible' | 'manual_review' | 'claimed' | 'unavailable'
   compensation_reason_code?: string
   claim_status?: 'evaluating' | 'manual_review' | 'approved' | 'rejected' | 'compensated'
@@ -2151,6 +2156,7 @@ export interface EmptyResponseClaim {
 }
 
 export interface EmptyResponseRecord {
+  estimated_refund?: number
   usage_log_id: number
   claim_id?: number | null
   model: string

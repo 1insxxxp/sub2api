@@ -37,6 +37,8 @@ const (
 	FieldAdminNote = "admin_note"
 	// FieldOriginalActualCost holds the string denoting the original_actual_cost field in the database.
 	FieldOriginalActualCost = "original_actual_cost"
+	// FieldCompensationAmount holds the string denoting the compensation_amount field in the database.
+	FieldCompensationAmount = "compensation_amount"
 	// FieldBalanceRefund holds the string denoting the balance_refund field in the database.
 	FieldBalanceRefund = "balance_refund"
 	// FieldSubscriptionRefund holds the string denoting the subscription_refund field in the database.
@@ -76,6 +78,7 @@ var Columns = []string{
 	FieldUserReason,
 	FieldAdminNote,
 	FieldOriginalActualCost,
+	FieldCompensationAmount,
 	FieldBalanceRefund,
 	FieldSubscriptionRefund,
 	FieldAPIKeyQuotaRefund,
@@ -197,6 +200,11 @@ func ByAdminNote(opts ...sql.OrderTermOption) OrderOption {
 // ByOriginalActualCost orders the results by the original_actual_cost field.
 func ByOriginalActualCost(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldOriginalActualCost, opts...).ToFunc()
+}
+
+// ByCompensationAmount orders the results by the compensation_amount field.
+func ByCompensationAmount(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCompensationAmount, opts...).ToFunc()
 }
 
 // ByBalanceRefund orders the results by the balance_refund field.

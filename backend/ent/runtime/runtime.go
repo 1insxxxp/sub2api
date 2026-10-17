@@ -1052,27 +1052,27 @@ func init() {
 	// emptyresponseclaim.DefaultOriginalActualCost holds the default value on creation for the original_actual_cost field.
 	emptyresponseclaim.DefaultOriginalActualCost = emptyresponseclaimDescOriginalActualCost.Default.(float64)
 	// emptyresponseclaimDescBalanceRefund is the schema descriptor for balance_refund field.
-	emptyresponseclaimDescBalanceRefund := emptyresponseclaimFields[12].Descriptor()
+	emptyresponseclaimDescBalanceRefund := emptyresponseclaimFields[13].Descriptor()
 	// emptyresponseclaim.DefaultBalanceRefund holds the default value on creation for the balance_refund field.
 	emptyresponseclaim.DefaultBalanceRefund = emptyresponseclaimDescBalanceRefund.Default.(float64)
 	// emptyresponseclaimDescSubscriptionRefund is the schema descriptor for subscription_refund field.
-	emptyresponseclaimDescSubscriptionRefund := emptyresponseclaimFields[13].Descriptor()
+	emptyresponseclaimDescSubscriptionRefund := emptyresponseclaimFields[14].Descriptor()
 	// emptyresponseclaim.DefaultSubscriptionRefund holds the default value on creation for the subscription_refund field.
 	emptyresponseclaim.DefaultSubscriptionRefund = emptyresponseclaimDescSubscriptionRefund.Default.(float64)
 	// emptyresponseclaimDescAPIKeyQuotaRefund is the schema descriptor for api_key_quota_refund field.
-	emptyresponseclaimDescAPIKeyQuotaRefund := emptyresponseclaimFields[14].Descriptor()
+	emptyresponseclaimDescAPIKeyQuotaRefund := emptyresponseclaimFields[15].Descriptor()
 	// emptyresponseclaim.DefaultAPIKeyQuotaRefund holds the default value on creation for the api_key_quota_refund field.
 	emptyresponseclaim.DefaultAPIKeyQuotaRefund = emptyresponseclaimDescAPIKeyQuotaRefund.Default.(float64)
 	// emptyresponseclaimDescRuleVersion is the schema descriptor for rule_version field.
-	emptyresponseclaimDescRuleVersion := emptyresponseclaimFields[16].Descriptor()
+	emptyresponseclaimDescRuleVersion := emptyresponseclaimFields[17].Descriptor()
 	// emptyresponseclaim.DefaultRuleVersion holds the default value on creation for the rule_version field.
 	emptyresponseclaim.DefaultRuleVersion = emptyresponseclaimDescRuleVersion.Default.(int)
 	// emptyresponseclaimDescCreatedAt is the schema descriptor for created_at field.
-	emptyresponseclaimDescCreatedAt := emptyresponseclaimFields[20].Descriptor()
+	emptyresponseclaimDescCreatedAt := emptyresponseclaimFields[21].Descriptor()
 	// emptyresponseclaim.DefaultCreatedAt holds the default value on creation for the created_at field.
 	emptyresponseclaim.DefaultCreatedAt = emptyresponseclaimDescCreatedAt.Default.(func() time.Time)
 	// emptyresponseclaimDescUpdatedAt is the schema descriptor for updated_at field.
-	emptyresponseclaimDescUpdatedAt := emptyresponseclaimFields[21].Descriptor()
+	emptyresponseclaimDescUpdatedAt := emptyresponseclaimFields[22].Descriptor()
 	// emptyresponseclaim.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	emptyresponseclaim.DefaultUpdatedAt = emptyresponseclaimDescUpdatedAt.Default.(func() time.Time)
 	// emptyresponseclaim.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

@@ -376,56 +376,38 @@ func (s *AuthService) SendVerifyCode(ctx context.Context, email string, locale .
 	return s.emailService.SendVerifyCode(ctx, email, siteName, firstEmailLocale(locale))
 }
 
-// SendVerifyCodeAsync 异步发送邮箱验证码并返回倒计时
+// SendVerifyCodeAsync accepts registration verification requests without revealing
+// whether the address, an alias, or a deleted identity is already registered.
 func (s *AuthService) SendVerifyCodeAsync(ctx context.Context, email string, locale ...string) (*SendVerifyCodeResult, error) {
-	logger.LegacyPrintf("service.auth", "[Auth] SendVerifyCodeAsync called for email: %s", email)
-
-	// 检查是否开放注册（默认关闭）
 	if s.settingService == nil || !s.settingService.IsRegistrationEnabled(ctx) {
-		logger.LegacyPrintf("service.auth", "%s", "[Auth] Registration is disabled")
 		return nil, ErrRegDisabled
 	}
-
 	if isReservedEmail(email) {
 		return nil, ErrEmailReserved
 	}
-	// 检查邮箱是否已存在（含 +别名 / Gmail 点号变体归一化；在发信前拦截，避免批量脚本消耗发信配额）
+	// Apply public domain restrictions independently of the address's registration status.
+	if err := s.validateRegistrationEmailQuota(ctx, email); err != nil {
+		return nil, err
+	}
+	if s.emailQueueService == nil {
+		return nil, ErrServiceUnavailable
+	}
 	existsEmail, err := s.existsByEmailOrAlias(ctx, email)
 	if err != nil {
 		logger.LegacyPrintf("service.auth", "[Auth] Database error checking email exists: %v", err)
 		return nil, ErrServiceUnavailable
 	}
+	result := &SendVerifyCodeResult{Countdown: 60}
 	if existsEmail {
-		logger.LegacyPrintf("service.auth", "[Auth] Email already exists: %s", email)
-		return nil, ErrEmailExists
+		return result, nil
 	}
-	if err := s.validateRegistrationEmailQuota(ctx, email); err != nil {
-		return nil, err
-	}
-
-	// 检查邮件队列服务是否配置
-	if s.emailQueueService == nil {
-		logger.LegacyPrintf("service.auth", "%s", "[Auth] Email queue service not configured")
-		return nil, errors.New("email queue service not configured")
-	}
-
-	// 获取网站名称
-	siteName := "Sub2API"
-	if s.settingService != nil {
-		siteName = s.settingService.GetSiteName(ctx)
-	}
-
-	// 异步发送
-	logger.LegacyPrintf("service.auth", "[Auth] Enqueueing verify code for: %s", email)
+	// Delivery is asynchronous already. Keep queue failures private as well, so a
+	// saturated queue cannot become a second address-enumeration signal.
+	siteName := s.settingService.GetSiteName(ctx)
 	if err := s.emailQueueService.EnqueueVerifyCode(email, siteName, firstEmailLocale(locale)); err != nil {
-		logger.LegacyPrintf("service.auth", "[Auth] Failed to enqueue: %v", err)
-		return nil, fmt.Errorf("enqueue verify code: %w", err)
+		logger.LegacyPrintf("service.auth", "[Auth] Failed to enqueue registration verification: %v", err)
 	}
-
-	logger.LegacyPrintf("service.auth", "[Auth] Verify code enqueued successfully for: %s", email)
-	return &SendVerifyCodeResult{
-		Countdown: 60, // 60秒倒计时
-	}, nil
+	return result, nil
 }
 
 // VerifyCaptchaForRegister 在注册场景下验证当前启用的验证码。

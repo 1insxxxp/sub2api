@@ -136,6 +136,12 @@ git push origin main
 - 配置、Nginx 路由和原容器参数备份位于 `/opt/backups/sub2api-image-preview-20260919`。目录含敏感配置，只供服务器运维使用；回退前核对是否有后续配置变更。
 - 仓库安全头中间件已补充旧 CSP 的兼容逻辑和回归测试，尚未随新镜像发布；后续发布按正常 CI 门禁执行。
 
+### 支付异常来源封禁（2026-10-17）
+
+- 关联异常账号通过用户管理 API 停用，余额和订单证据保留；认证 IP 黑名单采用追加精确 IP 的方式，保留原有规则和自动封禁配置。
+- `api.passionapi.com` 与 `direct.passionapi.com` 的 Nginx server 块均增加了标记为 `Payment abuse containment 2026-10-17` 的精确来源拦截。后续更新或重建入口配置时须保留，不能仅依赖认证入口黑名单。
+- 配置备份和验证结果位于 `/opt/backups/sub2api-payment-abuse-20261017`，目录含敏感运维数据，只保留在服务器。已验证正常健康检查为 200，模拟命中封禁来源为 403；未重启应用或数据库。
+
 ### 前置条件
 
 - 本地已配置 SSH 别名 `clicodeplus` 连接到生产服务器（运行服务）
@@ -1007,6 +1013,33 @@ curl -X PUT "${BASE}/api/v1/admin/settings/image-studio" \
   --data-binary @image-studio.json
 ```
 
+### 3.5 支付取消频率限制
+
+```
+GET /api/v1/admin/payment/config
+PUT /api/v1/admin/payment/config
+```
+
+PUT 支持部分更新，未提供的字段保留原值。取消限频字段如下：
+
+| 字段 | 说明 |
+|------|------|
+| `cancel_rate_limit_enabled` | 是否启用 |
+| `cancel_rate_limit_max` | 窗口内最大取消次数 |
+| `cancel_rate_limit_window` | 窗口长度 |
+| `cancel_rate_limit_unit` | `minute` / `hour` / `day` |
+| `cancel_rate_limit_window_mode` | `rolling`（滚动）/ `fixed`（固定） |
+
+例如启用滚动 10 分钟最多取消 5 次：用户达到该次数后，在窗口内无法创建新订单；
+已有订单的支付、查单、取消流程保持原有行为。操作前备份这五个字段，操作后在两个
+线上实例分别 GET 核对。无需重启或部署应用。
+
+```bash
+curl -X PUT "${BASE}/api/v1/admin/payment/config" \
+  -H "x-api-key: ${KEY}" -H "Content-Type: application/json" \
+  -d '{"cancel_rate_limit_enabled":true,"cancel_rate_limit_max":5,"cancel_rate_limit_window":10,"cancel_rate_limit_unit":"minute","cancel_rate_limit_window_mode":"rolling"}'
+```
+
 ### 4. 用户管理
 
 #### 4.1 用户列表
@@ -1028,6 +1061,43 @@ GET /api/v1/admin/users/:id
 ```bash
 curl -s "${BASE}/api/v1/admin/users/1" -H "x-api-key: ${KEY}"
 ```
+
+#### 4.2.1 更新用户状态
+
+```
+PUT /api/v1/admin/users/:id
+```
+
+请求体仅传需要修改的字段。`status` 支持 `active` / `disabled`；封禁使用
+`{"status":"disabled"}`，不传 `balance`，保留余额与订单用于核对。
+
+```bash
+curl -X PUT "${BASE}/api/v1/admin/users/1" \
+  -H "x-api-key: ${KEY}" -H "Content-Type: application/json" \
+  -d '{"status":"disabled"}'
+```
+
+#### 4.2.2 认证入口 IP 黑名单
+
+```
+GET /api/v1/admin/settings/auth-ip-blacklist
+PUT /api/v1/admin/settings/auth-ip-blacklist
+```
+
+配置字段：`enabled`（总开关）、`rules`（IP/CIDR 字符串数组）、`auto_block`
+（`enabled`、`window_minutes`、`register_threshold`、`verify_code_threshold`、
+`login_failure_threshold`）。PUT 为完整更新；先 GET 保留全部原规则和自动封禁配置，
+追加目标精确 IP 后回写。该配置只保护认证入口，不等同于 Nginx 全站访问封禁。
+
+```bash
+curl -s "${BASE}/api/v1/admin/settings/auth-ip-blacklist" -H "x-api-key: ${KEY}"
+curl -X PUT "${BASE}/api/v1/admin/settings/auth-ip-blacklist" \
+  -H "x-api-key: ${KEY}" -H "Content-Type: application/json" \
+  --data-binary @auth-ip-blacklist.json
+```
+
+Passion 正式环境使用 `BASE=https://api.passionapi.com`；密钥从本地 `.env` 读取，
+不得将实际密钥、目标用户信息或封禁 IP 写入仓库。
 
 #### 4.3 更新用户余额
 

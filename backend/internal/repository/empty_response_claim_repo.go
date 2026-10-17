@@ -30,7 +30,7 @@ func (r *emptyResponseClaimRepository) LoadEvaluation(ctx context.Context, userI
 	query := `
 		SELECT
 			ul.id, ul.user_id, ul.api_key_id, ul.account_id, ul.group_id, ul.subscription_id,
-			ul.actual_cost::float8, ul.compensated_cost::float8, ul.created_at, ul.stream,
+			ul.actual_cost::float8, ul.compensated_cost::float8, ul.billing_type, ul.created_at, ul.stream,
 			ul.input_tokens, ul.output_tokens, ul.cache_creation_tokens, ul.cache_read_tokens,
 			COALESCE(g.empty_response_compensation_enabled, FALSE),
 			uro.id, uro.http_status, uro.upstream_status, uro.has_text, uro.has_tool_call,
@@ -54,7 +54,7 @@ func (r *emptyResponseClaimRepository) LoadEvaluation(ctx context.Context, userI
 	var finishReason, disconnectSource, upstreamErrorKind sql.NullString
 	err := scanSingleRow(ctx, r.sql, query, []any{userID, usageLogID},
 		&usage.ID, &usage.UserID, &usage.APIKeyID, &usage.AccountID, &groupID, &subscriptionID,
-		&usage.ActualCost, &usage.CompensatedCost, &usage.CreatedAt, &stream,
+		&usage.ActualCost, &usage.CompensatedCost, &usage.BillingType, &usage.CreatedAt, &stream,
 		&inputTokens, &outputTokens, &cacheCreationTokens, &cacheReadTokens,
 		&groupEnabled,
 		&outcomeID, &httpStatus, &upstreamStatus, &hasText, &hasToolCall,
@@ -106,6 +106,18 @@ func (r *emptyResponseClaimRepository) LoadEvaluation(ctx context.Context, userI
 	return evaluation, nil
 }
 
+// GetByUsageLogID preserves a frozen policy when retrying an existing claim.
+func (r *emptyResponseClaimRepository) GetByUsageLogID(ctx context.Context, userID, usageLogID int64) (*service.EmptyResponseClaim, error) {
+	claim, err := r.scanClaim(ctx, "SELECT "+emptyResponseClaimSelectColumns+" FROM empty_response_claims WHERE user_id = $1 AND usage_log_id = $2", []any{userID, usageLogID})
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("load owned empty response claim: %w", err)
+	}
+	return claim, nil
+}
+
 func (r *emptyResponseClaimRepository) CountUserClaims(ctx context.Context, userID int64, start, end time.Time) (int, error) {
 	var count int
 	err := scanSingleRow(ctx, r.sql,
@@ -135,7 +147,10 @@ func (r *emptyResponseClaimRepository) ListRecentEvaluations(ctx context.Context
 			AND COALESCE(g.empty_response_compensation_enabled, FALSE) = TRUE
 			AND ul.output_tokens >= 0
 			AND ul.output_tokens <= $4
-			AND (erc.id IS NOT NULL OR (ul.actual_cost > 0 AND COALESCE(ul.compensated_cost, 0) <= 0))
+			AND (erc.id IS NOT NULL OR (
+                ul.actual_cost > 0 AND COALESCE(ul.compensated_cost, 0) <= 0
+                AND TRUNC(LEAST(ul.actual_cost, 5), 10) > 0
+            ))
 			AND (
 				erc.id IS NULL
 				OR erc.reason_code IN (
@@ -173,7 +188,9 @@ func (r *emptyResponseClaimRepository) ListRecentEvaluations(ctx context.Context
 			uro.stream_completed, uro.finish_reason, uro.disconnect_source,
 			uro.upstream_error_kind, uro.collector_version,
 			erc.id, erc.status, erc.reason_code,
-			COALESCE(erc.balance_refund + erc.subscription_refund, 0)::float8
+			COALESCE(erc.balance_refund + erc.subscription_refund, 0)::float8,
+            erc.compensation_amount::float8,
+			COALESCE(erc.original_actual_cost, 0)::float8, COALESCE(erc.rule_version, 0)
 		FROM usage_logs ul
 		LEFT JOIN usage_response_outcomes uro ON uro.usage_log_id = ul.id
 		LEFT JOIN empty_response_claims erc ON erc.usage_log_id = ul.id
@@ -200,6 +217,7 @@ func (r *emptyResponseClaimRepository) ListRecentEvaluations(ctx context.Context
 		var hasText, hasToolCall, hasReasoning, hasMedia, streamCompleted sql.NullBool
 		var finishReason, disconnectSource, upstreamErrorKind, claimStatus, claimReasonCode sql.NullString
 		var inboundEndpoint sql.NullString
+		var claimCompensationAmount sql.NullFloat64
 		if err := rows.Scan(
 			&usage.ID, &usage.UserID, &usage.APIKeyID, &usage.AccountID, &groupID, &subscriptionID,
 			&usage.Model, &usage.ActualCost, &usage.CompensatedCost, &usage.BillingType, &inboundEndpoint, &usage.CreatedAt, &stream,
@@ -209,6 +227,8 @@ func (r *emptyResponseClaimRepository) ListRecentEvaluations(ctx context.Context
 			&hasReasoning, &hasMedia, &outputBytes, &eventCount, &streamCompleted,
 			&finishReason, &disconnectSource, &upstreamErrorKind, &collectorVersion,
 			&claimID, &claimStatus, &claimReasonCode, &candidate.RefundedAmount,
+			&claimCompensationAmount,
+			&candidate.ClaimOriginalActualCost, &candidate.ClaimRuleVersion,
 		); err != nil {
 			return nil, nil, fmt.Errorf("scan recent empty response evaluation: %w", err)
 		}
@@ -251,6 +271,9 @@ func (r *emptyResponseClaimRepository) ListRecentEvaluations(ctx context.Context
 			candidate.ClaimID = &claimID.Int64
 			candidate.ClaimStatus = claimStatus.String
 			candidate.ClaimReasonCode = claimReasonCode.String
+			if claimCompensationAmount.Valid {
+				candidate.ClaimCompensationAmount = &claimCompensationAmount.Float64
+			}
 		}
 		candidates = append(candidates, candidate)
 	}
@@ -270,11 +293,19 @@ func (r *emptyResponseClaimRepository) ListRecentEvaluations(ctx context.Context
 }
 
 func (r *emptyResponseClaimRepository) Create(ctx context.Context, input *service.EmptyResponseClaimCreateInput) (*service.EmptyResponseClaim, bool, error) {
-	if input == nil {
+	if r == nil || r.sql == nil || input == nil {
 		return nil, false, service.ErrEmptyResponseClaimInvalidInput
 	}
 	evaluation := input.Evaluation
 	usage := evaluation.Usage
+	if input.Decision.RuleVersion >= 5 || input.CompensationAmount != nil {
+		quote := service.QuoteEmptyResponseCompensation(usage)
+		if input.CompensationAmount == nil || quote.Amount <= 0 ||
+			!validEmptyResponseRefund(*input.CompensationAmount, usage.ActualCost, usage.ActualCost) ||
+			*input.CompensationAmount != quote.Amount {
+			return nil, false, service.ErrEmptyResponseClaimInvalidInput
+		}
+	}
 	groupID := usage.GroupID
 	if groupID == nil && evaluation.Group.ID > 0 {
 		id := evaluation.Group.ID
@@ -289,54 +320,71 @@ func (r *emptyResponseClaimRepository) Create(ctx context.Context, input *servic
 		}
 	}
 
+	db, ok := r.sql.(*sql.DB)
+	if !ok {
+		return nil, false, errors.New("empty response claim transaction unavailable")
+	}
+	tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	if err != nil {
+		return nil, false, fmt.Errorf("begin empty response claim: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	// The lock must be a separate statement: Read Committed obtains the count's
+	// snapshot after waiting, so it sees every preceding claimant's committed row.
+	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended(($1::bigint)::text || ':' || to_char(NOW() AT TIME ZONE 'Asia/Shanghai', 'YYYY-MM-DD'), 0))`, usage.UserID); err != nil {
+		return nil, false, fmt.Errorf("lock empty response claim day: %w", err)
+	}
+	txRepo := newEmptyResponseClaimRepositoryWithSQL(tx)
 	query := `
-		WITH claim_lock AS (
-			SELECT pg_advisory_xact_lock(hashtextextended(($3::bigint)::text || ':' || to_char(NOW() AT TIME ZONE 'Asia/Shanghai', 'YYYY-MM-DD'), 0))
-		),
-		daily_claims AS (
+		WITH daily_claims AS (
 			SELECT COUNT(*) AS claim_count
-			FROM empty_response_claims, claim_lock
+			FROM empty_response_claims
 			WHERE user_id = $3::bigint
 				AND created_at >= (date_trunc('day', NOW() AT TIME ZONE 'Asia/Shanghai') AT TIME ZONE 'Asia/Shanghai')
 				AND created_at < ((date_trunc('day', NOW() AT TIME ZONE 'Asia/Shanghai') + INTERVAL '1 day') AT TIME ZONE 'Asia/Shanghai')
 		)
 		INSERT INTO empty_response_claims (
 			usage_log_id, outcome_id, user_id, api_key_id, account_id, group_id, subscription_id,
-			status, reason_code, user_reason, original_actual_cost, evidence, rule_version
+			status, reason_code, user_reason, original_actual_cost, evidence, rule_version,
+			compensation_amount
 		)
 		SELECT
 			$1, $2, $3::bigint, $4, $5, $6, $7,
-			$8, $9, $10, $11, $12::jsonb, $13
+			$8, $9, $10, $11, $12::jsonb, $13, $15
 		FROM daily_claims
 		WHERE claim_count < $14
 		ON CONFLICT (usage_log_id) DO NOTHING
 		RETURNING ` + emptyResponseClaimSelectColumns
-	claim, err := r.scanClaim(ctx, query, []any{
+	claim, err := txRepo.scanClaim(ctx, query, []any{
 		usage.ID, evaluation.OutcomeID, usage.UserID, usage.APIKeyID, usage.AccountID, groupID, usage.SubscriptionID,
 		input.Decision.Status, input.Decision.ReasonCode, input.UserReason, usage.ActualCost, evidence, input.Decision.RuleVersion,
-		service.EmptyResponseClaimDailyLimit,
+		service.EmptyResponseClaimDailyLimit, input.CompensationAmount,
 	})
-	if err == nil {
-		return claim, true, nil
-	}
-	if !errors.Is(err, sql.ErrNoRows) {
-		return nil, false, fmt.Errorf("create empty response claim: %w", err)
-	}
-	claim, err = r.scanClaim(ctx,
-		"SELECT "+emptyResponseClaimSelectColumns+" FROM empty_response_claims WHERE usage_log_id = $1",
-		[]any{usage.ID})
+	created := err == nil
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, false, service.ErrEmptyResponseClaimDailyLimitExceeded
+		if !errors.Is(err, sql.ErrNoRows) {
+			return nil, false, fmt.Errorf("create empty response claim: %w", err)
 		}
-		return nil, false, fmt.Errorf("load existing empty response claim: %w", err)
+		claim, err = txRepo.scanClaim(ctx,
+			"SELECT "+emptyResponseClaimSelectColumns+" FROM empty_response_claims WHERE user_id = $1 AND usage_log_id = $2",
+			[]any{usage.UserID, usage.ID})
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, false, service.ErrEmptyResponseClaimDailyLimitExceeded
+			}
+			return nil, false, fmt.Errorf("load existing empty response claim: %w", err)
+		}
 	}
-	return claim, false, nil
+	if err := tx.Commit(); err != nil {
+		return nil, false, fmt.Errorf("commit empty response claim: %w", err)
+	}
+	return claim, created, nil
 }
 
 const emptyResponseClaimSelectColumns = `
 	id, usage_log_id, outcome_id, user_id, api_key_id, account_id, group_id, subscription_id,
-	status, reason_code, user_reason, original_actual_cost::float8, balance_refund::float8,
+	status, reason_code, user_reason, original_actual_cost::float8,
+	compensation_amount::float8, balance_refund::float8,
 	subscription_refund::float8, api_key_quota_refund::float8, evidence, rule_version,
 	admin_note, reviewed_by, reviewed_at, compensated_at, created_at, updated_at`
 
@@ -344,16 +392,21 @@ func (r *emptyResponseClaimRepository) scanClaim(ctx context.Context, query stri
 	claim := &service.EmptyResponseClaim{}
 	var outcomeID, groupID, subscriptionID, reviewedBy sql.NullInt64
 	var reviewedAt, compensatedAt sql.NullTime
+	var compensationAmount sql.NullFloat64
 	var evidence []byte
 	err := scanSingleRow(ctx, r.sql, query, args,
 		&claim.ID, &claim.UsageLogID, &outcomeID, &claim.UserID, &claim.APIKeyID, &claim.AccountID, &groupID, &subscriptionID,
-		&claim.Status, &claim.ReasonCode, &claim.UserReason, &claim.OriginalActualCost, &claim.BalanceRefund,
+		&claim.Status, &claim.ReasonCode, &claim.UserReason, &claim.OriginalActualCost,
+		&compensationAmount, &claim.BalanceRefund,
 		&claim.SubscriptionRefund, &claim.APIKeyQuotaRefund, &evidence, &claim.RuleVersion,
 		&claim.AdminNote, &reviewedBy, &reviewedAt, &compensatedAt,
 		&claim.CreatedAt, &claim.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
+	}
+	if compensationAmount.Valid {
+		claim.CompensationAmount = &compensationAmount.Float64
 	}
 	if outcomeID.Valid {
 		claim.OutcomeID = &outcomeID.Int64
@@ -534,6 +587,7 @@ func scanEmptyResponseClaimRow(row rowScanner, withIdentity bool) (*service.Empt
 	claim := &service.EmptyResponseClaim{}
 	var outcomeID, groupID, subscriptionID, reviewedBy sql.NullInt64
 	var reviewedAt, compensatedAt sql.NullTime
+	var compensationAmount sql.NullFloat64
 	var evidence []byte
 	var requestID, inboundEndpoint, upstreamEndpoint sql.NullString
 	var usageCreatedAt time.Time
@@ -544,7 +598,8 @@ func scanEmptyResponseClaimRow(row rowScanner, withIdentity bool) (*service.Empt
 	var durationMs, firstTokenMs sql.NullInt64
 	dest := []any{
 		&claim.ID, &claim.UsageLogID, &outcomeID, &claim.UserID, &claim.APIKeyID, &claim.AccountID, &groupID, &subscriptionID,
-		&claim.Status, &claim.ReasonCode, &claim.UserReason, &claim.OriginalActualCost, &claim.BalanceRefund,
+		&claim.Status, &claim.ReasonCode, &claim.UserReason, &claim.OriginalActualCost,
+		&compensationAmount, &claim.BalanceRefund,
 		&claim.SubscriptionRefund, &claim.APIKeyQuotaRefund, &evidence, &claim.RuleVersion,
 		&claim.AdminNote, &reviewedBy, &reviewedAt, &compensatedAt, &claim.CreatedAt, &claim.UpdatedAt,
 	}
@@ -560,6 +615,9 @@ func scanEmptyResponseClaimRow(row rowScanner, withIdentity bool) (*service.Empt
 	}
 	if err := row.Scan(dest...); err != nil {
 		return nil, err
+	}
+	if compensationAmount.Valid {
+		claim.CompensationAmount = &compensationAmount.Float64
 	}
 	if outcomeID.Valid {
 		claim.OutcomeID = &outcomeID.Int64

@@ -484,6 +484,9 @@ export default {
     imageUnit: ' images',
     userAgent: 'User-Agent',
     ipGeo: {
+      maxmindAttribution: 'IP Geolocation by MaxMind',
+      offlineHint: 'Location estimated locally from an offline database.',
+      dbipAttribution: 'IP Geolocation by DB-IP',
       fetch: 'Fetch region',
       fetching: 'Fetching...',
       failed: 'Failed',
@@ -506,6 +509,8 @@ export default {
       autoReview: 'Automatic review',
       outputTokens: 'Output tokens',
       originalCharge: 'Original charge',
+      capTitle: 'Per-claim refund cap',
+      capHint: 'Eligible records are refunded at the actual charge, up to 5 site credits per claim. Charges below 5 credits are refunded at the actual charge.',
       expectedRefund: 'Estimated refund',
       rules: 'Only charged records from the last 7 days with 10 output tokens or fewer can be claimed. Up to 15 compensation claims can be submitted per day. Response content is never read or stored.',
       reason: 'Additional context (optional)',
@@ -526,7 +531,7 @@ export default {
       tokens: 'Tokens',
       tokenDetail: 'In {input} / Out {output} / Cache {cache} / Total {total}',
       claimRules: {
-        tavernOnly: 'Empty-response compensation is for SillyTavern only',
+        tavernOnly: 'Empty-response compensation is only available for SillyTavern groups',
         dailyLimit: 'Up to 15 compensation claims per day',
         tokenLimit: 'Output Token must be 10 or less'
       },
@@ -551,6 +556,7 @@ export default {
         daily_limited: 'Daily limit'
       },
       reasonCode: {
+        refund_amount_zero: 'No refundable amount remains',
         pure_empty: 'Successful response with no effective output',
         low_output: '10 output tokens or fewer',
         upstream_http_5xx: 'Upstream service error',
@@ -998,12 +1004,11 @@ export default {
       columns: {
         email: 'Email',
         username: 'Username',
-        paymentProgress: 'Cumulative paid',
-        rebate: 'Rebate',
+        status: 'Invitation status',
         joinedAt: 'Joined At'
       },
       qualified: 'Qualified',
-      inProgress: 'In progress'
+      notQualified: 'Not qualified'
     },
     tips: {
       title: 'How It Works',

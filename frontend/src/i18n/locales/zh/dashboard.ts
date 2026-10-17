@@ -489,6 +489,9 @@ export default {
     imageUnit: '张',
     userAgent: 'User-Agent',
     ipGeo: {
+      maxmindAttribution: 'IP 地区数据由 MaxMind 提供',
+      offlineHint: '通过本地离线数据库估算地区。',
+      dbipAttribution: 'IP 地区数据由 DB-IP 提供',
       fetch: '获取地区',
       fetching: '获取中...',
       failed: '获取失败',
@@ -511,6 +514,8 @@ export default {
       autoReview: '自动判定',
       outputTokens: '输出 Token',
       originalCharge: '原扣费',
+      capTitle: '单次补偿上限',
+      capHint: '符合条件的记录按实际扣费补偿，单次最多 5 额度；不足 5 额度按实际扣费补偿。',
       expectedRefund: '预计补偿',
       rules: '仅支持 7 天内、已扣费且输出 Token ≤ 10 的记录申请；每天最多可申请补偿 15 条。系统只使用结构化信号，不读取或保存响应正文。',
       reason: '补充说明（可选）',
@@ -531,7 +536,7 @@ export default {
       tokens: 'Token',
       tokenDetail: '入 {input} / 出 {output} / 缓存 {cache} / 总 {total}',
       claimRules: {
-        tavernOnly: '仅限酒馆补空回',
+        tavernOnly: '仅限酒馆分组补空回',
         dailyLimit: '每天最多可申请补偿 15 条',
         tokenLimit: '输出 Token 小于等于 10 才可申请'
       },
@@ -556,6 +561,7 @@ export default {
         daily_limited: '今日上限'
       },
       reasonCode: {
+        refund_amount_zero: '无可补偿金额',
         pure_empty: '成功响应但无有效输出',
         low_output: '输出 Token 不超过 10',
         upstream_http_5xx: '上游服务错误',
@@ -1002,12 +1008,11 @@ export default {
       columns: {
         email: '邮箱',
         username: '用户名',
-        paymentProgress: '累计实付',
-        rebate: '返利明细',
+        status: '邀请状态',
         joinedAt: '注册时间'
       },
       qualified: '已达标',
-      inProgress: '进行中'
+      notQualified: '未达标'
     },
     tips: {
       title: '使用说明',

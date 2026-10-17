@@ -100,14 +100,15 @@ func (s *EmptyResponseClaimAdminService) review(ctx context.Context, id, reviewe
 			return claim, err
 		}
 		claim.Status = EmptyResponseClaimCompensated
+		refund := claim.ExpectedRefund()
 		if claim.SubscriptionID != nil {
-			claim.SubscriptionRefund = claim.OriginalActualCost
+			claim.SubscriptionRefund = refund
 			claim.BalanceRefund = 0
 		} else {
-			claim.BalanceRefund = claim.OriginalActualCost
+			claim.BalanceRefund = refund
 			claim.SubscriptionRefund = 0
 		}
-		claim.APIKeyQuotaRefund = claim.OriginalActualCost
+		claim.APIKeyQuotaRefund = refund
 	}
 	if detailRepo, ok := s.repo.(EmptyResponseClaimAdminDetailRepository); ok {
 		detail, err := detailRepo.GetAdminByID(ctx, claim.ID)

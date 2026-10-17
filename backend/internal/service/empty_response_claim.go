@@ -2,11 +2,13 @@ package service
 
 import (
 	"context"
+	"math"
 	"strings"
 	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
+	"github.com/shopspring/decimal"
 )
 
 const (
@@ -17,9 +19,10 @@ const (
 	EmptyResponseClaimCompensated  = "compensated"
 	EmptyResponseClaimDailyLimited = "daily_limited"
 
-	EmptyResponseClaimRuleVersion     = 4
+	EmptyResponseClaimRuleVersion     = 5
 	EmptyResponseClaimDailyLimit      = 15
 	EmptyResponseClaimMaxOutputTokens = 10
+	EmptyResponseClaimMaxRefund       = 5
 	// Keep the production low-output rule name available while sharing the
 	// same threshold used by the newer empty-response list.
 	EmptyResponseClaimLowOutputTokenLimit = EmptyResponseClaimMaxOutputTokens
@@ -50,7 +53,25 @@ const (
 	EmptyResponseReasonConflictingEvidence = "conflicting_evidence"
 	EmptyResponseReasonDailyLimit          = "daily_limit_manual_review"
 	EmptyResponseReasonAlreadyClaimed      = "already_claimed"
+	EmptyResponseReasonRefundAmountZero    = "refund_amount_zero"
 )
+
+type EmptyResponseCompensationQuote struct {
+	Amount float64
+}
+
+// QuoteEmptyResponseCompensation refunds the actual charge up to the per-claim
+// cap, in the same site-credit units as ActualCost. Token counts do not affect it.
+func QuoteEmptyResponseCompensation(usage UsageLog) EmptyResponseCompensationQuote {
+	quote := EmptyResponseCompensationQuote{}
+	if usage.ActualCost <= 0 || math.IsNaN(usage.ActualCost) || math.IsInf(usage.ActualCost, 0) {
+		return quote
+	}
+	// Match the persisted ledger precision without rounding a refund upwards.
+	quote.Amount, _ = decimal.NewFromFloat(math.Min(usage.ActualCost, EmptyResponseClaimMaxRefund)).
+		Truncate(10).Float64()
+	return quote
+}
 
 type ClaimDecision struct {
 	Status      string
@@ -71,6 +92,7 @@ type EmptyResponseClaim struct {
 	ReasonCode         string
 	UserReason         string
 	OriginalActualCost float64
+	CompensationAmount *float64 // Nil only for claims created before capped refunds.
 	BalanceRefund      float64
 	SubscriptionRefund float64
 	APIKeyQuotaRefund  float64
@@ -106,6 +128,21 @@ type EmptyResponseClaim struct {
 	UpdatedAt           time.Time
 }
 
+// ExpectedRefund returns the immutable claim quote. Old claims retain their
+// original full-refund policy; missing snapshots on new claims fail closed.
+func (c *EmptyResponseClaim) ExpectedRefund() float64 {
+	if c == nil {
+		return 0
+	}
+	if c.CompensationAmount != nil {
+		return *c.CompensationAmount
+	}
+	if c.RuleVersion < 5 {
+		return c.OriginalActualCost
+	}
+	return 0
+}
+
 // CompensationSource identifies whether a completed refund came from the
 // server-side rule or an administrator review. Pending and rejected claims
 // have no compensation source.
@@ -127,14 +164,17 @@ type EmptyResponseClaimEvaluation struct {
 }
 
 type EmptyResponseRecentCandidate struct {
-	Evaluation      EmptyResponseClaimEvaluation
-	ClaimID         *int64
-	ClaimStatus     string
-	ClaimReasonCode string
-	RefundedAmount  float64
-	APIKeyName      string
-	GroupName       string
-	InboundEndpoint string
+	Evaluation              EmptyResponseClaimEvaluation
+	ClaimID                 *int64
+	ClaimStatus             string
+	ClaimReasonCode         string
+	ClaimCompensationAmount *float64
+	ClaimOriginalActualCost float64
+	ClaimRuleVersion        int
+	RefundedAmount          float64
+	APIKeyName              string
+	GroupName               string
+	InboundEndpoint         string
 }
 
 type EmptyResponseRecord struct {
@@ -150,6 +190,7 @@ type EmptyResponseRecord struct {
 	CacheTokens     int
 	TotalTokens     int
 	RefundedAmount  float64
+	EstimatedRefund float64
 	Status          string
 	ReasonCode      string
 	CreatedAt       time.Time
@@ -159,6 +200,7 @@ type EmptyResponseClaimCreateInput struct {
 	Evaluation         EmptyResponseClaimEvaluation
 	Decision           ClaimDecision
 	OriginalActualCost float64
+	CompensationAmount *float64
 	UserReason         string
 }
 
@@ -177,6 +219,10 @@ type EmptyResponseClaimRepository interface {
 
 type EmptyResponseClaimCompensator interface {
 	CompensateApprovedClaim(ctx context.Context, claimID int64) error
+}
+
+type EmptyResponseClaimLookupRepository interface {
+	GetByUsageLogID(ctx context.Context, userID, usageLogID int64) (*EmptyResponseClaim, error)
 }
 
 type EmptyResponseClaimService struct {
@@ -262,6 +308,24 @@ func (s *EmptyResponseClaimService) Submit(ctx context.Context, input EmptyRespo
 	if evaluation == nil {
 		return nil, ErrEmptyResponseClaimNotFound
 	}
+	// A previously approved claim is a durable commitment. Retrying a failed
+	// payment uses its frozen quote, without applying new gates or a new daily
+	// slot. The lookup is owner-bound just like the evaluation above.
+	if lookup, ok := s.repo.(EmptyResponseClaimLookupRepository); ok {
+		claim, err := lookup.GetByUsageLogID(ctx, input.UserID, input.UsageLogID)
+		if err != nil {
+			return nil, err
+		}
+		if claim != nil {
+			if claim.Status == EmptyResponseClaimApproved && s.compensator != nil {
+				if err := s.compensateClaim(ctx, claim, evaluation.Usage.BillingType); err != nil {
+					return claim, err
+				}
+				return claim, nil
+			}
+			return claim, ErrEmptyResponseClaimAlreadyExists
+		}
+	}
 	now := s.currentTime()
 	dayStart, dayEnd := emptyResponseClaimBusinessDay(now)
 	dailyCount, err := s.repo.CountUserClaims(ctx, input.UserID, dayStart, dayEnd)
@@ -278,10 +342,12 @@ func (s *EmptyResponseClaimService) Submit(ctx context.Context, input EmptyRespo
 	if decision.Status != EmptyResponseClaimApproved {
 		return nil, ErrEmptyResponseClaimNotFound
 	}
+	quote := QuoteEmptyResponseCompensation(evaluation.Usage)
 	createInput := &EmptyResponseClaimCreateInput{
 		Evaluation:         *evaluation,
 		Decision:           decision,
 		OriginalActualCost: evaluation.Usage.ActualCost,
+		CompensationAmount: &quote.Amount,
 		UserReason:         trimEmptyResponseClaimUserReason(input.UserReason),
 	}
 	claim, created, err := s.repo.Create(ctx, createInput)
@@ -317,12 +383,13 @@ func (s *EmptyResponseClaimService) compensateClaim(ctx context.Context, claim *
 		return err
 	}
 	claim.Status = EmptyResponseClaimCompensated
-	claim.APIKeyQuotaRefund = claim.OriginalActualCost
+	refund := claim.ExpectedRefund()
+	claim.APIKeyQuotaRefund = refund
 	if billingType == BillingTypeSubscription {
-		claim.SubscriptionRefund = claim.OriginalActualCost
+		claim.SubscriptionRefund = refund
 		claim.BalanceRefund = 0
 	} else {
-		claim.BalanceRefund = claim.OriginalActualCost
+		claim.BalanceRefund = refund
 		claim.SubscriptionRefund = 0
 	}
 	return nil
@@ -330,6 +397,7 @@ func (s *EmptyResponseClaimService) compensateClaim(ctx context.Context, claim *
 
 func emptyResponseRecordFromCandidate(now time.Time, candidate EmptyResponseRecentCandidate) (EmptyResponseRecord, bool, bool) {
 	usage := candidate.Evaluation.Usage
+	quote := QuoteEmptyResponseCompensation(usage)
 	record := EmptyResponseRecord{
 		UsageLogID:      usage.ID,
 		ClaimID:         candidate.ClaimID,
@@ -343,9 +411,16 @@ func emptyResponseRecordFromCandidate(now time.Time, candidate EmptyResponseRece
 		CacheTokens:     usage.CacheCreationTokens + usage.CacheReadTokens,
 		TotalTokens:     usage.InputTokens + usage.OutputTokens + usage.CacheCreationTokens + usage.CacheReadTokens,
 		RefundedAmount:  candidate.RefundedAmount,
+		EstimatedRefund: quote.Amount,
 		CreatedAt:       usage.CreatedAt,
 	}
 	if candidate.ClaimStatus != "" {
+		claimQuote := EmptyResponseClaim{
+			OriginalActualCost: candidate.ClaimOriginalActualCost,
+			CompensationAmount: candidate.ClaimCompensationAmount,
+			RuleVersion:        candidate.ClaimRuleVersion,
+		}
+		record.EstimatedRefund = claimQuote.ExpectedRefund()
 		record.Status = candidate.ClaimStatus
 		record.ReasonCode = candidate.ClaimReasonCode
 		return record, emptyResponseReasonIsVisible(candidate.ClaimReasonCode), false
@@ -416,6 +491,10 @@ func EvaluateEmptyResponseClaim(now time.Time, usage UsageLog, outcome *Response
 	}
 	if usage.OutputTokens > EmptyResponseClaimMaxOutputTokens {
 		return decision(EmptyResponseClaimRejected, EmptyResponseReasonEffectiveOutput)
+	}
+	quote := QuoteEmptyResponseCompensation(usage)
+	if quote.Amount <= 0 {
+		return decision(EmptyResponseClaimRejected, EmptyResponseReasonRefundAmountZero)
 	}
 	if isPureEmptyResponse(outcome) {
 		return decision(EmptyResponseClaimApproved, EmptyResponseReasonPureEmpty)

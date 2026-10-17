@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -31,6 +32,10 @@ type emptyResponseCompensationState struct {
 	groupID            sql.NullInt64
 	subscriptionID     sql.NullInt64
 	originalActualCost float64
+	compensationAmount sql.NullFloat64
+	ruleVersion        int
+	balanceRefund      float64
+	subscriptionRefund float64
 	actualCost         float64
 	compensatedCost    float64
 	billingType        int8
@@ -74,12 +79,15 @@ func (r *emptyResponseCompensationRepository) compensateOnce(ctx context.Context
 	state := &emptyResponseCompensationState{}
 	if err = scanSingleRow(ctx, tx, `
 		SELECT status, usage_log_id, user_id, api_key_id, group_id, subscription_id,
-			original_actual_cost::float8
+			original_actual_cost::float8,
+			(CASE WHEN rule_version >= 5 AND compensation_amount IS NULL THEN 0 ELSE compensation_amount END)::float8,
+			balance_refund::float8, subscription_refund::float8, rule_version
 		FROM empty_response_claims
 		WHERE id = $1
 		FOR UPDATE
 	`, []any{claimID}, &state.status, &state.usageLogID, &state.userID, &state.apiKeyID,
-		&state.groupID, &state.subscriptionID, &state.originalActualCost); err != nil {
+		&state.groupID, &state.subscriptionID, &state.originalActualCost, &state.compensationAmount,
+		&state.balanceRefund, &state.subscriptionRefund, &state.ruleVersion); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, service.ErrEmptyResponseClaimNotFound
 		}
@@ -120,16 +128,24 @@ func (r *emptyResponseCompensationRepository) compensateOnce(ctx context.Context
 
 	result = compensationResultFromState(claimID, state)
 	if state.status == service.EmptyResponseClaimCompensated {
+		if !validEmptyResponseRefund(result.RefundAmount, state.originalActualCost, state.actualCost) || result.RefundAmount != state.compensatedCost ||
+			(state.ruleVersion >= 5 && result.RefundAmount > service.EmptyResponseClaimMaxRefund) {
+			return nil, service.ErrEmptyResponseCompensationInvalidState
+		}
 		if err = tx.Commit(); err != nil {
 			return nil, fmt.Errorf("commit existing empty response compensation: %w", err)
 		}
 		return result, nil
 	}
-	if state.originalActualCost <= 0 || state.originalActualCost > state.actualCost || state.compensatedCost != 0 {
+	refund := state.originalActualCost
+	if state.compensationAmount.Valid {
+		refund = state.compensationAmount.Float64
+	}
+	if !validEmptyResponseRefund(refund, state.originalActualCost, state.actualCost) || state.compensatedCost != 0 ||
+		(state.ruleVersion >= 5 && refund > service.EmptyResponseClaimMaxRefund) {
 		return nil, service.ErrEmptyResponseCompensationInvalidState
 	}
 
-	refund := state.originalActualCost
 	switch state.billingType {
 	case service.BillingTypeBalance:
 		var update sql.Result
@@ -234,6 +250,12 @@ func compensationResultFromState(claimID int64, state *emptyResponseCompensation
 		APIKey:       state.apiKey,
 		RefundAmount: state.originalActualCost,
 	}
+	if state.compensationAmount.Valid {
+		result.RefundAmount = state.compensationAmount.Float64
+	}
+	if state.status == service.EmptyResponseClaimCompensated {
+		result.RefundAmount = state.balanceRefund + state.subscriptionRefund
+	}
 	if state.groupID.Valid {
 		result.GroupID = &state.groupID.Int64
 	}
@@ -256,4 +278,15 @@ func insertEmptyResponseBalanceHistory(ctx context.Context, tx *sql.Tx, claimID 
 		return service.ErrEmptyResponseCompensationInvalidState
 	}
 	return nil
+}
+
+// Validate every ledger bound before issuing any credit; NaN comparisons alone
+// do not reject malformed numeric values stored by an earlier writer.
+func validEmptyResponseRefund(refund, original, actual float64) bool {
+	for _, amount := range []float64{refund, original, actual} {
+		if math.IsNaN(amount) || math.IsInf(amount, 0) || amount <= 0 {
+			return false
+		}
+	}
+	return refund <= original && original <= actual
 }

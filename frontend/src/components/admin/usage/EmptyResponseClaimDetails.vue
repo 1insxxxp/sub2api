@@ -24,6 +24,7 @@
       <div class="review-card"><span>{{ t('admin.usage.emptyResponseClaims.usageTime') }}</span><strong>{{ formatDate(claim.usage_created_at) }}</strong></div>
       <div class="review-card"><span>{{ t('admin.usage.emptyResponseClaims.tokens') }}</span><strong>{{ claim.input_tokens }} ↓ / {{ claim.output_tokens }} ↑ / {{ claim.cache_read_tokens }} cache</strong></div>
       <div class="review-card"><span>{{ t('admin.usage.emptyResponseClaims.cost') }}</span><strong>${{ claim.actual_cost.toFixed(6) }} · {{ claim.request_type || 'unknown' }} · {{ billingTypeLabel }}</strong></div>
+      <div class="review-card"><span>{{ t('admin.usage.emptyResponseClaims.refund') }}</span><strong data-testid="claim-compensation-estimate">${{ claim.estimated_refund.toFixed(6) }}</strong></div>
       <div class="review-card"><span>{{ t('admin.usage.emptyResponseClaims.endpoint') }}</span><strong class="break-all">{{ claim.inbound_endpoint || '—' }} → {{ claim.upstream_endpoint || '—' }}</strong></div>
       <div class="review-card"><span>{{ t('admin.usage.emptyResponseClaims.timing') }}</span><strong>{{ claim.duration_ms ?? '—' }} ms · {{ claim.first_token_ms ?? '—' }} ms</strong></div>
     </div>

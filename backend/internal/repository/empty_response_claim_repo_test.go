@@ -4,6 +4,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"regexp"
 	"testing"
 	"time"
@@ -25,14 +26,14 @@ func TestEmptyResponseClaimRepositoryLoadEvaluationUsesOwnedUsageAndStructuredOu
 		WithArgs(int64(7), int64(100)).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"usage_log_id", "user_id", "api_key_id", "account_id", "group_id", "subscription_id",
-			"actual_cost", "compensated_cost", "created_at", "stream",
+			"actual_cost", "compensated_cost", "billing_type", "created_at", "stream",
 			"input_tokens", "output_tokens", "cache_creation_tokens", "cache_read_tokens",
 			"group_enabled", "outcome_id",
 			"http_status", "upstream_status", "has_text", "has_tool_call", "has_reasoning", "has_media",
 			"output_bytes", "event_count", "stream_completed", "finish_reason", "disconnect_source",
 			"upstream_error_kind", "collector_version",
 		}).AddRow(
-			100, 7, 8, 9, 10, nil, 1.25, 0, now, true, 1234, 0, 12, 34, true, 55,
+			100, 7, 8, 9, 10, nil, 1.25, 0, service.BillingTypeSubscription, now, true, 1234, 0, 12, 34, true, 55,
 			200, 200, false, true, false, false, 15, 2, true, "stop", "none", "none", 1,
 		))
 
@@ -40,6 +41,7 @@ func TestEmptyResponseClaimRepositoryLoadEvaluationUsesOwnedUsageAndStructuredOu
 	require.NoError(t, err)
 	require.Equal(t, int64(100), evaluation.Usage.ID)
 	require.Equal(t, 1.25, evaluation.Usage.ActualCost)
+	require.Equal(t, service.BillingTypeSubscription, evaluation.Usage.BillingType)
 	require.Equal(t, 1234, evaluation.Usage.InputTokens)
 	require.Equal(t, 0, evaluation.Usage.OutputTokens)
 	require.Equal(t, 12, evaluation.Usage.CacheCreationTokens)
@@ -75,24 +77,29 @@ func TestEmptyResponseClaimRepositoryCreateReturnsExistingClaimOnUniqueUsage(t *
 	}
 	claimColumns := []string{
 		"id", "usage_log_id", "outcome_id", "user_id", "api_key_id", "account_id", "group_id", "subscription_id",
-		"status", "reason_code", "user_reason", "original_actual_cost", "balance_refund", "subscription_refund",
+		"status", "reason_code", "user_reason", "original_actual_cost", "compensation_amount", "balance_refund", "subscription_refund",
 		"api_key_quota_refund", "evidence", "rule_version", "admin_note", "reviewed_by", "reviewed_at", "compensated_at", "created_at", "updated_at",
 	}
+
+	mock.ExpectBegin()
+	mock.ExpectExec(regexp.QuoteMeta("SELECT pg_advisory_xact_lock(hashtextextended(($1::bigint)::text")).WithArgs(int64(7)).WillReturnResult(sqlmock.NewResult(0, 1))
 
 	mock.ExpectQuery("INSERT INTO empty_response_claims").
 		WithArgs(
 			int64(100), &outcomeID, int64(7), int64(8), int64(9), sqlmock.AnyArg(), nil,
 			service.EmptyResponseClaimApproved, service.EmptyResponseReasonPureEmpty, "empty reply", 1.25,
-			sqlmock.AnyArg(), 1, service.EmptyResponseClaimDailyLimit,
+			sqlmock.AnyArg(), 1, service.EmptyResponseClaimDailyLimit, nil,
 		).
 		WillReturnRows(sqlmock.NewRows(claimColumns))
-	mock.ExpectQuery(`(?s)` + regexp.QuoteMeta("FROM empty_response_claims") + `.*` + regexp.QuoteMeta("WHERE usage_log_id = $1")).
-		WithArgs(int64(100)).
+	mock.ExpectQuery(`(?s)`+regexp.QuoteMeta("FROM empty_response_claims")+`.*`+regexp.QuoteMeta("WHERE user_id = $1 AND usage_log_id = $2")).
+		WithArgs(int64(7), int64(100)).
 		WillReturnRows(sqlmock.NewRows(claimColumns).AddRow(
 			201, 100, 55, 7, 8, 9, 10, nil,
-			service.EmptyResponseClaimCompensated, service.EmptyResponseReasonPureEmpty, "empty reply", 1.25, 1.25, 0, 1.25,
+			service.EmptyResponseClaimCompensated, service.EmptyResponseReasonPureEmpty, "empty reply", 1.25, nil, 1.25, 0, 1.25,
 			`{"http_status":200,"stream_completed":true}`, 1, "", nil, nil, now, now, now,
 		))
+
+	mock.ExpectCommit()
 
 	claim, created, err := repo.Create(context.Background(), input)
 	require.NoError(t, err)
@@ -127,24 +134,28 @@ func TestEmptyResponseClaimRepositoryCreateUsesBigintUserIDAcrossDailyGuard(t *t
 	}
 	claimColumns := []string{
 		"id", "usage_log_id", "outcome_id", "user_id", "api_key_id", "account_id", "group_id", "subscription_id",
-		"status", "reason_code", "user_reason", "original_actual_cost", "balance_refund", "subscription_refund",
+		"status", "reason_code", "user_reason", "original_actual_cost", "compensation_amount", "balance_refund", "subscription_refund",
 		"api_key_quota_refund", "evidence", "rule_version", "admin_note", "reviewed_by", "reviewed_at", "compensated_at", "created_at", "updated_at",
 	}
 	typedUserIDQuery := `(?s)` +
-		regexp.QuoteMeta("hashtextextended(($3::bigint)::text") + `.*` +
 		regexp.QuoteMeta("WHERE user_id = $3::bigint") + `.*` +
 		regexp.QuoteMeta("$1, $2, $3::bigint")
+	mock.ExpectBegin()
+	mock.ExpectExec(regexp.QuoteMeta("SELECT pg_advisory_xact_lock(hashtextextended(($1::bigint)::text")).WithArgs(int64(7)).WillReturnResult(sqlmock.NewResult(0, 1))
+
 	mock.ExpectQuery(typedUserIDQuery).
 		WithArgs(
 			int64(100), &outcomeID, int64(7), int64(8), int64(9), sqlmock.AnyArg(), nil,
 			service.EmptyResponseClaimApproved, service.EmptyResponseReasonPureEmpty, "empty reply", 1.25,
-			sqlmock.AnyArg(), 1, service.EmptyResponseClaimDailyLimit,
+			sqlmock.AnyArg(), 1, service.EmptyResponseClaimDailyLimit, nil,
 		).
 		WillReturnRows(sqlmock.NewRows(claimColumns).AddRow(
 			201, 100, 55, 7, 8, 9, 10, nil,
-			service.EmptyResponseClaimApproved, service.EmptyResponseReasonPureEmpty, "empty reply", 1.25, 0, 0, 0,
+			service.EmptyResponseClaimApproved, service.EmptyResponseReasonPureEmpty, "empty reply", 1.25, nil, 0, 0, 0,
 			`{"http_status":200}`, 1, "", nil, nil, nil, now, now,
 		))
+
+	mock.ExpectCommit()
 
 	claim, created, err := repo.Create(context.Background(), input)
 
@@ -192,7 +203,7 @@ func TestEmptyResponseClaimRepositoryListsRecentEvaluationsWithExistingClaimStat
 			"api_key_name", "group_name", "group_enabled", "outcome_id", "http_status", "upstream_status", "has_text",
 			"has_tool_call", "has_reasoning", "has_media", "output_bytes", "event_count",
 			"stream_completed", "finish_reason", "disconnect_source", "upstream_error_kind", "collector_version",
-			"claim_id", "claim_status", "claim_reason_code", "refunded_amount",
+			"claim_id", "claim_status", "claim_reason_code", "refunded_amount", "compensation_amount", "original_actual_cost", "rule_version",
 		}).AddRow(
 			100, 7, 8, 9, 10, nil,
 			"claude-opus-4-6", 1.25, 0, service.BillingTypeBalance, "/v1/messages", now.Add(-time.Hour), true,
@@ -200,7 +211,7 @@ func TestEmptyResponseClaimRepositoryListsRecentEvaluationsWithExistingClaimStat
 			"cli", "cc", true, 55, 200, 200, false,
 			false, false, false, 0, 1,
 			true, "stop", "none", "none", 1,
-			201, service.EmptyResponseClaimCompensated, service.EmptyResponseReasonPureEmpty, 1.25,
+			201, service.EmptyResponseClaimCompensated, service.EmptyResponseReasonPureEmpty, 1.25, nil, 1.25, 4,
 		).AddRow(
 			101, 7, 8, 9, 11, nil,
 			"claude-opus-4-6", 0.75, 0, service.BillingTypeBalance, "/v1/messages", now.Add(-2*time.Hour), false,
@@ -208,7 +219,7 @@ func TestEmptyResponseClaimRepositoryListsRecentEvaluationsWithExistingClaimStat
 			"cli", "enabled-cc", true, nil, nil, nil, nil,
 			nil, nil, nil, nil, nil,
 			nil, nil, nil, nil, nil,
-			nil, nil, nil, 0,
+			nil, nil, nil, 0, nil, 0, 0,
 		))
 
 	candidates, result, err := repo.ListRecentEvaluations(context.Background(), 7, start, now, pagination.PaginationParams{Page: 2, PageSize: 10})
@@ -253,7 +264,7 @@ func TestEmptyResponseClaimRepositoryListIncludesPrivacySafeReviewContext(t *tes
 	now := time.Now().UTC()
 	claimColumns := []string{
 		"id", "usage_log_id", "outcome_id", "user_id", "api_key_id", "account_id", "group_id", "subscription_id",
-		"status", "reason_code", "user_reason", "original_actual_cost", "balance_refund", "subscription_refund",
+		"status", "reason_code", "user_reason", "original_actual_cost", "compensation_amount", "balance_refund", "subscription_refund",
 		"api_key_quota_refund", "evidence", "rule_version", "admin_note", "reviewed_by", "reviewed_at", "compensated_at", "created_at", "updated_at",
 		"model", "user_email", "account_name", "group_name", "request_id", "usage_created_at", "input_tokens", "output_tokens",
 		"cache_creation_tokens", "cache_read_tokens", "total_cost", "actual_cost", "compensated_cost", "billing_type", "request_type",
@@ -264,7 +275,7 @@ func TestEmptyResponseClaimRepositoryListIncludesPrivacySafeReviewContext(t *tes
 	mock.ExpectQuery(`(?s)` + regexp.QuoteMeta("FROM empty_response_claims erc") + `.*` + regexp.QuoteMeta("JOIN usage_logs ul") + `.*` + regexp.QuoteMeta("ORDER BY erc.created_at DESC")).
 		WillReturnRows(sqlmock.NewRows(claimColumns).AddRow(
 			1, 100, nil, 7, 8, 9, 10, nil,
-			service.EmptyResponseClaimManualReview, service.EmptyResponseReasonMissingEvidence, "empty reply", 1.25, 0, 0, 0,
+			service.EmptyResponseClaimManualReview, service.EmptyResponseReasonMissingEvidence, "empty reply", 1.25, nil, 0, 0, 0,
 			`{}`, 1, "", nil, nil, nil, now, now,
 			"claude-opus-4-6", "user@example.com", "pool-1", "cc", "client:req-1", now, 1234, 0,
 			12, 34, 1.5, 1.25, 0, int8(0), int16(service.RequestTypeStream), true, 1800, 320, "/v1/messages", "/v1/messages",
@@ -291,7 +302,7 @@ func TestEmptyResponseClaimRepositoryGetAdminByIDReloadsMutationDetails(t *testi
 	now := time.Now().UTC()
 	claimColumns := []string{
 		"id", "usage_log_id", "outcome_id", "user_id", "api_key_id", "account_id", "group_id", "subscription_id",
-		"status", "reason_code", "user_reason", "original_actual_cost", "balance_refund", "subscription_refund",
+		"status", "reason_code", "user_reason", "original_actual_cost", "compensation_amount", "balance_refund", "subscription_refund",
 		"api_key_quota_refund", "evidence", "rule_version", "admin_note", "reviewed_by", "reviewed_at", "compensated_at", "created_at", "updated_at",
 		"model", "user_email", "account_name", "group_name", "request_id", "usage_created_at", "input_tokens", "output_tokens",
 		"cache_creation_tokens", "cache_read_tokens", "total_cost", "actual_cost", "compensated_cost", "billing_type", "request_type",
@@ -301,7 +312,7 @@ func TestEmptyResponseClaimRepositoryGetAdminByIDReloadsMutationDetails(t *testi
 		WithArgs(int64(12)).
 		WillReturnRows(sqlmock.NewRows(claimColumns).AddRow(
 			12, 100, nil, 7, 8, 9, 10, nil,
-			service.EmptyResponseClaimCompensated, service.EmptyResponseReasonPureEmpty, "empty reply", 1.25, 1.25, 0, 1.25,
+			service.EmptyResponseClaimCompensated, service.EmptyResponseReasonPureEmpty, "empty reply", 1.25, nil, 1.25, 0, 1.25,
 			`{"http_status":200}`, 1, "verified", 99, now, now, now, now,
 			"claude-opus-4-6", "user@example.com", "pool-1", "cc", "req-empty-response", now, 1234, 0,
 			12, 34, 1.5, 1.25, 1.25, int8(0), int16(service.RequestTypeStream), true, 1800, 320, "/v1/messages", "/v1/messages",
@@ -315,4 +326,148 @@ func TestEmptyResponseClaimRepositoryGetAdminByIDReloadsMutationDetails(t *testi
 	require.Equal(t, "req-empty-response", claim.RequestID)
 	require.NotNil(t, claim.CompensatedAt)
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestEmptyResponseClaimRepositoryCreateFreezesValidatedCapQuote(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+	amount := 2.0
+	input := &service.EmptyResponseClaimCreateInput{
+		Evaluation:         service.EmptyResponseClaimEvaluation{Usage: service.UsageLog{ID: 100, UserID: 7, APIKeyID: 8, AccountID: 9, ActualCost: 2, InputTokens: 200000, CacheReadTokens: 100000}},
+		Decision:           service.ClaimDecision{Status: service.EmptyResponseClaimApproved, ReasonCode: service.EmptyResponseReasonPureEmpty, RuleVersion: 5},
+		CompensationAmount: &amount,
+	}
+	now := time.Now().UTC()
+	mock.ExpectBegin()
+	mock.ExpectExec(regexp.QuoteMeta("SELECT pg_advisory_xact_lock(hashtextextended(($1::bigint)::text")).WithArgs(int64(7)).WillReturnResult(sqlmock.NewResult(0, 1))
+
+	mock.ExpectQuery("INSERT INTO empty_response_claims").WithArgs(int64(100), nil, int64(7), int64(8), int64(9), nil, nil, service.EmptyResponseClaimApproved, service.EmptyResponseReasonPureEmpty, "", 2.0, sqlmock.AnyArg(), 5, service.EmptyResponseClaimDailyLimit, amount).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "usage_log_id", "outcome_id", "user_id", "api_key_id", "account_id", "group_id", "subscription_id", "status", "reason_code", "user_reason", "original_actual_cost", "compensation_amount", "balance_refund", "subscription_refund", "api_key_quota_refund", "evidence", "rule_version", "admin_note", "reviewed_by", "reviewed_at", "compensated_at", "created_at", "updated_at"}).AddRow(201, 100, nil, 7, 8, 9, nil, nil, service.EmptyResponseClaimApproved, service.EmptyResponseReasonPureEmpty, "", 2, amount, 0, 0, 0, `{}`, 5, "", nil, nil, nil, now, now))
+	mock.ExpectCommit()
+
+	claim, created, err := newEmptyResponseClaimRepositoryWithSQL(db).Create(context.Background(), input)
+	require.NoError(t, err)
+	require.True(t, created)
+	require.Equal(t, 2.0, claim.OriginalActualCost)
+	require.NotNil(t, claim.CompensationAmount)
+	require.Equal(t, amount, *claim.CompensationAmount)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestEmptyResponseClaimRepositoryCreateRejectsInvalidCapSnapshots(t *testing.T) {
+	for _, name := range []string{"missing", "wrong_amount", "exceeds_cap", "zero", "negative"} {
+		t.Run(name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer db.Close()
+			amount := 5.0
+			input := &service.EmptyResponseClaimCreateInput{Evaluation: service.EmptyResponseClaimEvaluation{Usage: service.UsageLog{ActualCost: 12, InputTokens: 200000}}, Decision: service.ClaimDecision{RuleVersion: 5}, CompensationAmount: &amount}
+			switch name {
+			case "missing":
+				input.CompensationAmount = nil
+			case "wrong_amount":
+				amount = 4
+			case "exceeds_cap":
+				amount = 6
+			case "zero":
+				amount = 0
+			case "negative":
+				amount = -1
+			}
+			claim, created, err := newEmptyResponseClaimRepositoryWithSQL(db).Create(context.Background(), input)
+			require.ErrorIs(t, err, service.ErrEmptyResponseClaimInvalidInput)
+			require.Nil(t, claim)
+			require.False(t, created)
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+func TestEmptyResponseClaimRepositoryGetByUsageLogIDScopesOwnership(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+	mock.ExpectQuery(regexp.QuoteMeta("FROM empty_response_claims WHERE user_id = $1 AND usage_log_id = $2")).WithArgs(int64(7), int64(100)).WillReturnRows(sqlmock.NewRows([]string{"id"}))
+	claim, err := newEmptyResponseClaimRepositoryWithSQL(db).GetByUsageLogID(context.Background(), 7, 100)
+	require.NoError(t, err)
+	require.Nil(t, claim)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestEmptyResponseClaimRepositoryCapAllowsHighInputAndChargeTwelve(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+	amount := 5.0
+	input := &service.EmptyResponseClaimCreateInput{Evaluation: service.EmptyResponseClaimEvaluation{Usage: service.UsageLog{ID: 100, UserID: 7, APIKeyID: 8, AccountID: 9, ActualCost: 12, InputTokens: 200000}}, Decision: service.ClaimDecision{Status: service.EmptyResponseClaimApproved, ReasonCode: service.EmptyResponseReasonPureEmpty, RuleVersion: 5}, CompensationAmount: &amount}
+	now := time.Now().UTC()
+	mock.ExpectBegin()
+	mock.ExpectExec(regexp.QuoteMeta("SELECT pg_advisory_xact_lock(hashtextextended(($1::bigint)::text")).WithArgs(int64(7)).WillReturnResult(sqlmock.NewResult(0, 1))
+
+	mock.ExpectQuery("INSERT INTO empty_response_claims").WithArgs(int64(100), nil, int64(7), int64(8), int64(9), nil, nil, service.EmptyResponseClaimApproved, service.EmptyResponseReasonPureEmpty, "", 12.0, sqlmock.AnyArg(), 5, service.EmptyResponseClaimDailyLimit, 5.0).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "usage_log_id", "outcome_id", "user_id", "api_key_id", "account_id", "group_id", "subscription_id", "status", "reason_code", "user_reason", "original_actual_cost", "compensation_amount", "balance_refund", "subscription_refund", "api_key_quota_refund", "evidence", "rule_version", "admin_note", "reviewed_by", "reviewed_at", "compensated_at", "created_at", "updated_at"}).AddRow(201, 100, nil, 7, 8, 9, nil, nil, service.EmptyResponseClaimApproved, service.EmptyResponseReasonPureEmpty, "", 12, amount, 0, 0, 0, `{}`, 5, "", nil, nil, nil, now, now))
+	mock.ExpectCommit()
+
+	claim, created, err := newEmptyResponseClaimRepositoryWithSQL(db).Create(context.Background(), input)
+	require.NoError(t, err)
+	require.True(t, created)
+	require.Equal(t, 12.0, claim.OriginalActualCost)
+	require.NotNil(t, claim.CompensationAmount)
+	require.Equal(t, 5.0, *claim.CompensationAmount)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestEmptyResponseClaimRepositoryCreateTransactionFailures(t *testing.T) {
+	for _, name := range []string{"begin", "lock", "insert", "lookup", "daily_limit", "commit"} {
+		t.Run(name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer db.Close()
+			forced := errors.New("forced " + name + " failure")
+			amount := 2.0
+			input := &service.EmptyResponseClaimCreateInput{Evaluation: service.EmptyResponseClaimEvaluation{Usage: service.UsageLog{ID: 100, UserID: 7, APIKeyID: 8, AccountID: 9, ActualCost: 2}}, Decision: service.ClaimDecision{Status: service.EmptyResponseClaimApproved, ReasonCode: service.EmptyResponseReasonPureEmpty, RuleVersion: 5}, CompensationAmount: &amount}
+			begin := mock.ExpectBegin()
+			if name == "begin" {
+				begin.WillReturnError(forced)
+			} else {
+				lock := mock.ExpectExec(regexp.QuoteMeta("SELECT pg_advisory_xact_lock(hashtextextended(($1::bigint)::text")).WithArgs(int64(7))
+				if name == "lock" {
+					lock.WillReturnError(forced)
+				} else {
+					lock.WillReturnResult(sqlmock.NewResult(0, 1))
+					insert := mock.ExpectQuery("INSERT INTO empty_response_claims")
+					switch name {
+					case "insert":
+						insert.WillReturnError(forced)
+					case "lookup", "daily_limit":
+						insert.WillReturnRows(sqlmock.NewRows([]string{"id"}))
+						lookup := mock.ExpectQuery(regexp.QuoteMeta("WHERE user_id = $1 AND usage_log_id = $2")).WithArgs(int64(7), int64(100))
+						if name == "lookup" {
+							lookup.WillReturnError(forced)
+						} else {
+							lookup.WillReturnRows(sqlmock.NewRows([]string{"id"}))
+						}
+					case "commit":
+						now := time.Now()
+						insert.WillReturnRows(sqlmock.NewRows([]string{"id", "usage_log_id", "outcome_id", "user_id", "api_key_id", "account_id", "group_id", "subscription_id", "status", "reason_code", "user_reason", "original_actual_cost", "compensation_amount", "balance_refund", "subscription_refund", "api_key_quota_refund", "evidence", "rule_version", "admin_note", "reviewed_by", "reviewed_at", "compensated_at", "created_at", "updated_at"}).AddRow(201, 100, nil, 7, 8, 9, nil, nil, service.EmptyResponseClaimApproved, service.EmptyResponseReasonPureEmpty, "", 2, amount, 0, 0, 0, `{}`, 5, "", nil, nil, nil, now, now))
+					}
+				}
+				if name == "commit" {
+					mock.ExpectCommit().WillReturnError(forced)
+				} else {
+					mock.ExpectRollback()
+				}
+			}
+			claim, created, err := newEmptyResponseClaimRepositoryWithSQL(db).Create(context.Background(), input)
+			if name == "daily_limit" {
+				require.ErrorIs(t, err, service.ErrEmptyResponseClaimDailyLimitExceeded)
+			} else {
+				require.ErrorIs(t, err, forced)
+			}
+			require.Nil(t, claim)
+			require.False(t, created)
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
 }

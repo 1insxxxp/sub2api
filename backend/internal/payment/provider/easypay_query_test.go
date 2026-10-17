@@ -17,6 +17,8 @@ func TestEasyPayQueryOrderStatusMapping(t *testing.T) {
 	tests := []struct {
 		name        string
 		body        string
+		statusCode  int
+		merchantID  string
 		wantStatus  string
 		wantTradeNo string
 		wantAmount  float64
@@ -80,6 +82,39 @@ func TestEasyPayQueryOrderStatusMapping(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name:       "HTTP failure rejects paid-looking response",
+			body:       `{"code":1,"status":1,"money":"12.34"}`,
+			statusCode: http.StatusInternalServerError,
+			wantErr:    true,
+		},
+		{
+			name:    "fractional success code is rejected",
+			body:    `{"code":1.1,"status":1,"money":"12.34"}`,
+			wantErr: true,
+		},
+		{
+			name:    "foreign merchant is rejected",
+			body:    `{"code":1,"pid":"foreign","status":1,"money":"12.34"}`,
+			wantErr: true,
+		},
+		{
+			name:    "foreign nested merchant is rejected",
+			body:    `{"code":1,"data":{"pid":"foreign","status":"1","money":"12.34"}}`,
+			wantErr: true,
+		},
+		{
+			name:    "conflicting nested merchant is rejected",
+			body:    `{"code":1,"pid":"pid-1","data":{"pid":"foreign","status":1,"money":"12.34"}}`,
+			wantErr: true,
+		},
+		{
+			name:        "empty merchant echo remains compatible",
+			body:        `{"code":1,"pid":"","status":1,"money":"12.34"}`,
+			wantStatus:  payment.ProviderStatusPaid,
+			wantTradeNo: orderID,
+			wantAmount:  12.34,
+		},
+		{
 			name:    "foreign order echo is rejected",
 			body:    `{"code":1,"pid":"pid-1","out_trade_no":"order-999","trade_status":"TRADE_SUCCESS","money":"12.34"}`,
 			wantErr: true,
@@ -92,6 +127,7 @@ func TestEasyPayQueryOrderStatusMapping(t *testing.T) {
 		{
 			name:        "string numeric status from PHP deployments is paid",
 			body:        `{"code":"1","msg":"查询订单号成功！","trade_no":"2026101600001","out_trade_no":"order-123","pid":"1001","money":"12.34","status":"1"}`,
+			merchantID:  "1001",
 			wantStatus:  payment.ProviderStatusPaid,
 			wantTradeNo: "2026101600001",
 			wantAmount:  12.34,
@@ -106,13 +142,14 @@ func TestEasyPayQueryOrderStatusMapping(t *testing.T) {
 		{
 			name:        "documented caihong response with integer pid and status is paid",
 			body:        `{"code":1,"msg":"查询订单号成功！","trade_no":"2016080622555342651","out_trade_no":"order-123","api_trade_no":"4200001","type":"alipay","pid":1001,"addtime":"2016-08-06 22:55:52","endtime":"2016-08-06 22:55:52","name":"VIP会员","money":"1.00","status":1,"param":"","buyer":""}`,
+			merchantID:  "1001",
 			wantStatus:  payment.ProviderStatusPaid,
 			wantTradeNo: "2016080622555342651",
 			wantAmount:  1,
 		},
 		{
 			name:        "null top-level fields fall back to nested data",
-			body:        `{"code":1,"status":null,"money":null,"trade_no":null,"data":{"status":1,"money":"5.00","trade_no":"data-789"}}`,
+			body:        `{"code":1,"pid":null,"status":null,"money":null,"trade_no":null,"data":{"pid":"pid-1","status":"1","money":"5.00","trade_no":"data-789"}}`,
 			wantStatus:  payment.ProviderStatusPaid,
 			wantTradeNo: "data-789",
 			wantAmount:  5,
@@ -160,11 +197,17 @@ func TestEasyPayQueryOrderStatusMapping(t *testing.T) {
 					t.Errorf("body params %v do not mirror query params %v", r.PostForm, gotForm)
 				}
 				w.Header().Set("Content-Type", "application/json")
+				if tt.statusCode != 0 {
+					w.WriteHeader(tt.statusCode)
+				}
 				_, _ = w.Write([]byte(tt.body))
 			}))
 			defer server.Close()
 
 			provider := newTestEasyPay(t, server.URL)
+			if tt.merchantID != "" {
+				provider.config["pid"] = tt.merchantID
+			}
 			resp, err := provider.QueryOrder(context.Background(), orderID)
 			if tt.wantErr {
 				if err == nil {
@@ -186,7 +229,7 @@ func TestEasyPayQueryOrderStatusMapping(t *testing.T) {
 			}
 			for key, want := range map[string]string{
 				"act":          "order",
-				"pid":          "pid-1",
+				"pid":          provider.config["pid"],
 				"key":          "pkey-1",
 				"out_trade_no": orderID,
 			} {

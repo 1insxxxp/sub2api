@@ -78,17 +78,29 @@ describe('IpGeoCell', () => {
     expect(mocks.fetchOne).toHaveBeenCalledWith('121.35.47.43', true)
   })
 
-  it('opens the external lookup page when the label is clicked', async () => {
-    mocks.getEntry.mockReturnValue({ status: 'success', label: 'US · California', detail: {} })
+  it('shows local details without sending the customer IP to an external site', async () => {
+    mocks.getEntry.mockReturnValue({ status: 'success', label: 'US · California', detail: { timezone: 'America/Los_Angeles' } })
     const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null)
     const wrapper = mount(IpGeoCell, { props: { ip: '8.8.4.4' } })
-    await wrapper.findAll('button')[0].trigger('click')
-    expect(openSpy).toHaveBeenCalledWith(
-      'https://www.iplocation.net/ip-lookup?query=8.8.4.4',
-      '_blank',
-      'noopener,noreferrer'
-    )
+    const label = wrapper.findAll('button')[0]
+    expect(label.attributes('aria-expanded')).toBe('false')
+    await label.trigger('click')
+    expect(label.attributes('aria-expanded')).toBe('true')
+    expect(wrapper.text()).toContain('America/Los_Angeles')
+    expect(openSpy).not.toHaveBeenCalled()
+    expect(wrapper.find('a[href*="8.8.4.4"]').exists()).toBe(false)
+    await label.trigger('click')
+    expect(label.attributes('aria-expanded')).toBe('false')
     openSpy.mockRestore()
+  })
+
+  it('attributes DB-IP results without including the customer IP or a referrer', () => {
+    mocks.getEntry.mockReturnValue({ status: 'success', label: 'US', detail: { source: 'dbip' } })
+    const wrapper = mount(IpGeoCell, { props: { ip: '8.8.4.4' } })
+    const attribution = wrapper.find('a')
+    expect(attribution.attributes('href')).toBe('https://db-ip.com')
+    expect(attribution.attributes('referrerpolicy')).toBe('no-referrer')
+    expect(attribution.attributes('rel')).toContain('noreferrer')
   })
 
   it('renders failed state as a clickable retry', async () => {

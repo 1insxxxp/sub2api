@@ -182,3 +182,50 @@ func TestToUserErrorRequestDetail_Nil(t *testing.T) {
 		t.Errorf("expected nil for nil input, got %+v", out)
 	}
 }
+
+func TestUserErrorPrivacyHistoricalOutput(t *testing.T) {
+	message := `Invalid max_tokens for owner@example.invalid with Bearer opaqueHistoricalCredential; diagnostics={"request_body":{"prompt":"PRIVATE_HISTORICAL_PROMPT"}}`
+	body := `{"error":{"code":"invalid_schema","param":"messages","message":"Retry for owner@example.invalid","api_key":"opaqueHistoricalKey","request_body":{"prompt":"PRIVATE_HISTORICAL_PROMPT"}}}`
+	src := &OpsErrorLogDetail{OpsErrorLog: OpsErrorLog{ID: 123, Message: message}, ErrorBody: body}
+	for name, output := range map[string]any{"list": ToUserErrorRequest(&src.OpsErrorLog), "detail": ToUserErrorRequestDetail(src)} {
+		t.Run(name, func(t *testing.T) {
+			payload, err := json.Marshal(output)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, secret := range []string{"owner@example.invalid", "opaqueHistoricalCredential", "opaqueHistoricalKey", "PRIVATE_HISTORICAL_PROMPT"} {
+				if strings.Contains(string(payload), secret) {
+					t.Errorf("historical %s leaked in %s", secret, name)
+				}
+			}
+			if !strings.Contains(string(payload), "Invalid max_tokens") {
+				t.Fatal("actionable diagnostic was removed")
+			}
+		})
+	}
+	if src.Message != message || src.ErrorBody != body {
+		t.Fatal("user DTO conversion mutated the internal audit record")
+	}
+}
+
+func TestUserErrorPrivacyHistoricalTruncatedPayload(t *testing.T) {
+	raw := `invalid_schema: max_tokens must exceed thinking.budget_tokens; request_body={"messages":[{"content":"PRIVATE_REQUEST`
+	src := &OpsErrorLogDetail{OpsErrorLog: OpsErrorLog{ID: 124, Message: raw}, ErrorBody: raw}
+	for name, output := range map[string]any{"list": ToUserErrorRequest(&src.OpsErrorLog), "detail": ToUserErrorRequestDetail(src)} {
+		t.Run(name, func(t *testing.T) {
+			payload, err := json.Marshal(output)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(string(payload), "PRIVATE_REQUEST") {
+				t.Fatal("truncated historical request payload was exposed")
+			}
+			if !strings.Contains(string(payload), "max_tokens must exceed thinking.budget_tokens") {
+				t.Fatal("actionable parameter diagnostic was removed")
+			}
+		})
+	}
+	if src.Message != raw || src.ErrorBody != raw {
+		t.Fatal("user DTO conversion mutated the historical audit record")
+	}
+}
