@@ -62,6 +62,20 @@ describe('SubAdminCommissionCalendar stale month data', () => {
     vi.setSystemTime(new Date('2026-09-14T12:00:00'))
   })
 
+  it('refreshes the selected month when management settings change', async () => {
+    getWorkbenchCalendar.mockResolvedValue([])
+    const wrapper = mount(SubAdminCommissionCalendar, { props: { refreshKey: 0 }, global: { stubs: { SubAdminCommissionTrendChart: TrendChartStub } } })
+    mountedWrappers.push(wrapper)
+    await flushPromises()
+    await wrapper.get('input[type="month"]').setValue('2026-08')
+    await flushPromises()
+    expect(getWorkbenchCalendar).toHaveBeenCalledTimes(2)
+    await wrapper.setProps({ refreshKey: 1 })
+    await flushPromises()
+    expect(getWorkbenchCalendar).toHaveBeenCalledTimes(3)
+    expect(getWorkbenchCalendar).toHaveBeenLastCalledWith({ month: '2026-08' })
+  })
+
   it('clears the previous month data when the next month request fails', async () => {
     const previousMonthDays: SubAdminCommissionCalendarDay[] = [
       {

@@ -309,6 +309,11 @@ func (r *subAdminCommissionRepository) listLiveDayGroups(ctx context.Context, su
 		FROM global_grants gg
 		JOIN groups g ON g.id = gg.group_id
 		LEFT JOIN usage_logs ul ON ul.group_id = gg.group_id AND ul.created_at >= $1 AND ul.created_at < $2
+				AND NOT EXISTS (
+					SELECT 1 FROM sub_admin_commission_exclusions ce
+					WHERE ce.user_id = ul.user_id AND ce.started_at <= ul.created_at
+						AND (ce.ended_at IS NULL OR ul.created_at < ce.ended_at)
+				)
 		WHERE $3::date >= gg.granted_date
 			AND ((g.status = 'active' AND g.deleted_at IS NULL) OR ul.id IS NOT NULL)
 		GROUP BY g.id, g.name
@@ -332,7 +337,8 @@ func (r *subAdminCommissionRepository) listHistoricalDayGroups(ctx context.Conte
 			WHERE cg.enabled = TRUE
 			GROUP BY cg.group_id
 		)
-		SELECT g.id, g.name, 0::bigint AS requests, 0::bigint AS total_tokens, COALESCE(r.actual_cost, 0) AS actual_cost
+			SELECT g.id, g.name, 0::bigint AS requests, 0::bigint AS total_tokens,
+				COALESCE(r.actual_cost - r.commission_excluded_cost, 0) AS actual_cost
 		FROM global_grants gg
 		JOIN groups g ON g.id = gg.group_id
 		LEFT JOIN usage_group_daily_rollups r ON r.group_id = gg.group_id AND r.bucket_date = $1::date
@@ -505,7 +511,7 @@ func (r *subAdminCommissionRepository) loadCalendarRollupCosts(ctx context.Conte
 			WHERE cg.enabled = TRUE
 			GROUP BY cg.group_id
 		)
-		SELECT r.bucket_date::text AS date, COALESCE(SUM(r.actual_cost), 0) AS actual_cost
+			SELECT r.bucket_date::text AS date, COALESCE(SUM(r.actual_cost - r.commission_excluded_cost), 0) AS actual_cost
 		FROM usage_group_daily_rollups r
 		JOIN global_grants gg ON gg.group_id = r.group_id
 		WHERE r.bucket_date >= gg.granted_date
@@ -536,6 +542,11 @@ func (r *subAdminCommissionRepository) loadCalendarLiveCosts(ctx context.Context
 		JOIN global_grants gg ON gg.group_id = ul.group_id
 		WHERE (ul.created_at AT TIME ZONE $3)::date >= gg.granted_date
 			AND ul.created_at >= $1 AND ul.created_at < $2
+				AND NOT EXISTS (
+					SELECT 1 FROM sub_admin_commission_exclusions ce
+					WHERE ce.user_id = ul.user_id AND ce.started_at <= ul.created_at
+						AND (ce.ended_at IS NULL OR ul.created_at < ce.ended_at)
+				)
 		GROUP BY 1
 	`, start.UTC(), end.UTC(), timezone)
 	if err != nil {

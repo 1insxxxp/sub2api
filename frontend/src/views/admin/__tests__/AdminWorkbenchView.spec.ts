@@ -129,6 +129,7 @@ const mountWorkbench = () => {
       stubs: {
         AppLayout: { template: '<div><slot /></div>' },
         Icon: true,
+        Transition: true,
         Pagination: true,
         AdminAffiliateLeaderboardPanel: {
           template: '<div data-test="affiliate-leaderboard-panel-stub" />'
@@ -236,34 +237,6 @@ describe('AdminWorkbenchView balance transfer codes', () => {
         commission_amount: 1.44
       }
     ])
-    getWorkbenchCommissionDayGroupLogs.mockResolvedValue(
-      paginated(
-        [
-          {
-            id: 99,
-            request_id: 'req-1',
-            created_at: '2026-08-22T08:00:00Z',
-            user_id: 41,
-            user_email: 'customer@example.com',
-            api_key_id: 71,
-            api_key_name: 'Main key',
-            group_id: 3,
-            group_name: 'Claude 特价',
-            model: 'claude-sonnet-4',
-            requested_model: 'claude-sonnet-4',
-            input_tokens: 1000,
-            output_tokens: 500,
-            cache_creation_tokens: 0,
-            cache_read_tokens: 0,
-            actual_cost: 12,
-            total_tokens: 1500
-          }
-        ],
-        1,
-        1,
-        10
-      )
-    )
     listUsers.mockResolvedValue(
       paginated([
         {
@@ -434,6 +407,17 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     await leaderboardTab.trigger('keydown', { key: 'Home' })
     await flushPromises()
     expect(commissionTab.attributes('aria-selected')).toBe('true')
+  })
+
+  it('loads transfer history only on the first visit and keeps refresh available', async () => {
+    const wrapper = mountWorkbench()
+    await flushPromises()
+    expect(getGenerated).not.toHaveBeenCalled()
+    await openBalanceTab(wrapper)
+    expect(getGenerated).toHaveBeenCalledTimes(1)
+    await openCommissionTab(wrapper)
+    await openBalanceTab(wrapper)
+    expect(getGenerated).toHaveBeenCalledTimes(1)
   })
 
   it('loads generated codes for the workbench owner', async () => {
@@ -757,14 +741,9 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     expect(wrapper.get('[data-test="commission-day-dialog"]').attributes('aria-modal')).toBe('true')
     expect(wrapper.text()).toContain('Claude 特价')
 
-    await wrapper.get('[data-test="commission-day-group-3-toggle"]').trigger('click')
-    await flushPromises()
-
-    expect(getWorkbenchCommissionDayGroupLogs).toHaveBeenCalledWith('2026-08-22', 3, {
-      page: 1,
-      page_size: 10
-    })
-    expect(wrapper.text()).toContain('req-1')
+    expect(wrapper.find('[data-test="commission-day-group-3-toggle"]').exists()).toBe(false)
+    expect(getWorkbenchCommissionDayGroupLogs).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-test="commission-log-99"]').exists()).toBe(false)
   })
 
   it('uses compact mobile calendar cells and exposes full amounts through the day dialog', async () => {
@@ -862,6 +841,7 @@ describe('AdminWorkbenchView balance transfer codes', () => {
         stubs: {
           AppLayout: { template: '<div><slot /></div>' },
           Icon: true,
+        Transition: true,
           Pagination: true,
           AdminAffiliateLeaderboardPanel: {
             template: '<div data-test="affiliate-leaderboard-panel-stub" />'
@@ -879,7 +859,7 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     await flushPromises()
 
     const closeButton = wrapper.get('[data-test="commission-day-dialog-close"]')
-    const lastDialogControl = wrapper.get('[data-test="commission-day-group-3-toggle"]')
+    const lastDialogControl = closeButton
     expect(document.activeElement).toBe(closeButton.element)
 
     document.dispatchEvent(new KeyboardEvent('keydown', {
@@ -948,41 +928,7 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     expect(groupCard.get('[data-test="commission-day-group-3-amounts"]').classes()).toEqual(
       expect.arrayContaining(['grid-cols-1', 'min-[360px]:grid-cols-2'])
     )
-    expect(groupCard.get('[data-test="commission-day-group-3-toggle"]').classes()).toContain('w-full')
-  })
-
-  it('keeps commission day request logs readable on mobile', async () => {
-    Object.defineProperty(window, 'innerWidth', {
-      value: 390,
-      configurable: true
-    })
-    authState.user = {
-      id: 7,
-      email: 'sub-admin@example.com',
-      role: 'sub_admin',
-      balance: 30,
-      concurrency: 5
-    }
-
-    const wrapper = mountWorkbench()
-    await openCommissionTab(wrapper)
-    await wrapper.get('[data-test="commission-calendar-day-2026-08-22"]').trigger('click')
-    await flushPromises()
-    await wrapper.get('[data-test="commission-day-group-3-toggle"]').trigger('click')
-    await flushPromises()
-
-    const logCard = wrapper.get('[data-test="commission-log-99"]')
-    const requestID = wrapper.get('[data-test="commission-log-request-99"]')
-    const userLine = wrapper.get('[data-test="commission-log-user-99"]')
-    const modelLine = wrapper.get('[data-test="commission-log-model-99"]')
-
-    expect(logCard.classes()).toEqual(expect.arrayContaining(['rounded-lg', 'p-3']))
-    expect(requestID.classes()).toEqual(expect.arrayContaining(['break-all', 'sm:truncate']))
-    expect(userLine.classes()).toEqual(expect.arrayContaining(['break-all', 'sm:truncate']))
-    expect(modelLine.classes()).toEqual(expect.arrayContaining(['break-all', 'sm:truncate']))
-    expect(logCard.text()).toContain('customer@example.com')
-    expect(logCard.text()).toContain('claude-sonnet-4')
-    expect(logCard.text()).toContain('$12.00')
+    expect(groupCard.find('[data-test="commission-day-group-3-toggle"]').exists()).toBe(false)
   })
 
   it('omits the commission explainer copy for sub-admins', async () => {

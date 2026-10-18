@@ -16,6 +16,7 @@ import (
 )
 
 type subAdminCommissionHandlerServiceStub struct {
+	subAdminCommissionService
 	setRates []float64
 
 	replaceInput service.ReplaceSubAdminCommissionGrantsInput

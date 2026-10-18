@@ -116,6 +116,8 @@ import { extractApiErrorMessage } from '@/utils/apiError'
 import type { SubAdminCommissionCalendarDay } from '@/api/admin'
 import SubAdminCommissionTrendChart from './SubAdminCommissionTrendChart.vue'
 
+const props = withDefaults(defineProps<{ refreshKey?: number }>(), { refreshKey: 0 })
+
 const emit = defineEmits<{
   (event: 'select-day', date: string, day: SubAdminCommissionCalendarDay): void
 }>()
@@ -267,7 +269,7 @@ async function fetchCalendar() {
   }
 }
 
-watch(month, () => {
+watch([month, () => props.refreshKey], () => {
   void fetchCalendar()
 }, { immediate: true })
 

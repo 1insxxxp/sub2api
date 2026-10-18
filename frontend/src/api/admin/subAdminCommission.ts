@@ -41,33 +41,21 @@ export interface SubAdminCommissionDayGroup {
   commission_amount: number
 }
 
-export interface SubAdminCommissionUsageLog {
+export interface SubAdminCommissionExclusion {
   id: number
-  request_id: string
-  created_at: string
   user_id: number
   user_email: string
-  api_key_id: number
-  api_key_name: string
-  group_id: number
-  group_name: string
-  model: string
-  requested_model?: string
-  input_tokens: number
-  output_tokens: number
-  cache_creation_tokens: number
-  cache_read_tokens: number
-  actual_cost: number
-  total_tokens: number
+  username: string
+  started_at: string
+}
+
+export interface CommissionExclusionsQuery {
+  page?: number
+  page_size?: number
 }
 
 export interface WorkbenchCommissionCalendarQuery {
   month?: string
-}
-
-export interface WorkbenchCommissionLogsQuery {
-  page?: number
-  page_size?: number
 }
 
 export async function getSettings(): Promise<SubAdminCommissionSettings> {
@@ -130,16 +118,28 @@ export async function getWorkbenchDayGroups(
   return data
 }
 
-export async function getWorkbenchDayGroupLogs(
-  date: string,
-  groupID: number,
-  query: WorkbenchCommissionLogsQuery = {}
-): Promise<PaginatedResponse<SubAdminCommissionUsageLog>> {
-  const { data } = await apiClient.get<PaginatedResponse<SubAdminCommissionUsageLog>>(
-    `/admin/workbench/commission/days/${date}/groups/${groupID}/logs`,
+export async function listExclusions(
+  query: CommissionExclusionsQuery = {}
+): Promise<PaginatedResponse<SubAdminCommissionExclusion>> {
+  const { data } = await apiClient.get<PaginatedResponse<SubAdminCommissionExclusion>>(
+    '/admin/sub-admin-commissions/exclusions',
     { params: query }
   )
   return data
+}
+
+export async function addExclusion(
+  payload: { user_id: number }
+): Promise<SubAdminCommissionExclusion> {
+  const { data } = await apiClient.post<SubAdminCommissionExclusion>(
+    '/admin/sub-admin-commissions/exclusions',
+    payload
+  )
+  return data
+}
+
+export async function removeExclusion(userID: number): Promise<void> {
+  await apiClient.delete(`/admin/sub-admin-commissions/exclusions/${userID}`)
 }
 
 export const subAdminCommissionAPI = {
@@ -150,7 +150,9 @@ export const subAdminCommissionAPI = {
   getWorkbenchGrants,
   getWorkbenchCalendar,
   getWorkbenchDayGroups,
-  getWorkbenchDayGroupLogs,
+  listExclusions,
+  addExclusion,
+  removeExclusion,
 }
 
 export default subAdminCommissionAPI

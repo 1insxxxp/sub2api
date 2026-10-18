@@ -58,6 +58,24 @@ describe.each([
     }
   })
 
+  it('explains that blacklist changes apply prospectively without changing customer access', () => {
+    const hint = String(getMessage(messages, 'adminWorkbench.commission.exclusionsHint'))
+    if (_locale === 'zh') {
+      expect(hint).toContain('仅排除加入后的用量，历史收益不变；移除后新用量恢复计入')
+      expect(hint).toContain('排除期间的用量不回填')
+      expect(hint).toContain('不影响客户登录、请求、计费或权限')
+    } else {
+      expect(hint).toContain('earlier earnings stay unchanged')
+      expect(hint).toContain('New usage counts again after removal')
+      expect(hint).toContain('not backfilled')
+      expect(hint).toContain('permissions are unaffected')
+    }
+    for (const key of ['exclusions', 'exclusionSearch', 'exclusionSearchPlaceholder', 'exclusionSearchFailed', 'excludedCustomers', 'emptyExclusions', 'exclusionStartedAt', 'addExclusion', 'removeExclusion', 'alreadyExcluded', 'exclusionsSaved']) {
+      expect(getMessage(messages, `adminWorkbench.commission.${key}`)).toEqual(expect.any(String))
+    }
+    expect(getMessage(messages, 'adminWorkbench.commission.requestLogs')).toBeUndefined()
+  })
+
   it('does not retain a separate balance-spend chart series label', () => {
     expect(getMessage(messages, 'adminWorkbench.commission.dailyChartActualCost')).toBeUndefined()
   })

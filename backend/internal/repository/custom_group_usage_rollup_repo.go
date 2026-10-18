@@ -250,20 +250,26 @@ func (r *dashboardAggregationRepository) syncGroupUsageRollupsInTx(ctx context.C
 	}
 
 	if _, err := r.sql.ExecContext(ctx, `
-		INSERT INTO usage_group_daily_rollups (bucket_date, group_id, actual_cost, computed_at)
+		INSERT INTO usage_group_daily_rollups (bucket_date, group_id, actual_cost, commission_excluded_cost, computed_at)
 		SELECT
-			(created_at AT TIME ZONE $3::text)::date AS bucket_date,
-			group_id,
-			COALESCE(SUM(actual_cost), 0) AS actual_cost,
+			(ul.created_at AT TIME ZONE $3::text)::date AS bucket_date,
+			ul.group_id,
+			COALESCE(SUM(ul.actual_cost), 0) AS actual_cost,
+			COALESCE(SUM(ul.actual_cost) FILTER (WHERE EXISTS (
+				SELECT 1 FROM sub_admin_commission_exclusions ce
+				WHERE ce.user_id = ul.user_id AND ce.started_at <= ul.created_at
+					AND (ce.ended_at IS NULL OR ul.created_at < ce.ended_at)
+			)), 0) AS commission_excluded_cost,
 			NOW()
-		FROM usage_logs
-		WHERE group_id IS NOT NULL
-			AND created_at >= $1
-			AND created_at < $2
+		FROM usage_logs ul
+		WHERE ul.group_id IS NOT NULL
+			AND ul.created_at >= $1
+			AND ul.created_at < $2
 		GROUP BY 1, 2
 		ON CONFLICT (bucket_date, group_id)
 		DO UPDATE SET
 			actual_cost = EXCLUDED.actual_cost,
+			commission_excluded_cost = EXCLUDED.commission_excluded_cost,
 			computed_at = EXCLUDED.computed_at
 	`, rebuildStart.UTC(), todayStart.UTC(), timezoneName); err != nil {
 		return fmt.Errorf("重建分组用量日桶: %w", err)

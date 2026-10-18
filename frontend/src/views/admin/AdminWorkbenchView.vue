@@ -404,6 +404,7 @@ const appStore = useAppStore()
 type WorkbenchTab = 'balance-transfer' | 'commission' | 'affiliate-leaderboard'
 
 const activeTab = ref<WorkbenchTab>('commission')
+const generatedHistoryVisited = ref(false)
 const workbenchTabIds: WorkbenchTab[] = ['commission', 'balance-transfer', 'affiliate-leaderboard']
 const workbenchTabs = computed<Array<{ id: WorkbenchTab; label: string; icon: 'gift' | 'chartBar' | 'users' }>>(() => [
   {
@@ -733,14 +734,17 @@ function syncTransferFormLayout() {
   }
 }
 
-watch(activeTab, () => {
+watch(activeTab, (tab) => {
+  if (tab === 'balance-transfer' && !generatedHistoryVisited.value) {
+    generatedHistoryVisited.value = true
+    void fetchGeneratedCodes()
+  }
   // The transfer form is conditionally mounted, so wait until Vue has applied
   // the tab change before measuring it or attaching its resize observer.
   void nextTick(syncTransferFormLayout)
 })
 
 onMounted(() => {
-  void fetchGeneratedCodes()
   syncTransferFormLayout()
   window.addEventListener('resize', updateGeneratedNowHeight)
 })

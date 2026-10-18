@@ -10,10 +10,11 @@ import (
 )
 
 var (
-	ErrSubAdminCommissionForbidden   = infraerrors.Forbidden("SUB_ADMIN_COMMISSION_FORBIDDEN", "group is not assigned to this secondary admin")
-	ErrSubAdminCommissionRateInvalid = infraerrors.BadRequest("SUB_ADMIN_COMMISSION_RATE_INVALID", "commission rate must be between 0 and 1")
-	ErrSubAdminCommissionUserInvalid = infraerrors.BadRequest("SUB_ADMIN_COMMISSION_USER_INVALID", "target user must be a secondary admin")
-	ErrSubAdminCommissionRepoMissing = infraerrors.InternalServer("SUB_ADMIN_COMMISSION_REPO_MISSING", "sub-admin commission repository is not configured")
+	ErrSubAdminCommissionForbidden     = infraerrors.Forbidden("SUB_ADMIN_COMMISSION_FORBIDDEN", "group is not assigned to this secondary admin")
+	ErrSubAdminCommissionRateInvalid   = infraerrors.BadRequest("SUB_ADMIN_COMMISSION_RATE_INVALID", "commission rate must be between 0 and 1")
+	ErrSubAdminCommissionUserInvalid   = infraerrors.BadRequest("SUB_ADMIN_COMMISSION_USER_INVALID", "target user must be a secondary admin")
+	ErrSubAdminCommissionRepoMissing   = infraerrors.InternalServer("SUB_ADMIN_COMMISSION_REPO_MISSING", "sub-admin commission repository is not configured")
+	ErrSubAdminCommissionTargetInvalid = infraerrors.BadRequest("SUB_ADMIN_COMMISSION_TARGET_INVALID", "user ID must be positive")
 )
 
 type SubAdminCommissionGrant struct {
@@ -42,6 +43,16 @@ type SubAdminCommissionDayGroup struct {
 	TotalTokens      int64
 	ActualCost       float64
 	CommissionAmount float64
+}
+
+// SubAdminCommissionExclusion describes a currently active customer exclusion.
+// Closed intervals remain in storage so past reports never change on removal.
+type SubAdminCommissionExclusion struct {
+	ID        int64
+	UserID    int64
+	UserEmail string
+	Username  string
+	StartedAt time.Time
 }
 
 type SubAdminCommissionUsageLog struct {
@@ -77,6 +88,9 @@ type SubAdminCommissionRepository interface {
 	ListCalendar(ctx context.Context, subAdminID int64, month string, commissionRate float64, now time.Time) ([]SubAdminCommissionCalendarDay, error)
 	ListDayGroups(ctx context.Context, subAdminID int64, date string, commissionRate float64) ([]SubAdminCommissionDayGroup, error)
 	ListDayGroupLogs(ctx context.Context, subAdminID, groupID int64, date string, params pagination.PaginationParams) ([]SubAdminCommissionUsageLog, pagination.PaginationResult, error)
+	ListExclusions(ctx context.Context, params pagination.PaginationParams) ([]SubAdminCommissionExclusion, pagination.PaginationResult, error)
+	AddExclusion(ctx context.Context, userID, operatorID int64) (*SubAdminCommissionExclusion, error)
+	RemoveExclusion(ctx context.Context, userID int64) error
 }
 
 type SubAdminCommissionService struct {
@@ -115,6 +129,33 @@ func (s *SubAdminCommissionService) SetSettings(ctx context.Context, rate float6
 
 func validSubAdminCommissionRate(rate float64) bool {
 	return !math.IsNaN(rate) && !math.IsInf(rate, 0) && rate >= 0 && rate <= 1
+}
+
+func (s *SubAdminCommissionService) ListExclusions(ctx context.Context, params pagination.PaginationParams) ([]SubAdminCommissionExclusion, pagination.PaginationResult, error) {
+	if s == nil || s.repo == nil {
+		return nil, pagination.PaginationResult{}, ErrSubAdminCommissionRepoMissing
+	}
+	return s.repo.ListExclusions(ctx, params)
+}
+
+func (s *SubAdminCommissionService) AddExclusion(ctx context.Context, userID, operatorID int64) (*SubAdminCommissionExclusion, error) {
+	if userID <= 0 {
+		return nil, ErrSubAdminCommissionTargetInvalid
+	}
+	if s == nil || s.repo == nil {
+		return nil, ErrSubAdminCommissionRepoMissing
+	}
+	return s.repo.AddExclusion(ctx, userID, operatorID)
+}
+
+func (s *SubAdminCommissionService) RemoveExclusion(ctx context.Context, userID int64) error {
+	if userID <= 0 {
+		return ErrSubAdminCommissionTargetInvalid
+	}
+	if s == nil || s.repo == nil {
+		return ErrSubAdminCommissionRepoMissing
+	}
+	return s.repo.RemoveExclusion(ctx, userID)
 }
 
 func (s *SubAdminCommissionService) ListAllGrants(ctx context.Context) ([]SubAdminCommissionGrant, error) {

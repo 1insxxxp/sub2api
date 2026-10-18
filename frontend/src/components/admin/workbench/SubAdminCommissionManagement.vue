@@ -3,10 +3,18 @@
     data-test="sub-admin-commission-management"
     class="workbench-commission-management min-w-0 pb-5"
   >
-    <div class="mb-3">
+    <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
       <h2 class="text-base font-semibold text-gray-950 dark:text-white">
         {{ t('adminWorkbench.commission.settings') }}
       </h2>
+      <button
+        type="button"
+        data-test="commission-exclusions-open"
+        class="btn btn-secondary min-h-11 justify-center"
+        @click="showExclusions = true"
+      >
+        {{ t('adminWorkbench.commission.exclusions') }}
+      </button>
     </div>
 
     <div class="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,0.7fr)_minmax(0,1.3fr)]">
@@ -82,6 +90,11 @@
         </div>
       </div>
     </div>
+    <SubAdminCommissionExclusionsDialog
+      v-if="showExclusions"
+      @close="showExclusions = false"
+      @changed="emit('changed')"
+    />
   </section>
 </template>
 
@@ -94,7 +107,10 @@ import type { SubAdminCommissionGrant } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import Icon from '@/components/icons/Icon.vue'
+import SubAdminCommissionExclusionsDialog from './SubAdminCommissionExclusionsDialog.vue'
 
+const emit = defineEmits<{ (event: 'changed'): void }>()
+const showExclusions = ref(false)
 const { t } = useI18n()
 const appStore = useAppStore()
 
@@ -139,6 +155,7 @@ async function saveSettings() {
     })
     commissionRate.value = saved.commission_rate
     appStore.showSuccess(t('adminWorkbench.commission.saveSuccess'))
+    emit('changed')
   } catch (error: any) {
     appStore.showError(extractApiErrorMessage(error, t('adminWorkbench.commission.saveFailed')))
   } finally {
@@ -155,6 +172,7 @@ async function saveGrants() {
     grants.value = updated
     syncSelectedGrants()
     appStore.showSuccess(t('adminWorkbench.commission.saveSuccess'))
+    emit('changed')
   } catch (error: any) {
     appStore.showError(extractApiErrorMessage(error, t('adminWorkbench.commission.saveFailed')))
   } finally {

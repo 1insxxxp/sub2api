@@ -94,71 +94,6 @@
               </span>
             </span>
           </div>
-          <button
-            type="button"
-            class="btn btn-secondary w-full justify-center px-3"
-            :data-test="`commission-day-group-${group.group_id}-toggle`"
-            @click="toggleGroup(group.group_id)"
-          >
-            <span>{{ expandedGroupID === group.group_id ? t('common.collapse') : t('common.expand') }}</span>
-          </button>
-        </div>
-
-        <div v-if="expandedGroupID === group.group_id" class="mt-4 border-t border-gray-100 pt-4 dark:border-dark-800">
-          <h4 class="mb-3 text-sm font-semibold text-gray-900 dark:text-white">
-            {{ t('adminWorkbench.commission.requestLogs') }}
-          </h4>
-          <div v-if="loadingLogs" class="py-6 text-center text-sm text-gray-500 dark:text-dark-400">
-            {{ t('common.loading') }}
-          </div>
-          <div v-else-if="logs.length === 0" class="py-6 text-center text-sm text-gray-500 dark:text-dark-400">
-            {{ t('common.noData') }}
-          </div>
-          <div v-else class="space-y-2">
-            <div
-              v-for="log in logs"
-              :key="log.id"
-              :data-test="`commission-log-${log.id}`"
-              class="grid gap-3 rounded-lg bg-gray-50 p-3 text-sm dark:bg-dark-800/70 sm:gap-2 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_auto]"
-            >
-              <div class="min-w-0">
-                <p
-                  :data-test="`commission-log-request-${log.id}`"
-                  class="break-all font-mono font-semibold text-gray-950 dark:text-white sm:truncate"
-                >
-                  {{ log.request_id }}
-                </p>
-                <p
-                  :data-test="`commission-log-user-${log.id}`"
-                  class="break-all text-xs text-gray-500 dark:text-dark-400 sm:truncate"
-                >
-                  {{ log.user_email }} · {{ log.api_key_name }}
-                </p>
-              </div>
-              <div class="min-w-0 text-xs text-gray-600 dark:text-dark-300">
-                <p
-                  :data-test="`commission-log-model-${log.id}`"
-                  class="break-all sm:truncate"
-                >
-                  {{ log.requested_model || log.model }}
-                </p>
-                <p class="tabular-nums">{{ log.total_tokens }} tokens</p>
-              </div>
-              <div class="text-left font-semibold tabular-nums text-gray-950 dark:text-white md:text-right">
-                ${{ log.actual_cost.toFixed(2) }}
-              </div>
-            </div>
-          </div>
-          <Pagination
-            v-if="pagination.total > pagination.page_size"
-            class="mt-4"
-            :page="pagination.page"
-            :page-size="pagination.page_size"
-            :total="pagination.total"
-            :page-size-options="[10, 20, 50]"
-            @update:page="handleLogPageChange"
-            @update:page-size="handleLogPageSizeChange"
-          />
         </div>
       </article>
       </div>
@@ -169,13 +104,12 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
-import type { SubAdminCommissionCalendarDay, SubAdminCommissionDayGroup, SubAdminCommissionUsageLog } from '@/api/admin'
+import type { SubAdminCommissionCalendarDay, SubAdminCommissionDayGroup } from '@/api/admin'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import Icon from '@/components/icons/Icon.vue'
-import Pagination from '@/components/common/Pagination.vue'
 
 const props = defineProps<{
   date: string | null
@@ -189,16 +123,9 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 const groups = ref<SubAdminCommissionDayGroup[]>([])
-const logs = ref<SubAdminCommissionUsageLog[]>([])
-const expandedGroupID = ref<number | null>(null)
 const loadingGroups = ref(false)
-const loadingLogs = ref(false)
 const errorMessage = ref('')
-const pagination = reactive({
-  page: 1,
-  page_size: 10,
-  total: 0
-})
+let groupRequestID = 0
 const dialogRootRef = ref<HTMLElement | null>(null)
 const closeButtonRef = ref<HTMLButtonElement | null>(null)
 
@@ -276,76 +203,25 @@ function syncDialogSideEffects(open: boolean) {
 }
 
 async function fetchGroups() {
-  if (!props.date) {
-    groups.value = []
-    return
-  }
-  loadingGroups.value = true
+  const requestID = ++groupRequestID
+  const date = props.date
+  groups.value = []
   errorMessage.value = ''
+  loadingGroups.value = Boolean(date)
+  if (!date) return
   try {
-    groups.value = await adminAPI.subAdminCommission.getWorkbenchDayGroups(props.date)
+    const result = await adminAPI.subAdminCommission.getWorkbenchDayGroups(date)
+    if (requestID === groupRequestID && props.date === date) groups.value = result
   } catch (error: any) {
-    errorMessage.value = extractApiErrorMessage(error, t('adminWorkbench.commission.loadFailed'))
+    if (requestID === groupRequestID && props.date === date) {
+      errorMessage.value = extractApiErrorMessage(error, t('adminWorkbench.commission.loadFailed'))
+    }
   } finally {
-    loadingGroups.value = false
+    if (requestID === groupRequestID) loadingGroups.value = false
   }
 }
 
-async function fetchLogs() {
-  if (!props.date || expandedGroupID.value == null) {
-    logs.value = []
-    return
-  }
-  loadingLogs.value = true
-  try {
-    const response = await adminAPI.subAdminCommission.getWorkbenchDayGroupLogs(
-      props.date,
-      expandedGroupID.value,
-      { page: pagination.page, page_size: pagination.page_size }
-    )
-    logs.value = response.items
-    pagination.total = response.total
-    pagination.page = response.page
-    pagination.page_size = response.page_size
-  } catch (error: any) {
-    errorMessage.value = extractApiErrorMessage(error, t('adminWorkbench.commission.loadFailed'))
-  } finally {
-    loadingLogs.value = false
-  }
-}
-
-function toggleGroup(groupID: number) {
-  if (expandedGroupID.value === groupID) {
-    expandedGroupID.value = null
-    logs.value = []
-    return
-  }
-  expandedGroupID.value = groupID
-  pagination.page = 1
-  void fetchLogs()
-}
-
-function handleLogPageChange(page: number) {
-  pagination.page = page
-  void fetchLogs()
-}
-
-function handleLogPageSizeChange(pageSize: number) {
-  pagination.page_size = pageSize
-  pagination.page = 1
-  void fetchLogs()
-}
-
-watch(
-  () => props.date,
-  () => {
-    expandedGroupID.value = null
-    logs.value = []
-    pagination.page = 1
-    void fetchGroups()
-  },
-  { immediate: true }
-)
+watch(() => props.date, () => { void fetchGroups() }, { immediate: true })
 
 watch(
   () => Boolean(props.date),
@@ -353,5 +229,8 @@ watch(
   { immediate: true }
 )
 
-onBeforeUnmount(() => syncDialogSideEffects(false))
+onBeforeUnmount(() => {
+  groupRequestID += 1
+  syncDialogSideEffects(false)
+})
 </script>

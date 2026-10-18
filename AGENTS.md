@@ -1246,6 +1246,34 @@ curl -X PUT "${BASE}/api/v1/admin/groups/123" \
 
 ---
 
+### 6. 收益管理客户排除名单
+
+仅主管理员可读取和管理名单，沿用 Admin API 认证。二级管理员只能查看应用排除规则后的收益汇总。名单不影响用户状态、余额扣费、真实使用记录或分组管理统计。
+
+| 方法 | 端点 | 参数与响应 |
+|------|------|------------|
+| GET | `/api/v1/admin/sub-admin-commissions/exclusions` | `page`、`page_size`；分页返回当前有效名单，字段 `id`、`user_id`、`user_email`、`username`、`started_at` |
+| POST | `/api/v1/admin/sub-admin-commissions/exclusions` | JSON `{ "user_id": 123 }`；返回当前排除记录，重复添加不会重置开始时间 |
+| DELETE | `/api/v1/admin/sub-admin-commissions/exclusions/:user_id` | 移除该客户当前排除状态，返回成功信息；重复移除安全 |
+
+```bash
+curl -s "${BASE}/api/v1/admin/sub-admin-commissions/exclusions?page=1&page_size=20" \
+  -H "x-api-key: ${KEY}"
+
+curl -s -X POST "${BASE}/api/v1/admin/sub-admin-commissions/exclusions" \
+  -H "x-api-key: ${KEY}" -H "Content-Type: application/json" \
+  -d '{"user_id":123}'
+
+curl -s -X DELETE "${BASE}/api/v1/admin/sub-admin-commissions/exclusions/123" \
+  -H "x-api-key: ${KEY}"
+```
+
+生效时间由数据库生成，按用量记录 `created_at` 匹配 `[加入时间, 移除时间)`。加入前的收益不变，移除后新用量恢复计入，之前排除期间的收益不会恢复计入。历史区间保留用于统计，不能直接删除区间行。历史分组日桶的 `commission_excluded_cost` 仅供收益计算扣除，原 `actual_cost` 保持全部真实消耗。
+
+收益页只展示月份/日/分组汇总。原 `/api/v1/admin/workbench/commission/days/:date/groups/:group_id/logs` 流水接口已移除；正常管理员用量管理接口保持不变。
+
+**部署 249 迁移后的兼容约束**：启用排除名单前，必须停止旧镜像的后台分组日汇总任务。旧代码重建日桶时不写 `commission_excluded_cost`，可能把排除金额重置为 0。不能将旧应用容器长期运行作为静态资源回退；应单独保留旧静态文件，或先停止旧应用后台任务。应用回退也不能继续使用忽略此字段的旧聚合器。
+
 ## 注意事项
 
 1. **前端必须打包进镜像**：使用 `docker build` 在构建服务器（`us-asaki-root`）上构建，Dockerfile 会自动编译前端并 embed 到后端二进制中，构建完成后通过 `docker save | docker load` 传输到生产服务器（`clicodeplus`）

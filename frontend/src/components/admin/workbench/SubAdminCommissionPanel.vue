@@ -4,13 +4,13 @@
     data-test="sub-admin-commission-panel"
     class="min-w-0 space-y-4"
   >
-    <SubAdminCommissionManagement v-if="isAdmin" />
+    <SubAdminCommissionManagement v-if="isAdmin" @changed="refreshCommission" />
 
     <div
       data-test="commission-calendar-layout"
       class="commission-calendar-layout grid min-w-0 items-start gap-4"
     >
-      <SubAdminCommissionCalendar @select-day="handleDaySelect" />
+      <SubAdminCommissionCalendar :refresh-key="refreshKey" @select-day="handleDaySelect" />
       <SubAdminCommissionDayDrawer
         :date="selectedDate"
         :day="selectedDay"
@@ -29,6 +29,7 @@ import SubAdminCommissionCalendar from './SubAdminCommissionCalendar.vue'
 import SubAdminCommissionDayDrawer from './SubAdminCommissionDayDrawer.vue'
 
 const authStore = useAuthStore()
+const refreshKey = ref(0)
 const selectedDate = ref<string | null>(null)
 const selectedDay = ref<SubAdminCommissionCalendarDay | null>(null)
 
@@ -39,6 +40,11 @@ const canViewCommission = computed(() => role.value === 'admin' || role.value ==
 function handleDaySelect(date: string, day: SubAdminCommissionCalendarDay) {
   selectedDate.value = date
   selectedDay.value = day
+}
+
+function refreshCommission() {
+  closeDayDrawer()
+  refreshKey.value += 1
 }
 
 function closeDayDrawer() {

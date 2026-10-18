@@ -132,9 +132,9 @@ export type {
   ReplaceSubAdminCommissionGrantsRequest,
   SubAdminCommissionCalendarDay,
   SubAdminCommissionDayGroup,
-  SubAdminCommissionUsageLog,
-  WorkbenchCommissionCalendarQuery,
-  WorkbenchCommissionLogsQuery
+  SubAdminCommissionExclusion,
+  CommissionExclusionsQuery,
+  WorkbenchCommissionCalendarQuery
 } from './subAdminCommission'
 export type { BalanceHistoryItem } from './users'
 export type { ErrorPassthroughRule, CreateRuleRequest, UpdateRuleRequest } from './errorPassthrough'

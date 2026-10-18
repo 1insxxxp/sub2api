@@ -248,7 +248,6 @@ func registerAdminWorkbenchRoutes(workbench *gin.RouterGroup, h *handler.Handler
 			commission.GET("/grants", h.Admin.SubAdminCommission.GetWorkbenchGrants)
 			commission.GET("/calendar", h.Admin.SubAdminCommission.GetWorkbenchCalendar)
 			commission.GET("/days/:date/groups", h.Admin.SubAdminCommission.GetWorkbenchDayGroups)
-			commission.GET("/days/:date/groups/:group_id/logs", h.Admin.SubAdminCommission.GetWorkbenchDayGroupLogs)
 		}
 	}
 
@@ -263,6 +262,9 @@ func registerSubAdminCommissionRoutes(admin *gin.RouterGroup, h *handler.Handler
 	{
 		commissions.GET("/settings", h.Admin.SubAdminCommission.GetSettings)
 		commissions.PUT("/settings", h.Admin.SubAdminCommission.UpdateSettings)
+		commissions.GET("/exclusions", h.Admin.SubAdminCommission.ListExclusions)
+		commissions.POST("/exclusions", h.Admin.SubAdminCommission.AddExclusion)
+		commissions.DELETE("/exclusions/:user_id", h.Admin.SubAdminCommission.RemoveExclusion)
 		commissions.GET("/grants", h.Admin.SubAdminCommission.ListGrants)
 		commissions.PUT("/grants", h.Admin.SubAdminCommission.ReplaceGrants)
 		commissions.PUT("/grants/:sub_admin_id", h.Admin.SubAdminCommission.ReplaceGrants)
