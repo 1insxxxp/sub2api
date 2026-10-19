@@ -52,6 +52,7 @@ type SubAdminCommissionExclusion struct {
 	UserID    int64
 	UserEmail string
 	Username  string
+	Notes     string
 	StartedAt time.Time
 }
 

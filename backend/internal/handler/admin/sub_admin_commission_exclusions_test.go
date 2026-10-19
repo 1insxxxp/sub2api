@@ -22,18 +22,19 @@ type commissionExclusionsHandlerStub struct {
 	userID, operatorID int64
 	params             pagination.PaginationParams
 	err                error
+	notes              string
 }
 
 func (s *commissionExclusionsHandlerStub) ListExclusions(_ context.Context, params pagination.PaginationParams) ([]service.SubAdminCommissionExclusion, pagination.PaginationResult, error) {
 	s.called++
 	s.params = params
-	return []service.SubAdminCommissionExclusion{{ID: 1, UserID: 7, UserEmail: "test@example.com", StartedAt: time.Date(2026, 10, 18, 4, 0, 0, 0, time.UTC)}}, pagination.PaginationResult{Page: params.Page, PageSize: params.PageSize, Total: 1}, s.err
+	return []service.SubAdminCommissionExclusion{{ID: 1, UserID: 7, UserEmail: "test@example.com", Username: "Customer", Notes: s.notes, StartedAt: time.Date(2026, 10, 18, 4, 0, 0, 0, time.UTC)}}, pagination.PaginationResult{Page: params.Page, PageSize: params.PageSize, Total: 1}, s.err
 }
 
 func (s *commissionExclusionsHandlerStub) AddExclusion(_ context.Context, userID, operatorID int64) (*service.SubAdminCommissionExclusion, error) {
 	s.called++
 	s.userID, s.operatorID = userID, operatorID
-	return &service.SubAdminCommissionExclusion{ID: 1, UserID: userID, StartedAt: time.Date(2026, 10, 18, 4, 0, 0, 0, time.UTC)}, s.err
+	return &service.SubAdminCommissionExclusion{ID: 1, UserID: userID, Username: "Customer", Notes: s.notes, StartedAt: time.Date(2026, 10, 18, 4, 0, 0, 0, time.UTC)}, s.err
 }
 
 func (s *commissionExclusionsHandlerStub) RemoveExclusion(_ context.Context, userID int64) error {
@@ -135,4 +136,48 @@ func TestSubAdminCommissionExclusionHandlerPropagatesNotFound(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestSubAdminCommissionExclusionHandlersReturnCustomerDetails(t *testing.T) {
+	for _, tc := range []struct {
+		name, notes string
+	}{
+		{name: "filled", notes: "客服识别备注\nVIP <customer>"},
+		{name: "empty"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, method := range []string{http.MethodGet, http.MethodPost} {
+				t.Run(method, func(t *testing.T) {
+					stub := &commissionExclusionsHandlerStub{notes: tc.notes}
+					router := commissionExclusionsTestRouter(stub, service.RoleAdmin)
+					req := httptest.NewRequest(method, "/exclusions", strings.NewReader(`{"user_id":7}`))
+					req.Header.Set("Content-Type", "application/json")
+					rec := httptest.NewRecorder()
+					router.ServeHTTP(rec, req)
+					require.Equal(t, http.StatusOK, rec.Code)
+					var envelope struct {
+						Data json.RawMessage `json:"data"`
+					}
+					require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &envelope))
+					detail := map[string]json.RawMessage{}
+					if method == http.MethodGet {
+						var result struct {
+							Items []map[string]json.RawMessage `json:"items"`
+						}
+						require.NoError(t, json.Unmarshal(envelope.Data, &result))
+						require.Len(t, result.Items, 1)
+						detail = result.Items[0]
+					} else {
+						require.NoError(t, json.Unmarshal(envelope.Data, &detail))
+					}
+					require.Contains(t, detail, "notes", "empty notes must also be represented explicitly")
+					var username, notes string
+					require.NoError(t, json.Unmarshal(detail["username"], &username))
+					require.NoError(t, json.Unmarshal(detail["notes"], &notes))
+					require.Equal(t, "Customer", username)
+					require.Equal(t, tc.notes, notes)
+				})
+			}
+		})
+	}
 }

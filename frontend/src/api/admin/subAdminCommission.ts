@@ -46,6 +46,7 @@ export interface SubAdminCommissionExclusion {
   user_id: number
   user_email: string
   username: string
+  notes: string
   started_at: string
 }
 

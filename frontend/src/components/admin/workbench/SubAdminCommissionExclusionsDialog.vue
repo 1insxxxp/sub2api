@@ -29,9 +29,10 @@
         <p v-else-if="searchError" class="text-xs text-red-600 dark:text-red-400" role="alert">{{ searchError }}</p>
         <ul v-else-if="results.length" class="divide-y divide-gray-100 dark:divide-dark-700">
           <li v-for="user in results" :key="user.id" class="flex min-w-0 items-center gap-3 py-2">
-            <div class="min-w-0 flex-1">
+            <div class="min-w-0 flex-1 space-y-1">
               <p class="break-all text-sm font-medium text-gray-900 dark:text-white">{{ user.email }}</p>
-              <p class="break-words text-xs text-gray-500 dark:text-dark-400">#{{ user.id }}<template v-if="user.username"> · {{ user.username }}</template></p>
+              <p class="break-words text-xs text-gray-500 [overflow-wrap:anywhere] dark:text-dark-400">#{{ user.id }} · {{ t('admin.users.username') }}：{{ user.username?.trim() || '—' }}</p>
+              <p class="whitespace-pre-wrap break-words text-xs text-gray-500 [overflow-wrap:anywhere] dark:text-dark-400">{{ t('admin.users.notes') }}：{{ user.notes?.trim() || '—' }}</p>
             </div>
             <button
               type="button"
@@ -64,7 +65,8 @@
           >
             <div class="min-w-0 flex-1 space-y-1">
               <p class="break-all text-sm font-medium text-gray-900 dark:text-white">{{ item.user_email }}</p>
-              <p class="break-words text-xs text-gray-500 dark:text-dark-400">#{{ item.user_id }}<template v-if="item.username"> · {{ item.username }}</template></p>
+              <p class="break-words text-xs text-gray-500 [overflow-wrap:anywhere] dark:text-dark-400">#{{ item.user_id }} · {{ t('admin.users.username') }}：{{ item.username?.trim() || '—' }}</p>
+              <p class="whitespace-pre-wrap break-words text-xs text-gray-500 [overflow-wrap:anywhere] dark:text-dark-400">{{ t('admin.users.notes') }}：{{ item.notes?.trim() || '—' }}</p>
               <p class="break-words text-xs text-gray-500 dark:text-dark-400">
                 {{ t('adminWorkbench.commission.exclusionStartedAt') }}：<time :datetime="item.started_at">{{ formatDateTime(item.started_at) }}</time>
               </p>

@@ -69,6 +69,37 @@ describe('commission exclusion management', () => {
     expect(wrapper.text()).toContain('adminWorkbench.commission.exclusionsHint')
   })
 
+  it('identifies excluded customers by labeled username and administrator notes', async () => {
+    api.listExclusions.mockResolvedValueOnce(page([{ ...exclusion, notes: 'VIP customer\nInvoice contact <b>finance</b>' }]))
+    const wrapper = create()
+    await open(wrapper)
+    const customer = wrapper.get('[data-test="commission-exclusion-42"]')
+    expect(customer.text()).toContain('admin.users.username：Client')
+    expect(customer.text()).toContain('admin.users.notes：VIP customer\nInvoice contact <b>finance</b>')
+    expect(customer.find('b').exists()).toBe(false)
+    expect(api.getUser).not.toHaveBeenCalled()
+  })
+
+  it('shows explicit empty values for an excluded customer without a username or notes', async () => {
+    api.listExclusions.mockResolvedValueOnce(page([{ ...exclusion, username: '', notes: '' }]))
+    const wrapper = create()
+    await open(wrapper)
+    const customer = wrapper.get('[data-test="commission-exclusion-42"]')
+    expect(customer.text()).toContain('admin.users.username：—')
+    expect(customer.text()).toContain('admin.users.notes：—')
+  })
+
+  it('shows username and notes in search results before selecting a customer', async () => {
+    api.listUsers.mockResolvedValueOnce(page([{ id: 43, email: 'new@example.com', username: 'New', notes: 'Corporate contact' }]))
+    const wrapper = create()
+    await open(wrapper)
+    await search(wrapper, 'new@')
+    const customer = wrapper.get('[data-test="commission-exclusion-add-43"]').element.closest('li')!
+    expect(customer.textContent).toContain('admin.users.username：New')
+    expect(customer.textContent).toContain('admin.users.notes：Corporate contact')
+    expect(api.getUser).not.toHaveBeenCalled()
+  })
+
   it('searches a small page, then adds a selected customer and refreshes summaries', async () => {
     const wrapper = create()
     await open(wrapper)

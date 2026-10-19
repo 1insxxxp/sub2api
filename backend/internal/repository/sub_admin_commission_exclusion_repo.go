@@ -21,7 +21,7 @@ func (r *subAdminCommissionRepository) ListExclusions(ctx context.Context, param
 		return nil, pagination.PaginationResult{}, err
 	}
 	rows, err := r.sql.QueryContext(ctx, `
-		SELECT ce.id, ce.user_id, u.email, COALESCE(u.username, ''), ce.started_at
+		SELECT ce.id, ce.user_id, u.email, COALESCE(u.username, ''), COALESCE(u.notes, ''), ce.started_at
 		`+from+`
 		ORDER BY ce.started_at DESC, ce.id DESC
 		LIMIT $1 OFFSET $2
@@ -33,7 +33,7 @@ func (r *subAdminCommissionRepository) ListExclusions(ctx context.Context, param
 	items := make([]service.SubAdminCommissionExclusion, 0)
 	for rows.Next() {
 		var item service.SubAdminCommissionExclusion
-		if err := rows.Scan(&item.ID, &item.UserID, &item.UserEmail, &item.Username, &item.StartedAt); err != nil {
+		if err := rows.Scan(&item.ID, &item.UserID, &item.UserEmail, &item.Username, &item.Notes, &item.StartedAt); err != nil {
 			return nil, pagination.PaginationResult{}, err
 		}
 		items = append(items, item)
@@ -63,9 +63,9 @@ func (r *subAdminCommissionRepository) AddExclusion(ctx context.Context, userID,
 	// Taking a timestamp only after this lock avoids transaction-start NOW()
 	// timestamps overlapping an interval closed while this transaction waited.
 	if err := scanSingleRow(ctx, tx, `
-		SELECT email, COALESCE(username, '') FROM users
+		SELECT email, COALESCE(username, ''), COALESCE(notes, '') FROM users
 		WHERE id = $1 AND deleted_at IS NULL FOR NO KEY UPDATE
-	`, []any{userID}, &item.UserEmail, &item.Username); err != nil {
+	`, []any{userID}, &item.UserEmail, &item.Username, &item.Notes); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, service.ErrUserNotFound
 		}

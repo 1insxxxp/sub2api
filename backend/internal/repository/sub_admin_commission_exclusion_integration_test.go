@@ -89,6 +89,47 @@ func TestSubAdminCommissionExclusionLifecyclePreservesClosedHistory(t *testing.T
 	require.Equal(t, 2, intervalCount)
 }
 
+func TestSubAdminCommissionExclusionReturnsCurrentCustomerDetails(t *testing.T) {
+	repo, userID := newCommissionExclusionCustomer(t)
+	ctx := context.Background()
+	original, err := repo.AddExclusion(ctx, userID, 0)
+	require.NoError(t, err)
+	for _, tc := range []struct {
+		name, username, notes string
+	}{
+		{name: "filled", username: "Customer", notes: "客服识别备注\nVIP <customer>"},
+		{name: "updated", username: "Renamed customer", notes: "Updated administrator note"},
+		{name: "empty"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := integrationDB.Exec(`UPDATE users SET username = $2, notes = $3 WHERE id = $1`, userID, tc.username, tc.notes)
+			require.NoError(t, err)
+			items, _, err := repo.ListExclusions(ctx, pagination.PaginationParams{Page: 1, PageSize: 1000})
+			require.NoError(t, err)
+			var listed *service.SubAdminCommissionExclusion
+			for _, item := range items {
+				if item.UserID == userID {
+					listed = &item
+					break
+				}
+			}
+			t.Run("list", func(t *testing.T) {
+				require.NotNil(t, listed)
+				require.Equal(t, tc.username, listed.Username)
+				require.Equal(t, tc.notes, listed.Notes)
+			})
+			t.Run("add", func(t *testing.T) {
+				entry, err := repo.AddExclusion(ctx, userID, 0)
+				require.NoError(t, err)
+				require.Equal(t, tc.username, entry.Username)
+				require.Equal(t, tc.notes, entry.Notes)
+				require.Equal(t, original.ID, entry.ID)
+				require.Equal(t, original.StartedAt, entry.StartedAt)
+			})
+		})
+	}
+}
+
 func TestSubAdminCommissionExclusionConcurrentAddsKeepOneOriginalInterval(t *testing.T) {
 	repo, userID := newCommissionExclusionCustomer(t)
 	const workers = 8

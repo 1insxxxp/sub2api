@@ -13,13 +13,14 @@ type commissionExclusionResponse struct {
 	UserID    int64  `json:"user_id"`
 	UserEmail string `json:"user_email"`
 	Username  string `json:"username"`
+	Notes     string `json:"notes"`
 	StartedAt string `json:"started_at"`
 }
 
 func commissionExclusionDTO(entry service.SubAdminCommissionExclusion) commissionExclusionResponse {
 	return commissionExclusionResponse{
 		ID: entry.ID, UserID: entry.UserID, UserEmail: entry.UserEmail,
-		Username: entry.Username, StartedAt: formatCommissionTime(entry.StartedAt),
+		Username: entry.Username, Notes: entry.Notes, StartedAt: formatCommissionTime(entry.StartedAt),
 	}
 }
 

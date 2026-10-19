@@ -1252,7 +1252,7 @@ curl -X PUT "${BASE}/api/v1/admin/groups/123" \
 
 | 方法 | 端点 | 参数与响应 |
 |------|------|------------|
-| GET | `/api/v1/admin/sub-admin-commissions/exclusions` | `page`、`page_size`；分页返回当前有效名单，字段 `id`、`user_id`、`user_email`、`username`、`started_at` |
+| GET | `/api/v1/admin/sub-admin-commissions/exclusions` | `page`、`page_size`；分页返回当前有效名单，字段 `id`、`user_id`、`user_email`、`username`、`notes`（管理员备注）、`started_at`；仅超级管理员可访问 |
 | POST | `/api/v1/admin/sub-admin-commissions/exclusions` | JSON `{ "user_id": 123 }`；返回当前排除记录，重复添加不会重置开始时间 |
 | DELETE | `/api/v1/admin/sub-admin-commissions/exclusions/:user_id` | 移除该客户当前排除状态，返回成功信息；重复移除安全 |
 
