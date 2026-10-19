@@ -178,14 +178,23 @@ function clearSearch() {
 
 async function searchUsers(keyword: string, requestID: number) {
   searching.value = true
-  searchController = new AbortController()
+  const controller = new AbortController()
+  searchController = controller
   try {
-    let found: AdminUser[] = []
+    let found: AdminUser[] | undefined
     if (/^\d+$/.test(keyword)) {
       const id = Number(keyword)
-      if (Number.isSafeInteger(id) && id > 0) found = [await adminAPI.users.getById(id)]
-    } else {
-      const response = await adminAPI.users.list(1, 10, { search: keyword }, { signal: searchController.signal })
+      if (Number.isSafeInteger(id) && id > 0) {
+        try {
+          found = [await adminAPI.users.getById(id)]
+        } catch (error: unknown) {
+          if (typeof error !== 'object' || error === null || !('status' in error) || error.status !== 404) throw error
+        }
+      }
+    }
+    if (!found) {
+      if (disposed || requestID !== searchRequestID || controller.signal.aborted) return
+      const response = await adminAPI.users.list(1, 10, { search: keyword }, { signal: controller.signal })
       found = response.items
     }
     if (!disposed && requestID === searchRequestID) results.value = found

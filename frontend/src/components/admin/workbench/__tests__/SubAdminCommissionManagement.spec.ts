@@ -91,6 +91,59 @@ describe('commission exclusion management', () => {
     expect(wrapper.get('[data-test="commission-exclusion-add-43"]').text()).toContain('adminWorkbench.commission.addExclusion')
   })
 
+  it('finds numeric email prefixes when no matching user ID exists', async () => {
+    api.getUser.mockRejectedValueOnce({ status: 404, message: 'user not found' })
+    api.listUsers.mockResolvedValueOnce(page([{ id: 86, email: '123456789@example.com', username: 'Client' }]))
+    const wrapper = create()
+    await open(wrapper)
+    await search(wrapper, '123456789')
+    expect(api.listUsers).toHaveBeenCalledWith(1, 10, { search: '123456789' }, { signal: expect.any(AbortSignal) })
+    expect(wrapper.get('[data-test="commission-exclusion-add-86"]').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('user not found')
+  })
+
+  it('shows no matching data when neither numeric ID nor text search finds a customer', async () => {
+    api.getUser.mockRejectedValueOnce({ status: 404, message: 'user not found' })
+    api.listUsers.mockResolvedValueOnce(page([]))
+    const wrapper = create()
+    await open(wrapper)
+    await search(wrapper, '123456789')
+    expect(wrapper.text()).toContain('common.noData')
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+  })
+
+  it('does not hide permission or server errors behind numeric text search', async () => {
+    api.getUser.mockRejectedValueOnce({ status: 403, message: 'forbidden' })
+    const wrapper = create()
+    await open(wrapper)
+    await search(wrapper, '43')
+    expect(api.listUsers).not.toHaveBeenCalled()
+    expect(wrapper.get('[role="alert"]').text()).toBe('forbidden')
+  })
+
+  it('searches long numeric email prefixes without losing precision', async () => {
+    const wrapper = create()
+    await open(wrapper)
+    await search(wrapper, '9007199254740993')
+    expect(api.getUser).not.toHaveBeenCalled()
+    expect(api.listUsers).toHaveBeenCalledWith(1, 10, { search: '9007199254740993' }, { signal: expect.any(AbortSignal) })
+    expect(wrapper.find('[data-test="commission-exclusion-add-43"]').exists()).toBe(true)
+  })
+
+  it('does not start a fallback search after a numeric lookup is superseded', async () => {
+    let reject!: (reason: unknown) => void
+    api.getUser.mockReturnValueOnce(new Promise((_resolve, fail) => { reject = fail }))
+    const wrapper = create()
+    await open(wrapper)
+    await search(wrapper, '123456789')
+    await search(wrapper, 'new@')
+    reject({ status: 404, message: 'user not found' })
+    await flushPromises()
+    expect(api.listUsers).toHaveBeenCalledTimes(1)
+    expect(api.listUsers).toHaveBeenCalledWith(1, 10, { search: 'new@' }, { signal: expect.any(AbortSignal) })
+    expect(wrapper.find('[data-test="commission-exclusion-add-43"]').exists()).toBe(true)
+  })
+
   it('ignores stale searches and cancels pending searches when closed', async () => {
     const stale = deferred<ReturnType<typeof page>>()
     api.listUsers.mockReturnValueOnce(stale.promise)
