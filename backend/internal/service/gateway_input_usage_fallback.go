@@ -1,0 +1,58 @@
+package service
+
+import (
+	"context"
+	"log/slog"
+)
+
+// prepareAnthropicInputTokenEstimate snapshots only a scalar estimate of the
+// final upstream request, so asynchronous settlement never retains the prompt.
+// Provider-reported input/cache usage always takes precedence.
+func prepareAnthropicInputTokenEstimate(result *ForwardResult, body []byte) {
+	if result == nil {
+		return
+	}
+	result.EstimatedInputTokens = 0
+	if !anthropicInputUsageMissing(result.Usage) || len(body) == 0 {
+		return
+	}
+	if estimated, err := estimateAnthropicCountTokensLocally(body); err == nil && estimated > 0 {
+		result.EstimatedInputTokens = estimated
+	}
+}
+
+func anthropicInputUsageMissing(usage ClaudeUsage) bool {
+	return usage.InputTokens == 0 && usage.CacheReadInputTokens == 0 &&
+		usage.CacheCreationInputTokens == 0 && usage.CacheCreation5mTokens == 0 &&
+		usage.CacheCreation1hTokens == 0
+}
+
+// applyMissingInputTokenEstimate repairs missing input accounting only after
+// generation has been observed. Headers, pings and a terminal event alone do
+// not prove that the provider processed a billable generation.
+func applyMissingInputTokenEstimate(ctx context.Context, result *ForwardResult, account *Account) {
+	if result == nil || result.EstimatedInputTokens <= 0 || !anthropicInputUsageMissing(result.Usage) {
+		return
+	}
+	hasGeneration := result.Usage.OutputTokens > 0 ||
+		(result.DeliveredOutputTokens != nil && *result.DeliveredOutputTokens > 0) ||
+		(result.Outcome != nil && result.Outcome.HasEffectiveOutput())
+	if !hasGeneration {
+		return
+	}
+	result.Usage.InputTokens = result.EstimatedInputTokens
+	result.InputTokensEstimated = true
+	accountID := int64(0)
+	if account != nil {
+		accountID = account.ID
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	slog.InfoContext(ctx, "billing.input_tokens_estimated",
+		"request_id", result.RequestID,
+		"account_id", accountID,
+		"model", result.Model,
+		"input_tokens", result.EstimatedInputTokens,
+		"reason", "missing_upstream_input_usage")
+}

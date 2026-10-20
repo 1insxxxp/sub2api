@@ -619,6 +619,11 @@ type ForwardResult struct {
 	UpstreamHeaders http.Header
 	Usage           ClaudeUsage
 	Model           string
+	// EstimatedInputTokens is a local estimate of the final Anthropic request.
+	// It is only applied when upstream input/cache usage is missing and there is
+	// evidence of generation. No request-body reference is retained for billing.
+	EstimatedInputTokens int
+	InputTokensEstimated bool
 	// DeliveredOutputTokens is the user-visible text successfully written before
 	// the downstream request was canceled. It is only a billing fallback when
 	// the upstream response did not complete with authoritative usage.

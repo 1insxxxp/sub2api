@@ -700,25 +700,29 @@ func (u *ClaudeUsage) hasObservedTokens() bool {
 		u.ImageOutputTokens > 0
 }
 
-// partialStreamUsageResult 在流式转发中途出错时，把已观测到 usage 的部分结果包装为
+// partialStreamUsageResult 在流式转发中途出错时，把已观测到 usage 或有效输出的部分结果包装为
 // ForwardResult（与错误一起返回给 handler 记录）。上游一旦下发过 message_start，
 // input/cache token 就已计量，直接丢弃会让请求完全漏记漏计费（issue #5148）。
-// 无已观测 usage 时返回 nil。
+// 上游仅在末尾提供 usage 时，保留有效输出供结算兜底；两者均无时返回 nil。
 //
 // 不变式：UpstreamFailoverError 必须保持 result=nil——failover 重试成功后按成功请求
 // 计费，若同时返回部分 usage 会造成双重计费，此处显式拦截兜底。
 func partialStreamUsageResult(c *gin.Context, resp *http.Response, streamResult *streamingResult, model, upstreamModel, cacheCreationTTLTarget string, startTime time.Time, err error) *ForwardResult {
-	if streamResult == nil || !streamResult.usage.hasObservedTokens() {
+	if streamResult == nil || (!streamResult.usage.hasObservedTokens() && !streamResult.outcome.HasEffectiveOutput()) {
 		return nil
 	}
 	var failoverErr *UpstreamFailoverError
 	if errors.As(err, &failoverErr) {
 		return nil
 	}
+	usage := ClaudeUsage{}
+	if streamResult.usage != nil {
+		usage = *streamResult.usage
+	}
 	return &ForwardResult{
 		RequestID:                     resp.Header.Get("x-request-id"),
 		UpstreamHeaders:               resp.Header,
-		Usage:                         *streamResult.usage,
+		Usage:                         usage,
 		Model:                         model,
 		CacheCreationTTLTarget:        cacheCreationTTLTarget,
 		UpstreamModel:                 upstreamModel,

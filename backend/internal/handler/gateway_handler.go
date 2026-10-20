@@ -248,12 +248,8 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 
 	// Track if we've started streaming (for error handling)
 	streamStarted := false
-	var deliveredOutputTokens *service.DownstreamOutputTokenCollector
-	if reqStream {
-		var restoreDeliveredOutputTokens func()
-		deliveredOutputTokens, restoreDeliveredOutputTokens = service.AttachDownstreamOutputTokenCollector(c, reqModel)
-		defer restoreDeliveredOutputTokens()
-	}
+	deliveredOutputTokens, restoreDeliveredOutputTokens := service.AttachDownstreamOutputTokenCollector(c, reqModel)
+	defer restoreDeliveredOutputTokens()
 
 	// 绑定错误透传服务，允许 service 层在非 failover 错误场景复用规则。
 	if h.errorPassthroughService != nil {

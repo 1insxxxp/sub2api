@@ -41,6 +41,15 @@ func (c *DownstreamOutputTokenCollector) ObserveWritten(written []byte) {
 	}
 
 	c.pending += string(written)
+	// Buffered protocol responses are written as one JSON document rather than
+	// SSE frames. Wait for the full document before counting its semantic body.
+	if strings.HasPrefix(strings.TrimSpace(c.pending), "{") {
+		if gjson.Valid(c.pending) {
+			c.appendJSONResponse(gjson.Parse(c.pending))
+			c.pending = ""
+		}
+		return
+	}
 	for {
 		frameEnd, separatorLength := nextSSEFrameBoundary(c.pending)
 		if frameEnd < 0 {
@@ -250,6 +259,77 @@ func (c *DownstreamOutputTokenCollector) appendText(text string) {
 	}
 }
 
+func (c *DownstreamOutputTokenCollector) appendJSONResponse(data gjson.Result) {
+	responseError := data.Get("error")
+	if (responseError.Exists() && responseError.Type != gjson.Null) || data.Get("type").String() == "error" || data.Get("status").String() == "failed" {
+		return
+	}
+	data.Get("content").ForEach(func(_, block gjson.Result) bool {
+		switch block.Get("type").String() {
+		case "text":
+			c.appendText(block.Get("text").String())
+		case "thinking":
+			c.appendText(block.Get("thinking").String())
+		case "tool_use", "server_tool_use":
+			if input := block.Get("input"); input.Exists() && input.Type != gjson.Null {
+				c.appendText(input.Raw)
+			}
+		}
+		return true
+	})
+	data.Get("choices").ForEach(func(_, choice gjson.Result) bool {
+		message := choice.Get("message")
+		c.appendJSONMessageContent(message.Get("content"))
+		c.appendText(message.Get("reasoning_content").String())
+		if reasoning := message.Get("reasoning"); reasoning.Type == gjson.String {
+			c.appendText(reasoning.String())
+		}
+		message.Get("tool_calls").ForEach(func(_, call gjson.Result) bool {
+			c.appendText(call.Get("function.arguments").String())
+			return true
+		})
+		c.appendText(message.Get("function_call.arguments").String())
+		return true
+	})
+	data.Get("output").ForEach(func(_, item gjson.Result) bool {
+		switch item.Get("type").String() {
+		case "message":
+			c.appendJSONMessageContent(item.Get("content"))
+		case "reasoning":
+			c.appendJSONMessageContent(item.Get("summary"))
+			c.appendJSONMessageContent(item.Get("content"))
+		case "function_call":
+			c.appendText(item.Get("arguments").String())
+		case "custom_tool_call":
+			c.appendText(item.Get("input").String())
+		}
+		return true
+	})
+	data.Get("candidates").ForEach(func(_, candidate gjson.Result) bool {
+		candidate.Get("content.parts").ForEach(func(_, part gjson.Result) bool {
+			c.appendText(part.Get("text").String())
+			return true
+		})
+		return true
+	})
+}
+
+func (c *DownstreamOutputTokenCollector) appendJSONMessageContent(content gjson.Result) {
+	if content.Type == gjson.String {
+		c.appendText(content.String())
+		return
+	}
+	content.ForEach(func(_, part gjson.Result) bool {
+		switch part.Get("type").String() {
+		case "text", "output_text", "summary_text", "reasoning_text":
+			c.appendText(part.Get("text").String())
+		case "refusal":
+			c.appendText(part.Get("refusal").String())
+		}
+		return true
+	})
+}
+
 type downstreamOutputTokenResponseWriter struct {
 	gin.ResponseWriter
 	collector *DownstreamOutputTokenCollector
@@ -257,7 +337,7 @@ type downstreamOutputTokenResponseWriter struct {
 
 func (w *downstreamOutputTokenResponseWriter) Write(data []byte) (int, error) {
 	n, err := w.ResponseWriter.Write(data)
-	if n > 0 {
+	if n > 0 && w.Status() >= 200 && w.Status() < 300 {
 		w.collector.ObserveWritten(data[:n])
 	}
 	if err != nil {
@@ -268,7 +348,7 @@ func (w *downstreamOutputTokenResponseWriter) Write(data []byte) (int, error) {
 
 func (w *downstreamOutputTokenResponseWriter) WriteString(data string) (int, error) {
 	n, err := w.ResponseWriter.WriteString(data)
-	if n > 0 {
+	if n > 0 && w.Status() >= 200 && w.Status() < 300 {
 		w.collector.ObserveWritten([]byte(data[:n]))
 	}
 	if err != nil {
@@ -318,7 +398,7 @@ func AttachDownstreamOutputTokenCollector(c *gin.Context, model string) (*Downst
 }
 
 // ApplyDeliveredOutputTokens snapshots output that reached the client. It is
-// used as a billing fallback only when the upstream response is incomplete.
+// used as a billing fallback when upstream usage is incomplete or missing.
 func ApplyDeliveredOutputTokens(result *ForwardResult, collector *DownstreamOutputTokenCollector) {
 	if result == nil || collector == nil {
 		return
@@ -351,7 +431,7 @@ func recordedOutputTokens(result *ForwardResult) int {
 	if result == nil {
 		return 0
 	}
-	if upstreamUsageComplete(result.Outcome) {
+	if result.Usage.OutputTokens > 0 && (upstreamUsageComplete(result.Outcome) || (!result.Stream && !result.ClientDisconnect)) {
 		return result.Usage.OutputTokens
 	}
 	if result.Outcome != nil && result.DeliveredOutputTokens != nil {
@@ -364,7 +444,7 @@ func recordedOpenAIOutputTokens(result *OpenAIForwardResult) int {
 	if result == nil {
 		return 0
 	}
-	if upstreamUsageComplete(result.Outcome) {
+	if upstreamUsageComplete(result.Outcome) && result.Usage.OutputTokens > 0 {
 		return result.Usage.OutputTokens
 	}
 	if result.Outcome != nil && result.DeliveredOutputTokens != nil {
@@ -378,7 +458,7 @@ func upstreamUsageComplete(outcome *ResponseOutcome) bool {
 }
 
 func customerBillableOutputTokens(clientDisconnect bool, delivered *int, provider int) int {
-	if !clientDisconnect || delivered == nil {
+	if delivered == nil || (!clientDisconnect && provider > 0) {
 		return provider
 	}
 	return deliveredOutputTokens(delivered)

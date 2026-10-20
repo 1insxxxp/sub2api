@@ -59,7 +59,7 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInput(
 	c *gin.Context,
 	account *Account,
 	input anthropicPassthroughForwardInput,
-) (*ForwardResult, error) {
+) (result *ForwardResult, returnErr error) {
 	token, tokenType, err := s.GetAccessToken(ctx, account)
 	if err != nil {
 		return nil, err
@@ -100,6 +100,7 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInput(
 
 	var resp *http.Response
 	lastWireBody := input.Body
+	defer func() { prepareAnthropicInputTokenEstimate(result, lastWireBody) }()
 	retryStart := time.Now()
 	for attempt := 1; attempt <= maxRetryAttempts; attempt++ {
 		upstreamCtx, releaseUpstreamCtx := detachStreamUpstreamContext(ctx, input.RequestStream)

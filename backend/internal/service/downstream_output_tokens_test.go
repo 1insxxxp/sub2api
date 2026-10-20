@@ -5,7 +5,10 @@ package service
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -152,6 +155,137 @@ func TestDownstreamCollectorCountsVisibleReasoningButNotSignature(t *testing.T) 
 	require.Greater(t, collector.TokenCount(), 0)
 }
 
+func TestDownstreamCollectorCountsOnlyNonStreamingJSONOutput(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		payload string
+		want    string
+	}{
+		{
+			name:    "anthropic",
+			payload: `{"type":"message","id":"not-output","model":"not-output","content":[{"type":"text","text":"answer"},{"type":"thinking","thinking":"checking","signature":"opaque"},{"type":"tool_use","id":"opaque","name":"lookup","input":{"q":"status"}},{"type":"redacted_thinking","data":"opaque"}],"usage":{"input_tokens":0,"output_tokens":0}}`,
+			want:    `answerchecking{"q":"status"}`,
+		},
+		{
+			name:    "chat completions",
+			payload: `{"object":"chat.completion","choices":[{"message":{"role":"assistant","content":"answer","reasoning_content":"checking","tool_calls":[{"id":"opaque","type":"function","function":{"name":"lookup","arguments":"{\"q\":\"status\"}"}}]}}],"usage":{"prompt_tokens":0,"completion_tokens":0}}`,
+			want:    `answerchecking{"q":"status"}`,
+		},
+		{
+			name:    "chat text parts",
+			payload: `{"choices":[{"message":{"content":[{"type":"text","text":"answer"},{"type":"image_url","image_url":{"url":"opaque"}}],"function_call":{"name":"lookup","arguments":"{\"q\":\"status\"}"}}}]}`,
+			want:    `answer{"q":"status"}`,
+		},
+		{
+			name:    "responses",
+			payload: `{"object":"response","status":"completed","error":null,"output":[{"type":"message","content":[{"type":"output_text","text":"answer"}]},{"type":"reasoning","summary":[{"type":"summary_text","text":"checking"}],"encrypted_content":"opaque"},{"type":"function_call","name":"lookup","arguments":"{\"q\":\"status\"}"},{"type":"custom_tool_call","name":"patch","input":"patch body"}]}`,
+			want:    `answerchecking{"q":"status"}patch body`,
+		},
+		{
+			name:    "gemini",
+			payload: `{"candidates":[{"content":{"parts":[{"text":"answer","thoughtSignature":"opaque"}]}}],"usageMetadata":{"promptTokenCount":0,"candidatesTokenCount":0}}`,
+			want:    "answer",
+		},
+		{name: "error", payload: `{"type":"error","error":{"message":"not output"},"content":[{"type":"text","text":"not output"}]}`},
+		{name: "failed response", payload: `{"object":"response","status":"failed","output":[{"type":"message","content":[{"type":"output_text","text":"not output"}]}]}`},
+		{name: "protocol metadata", payload: `{"id":"opaque","model":"opaque","usage":{"output_tokens":999},"signature":"opaque"}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			collector := NewDownstreamOutputTokenCollector("claude-opus-4-6")
+			collector.ObserveWritten([]byte(tc.payload))
+			require.Equal(t, tc.want, collector.VisibleText())
+			if tc.want == "" {
+				require.Zero(t, collector.TokenCount())
+			} else {
+				require.Positive(t, collector.TokenCount())
+			}
+		})
+	}
+}
+
+func TestAttachedDownstreamCollectorCountsJSONOnlyAfterCompleteSuccessfulWrite(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, status := range []int{http.StatusOK, http.StatusBadGateway} {
+		t.Run(fmt.Sprint(status), func(t *testing.T) {
+			c, _ := gin.CreateTestContext(httptest.NewRecorder())
+			c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+			collector, restore := AttachDownstreamOutputTokenCollector(c, "claude-opus-4-6")
+			defer restore()
+			c.Status(status)
+			_, err := c.Writer.WriteString("{\n\n\"type\":\"message\",\"content\":[{\"type\":\"text\",\"text\":\"answer\"}]")
+			require.NoError(t, err)
+			require.Zero(t, collector.TokenCount())
+			_, err = c.Writer.Write([]byte("}"))
+			require.NoError(t, err)
+			if status == http.StatusOK {
+				require.Equal(t, "answer", collector.VisibleText())
+				first := collector.TokenCount()
+				require.Positive(t, first)
+				require.Equal(t, first, collector.TokenCount(), "reading the snapshot must not count JSON twice")
+			} else {
+				require.Zero(t, collector.TokenCount(), "an HTTP failure is not model output")
+			}
+		})
+	}
+}
+
+func TestNonStreamingAnthropicAdaptersMissingUsageBillDeliveredJSONOutput(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, protocol := range []string{"chat", "responses", "native", "passthrough"} {
+		t.Run(protocol, func(t *testing.T) {
+			body := []byte(`{"model":"claude-sonnet-4-5","stream":false,"max_tokens":128,"messages":[{"role":"user","content":"Explain HTTP streaming."}]}`)
+			path := "/v1/messages"
+			if protocol == "chat" {
+				path = "/v1/chat/completions"
+			} else if protocol == "responses" {
+				path = "/v1/responses"
+				body = []byte(`{"model":"claude-sonnet-4-5","stream":false,"max_output_tokens":128,"input":"Explain HTTP streaming."}`)
+			}
+			upstream := &anthropicHTTPUpstreamRecorder{resp: &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": {"application/json"}},
+				Body:       io.NopCloser(strings.NewReader(`{"id":"zero-usage","type":"message","role":"assistant","model":"claude-sonnet-4-5","content":[{"type":"text","text":"HTTP streams deliver the response incrementally."}],"stop_reason":"end_turn","usage":{"input_tokens":0,"output_tokens":0}}`)),
+			}}
+			if protocol == "chat" || protocol == "responses" {
+				// These adapters always request an upstream SSE response, even
+				// when their client requested a buffered JSON response.
+				upstream.resp.Header.Set("Content-Type", "text/event-stream")
+				upstream.resp.Body = io.NopCloser(strings.NewReader(
+					"event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"zero-usage\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4-5\",\"content\":[],\"usage\":{\"input_tokens\":0,\"output_tokens\":0}}}\n\n" +
+						"event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n" +
+						"event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"HTTP streams deliver the response incrementally.\"}}\n\n" +
+						"event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n" +
+						"event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":0}}\n\n" +
+						"event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"))
+			}
+			svc := &GatewayService{cfg: rawChatCompletionsTestConfig(), httpUpstream: upstream, tlsFPProfileService: &TLSFingerprintProfileService{}}
+			account := newAnthropicAPIKeyAccountForTest()
+			account.Extra["anthropic_passthrough"] = protocol == "passthrough"
+			c, _ := gin.CreateTestContext(httptest.NewRecorder())
+			c.Request = httptest.NewRequest(http.MethodPost, path, strings.NewReader(string(body)))
+			collector, restore := AttachDownstreamOutputTokenCollector(c, "claude-sonnet-4-5")
+			defer restore()
+			var result *ForwardResult
+			var err error
+			switch protocol {
+			case "chat":
+				result, err = svc.ForwardAsChatCompletions(c.Request.Context(), c, account, body, nil)
+			case "responses":
+				result, err = svc.ForwardAsResponses(c.Request.Context(), c, account, body, nil)
+			default:
+				parsed, parseErr := ParseGatewayRequest(NewRequestBodyRef(body), PlatformAnthropic)
+				require.NoError(t, parseErr)
+				result, err = svc.Forward(c.Request.Context(), c, account, parsed)
+			}
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			ApplyDeliveredOutputTokens(result, collector)
+			require.Positive(t, recordedOutputTokens(result))
+			require.Zero(t, result.Usage.OutputTokens, "retain the raw provider measurement")
+		})
+	}
+}
+
 func TestCompletedStreamRecordsProviderOutputTokens(t *testing.T) {
 	collector := NewDownstreamOutputTokenCollector("claude-opus-4-6")
 	collector.ObserveWritten([]byte("data: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"visible\"}}\n\n"))
@@ -164,6 +298,61 @@ func TestCompletedStreamRecordsProviderOutputTokens(t *testing.T) {
 	require.Equal(t, collector.TokenCount(), *result.DeliveredOutputTokens)
 	require.Equal(t, 321, recordedOutputTokens(result))
 	require.Equal(t, 321, customerBillableOutputTokens(result.ClientDisconnect, result.DeliveredOutputTokens, result.Usage.OutputTokens))
+}
+
+func TestCompletedStreamWithoutProviderOutputUsesDeliveredTokens(t *testing.T) {
+	for _, disconnected := range []bool{false, true} {
+		t.Run(fmt.Sprintf("client_disconnect_%t", disconnected), func(t *testing.T) {
+			collector := NewDownstreamOutputTokenCollector("claude-opus-4-6")
+			collector.ObserveWritten([]byte("data: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"The answer reached the client.\"}}\n\n"))
+			delivered := collector.TokenCount()
+			require.Greater(t, delivered, 0)
+			if disconnected {
+				collector.Freeze()
+			}
+
+			t.Run("anthropic", func(t *testing.T) {
+				result := &ForwardResult{Outcome: &ResponseOutcome{StreamCompleted: true}}
+				ApplyDeliveredOutputTokens(result, collector)
+				require.Equal(t, delivered, recordedOutputTokens(result))
+				require.Equal(t, delivered, customerBillingForwardResult(result).Usage.OutputTokens)
+				require.Zero(t, result.Usage.OutputTokens, "keep the upstream usage separate from the billing estimate")
+			})
+
+			t.Run("openai", func(t *testing.T) {
+				result := &OpenAIForwardResult{Outcome: &ResponseOutcome{StreamCompleted: true}}
+				ApplyDeliveredOpenAIOutputTokens(result, collector)
+				require.Equal(t, delivered, recordedOpenAIOutputTokens(result))
+				require.Zero(t, result.Usage.OutputTokens)
+			})
+		})
+	}
+}
+
+func TestCompletedStreamWithoutDeliveredOutputPreservesZero(t *testing.T) {
+	for _, delivered := range []*int{nil, new(int)} {
+		result := &ForwardResult{
+			DeliveredOutputTokens: delivered,
+			Outcome:               &ResponseOutcome{StreamCompleted: true},
+		}
+		require.Zero(t, recordedOutputTokens(result))
+
+		openAIResult := &OpenAIForwardResult{
+			DeliveredOutputTokens: delivered,
+			Outcome:               &ResponseOutcome{StreamCompleted: true},
+		}
+		require.Zero(t, recordedOpenAIOutputTokens(openAIResult))
+	}
+}
+
+func TestMissingProviderOutputUsesDeliveredTokensWithoutDisconnect(t *testing.T) {
+	delivered := 7
+	result := &ForwardResult{DeliveredOutputTokens: &delivered}
+	openAIResult := &OpenAIForwardResult{DeliveredOutputTokens: &delivered}
+
+	require.Equal(t, delivered, recordedOutputTokens(result))
+	require.Equal(t, delivered, recordedOpenAIOutputTokens(openAIResult))
+	require.Equal(t, delivered, customerBillableOutputTokens(false, &delivered, 0))
 }
 
 func TestApplyDeliveredOutputTokensMarksFrozenCollectorAsClientDisconnect(t *testing.T) {

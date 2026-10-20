@@ -219,6 +219,7 @@ func (s *GatewayService) ForwardAsResponses(
 		result, handleErr = s.handleResponsesBufferedStreamingResponse(resp, c, originalModel, mappedModel, cacheCreationTTLTarget, reasoningEffort, startTime, clientToolMapping)
 	}
 
+	prepareAnthropicInputTokenEstimate(result, forwardedBody)
 	return result, handleErr
 }
 

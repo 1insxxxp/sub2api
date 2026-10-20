@@ -250,6 +250,7 @@ func (s *GatewayService) ForwardAsChatCompletions(
 		result, handleErr = s.handleCCBufferedFromAnthropic(resp, c, originalModel, mappedModel, cacheCreationTTLTarget, reasoningEffort, startTime)
 	}
 
+	prepareAnthropicInputTokenEstimate(result, forwardedBody)
 	if result != nil && result.ClientDisconnect {
 		logger.FromContext(ctx).Info("gateway.cc.client_disconnected_upstream_stopped",
 			zap.Int64("account_id", account.ID),

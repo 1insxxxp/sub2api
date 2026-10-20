@@ -427,6 +427,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 	// 重试循环
 	var resp *http.Response
 	lastWireBody := body
+	defer func() { prepareAnthropicInputTokenEstimate(result, lastWireBody) }()
 	retryStart := time.Now()
 	for attempt := 1; attempt <= maxRetryAttempts; attempt++ {
 		// 构建上游请求（每次重试需要重新构建，因为请求体需要重新读取）
