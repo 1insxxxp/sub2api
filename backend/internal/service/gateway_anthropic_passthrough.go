@@ -588,6 +588,7 @@ func (s *GatewayService) handleStreamingResponseAnthropicAPIKeyPassthrough(
 
 	usage := &ClaudeUsage{}
 	var firstTokenMs *int
+	replayState := newAnthropicStreamReplayState(c)
 	clientDisconnected := false
 	sawTerminalEvent := false
 
@@ -687,7 +688,10 @@ func (s *GatewayService) handleStreamingResponseAnthropicAPIKeyPassthrough(
 							return &streamingResult{usage: usage, firstTokenMs: firstTokenMs, clientDisconnect: true}, fmt.Errorf("stream usage incomplete after timeout")
 						}
 					}
-					return &streamingResult{usage: usage, firstTokenMs: firstTokenMs, clientDisconnect: clientDisconnected}, fmt.Errorf("stream usage incomplete: missing terminal event")
+					if failoverErr := replayState.incompleteEOF(ctx, c, resp, account, clientDisconnected, outcomeCollector.Snapshot()); failoverErr != nil {
+						return nil, failoverErr
+					}
+					return &streamingResult{usage: usage, firstTokenMs: firstTokenMs, clientDisconnect: clientDisconnected}, errors.New(anthropicIncompleteStreamMessage)
 				}
 				return &streamingResult{usage: usage, firstTokenMs: firstTokenMs, clientDisconnect: clientDisconnected}, nil
 			}
@@ -773,7 +777,9 @@ func (s *GatewayService) handleStreamingResponseAnthropicAPIKeyPassthrough(
 				resetKeepaliveTimer()
 				continue
 			}
-			if _, err := fmt.Fprint(w, "event: ping\ndata: {\"type\": \"ping\"}\n\n"); err != nil {
+			n, err := fmt.Fprint(w, "event: ping\ndata: {\"type\": \"ping\"}\n\n")
+			replayState.heartbeatBytes += n
+			if err != nil {
 				clientDisconnected = true
 				logger.LegacyPrintf("service.gateway", "[Anthropic passthrough] Client disconnected during keepalive ping, continue draining upstream for usage: account=%d", account.ID)
 				continue

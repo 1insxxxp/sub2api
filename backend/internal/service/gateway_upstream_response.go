@@ -775,6 +775,7 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 
 	usage := &ClaudeUsage{}
 	var firstTokenMs *int
+	replayState := newAnthropicStreamReplayState(c)
 	scanner := bufio.NewScanner(resp.Body)
 	// 设置更大的buffer以处理长行
 	maxLineSize := defaultMaxLineSize
@@ -907,7 +908,11 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 			return
 		}
 		restored := reverseToolNamesIfPresent(c, []byte(block))
-		if _, werr := fmt.Fprint(w, string(restored)); werr != nil {
+		n, werr := fmt.Fprint(w, string(restored))
+		if anthropicSSEBlockIsHeartbeat(string(restored)) {
+			replayState.heartbeatBytes += n
+		}
+		if werr != nil {
 			clientDisconnected = true
 			logger.LegacyPrintf("service.gateway", "Client disconnected during streaming, continuing to drain upstream for billing")
 			return
@@ -1086,7 +1091,10 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 			if !ok {
 				// 上游完成，返回结果
 				if !sawTerminalEvent {
-					return &streamingResult{usage: usage, firstTokenMs: firstTokenMs, clientDisconnect: clientDisconnected}, fmt.Errorf("stream usage incomplete: missing terminal event")
+					if failoverErr := replayState.incompleteEOF(ctx, c, resp, account, clientDisconnected, outcomeCollector.Snapshot()); failoverErr != nil {
+						return nil, failoverErr
+					}
+					return &streamingResult{usage: usage, firstTokenMs: firstTokenMs, clientDisconnect: clientDisconnected}, errors.New(anthropicIncompleteStreamMessage)
 				}
 				return &streamingResult{usage: usage, firstTokenMs: firstTokenMs, clientDisconnect: clientDisconnected}, nil
 			}
@@ -1215,7 +1223,11 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 					keepaliveBlock = block
 				}
 			}
-			if _, werr := fmt.Fprint(w, keepaliveBlock); werr != nil {
+			n, werr := fmt.Fprint(w, keepaliveBlock)
+			if anthropicSSEBlockIsHeartbeat(keepaliveBlock) {
+				replayState.heartbeatBytes += n
+			}
+			if werr != nil {
 				clientDisconnected = true
 				logger.LegacyPrintf("service.gateway", "Client disconnected during keepalive ping, continuing to drain upstream for billing")
 				continue
