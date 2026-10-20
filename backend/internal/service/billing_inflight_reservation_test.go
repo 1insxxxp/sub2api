@@ -6,6 +6,8 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"os"
+	"os/exec"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -434,6 +436,17 @@ func attachInflightSnapshot(svc *GatewayService, snap *inflightSnapshotCacheStub
 
 // 已定价模型永不查账号映射；随机未定价模型名不直接查库、不产生按模型名的缓存（内存有界）。
 func TestInflightEstimate_AccountMappingNoDBAndBoundedMemory(t *testing.T) {
+	const isolatedEnv = "SUB2API_TEST_INFLIGHT_MEMORY_SUBPROCESS"
+	if os.Getenv(isolatedEnv) != "1" {
+		// MemStats measures the whole process; other service tests can retain
+		// background allocations, so run this heap assertion in its own process.
+		cmd := exec.Command(os.Args[0], "-test.run=^TestInflightEstimate_AccountMappingNoDBAndBoundedMemory$", "-test.count=1", "-test.timeout=30s")
+		cmd.Env = append(os.Environ(), isolatedEnv+"=1")
+		output, err := cmd.CombinedOutput()
+		require.NoError(t, err, "isolated memory assertion failed:\n%s", output)
+		return
+	}
+
 	groupID := int64(40)
 	svc := newInflightEstimateGateway(t, nil)
 	snap := &inflightSnapshotCacheStub{byBucket: map[string][]Account{inflightBucketKey(groupID, PlatformAnthropic): {
