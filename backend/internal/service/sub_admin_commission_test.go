@@ -118,3 +118,41 @@ func TestSubAdminCommissionDayGroupLogsPropagatesForbiddenGrant(t *testing.T) {
 	require.ErrorIs(t, err, ErrSubAdminCommissionForbidden)
 	require.True(t, infraerrors.IsForbidden(err))
 }
+
+type monthlyReportCommissionRepoStub struct {
+	SubAdminCommissionRepository
+	subAdminID int64
+	month      string
+	rate       float64
+	now        time.Time
+	report     SubAdminCommissionMonthlyReport
+	err        error
+}
+
+func (r *monthlyReportCommissionRepoStub) ListMonthlyReport(ctx context.Context, id int64, month string, rate float64, now time.Time) (SubAdminCommissionMonthlyReport, error) {
+	r.subAdminID = id
+	r.month = month
+	r.rate = rate
+	r.now = now
+	return r.report, r.err
+}
+
+func TestSubAdminCommissionMonthlyReportUsesConfiguredRateAndPropagatesReport(t *testing.T) {
+	now := time.Date(2026, 8, 23, 10, 0, 0, 0, time.UTC)
+	report := SubAdminCommissionMonthlyReport{Days: []SubAdminCommissionCalendarDay{{Date: "2026-08-23", ActualCost: 12.5, CommissionAmount: 1.0}}, Groups: []SubAdminCommissionMonthlyGroup{{GroupID: 9, GroupName: "Group"}}}
+	repo := &monthlyReportCommissionRepoStub{report: report}
+	svc := NewSubAdminCommissionService(repo, nil, NewSettingService(&subAdminCommissionSettingRepoStub{values: map[string]string{SettingKeySubAdminCommissionRate: "0.08"}}, nil))
+	got, err := svc.ListMonthlyReport(context.Background(), 17, "2026-08", now)
+	require.NoError(t, err)
+	require.Equal(t, report, got)
+	require.Equal(t, int64(17), repo.subAdminID)
+	require.Equal(t, "2026-08", repo.month)
+	require.Equal(t, 0.08, repo.rate)
+	require.Equal(t, now, repo.now)
+	repo.err = ErrSubAdminCommissionForbidden
+	_, err = svc.ListMonthlyReport(context.Background(), 17, "2026-08", time.Time{})
+	require.ErrorIs(t, err, repo.err)
+	require.False(t, repo.now.IsZero())
+	_, err = (*SubAdminCommissionService)(nil).ListMonthlyReport(context.Background(), 17, "2026-08", now)
+	require.ErrorIs(t, err, ErrSubAdminCommissionRepoMissing)
+}

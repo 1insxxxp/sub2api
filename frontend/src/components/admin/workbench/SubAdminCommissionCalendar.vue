@@ -1,110 +1,151 @@
 <template>
   <section
+    ref="overview"
     data-test="sub-admin-commission-calendar"
     class="workbench-commission-calendar min-w-0"
   >
-    <div class="workbench-commission-overview">
+    <div class="workbench-commission-toolbar">
+      <div class="flex min-w-0 items-center justify-between gap-3">
+        <div class="min-w-0">
+          <h2 class="text-base font-semibold text-gray-950 dark:text-white">
+            {{ t('adminWorkbench.commission.overview') }}
+          </h2>
+          <p class="mt-1 break-words text-xs text-gray-500 dark:text-dark-400">
+            {{ selectedGroup ? selectedGroup.group_name : t('adminWorkbench.commission.allGroups') }}
+          </p>
+        </div>
+        <label class="workbench-commission-month block min-w-0 shrink-0">
+          <span class="sr-only">{{ t('adminWorkbench.commission.calendar') }}</span>
+          <input v-model="month" type="month" class="input min-h-11" />
+        </label>
+      </div>
+      <div v-if="$slots.actions" class="workbench-commission-actions min-w-0">
+        <slot name="actions" />
+      </div>
+    </div>
+    <dl
+      data-test="commission-calendar-month-summary"
+      :aria-label="t('adminWorkbench.commission.monthTotal')"
+      class="workbench-commission-summary mt-4 grid min-w-0 grid-cols-1 gap-3 min-[360px]:grid-cols-2"
+    >
+      <div class="workbench-commission-metric min-w-0 px-4 py-4 sm:px-5">
+        <dt class="text-xs text-gray-500 dark:text-dark-400">
+          {{ t('adminWorkbench.commission.actualCost') }}
+        </dt>
+        <dd class="mt-2 break-all text-2xl font-semibold tracking-tight tabular-nums text-gray-950 dark:text-white sm:text-3xl" :title="formatCurrency(monthActualTotal)" :aria-busy="loading">
+          {{ loading || errorMessage ? '—' : formatCurrency(monthActualTotal) }}
+        </dd>
+      </div>
+      <div class="workbench-commission-metric min-w-0 px-4 py-4 sm:px-5">
+        <dt class="text-xs text-gray-500 dark:text-dark-400">
+          {{ t('adminWorkbench.commission.commissionAmount') }}
+        </dt>
+        <dd class="mt-2 break-all text-2xl font-semibold tracking-tight tabular-nums text-emerald-700 dark:text-emerald-300 sm:text-3xl" :title="formatCurrency(monthCommissionTotal)" :aria-busy="loading">
+          {{ loading || errorMessage ? '—' : formatCurrency(monthCommissionTotal) }}
+        </dd>
+      </div>
+    </dl>
+
+    <div class="mt-4 flex min-w-0 flex-wrap items-center justify-between gap-3">
       <div class="min-w-0">
-        <h2 class="text-base font-semibold text-gray-950 dark:text-white">
-          {{ t('adminWorkbench.commission.calendar') }}
-        </h2>
-      </div>
-      <label class="workbench-commission-month block min-w-0">
-        <span class="sr-only">{{ t('adminWorkbench.commission.calendar') }}</span>
-        <input v-model="month" type="month" class="input" />
-      </label>
-      <dl
-        data-test="commission-calendar-month-summary"
-        :aria-label="t('adminWorkbench.commission.monthTotal')"
-        class="workbench-commission-summary grid min-w-0 grid-cols-1 gap-3 min-[360px]:grid-cols-2"
-      >
-        <div class="min-w-0">
-          <dt class="text-xs text-gray-500 dark:text-dark-400">
-            {{ t('adminWorkbench.commission.actualCost') }}
-          </dt>
-          <dd class="mt-1 break-all text-lg font-semibold tabular-nums text-gray-950 dark:text-white" :title="formatCurrency(monthActualTotal)">
-            {{ formatCurrency(monthActualTotal) }}
-          </dd>
-        </div>
-        <div class="min-w-0">
-          <dt class="text-xs text-gray-500 dark:text-dark-400">
-            {{ t('adminWorkbench.commission.commissionAmount') }}
-          </dt>
-          <dd class="mt-1 break-all text-lg font-semibold tabular-nums text-emerald-700 dark:text-emerald-300" :title="formatCurrency(monthCommissionTotal)">
-            {{ formatCurrency(monthCommissionTotal) }}
-          </dd>
-        </div>
-      </dl>
-    </div>
-
-    <SubAdminCommissionTrendChart
-      class="workbench-commission-chart mt-4"
-      :days="days"
-      :loading="loading"
-    />
-
-    <div v-if="loading" class="py-12 text-center text-sm text-gray-500 dark:text-dark-400">
-      {{ t('common.loading') }}
-    </div>
-    <div v-else-if="errorMessage" class="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-300">
-      {{ errorMessage }}
-    </div>
-    <div v-else class="mt-5">
-      <div class="grid grid-cols-7 gap-1 text-center text-[10px] font-medium text-gray-500 dark:text-dark-400 sm:gap-2 sm:text-xs">
-        <div v-for="day in weekdays" :key="day" class="py-1">
-          {{ day }}
-        </div>
-      </div>
-      <div
-        data-test="commission-calendar-grid"
-        class="commission-calendar-grid mt-2 grid grid-cols-7 gap-1 sm:gap-2"
-      >
-        <button
-          v-for="cell in calendarCells"
-          :key="cell.key"
-          type="button"
-          :data-test="cell.date ? `commission-calendar-day-${cell.date}` : undefined"
-          :aria-label="calendarCellAriaLabel(cell)"
-          :aria-pressed="cell.selectable ? cell.date === selectedMobileDate : undefined"
-          class="commission-calendar-day-cell commission-calendar-compact-cell relative flex aspect-square min-w-0 items-start justify-start overflow-hidden rounded-md border p-1.5 text-left transition sm:min-h-[78px] sm:aspect-auto sm:rounded-lg sm:p-2.5"
-          :class="calendarCellClasses(cell)"
-          :disabled="!cell.selectable"
-          @click="cell.selectable && selectDay(cell.date)"
-        >
-          <span
-            v-if="cell.day && (cell.day.actual_cost > 0 || cell.day.commission_amount > 0)"
-            class="absolute bottom-1.5 left-1/2 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-blue-500 dark:bg-cyan-300 sm:hidden"
-            aria-hidden="true"
-          />
-          <span
-            v-if="cell.day && (cell.day.actual_cost > 0 || cell.day.commission_amount > 0)"
-            class="absolute bottom-2 left-2.5 hidden h-1 w-6 rounded-full bg-blue-500/80 dark:bg-cyan-300/80 sm:block"
-            aria-hidden="true"
-          />
-          <span class="flex w-full min-w-0 flex-col gap-1">
-            <span class="block text-[11px] font-semibold leading-none tabular-nums sm:text-sm">{{ cell.label }}</span>
-            <span
-              v-if="cell.day && (cell.day.actual_cost > 0 || cell.day.commission_amount > 0)"
-              :data-test="`commission-calendar-day-${cell.date}-amounts`"
-              class="mt-1 hidden min-w-0 space-y-0.5 text-[11px] font-semibold leading-tight tabular-nums sm:block"
-              aria-hidden="true"
-            >
-              <span class="flex min-w-0 items-center gap-1 whitespace-nowrap text-blue-700 dark:text-blue-200" :title="`${t('adminWorkbench.commission.actualCost')} ${formatCurrency(cell.day.actual_cost)}`">
-                <span class="text-xs font-bold text-blue-500 dark:text-cyan-300 sm:text-[10px]" aria-hidden="true">↓</span>
-                <span>{{ compactCurrency(cell.day.actual_cost) }}</span>
-              </span>
-              <span class="flex min-w-0 items-center gap-1 whitespace-nowrap text-emerald-700 dark:text-emerald-300" :title="`${t('adminWorkbench.commission.commissionAmount')} ${formatCurrency(cell.day.commission_amount)}`">
-                <span class="text-xs font-bold text-emerald-500 dark:text-emerald-300 sm:text-[10px]" aria-hidden="true">↑</span>
-                <span>{{ compactCurrency(cell.day.commission_amount) }}</span>
-              </span>
-            </span>
-          </span>
+        <button v-if="selectedGroup" type="button" data-test="commission-all-groups" class="btn btn-secondary min-h-11 max-w-full px-3 text-xs" @click="selectGroup(null)">
+          {{ t('adminWorkbench.commission.backToAllGroups') }}
         </button>
       </div>
-      <p v-if="days.length === 0" class="mt-4 rounded-lg bg-gray-50 px-3 py-3 text-center text-sm text-gray-500 dark:bg-dark-800/70 dark:text-dark-400">
-        {{ t('adminWorkbench.commission.emptyGrants') }}
-      </p>
+      <div class="commission-metric-switch flex min-w-0 rounded-lg border p-1" role="group" :aria-label="t('adminWorkbench.commission.chartMetric')">
+        <button v-for="option in metricOptions" :key="option.value" type="button" :data-test="`commission-metric-${option.value}`" :aria-pressed="metric === option.value" class="min-h-11 rounded-md px-3 text-xs font-medium" :class="metric === option.value ? 'bg-blue-500/10 text-blue-700 dark:bg-blue-500/20 dark:text-blue-200' : 'text-gray-500 hover:text-gray-900 dark:text-dark-400 dark:hover:text-white'" @click="metric = option.value">
+          {{ option.label }}
+        </button>
+      </div>
     </div>
+    <div class="workbench-commission-data mt-5">
+      <SubAdminCommissionTrendChart
+        class="workbench-commission-chart"
+        :days="days"
+        :loading="loading"
+        :metric="metric"
+      />
+
+      <section class="workbench-commission-calendar-stage min-w-0">
+        <h3 class="mb-3 text-sm font-semibold text-gray-950 dark:text-white">
+          {{ t('adminWorkbench.commission.calendar') }}
+        </h3>
+        <div v-if="loading" class="py-12 text-center text-sm text-gray-500 dark:text-dark-400">
+          {{ t('common.loading') }}
+        </div>
+        <div v-else-if="errorMessage" class="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-300">
+          {{ errorMessage }}
+        </div>
+        <div v-else>
+          <div class="grid grid-cols-7 gap-1 text-center text-[10px] font-medium text-gray-500 dark:text-dark-400 sm:gap-2 sm:text-xs">
+            <div v-for="day in weekdays" :key="day" class="py-1">
+              {{ day }}
+            </div>
+          </div>
+          <div
+            data-test="commission-calendar-grid"
+            class="commission-calendar-grid mt-2 grid grid-cols-7 gap-1 sm:gap-2"
+          >
+            <button
+              v-for="cell in calendarCells"
+              :key="cell.key"
+              type="button"
+              :data-test="cell.date ? `commission-calendar-day-${cell.date}` : undefined"
+              :aria-label="calendarCellAriaLabel(cell)"
+              :aria-pressed="cell.selectable ? cell.date === selectedMobileDate : undefined"
+              class="commission-calendar-day-cell commission-calendar-compact-cell relative flex aspect-square min-w-0 items-start justify-start overflow-hidden rounded-md border p-1.5 text-left transition sm:min-h-[78px] sm:aspect-auto sm:rounded-lg sm:p-2"
+              :class="calendarCellClasses(cell)"
+              :disabled="!cell.selectable"
+              @click="cell.selectable && selectDay(cell.date)"
+            >
+              <span
+                v-if="cell.day && (cell.day.actual_cost > 0 || cell.day.commission_amount > 0)"
+                class="absolute bottom-1.5 left-1/2 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-blue-500 dark:bg-cyan-300 sm:hidden"
+                aria-hidden="true"
+              />
+              <span
+                v-if="cell.day && (cell.day.actual_cost > 0 || cell.day.commission_amount > 0)"
+                class="absolute right-2 top-2 hidden h-1 w-1 rounded-full bg-blue-500/80 dark:bg-cyan-300/80 sm:block"
+                aria-hidden="true"
+              />
+              <span class="flex w-full min-w-0 flex-col gap-1">
+                <span class="block text-[11px] font-semibold leading-none tabular-nums sm:text-sm">{{ cell.label }}</span>
+                <span
+                  v-if="cell.day && (cell.day.actual_cost > 0 || cell.day.commission_amount > 0)"
+                  :data-test="`commission-calendar-day-${cell.date}-amounts`"
+                  class="mt-1 hidden min-w-0 space-y-0.5 text-[11px] font-semibold leading-tight tabular-nums sm:block"
+                  aria-hidden="true"
+                >
+                  <span class="flex min-w-0 items-center gap-1 whitespace-nowrap text-blue-700 dark:text-blue-200" :title="`${t('adminWorkbench.commission.actualCost')} ${formatCurrency(cell.day.actual_cost)}`">
+                    <span class="text-xs font-bold text-blue-500 dark:text-cyan-300 sm:text-[10px]" aria-hidden="true">↓</span>
+                    <span>{{ compactCurrency(cell.day.actual_cost) }}</span>
+                  </span>
+                  <span class="flex min-w-0 items-center gap-1 whitespace-nowrap text-emerald-700 dark:text-emerald-300" :title="`${t('adminWorkbench.commission.commissionAmount')} ${formatCurrency(cell.day.commission_amount)}`">
+                    <span class="text-xs font-bold text-emerald-500 dark:text-emerald-300 sm:text-[10px]" aria-hidden="true">↑</span>
+                    <span>{{ compactCurrency(cell.day.commission_amount) }}</span>
+                  </span>
+                </span>
+              </span>
+            </button>
+          </div>
+          <p v-if="days.length === 0" class="mt-4 rounded-lg bg-gray-50 px-3 py-3 text-center text-sm text-gray-500 dark:bg-dark-800/70 dark:text-dark-400">
+            {{ t('adminWorkbench.commission.emptyGrants') }}
+          </p>
+        </div>
+      </section>
+    </div>
+    <SubAdminCommissionGroupStats
+      class="mt-5"
+      :groups="groups"
+      :month="month"
+      :end-date="trendEndDate"
+      :total-commission="allMonthCommissionTotal"
+      :metric="metric"
+      :selected-group-id="selectedGroupId"
+      :loading="loading"
+      :error="errorMessage"
+      @select-group="selectGroup"
+    />
   </section>
 </template>
 
@@ -113,19 +154,32 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
 import { extractApiErrorMessage } from '@/utils/apiError'
-import type { SubAdminCommissionCalendarDay } from '@/api/admin'
+import type { SubAdminCommissionCalendarDay, SubAdminCommissionMonthlyGroup } from '@/api/admin'
 import SubAdminCommissionTrendChart from './SubAdminCommissionTrendChart.vue'
+import SubAdminCommissionGroupStats from './SubAdminCommissionGroupStats.vue'
 
 const props = withDefaults(defineProps<{ refreshKey?: number }>(), { refreshKey: 0 })
 
 const emit = defineEmits<{
-  (event: 'select-day', date: string, day: SubAdminCommissionCalendarDay): void
+  (event: 'select-day', date: string, day: SubAdminCommissionCalendarDay, groupId: number | null): void
+  (event: 'scope-change'): void
 }>()
 
 const { t } = useI18n()
 
+const overview = ref<HTMLElement | null>(null)
 const month = ref(formatLocalMonth(new Date()))
-const days = ref<SubAdminCommissionCalendarDay[]>([])
+const allDays = ref<SubAdminCommissionCalendarDay[]>([])
+const groups = ref<SubAdminCommissionMonthlyGroup[]>([])
+const trendEndDate = computed(() => allDays.value.reduce((latest, day) => day.date > latest ? day.date : latest, ''))
+const selectedGroupId = ref<number | null>(null)
+const selectedGroup = computed(() => groups.value.find(group => group.group_id === selectedGroupId.value))
+const days = computed(() => selectedGroup.value?.days ?? allDays.value)
+const metric = ref<'commission' | 'actual'>('commission')
+const metricOptions = computed(() => [
+  { value: 'commission' as const, label: t('adminWorkbench.commission.commissionAmount') },
+  { value: 'actual' as const, label: t('adminWorkbench.commission.actualCost') }
+])
 const loading = ref(false)
 const errorMessage = ref('')
 const selectedMobileDate = ref('')
@@ -147,6 +201,9 @@ const dayByDate = computed(() => {
 
 const monthActualTotal = computed(() =>
   days.value.reduce((sum, day) => sum + day.actual_cost, 0)
+)
+const allMonthCommissionTotal = computed(() =>
+  allDays.value.reduce((sum, day) => sum + day.commission_amount, 0)
 )
 const monthCommissionTotal = computed(() =>
   days.value.reduce((sum, day) => sum + day.commission_amount, 0)
@@ -232,7 +289,7 @@ function calendarCellClasses(cell: { date: string; day?: SubAdminCommissionCalen
   if (cell.date === selectedMobileDate.value) {
     return 'border-blue-500 bg-blue-50 text-blue-950 ring-2 ring-blue-500/10 dark:border-blue-400 dark:bg-blue-500/15 dark:text-blue-50'
   }
-  return 'border-blue-200 bg-gradient-to-br from-blue-50 via-white to-cyan-50 text-blue-950 shadow-sm shadow-blue-900/5 hover:border-blue-400 dark:border-blue-500/20 dark:from-blue-500/15 dark:via-dark-900 dark:to-cyan-500/10 dark:text-blue-50 dark:hover:border-blue-400/60'
+  return 'workbench-commission-date hover:border-blue-300 dark:hover:border-blue-400/60'
 }
 
 function selectDay(date: string) {
@@ -241,7 +298,18 @@ function selectDay(date: string) {
     return
   }
   selectedMobileDate.value = date
-  emit('select-day', date, day)
+  emit('select-day', date, day, selectedGroupId.value)
+}
+
+function selectGroup(groupId: number | null) {
+  if (groupId === selectedGroupId.value) return
+  selectedGroupId.value = groupId
+  selectedMobileDate.value = ''
+  emit('scope-change')
+  if (groupId !== null && typeof overview.value?.scrollIntoView === 'function') {
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+    overview.value.scrollIntoView({ block: 'start', behavior: reduceMotion ? 'auto' : 'smooth' })
+  }
 }
 
 async function fetchCalendar() {
@@ -252,11 +320,16 @@ async function fetchCalendar() {
   // Clear the previous month's data immediately so totals, chart, and calendar
   // cells cannot briefly show stale values while the new month is loading (or
   // after its request fails).
-  days.value = []
+  allDays.value = []
+  groups.value = []
+  selectedGroupId.value = null
+  selectedMobileDate.value = ''
+  emit('scope-change')
   try {
-    const nextDays = await adminAPI.subAdminCommission.getWorkbenchCalendar({ month: requestedMonth })
+    const report = await adminAPI.subAdminCommission.getWorkbenchMonthlyReport({ month: requestedMonth })
     if (requestId === calendarRequestId && month.value === requestedMonth) {
-      days.value = nextDays
+      allDays.value = report.days
+      groups.value = report.groups
     }
   } catch (error: any) {
     if (requestId === calendarRequestId && month.value === requestedMonth) {
@@ -285,23 +358,55 @@ watch(visibleDayRows, (rows) => {
 </script>
 
 <style scoped>
-.workbench-commission-overview {
+.workbench-commission-calendar { scroll-margin-top: 6rem; }
+.workbench-commission-toolbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 10rem);
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
 }
-.workbench-commission-summary { grid-column: 1 / -1; }
-.workbench-commission-calendar .workbench-commission-chart {
-  border-color: var(--workspace-rule);
+.workbench-commission-month { width: 9.5rem; }
+.commission-metric-switch { border-color: var(--workspace-rule); background: var(--workspace-surface); }
+.workbench-commission-metric {
+  border: 1px solid var(--workspace-rule);
   border-radius: 8px;
   background: linear-gradient(125deg, var(--workspace-highlight) 15%, transparent 70%), var(--workspace-surface);
   box-shadow: var(--workspace-shadow);
 }
+.workbench-commission-data {
+  display: grid;
+  min-width: 0;
+  gap: 1.25rem;
+}
+.workbench-commission-calendar-stage {
+  border-top: 1px solid var(--workspace-divider);
+  padding-top: 1rem;
+}
+.workbench-commission-date {
+  border-color: var(--workspace-rule);
+  background: linear-gradient(125deg, var(--workspace-highlight) 15%, transparent 70%), var(--workspace-surface);
+  color: var(--workspace-ink);
+}
+.commission-calendar-day-cell:focus-visible {
+  outline: 2px solid var(--workspace-focus);
+  outline-offset: 2px;
+}
 
 @media (min-width: 768px) {
-  .workbench-commission-overview { grid-template-columns: minmax(0, 1fr) minmax(16rem, 1fr) 10rem; }
-  .workbench-commission-month { order: 1; }
-  .workbench-commission-summary { grid-column: auto; }
+  .workbench-commission-toolbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 1.5rem;
+  }
+}
+@media (min-width: 1440px) {
+  .workbench-commission-data { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); }
+  .workbench-commission-calendar-stage {
+    border-top: 0;
+    border-left: 1px solid var(--workspace-divider);
+    padding-top: 0;
+    padding-left: 1.5rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .commission-calendar-day-cell { transition: none; }
 }
 </style>

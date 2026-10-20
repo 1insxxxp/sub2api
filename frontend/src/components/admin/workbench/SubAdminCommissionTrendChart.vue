@@ -1,11 +1,11 @@
 <template>
   <section
-    class="min-w-0 max-w-full overflow-hidden rounded-lg border border-gray-100 bg-gray-50/70 p-3 dark:border-dark-800 dark:bg-dark-950/40 sm:p-4"
+    class="commission-trend-section min-w-0 max-w-full overflow-hidden pt-4"
   >
-    <div class="mb-3 flex min-w-0 items-start justify-between gap-3">
+    <div class="mb-3 flex min-w-0 items-start justify-between gap-3 px-1">
       <div class="min-w-0">
         <h3 class="text-sm font-semibold text-gray-950 dark:text-white">
-          {{ t('adminWorkbench.commission.dailyChartTitle') }}
+          {{ t(metric === 'actual' ? 'adminWorkbench.commission.dailyConsumptionTitle' : 'adminWorkbench.commission.dailyChartTitle') }}
         </h3>
         <p class="mt-1 text-xs text-gray-500 dark:text-dark-400">
           {{ t('adminWorkbench.commission.monthTotal') }}
@@ -19,7 +19,7 @@
         data-test="commission-daily-chart-loading"
         class="flex h-full items-center justify-center rounded-md text-sm text-gray-500 dark:text-dark-400"
       >
-        <span class="animate-pulse">{{ t('common.loading') }}</span>
+        <span class="animate-pulse motion-reduce:animate-none">{{ t('common.loading') }}</span>
       </div>
       <Line
         v-else-if="chartData"
@@ -58,10 +58,11 @@ import type { SubAdminCommissionCalendarDay } from '@/api/admin/subAdminCommissi
 
 ChartJS.register(CategoryScale, Filler, Legend, LineElement, LinearScale, PointElement, Title, Tooltip)
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   days: SubAdminCommissionCalendarDay[]
   loading?: boolean
-}>()
+  metric?: 'commission' | 'actual'
+}>(), { metric: 'commission', loading: false })
 
 const { t } = useI18n()
 
@@ -74,6 +75,15 @@ function readIsDarkMode() {
 
 const isDarkMode = ref(readIsDarkMode())
 let themeObserver: MutationObserver | null = null
+const motionQuery = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+  ? window.matchMedia('(prefers-reduced-motion: reduce)')
+  : null
+const reducedMotion = ref(motionQuery?.matches ?? false)
+let removeMotionListener: (() => void) | null = null
+
+function syncMotionPreference() {
+  reducedMotion.value = motionQuery?.matches ?? false
+}
 
 function syncTheme() {
   isDarkMode.value = readIsDarkMode()
@@ -81,6 +91,14 @@ function syncTheme() {
 
 onMounted(() => {
   syncTheme()
+  syncMotionPreference()
+  if (motionQuery && typeof motionQuery.addEventListener === 'function') {
+    motionQuery.addEventListener('change', syncMotionPreference)
+    removeMotionListener = () => motionQuery.removeEventListener('change', syncMotionPreference)
+  } else if (motionQuery && typeof motionQuery.addListener === 'function') {
+    motionQuery.addListener(syncMotionPreference)
+    removeMotionListener = () => motionQuery.removeListener(syncMotionPreference)
+  }
   if (typeof MutationObserver === 'undefined' || typeof document === 'undefined') {
     return
   }
@@ -94,13 +112,17 @@ onMounted(() => {
 onBeforeUnmount(() => {
   themeObserver?.disconnect()
   themeObserver = null
+  removeMotionListener?.()
+  removeMotionListener = null
 })
 
 const colors = computed(() => ({
   text: isDarkMode.value ? '#d1d5db' : '#4b5563',
   grid: isDarkMode.value ? '#374151' : '#e5e7eb',
-  commission: '#10b981',
-  commissionFill: isDarkMode.value ? 'rgba(16, 185, 129, 0.18)' : 'rgba(16, 185, 129, 0.12)'
+  commission: props.metric === 'actual' ? '#3b82f6' : '#10b981',
+  commissionFill: props.metric === 'actual'
+    ? (isDarkMode.value ? 'rgba(59, 130, 246, 0.18)' : 'rgba(59, 130, 246, 0.12)')
+    : (isDarkMode.value ? 'rgba(16, 185, 129, 0.18)' : 'rgba(16, 185, 129, 0.12)')
 }))
 
 const orderedDays = computed(() =>
@@ -116,8 +138,8 @@ const chartData = computed(() => {
     labels: orderedDays.value.map((day) => day.date.slice(5)),
     datasets: [
       {
-        label: t('adminWorkbench.commission.dailyChartCommission'),
-        data: orderedDays.value.map((day) => day.commission_amount ?? 0),
+        label: t(props.metric === 'actual' ? 'adminWorkbench.commission.actualCost' : 'adminWorkbench.commission.dailyChartCommission'),
+        data: orderedDays.value.map((day) => (props.metric === 'actual' ? day.actual_cost : day.commission_amount) ?? 0),
         borderColor: colors.value.commission,
         backgroundColor: colors.value.commissionFill,
         fill: true,
@@ -138,6 +160,7 @@ const formatCurrency = (value: unknown) => {
 const chartOptions = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
+  animation: reducedMotion.value ? false as const : { duration: 180 },
   interaction: {
     intersect: false,
     mode: 'index' as const
@@ -198,6 +221,11 @@ const chartOptions = computed(() => ({
 </script>
 
 <style scoped>
+.commission-trend-section {
+  border-top: 1px solid var(--workspace-divider, rgb(148 163 184 / 14%));
+}
+
+
 .commission-daily-chart :deep(canvas) {
   display: block;
   width: 100% !important;

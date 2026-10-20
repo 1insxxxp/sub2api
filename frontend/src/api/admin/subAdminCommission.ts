@@ -32,6 +32,17 @@ export interface SubAdminCommissionCalendarDay {
   commission_amount: number
 }
 
+export interface SubAdminCommissionMonthlyGroup {
+  group_id: number
+  group_name: string
+  days: SubAdminCommissionCalendarDay[]
+}
+
+export interface SubAdminCommissionMonthlyReport {
+  days: SubAdminCommissionCalendarDay[]
+  groups: SubAdminCommissionMonthlyGroup[]
+}
+
 export interface SubAdminCommissionDayGroup {
   group_id: number
   group_name: string
@@ -119,6 +130,16 @@ export async function getWorkbenchDayGroups(
   return data
 }
 
+export async function getWorkbenchMonthlyReport(
+  query: WorkbenchCommissionCalendarQuery = {}
+): Promise<SubAdminCommissionMonthlyReport> {
+  const { data } = await apiClient.get<SubAdminCommissionMonthlyReport>(
+    '/admin/workbench/commission/monthly-report',
+    { params: query }
+  )
+  return data
+}
+
 export async function listExclusions(
   query: CommissionExclusionsQuery = {}
 ): Promise<PaginatedResponse<SubAdminCommissionExclusion>> {
@@ -150,6 +171,7 @@ export const subAdminCommissionAPI = {
   replaceGrants,
   getWorkbenchGrants,
   getWorkbenchCalendar,
+  getWorkbenchMonthlyReport,
   getWorkbenchDayGroups,
   listExclusions,
   addExclusion,

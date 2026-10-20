@@ -1,14 +1,14 @@
 <template>
-  <section data-test="affiliate-leaderboard-panel" class="min-w-0 space-y-4">
-    <header class="flex min-w-0 items-start gap-3">
-      <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
-        <Icon name="users" size="md" />
+  <section data-test="affiliate-leaderboard-panel" class="affiliate-leaderboard min-w-0 space-y-3">
+    <header class="flex min-w-0 items-start gap-2.5">
+      <span class="affiliate-leaderboard-icon mt-0.5 inline-flex shrink-0 items-center justify-center">
+        <Icon name="users" size="sm" />
       </span>
       <div class="min-w-0">
-        <h2 class="text-base font-semibold text-gray-950 dark:text-white">
+        <h2 class="text-sm font-semibold text-gray-950 dark:text-white">
           {{ t('adminWorkbench.affiliateLeaderboard.title') }}
         </h2>
-        <p class="mt-1 text-sm leading-5 text-gray-500 dark:text-dark-400">
+        <p class="mt-1 text-xs leading-5 text-gray-500 dark:text-dark-400">
           {{ t('adminWorkbench.affiliateLeaderboard.subtitle') }}
         </p>
       </div>
@@ -41,9 +41,9 @@
     <template v-else>
       <div
         data-test="affiliate-leaderboard-desktop"
-        class="hidden min-w-0 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm dark:border-dark-700 dark:bg-dark-900 md:block"
+        class="affiliate-leaderboard-surface hidden min-w-0 overflow-x-auto rounded-lg xl:block"
       >
-        <table class="w-full table-fixed border-collapse text-left">
+        <table class="w-full min-w-[48rem] table-fixed border-collapse text-left">
           <colgroup>
             <col class="w-20" />
             <col />
@@ -52,7 +52,7 @@
             <col class="w-32" />
             <col class="w-44" />
           </colgroup>
-          <thead class="bg-gray-50 text-xs font-medium text-gray-500 dark:bg-dark-800/70 dark:text-dark-400">
+          <thead class="affiliate-leaderboard-table-head text-xs font-medium text-gray-500 dark:text-dark-400">
             <tr>
               <th class="px-4 py-3">{{ t('adminWorkbench.affiliateLeaderboard.rank') }}</th>
               <th class="px-4 py-3">{{ t('adminWorkbench.affiliateLeaderboard.user') }}</th>
@@ -62,7 +62,7 @@
               <th class="px-4 py-3">{{ t('adminWorkbench.affiliateLeaderboard.lastInvitedAt') }}</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-gray-100 dark:divide-dark-700">
+          <tbody class="affiliate-leaderboard-table-body">
             <tr
               v-for="(leader, index) in leaders"
               :key="leader.inviter_id"
@@ -80,7 +80,7 @@
               <td class="min-w-0 px-4 py-3.5">
                 <div class="flex min-w-0 items-center gap-3">
                   <span
-                    class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary-50 text-sm font-semibold text-primary-700 ring-1 ring-primary-100 dark:bg-primary-500/10 dark:text-primary-200 dark:ring-primary-500/20"
+                    class="affiliate-leaderboard-avatar flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-semibold"
                     aria-hidden="true"
                   >
                     <img
@@ -108,7 +108,7 @@
                   </div>
                 </div>
               </td>
-              <td class="px-4 py-3.5 text-right text-base font-semibold tabular-nums text-primary-700 dark:text-primary-300">
+              <td class="px-4 py-3.5 text-right font-semibold tabular-nums text-gray-950 dark:text-white">
                 {{ leader.invited_count }}
               </td>
               <td class="px-4 py-3.5 text-right font-semibold tabular-nums text-emerald-700 dark:text-emerald-300">
@@ -125,16 +125,16 @@
         </table>
       </div>
 
-      <div data-test="affiliate-leaderboard-mobile" class="space-y-3 md:hidden">
+      <div data-test="affiliate-leaderboard-mobile" class="space-y-3 xl:hidden">
         <article
           v-for="(leader, index) in leaders"
           :key="leader.inviter_id"
-          class="rounded-lg border border-gray-200 bg-white p-3 shadow-sm dark:border-dark-700 dark:bg-dark-900 min-[360px]:p-4"
+          class="affiliate-leaderboard-surface rounded-lg p-3 min-[360px]:p-4"
         >
           <div class="flex min-w-0 items-start gap-3">
             <span :class="rankClass(index)">{{ index + 1 }}</span>
             <span
-              class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary-50 text-sm font-semibold text-primary-700 ring-1 ring-primary-100 dark:bg-primary-500/10 dark:text-primary-200 dark:ring-primary-500/20"
+              class="affiliate-leaderboard-avatar flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-semibold"
               aria-hidden="true"
             >
               <img
@@ -166,19 +166,19 @@
           </div>
           <dl
             :data-test="`affiliate-leaderboard-mobile-metrics-${leader.inviter_id}`"
-            class="mt-4 grid grid-cols-2 gap-2 border-t border-gray-100 pt-3 dark:border-dark-700"
+            class="affiliate-leaderboard-metrics mt-3 grid grid-cols-2 gap-2 pt-3"
           >
-            <div class="min-w-0 rounded-md bg-primary-50/70 px-3 py-2 dark:bg-primary-500/10">
+            <div class="affiliate-leaderboard-metric min-w-0 rounded-md px-3 py-2">
               <dt class="text-xs text-gray-500 dark:text-dark-400">{{ t('adminWorkbench.affiliateLeaderboard.invitedCount') }}</dt>
-              <dd class="mt-1 whitespace-nowrap font-semibold tabular-nums text-primary-700 dark:text-primary-300">{{ leader.invited_count }}</dd>
+              <dd class="mt-1 whitespace-nowrap font-semibold tabular-nums text-gray-950 dark:text-white">{{ leader.invited_count }}</dd>
             </div>
-            <div class="min-w-0 rounded-md bg-emerald-50/70 px-3 py-2 dark:bg-emerald-500/10">
+            <div class="affiliate-leaderboard-metric min-w-0 rounded-md px-3 py-2">
               <dt class="text-xs text-gray-500 dark:text-dark-400">{{ t('adminWorkbench.affiliateLeaderboard.qualifiedCount') }}</dt>
               <dd class="mt-1 whitespace-nowrap font-semibold tabular-nums text-emerald-700 dark:text-emerald-300">{{ leader.qualified_invitee_count }}</dd>
             </div>
             <div
               :data-test="`affiliate-leaderboard-mobile-rebate-${leader.inviter_id}`"
-              class="col-span-2 flex min-w-0 items-center justify-between gap-3 rounded-md bg-gray-50 px-3 py-2 dark:bg-dark-800/70"
+              class="affiliate-leaderboard-metric col-span-2 flex min-w-0 items-center justify-between gap-3 rounded-md px-3 py-2"
             >
               <dt class="text-xs text-gray-500 dark:text-dark-400">{{ t('adminWorkbench.affiliateLeaderboard.totalRebate') }}</dt>
               <dd class="shrink-0 whitespace-nowrap font-semibold tabular-nums text-gray-950 dark:text-white">{{ formatCurrency(leader.total_rebate) }}</dd>
@@ -223,11 +223,11 @@ function markAvatarFailed(inviterId: number): void {
 }
 
 function rankClass(index: number): string {
-  const base = 'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold tabular-nums'
-  if (index === 0) return `${base} bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-200`
-  if (index === 1) return `${base} bg-gray-200 text-gray-700 dark:bg-dark-700 dark:text-dark-200`
-  if (index === 2) return `${base} bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-200`
-  return `${base} bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300`
+  const base = 'affiliate-leaderboard-rank inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-xs font-semibold tabular-nums'
+  if (index === 0) return `${base} text-amber-700 dark:text-amber-300`
+  if (index === 1) return `${base} text-slate-600 dark:text-slate-300`
+  if (index === 2) return `${base} text-orange-700 dark:text-orange-300`
+  return `${base} text-gray-500 dark:text-dark-400`
 }
 
 function formatLastInvite(value: string | null): string {
@@ -252,3 +252,41 @@ onMounted(() => {
   void loadLeaderboard()
 })
 </script>
+
+<style scoped>
+.affiliate-leaderboard-icon {
+  color: var(--workspace-muted, #677282);
+}
+
+.affiliate-leaderboard-surface {
+  border: 1px solid var(--workspace-rule, rgb(148 163 184 / 24%));
+  background-color: var(--workspace-surface, #fff);
+  background-image: linear-gradient(132deg, var(--workspace-highlight, rgb(255 255 255 / 82%)), transparent 68%);
+  box-shadow: var(--workspace-shadow, inset 0 1px 0 #fff, 0 2px 4px rgb(15 23 42 / 4%));
+}
+
+.affiliate-leaderboard-table-head,
+.affiliate-leaderboard-rank,
+.affiliate-leaderboard-avatar,
+.affiliate-leaderboard-metric {
+  background: var(--workspace-hover, rgb(148 163 184 / 7%));
+}
+
+.affiliate-leaderboard-table-head {
+  border-bottom: 1px solid var(--workspace-divider, rgb(148 163 184 / 14%));
+}
+
+.affiliate-leaderboard-table-body > tr + tr,
+.affiliate-leaderboard-metrics {
+  border-top: 1px solid var(--workspace-divider, rgb(148 163 184 / 14%));
+}
+
+.affiliate-leaderboard-rank,
+.affiliate-leaderboard-avatar {
+  border: 1px solid var(--workspace-divider, rgb(148 163 184 / 14%));
+}
+
+.affiliate-leaderboard-avatar {
+  color: var(--workspace-muted, #677282);
+}
+</style>

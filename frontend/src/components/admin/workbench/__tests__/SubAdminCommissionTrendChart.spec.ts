@@ -71,7 +71,7 @@ function createDays(): SubAdminCommissionCalendarDay[] {
   ]
 }
 
-function mountChart(props: { days: SubAdminCommissionCalendarDay[]; loading?: boolean }) {
+function mountChart(props: { days: SubAdminCommissionCalendarDay[]; loading?: boolean; metric?: 'commission' | 'actual' }) {
   const wrapper = mount(SubAdminCommissionTrendChart, { props })
   mountedWrappers.push(wrapper)
   return wrapper
@@ -82,6 +82,7 @@ const mountedWrappers: Array<ReturnType<typeof mountChart>> = []
 afterEach(() => {
   mountedWrappers.splice(0).forEach((wrapper) => wrapper.unmount())
   document.documentElement.classList.remove('dark')
+  vi.unstubAllGlobals()
 })
 
 describe('SubAdminCommissionTrendChart', () => {
@@ -107,6 +108,14 @@ describe('SubAdminCommissionTrendChart', () => {
       '2026-08-01',
       '2026-08-02',
     ])
+  })
+
+  it('switches to balance consumption without changing daily points', async () => {
+    const wrapper = mountChart({ days: createDays() })
+    await wrapper.setProps({ metric: 'actual' })
+    const data = wrapper.findComponent({ name: 'LineChartStub' }).props('data') as ChartData
+    expect(data.datasets[0].label).toBe('adminWorkbench.commission.actualCost')
+    expect(data.datasets[0].data).toEqual([12.25, 0, 0])
   })
 
   it('renders the empty state without mounting a chart when there are no daily points', () => {
@@ -170,4 +179,57 @@ describe('SubAdminCommissionTrendChart', () => {
     expect(lightOptions.plugins.legend.labels.color).toBe('#4b5563')
     expect(darkOptions.plugins.legend.labels.color).toBe('#d1d5db')
   })
+
+  it('uses a short chart transition when reduced-motion detection is unavailable', () => {
+    vi.stubGlobal('matchMedia', undefined)
+    const wrapper = mountChart({ days: createDays() })
+    const options = wrapper.findComponent({ name: 'LineChartStub' }).props('options') as { animation: { duration: number } }
+    expect(options.animation).toEqual({ duration: 180 })
+  })
+
+  it('reacts to reduced-motion preferences and removes the modern listener on unmount', async () => {
+    const query = {
+      matches: true,
+      addEventListener: vi.fn<(type: string, listener: () => void) => void>(),
+      removeEventListener: vi.fn<(type: string, listener: () => void) => void>()
+    }
+    vi.stubGlobal('matchMedia', vi.fn(() => query))
+    const wrapper = mountChart({ days: createDays() })
+    const line = wrapper.findComponent({ name: 'LineChartStub' })
+    expect((line.props('options') as { animation: unknown }).animation).toBe(false)
+    expect(query.addEventListener).toHaveBeenCalledWith('change', expect.any(Function))
+    const listener = query.addEventListener.mock.calls[0][1]
+    query.matches = false
+    listener()
+    await nextTick()
+    expect((line.props('options') as { animation: unknown }).animation).toEqual({ duration: 180 })
+    query.matches = true
+    listener()
+    await nextTick()
+    expect((line.props('options') as { animation: unknown }).animation).toBe(false)
+    wrapper.unmount()
+    mountedWrappers.splice(mountedWrappers.indexOf(wrapper), 1)
+    expect(query.removeEventListener).toHaveBeenCalledWith('change', listener)
+  })
+
+  it('supports and cleans up legacy Safari motion preference listeners', async () => {
+    const query = {
+      matches: false,
+      addListener: vi.fn<(listener: () => void) => void>(),
+      removeListener: vi.fn<(listener: () => void) => void>()
+    }
+    vi.stubGlobal('matchMedia', vi.fn(() => query))
+    const wrapper = mountChart({ days: createDays() })
+    expect(query.addListener).toHaveBeenCalledWith(expect.any(Function))
+    const listener = query.addListener.mock.calls[0][0]
+    query.matches = true
+    listener()
+    await nextTick()
+    const line = wrapper.findComponent({ name: 'LineChartStub' })
+    expect((line.props('options') as { animation: unknown }).animation).toBe(false)
+    wrapper.unmount()
+    mountedWrappers.splice(mountedWrappers.indexOf(wrapper), 1)
+    expect(query.removeListener).toHaveBeenCalledWith(listener)
+  })
+
 })

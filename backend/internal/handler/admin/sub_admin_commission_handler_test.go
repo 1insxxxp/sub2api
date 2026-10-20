@@ -138,3 +138,64 @@ func TestSubAdminCommissionHandlerWorkbenchLogsForbidden(t *testing.T) {
 
 	require.Equal(t, http.StatusForbidden, rec.Code)
 }
+
+type monthlyReportHandlerServiceStub struct {
+	subAdminCommissionHandlerServiceStub
+	report service.SubAdminCommissionMonthlyReport
+	err    error
+	calls  int
+}
+
+func (s *monthlyReportHandlerServiceStub) ListMonthlyReport(ctx context.Context, id int64, month string, now time.Time) (service.SubAdminCommissionMonthlyReport, error) {
+	s.calls++
+	s.calendarSubAdminID = id
+	s.calendarMonth = month
+	return s.report, s.err
+}
+func monthlyReportHandlerRouter(stub *monthlyReportHandlerServiceStub, userID int64) *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	if userID > 0 {
+		router.Use(func(c *gin.Context) {
+			c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: userID})
+			c.Next()
+		})
+	}
+	h := &SubAdminCommissionHandler{service: stub}
+	router.GET("/monthly-report", h.GetWorkbenchMonthlyReport)
+	return router
+}
+func TestSubAdminCommissionHandlerMonthlyReportAuthValidationAndPrivateResponse(t *testing.T) {
+	for _, month := range []string{"2026-13", "2026-8", "invalid", "2026-08-01"} {
+		stub := &monthlyReportHandlerServiceStub{}
+		rec := httptest.NewRecorder()
+		monthlyReportHandlerRouter(stub, 88).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/monthly-report?month="+month, nil))
+		require.Equal(t, http.StatusBadRequest, rec.Code, month)
+		require.Zero(t, stub.calls)
+	}
+	stub := &monthlyReportHandlerServiceStub{}
+	rec := httptest.NewRecorder()
+	monthlyReportHandlerRouter(stub, 0).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/monthly-report", nil))
+	require.Equal(t, http.StatusUnauthorized, rec.Code)
+	require.Zero(t, stub.calls)
+	day := service.SubAdminCommissionCalendarDay{Date: "2026-08-23", Enabled: true, ActualCost: 12.5, CommissionAmount: 1.0}
+	stub.report = service.SubAdminCommissionMonthlyReport{Days: []service.SubAdminCommissionCalendarDay{day}, Groups: []service.SubAdminCommissionMonthlyGroup{{GroupID: 9, GroupName: "Group", Days: []service.SubAdminCommissionCalendarDay{day}}}}
+	rec = httptest.NewRecorder()
+	monthlyReportHandlerRouter(stub, 88).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/monthly-report?month=2026-08", nil))
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, int64(88), stub.calendarSubAdminID)
+	require.Equal(t, "2026-08", stub.calendarMonth)
+	require.JSONEq(t, `{"code":0,"message":"success","data":{"days":[{"date":"2026-08-23","enabled":true,"actual_cost":12.5,"commission_amount":1}],"groups":[{"group_id":9,"group_name":"Group","days":[{"date":"2026-08-23","enabled":true,"actual_cost":12.5,"commission_amount":1}]}]}}`, rec.Body.String())
+}
+func TestSubAdminCommissionHandlerMonthlyReportEmptyArraysAndServiceErrors(t *testing.T) {
+	stub := &monthlyReportHandlerServiceStub{}
+	router := monthlyReportHandlerRouter(stub, 88)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/monthly-report", nil))
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.JSONEq(t, `{"code":0,"message":"success","data":{"days":[],"groups":[]}}`, rec.Body.String())
+	stub.err = service.ErrSubAdminCommissionForbidden
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/monthly-report", nil))
+	require.Equal(t, http.StatusForbidden, rec.Code)
+}

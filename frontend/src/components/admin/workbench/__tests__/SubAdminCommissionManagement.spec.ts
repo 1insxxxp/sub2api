@@ -14,10 +14,10 @@ vi.mock('vue-i18n', async () => ({ ...await vi.importActual<typeof import('vue-i
 const page = (items: unknown[], total = items.length, current = 1) => ({ items, total, page: current, page_size: 10, pages: Math.max(1, Math.ceil(total / 10)) })
 const exclusion = { id: 1, user_id: 42, user_email: 'client@example.com', username: 'Client', started_at: '2026-10-18T10:00:00Z' }
 const wrappers: Array<ReturnType<typeof mount>> = []
-const create = () => {
-  const wrapper = mount(SubAdminCommissionManagement, { global: { stubs: {
+const create = (realDialog = false) => {
+  const wrapper = mount(SubAdminCommissionManagement, { attachTo: realDialog ? document.body : undefined, global: { stubs: {
     Icon: true,
-    BaseDialog: { name: 'BaseDialog', props: ['show', 'title', 'appearance'], template: '<div v-if="show" data-test="exclusions-dialog"><h2>{{ title }}</h2><slot /><slot name="footer" /><button data-test="dialog-close" @click="$emit(\'close\')">Close</button></div>' },
+    BaseDialog: realDialog ? false : { name: 'BaseDialog', props: ['show', 'title', 'appearance', 'width'], template: '<div v-if="show" data-test="exclusions-dialog"><h2>{{ title }}</h2><slot /><slot name="footer" /><button data-test="dialog-close" @click="$emit(\'close\')">Close</button></div>' },
     Pagination: { props: ['page', 'total'], emits: ['update:page'], template: '<button data-test="exclusions-next-page" @click="$emit(\'update:page\', 2)">Next</button>' },
   } } })
   wrappers.push(wrapper)
@@ -25,6 +25,10 @@ const create = () => {
 }
 async function open(wrapper: ReturnType<typeof create>) {
   await wrapper.get('[data-test="commission-exclusions-open"]').trigger('click')
+  await flushPromises()
+}
+async function openSettings(wrapper: ReturnType<typeof create>) {
+  await wrapper.get('[data-test="commission-settings-open"]').trigger('click')
   await flushPromises()
 }
 async function search(wrapper: ReturnType<typeof create>, value: string) {
@@ -67,6 +71,9 @@ describe('commission exclusion management', () => {
     expect(wrapper.get('[data-test="commission-exclusion-42"]').text()).toContain('42')
     expect(wrapper.get('[data-test="commission-exclusion-42"]').text()).toContain('2026')
     expect(wrapper.text()).toContain('adminWorkbench.commission.exclusionsHint')
+    expect(api.getSettings).not.toHaveBeenCalled()
+    expect(api.getAll).not.toHaveBeenCalled()
+    expect(api.listGrants).not.toHaveBeenCalled()
   })
 
   it('identifies excluded customers by labeled username and administrator notes', async () => {
@@ -244,9 +251,147 @@ describe('commission exclusion management', () => {
     expect(api.listUsers).not.toHaveBeenCalled()
   })
 
-  it('also notifies the panel after rate and assignment changes', async () => {
+  it('loads settings only when the wide neutral settings dialog is opened', async () => {
     const wrapper = create()
     await flushPromises()
+    expect(api.getSettings).not.toHaveBeenCalled()
+    expect(api.getAll).not.toHaveBeenCalled()
+    expect(api.listGrants).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-test="sub-admin-commission-rate"]').exists()).toBe(false)
+    expect(wrapper.findComponent({ name: 'BaseDialog' }).exists()).toBe(false)
+    await openSettings(wrapper)
+    expect(api.getSettings).toHaveBeenCalledTimes(1)
+    expect(api.getAll).toHaveBeenCalledTimes(1)
+    expect(api.listGrants).toHaveBeenCalledTimes(1)
+    const dialog = wrapper.getComponent({ name: 'BaseDialog' })
+    expect(dialog.props()).toMatchObject({ title: 'adminWorkbench.commission.settings', appearance: 'neutral', width: 'wide' })
+    expect((wrapper.get('[data-test="sub-admin-commission-rate"]').element as HTMLInputElement).value).toBe('0.12')
+    expect(api.listExclusions).not.toHaveBeenCalled()
+  })
+
+  it('cycles keyboard focus across the real settings dialog and returns it to the opener on close', async () => {
+    const wrapper = create(true)
+    const opener = wrapper.get('[data-test="commission-settings-open"]').element as HTMLButtonElement
+    opener.focus()
+    await openSettings(wrapper)
+    const dialog = document.body.querySelector<HTMLElement>('[role="dialog"]')!
+    expect(dialog).not.toBeNull()
+    const first = dialog.querySelector<HTMLButtonElement>('.modal-header button')!
+    const last = dialog.querySelector<HTMLButtonElement>('.modal-footer button')!
+    expect(document.activeElement).toBe(first)
+
+    const backwards = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true })
+    first.dispatchEvent(backwards)
+    expect(backwards.defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(last)
+    const forwards = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
+    last.dispatchEvent(forwards)
+    expect(forwards.defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(first)
+
+    const input = dialog.querySelector<HTMLInputElement>('[data-test="sub-admin-commission-rate"]')!
+    input.focus()
+    const middle = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
+    input.dispatchEvent(middle)
+    expect(middle.defaultPrevented).toBe(false)
+    last.click()
+    await flushPromises()
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull()
+    expect(document.activeElement).toBe(opener)
+    const closed = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
+    opener.dispatchEvent(closed)
+    expect(closed.defaultPrevented).toBe(false)
+  })
+
+  it('preserves unsaved rate and group choices when settings are reopened without refetching', async () => {
+    api.getAll.mockResolvedValueOnce([{ id: 9, name: 'Shared group' }])
+    const wrapper = create()
+    await openSettings(wrapper)
+    await wrapper.get('[data-test="sub-admin-commission-rate"]').setValue('0.27')
+    await wrapper.get('[data-test="sub-admin-commission-group-9"]').setValue(true)
+    await wrapper.get('[data-test="dialog-close"]').trigger('click')
+    expect(wrapper.find('[data-test="sub-admin-commission-rate"]').exists()).toBe(false)
+    await openSettings(wrapper)
+    expect((wrapper.get('[data-test="sub-admin-commission-rate"]').element as HTMLInputElement).value).toBe('0.27')
+    expect((wrapper.get('[data-test="sub-admin-commission-group-9"]').element as HTMLInputElement).checked).toBe(true)
+    expect(api.getSettings).toHaveBeenCalledTimes(1)
+    expect(api.getAll).toHaveBeenCalledTimes(1)
+    expect(api.listGrants).toHaveBeenCalledTimes(1)
+    await wrapper.get('[data-test="sub-admin-commission-save-grants"]').trigger('click')
+    await flushPromises()
+    expect(api.replaceGrants).toHaveBeenCalledWith({ group_ids: [9] })
+  })
+
+  it('waits for all initial settings reads and reuses an in-flight load after reopening', async () => {
+    const pending = deferred<unknown[]>()
+    api.getAll.mockReturnValueOnce(pending.promise)
+    const wrapper = create()
+    await openSettings(wrapper)
+    expect(wrapper.get('[data-test="sub-admin-commission-save-settings"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-test="sub-admin-commission-save-grants"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-test="sub-admin-commission-save-settings"]').trigger('click')
+    expect(api.updateSettings).not.toHaveBeenCalled()
+    await wrapper.get('[data-test="dialog-close"]').trigger('click')
+    await openSettings(wrapper)
+    expect(api.getSettings).toHaveBeenCalledTimes(1)
+    expect(api.getAll).toHaveBeenCalledTimes(1)
+    expect(api.listGrants).toHaveBeenCalledTimes(1)
+    pending.resolve([])
+    await flushPromises()
+    expect(wrapper.get('[data-test="sub-admin-commission-save-settings"]').attributes('disabled')).toBeUndefined()
+    expect(wrapper.get('[data-test="sub-admin-commission-save-grants"]').attributes('disabled')).toBeUndefined()
+  })
+
+  it('disables saving after a failed initial load and retries on the next open', async () => {
+    api.getSettings.mockRejectedValueOnce(new Error('offline'))
+    const wrapper = create()
+    await openSettings(wrapper)
+    expect(wrapper.get('[role="alert"]').text()).toBe('offline')
+    expect(wrapper.get('[data-test="sub-admin-commission-save-settings"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-test="sub-admin-commission-save-grants"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-test="sub-admin-commission-save-settings"]').trigger('click')
+    await wrapper.get('[data-test="sub-admin-commission-save-grants"]').trigger('click')
+    expect(api.updateSettings).not.toHaveBeenCalled()
+    expect(api.replaceGrants).not.toHaveBeenCalled()
+    await wrapper.get('[data-test="dialog-close"]').trigger('click')
+    await openSettings(wrapper)
+    expect(api.getSettings).toHaveBeenCalledTimes(2)
+    expect(api.getAll).toHaveBeenCalledTimes(2)
+    expect(api.listGrants).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    expect(wrapper.get('[data-test="sub-admin-commission-save-settings"]').attributes('disabled')).toBeUndefined()
+  })
+
+  it('keeps failed save drafts and only requests summary refresh after a successful save', async () => {
+    api.getAll.mockResolvedValueOnce([{ id: 9, name: 'Shared group' }])
+    api.updateSettings.mockRejectedValueOnce(new Error('offline'))
+    api.replaceGrants.mockRejectedValueOnce(new Error('offline'))
+    const wrapper = create()
+    await openSettings(wrapper)
+    await wrapper.get('[data-test="sub-admin-commission-rate"]').setValue('0.27')
+    await wrapper.get('[data-test="sub-admin-commission-group-9"]').setValue(true)
+    await wrapper.get('[data-test="sub-admin-commission-save-settings"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-test="sub-admin-commission-save-grants"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.emitted('changed')).toBeUndefined()
+    expect(showError).toHaveBeenCalledTimes(2)
+    await wrapper.get('[data-test="dialog-close"]').trigger('click')
+    await openSettings(wrapper)
+    expect((wrapper.get('[data-test="sub-admin-commission-rate"]').element as HTMLInputElement).value).toBe('0.27')
+    expect((wrapper.get('[data-test="sub-admin-commission-group-9"]').element as HTMLInputElement).checked).toBe(true)
+    await wrapper.get('[data-test="sub-admin-commission-save-settings"]').trigger('click')
+    await flushPromises()
+    expect(api.updateSettings).toHaveBeenLastCalledWith({ commission_rate: 0.27 })
+    expect(wrapper.emitted('changed')).toHaveLength(1)
+    expect(api.getSettings).toHaveBeenCalledTimes(1)
+    expect(api.getAll).toHaveBeenCalledTimes(1)
+    expect(api.listGrants).toHaveBeenCalledTimes(1)
+  })
+
+  it('also notifies the panel after rate and assignment changes', async () => {
+    const wrapper = create()
+    await openSettings(wrapper)
     await wrapper.get('[data-test="sub-admin-commission-save-settings"]').trigger('click')
     await flushPromises()
     await wrapper.get('[data-test="sub-admin-commission-save-grants"]').trigger('click')

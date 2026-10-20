@@ -1,6 +1,6 @@
 <template>
   <AppLayout>
-    <div class="admin-workbench-page admin-workbench-console min-w-0 space-y-5">
+    <div class="admin-workbench-page admin-workbench-console min-w-0 space-y-5 sm:space-y-6">
       <div data-test="workbench-navigation" class="workbench-navigation">
         <nav
           data-test="admin-workbench-tabs"
@@ -65,10 +65,13 @@
             class="workbench-tool min-w-0 p-4 sm:p-5"
             @submit.prevent="handleGenerate"
           >
-            <div class="mb-4">
+            <div class="workbench-tool-heading mb-5 pb-4">
               <h2 class="text-base font-semibold text-gray-950 dark:text-white">
                 {{ t('adminWorkbench.balanceTransfer.title') }}
               </h2>
+              <p class="mt-1 text-xs leading-5 text-gray-500 dark:text-dark-400">
+                {{ t('adminWorkbench.balanceTransfer.subtitle') }}
+              </p>
             </div>
 
             <div class="grid gap-4 sm:grid-cols-2">
@@ -185,7 +188,7 @@
             class="admin-workbench-generated-now workbench-tool flex min-h-0 min-w-0 flex-col overflow-hidden p-4 sm:p-5"
             :style="generatedNowPanelStyle"
           >
-            <div class="mb-4 flex shrink-0 flex-col items-stretch justify-between gap-3 min-[360px]:flex-row min-[360px]:items-center">
+            <div class="workbench-tool-heading mb-4 flex shrink-0 flex-col items-stretch justify-between gap-3 pb-4 min-[360px]:flex-row min-[360px]:items-center">
               <div class="min-w-0">
                 <h2 class="text-base font-semibold text-gray-950 dark:text-white">
                   {{ t('adminWorkbench.balanceTransfer.generatedNow') }}
@@ -193,7 +196,7 @@
               </div>
               <button
                 type="button"
-                class="btn btn-secondary w-full justify-center min-[360px]:w-auto"
+                class="btn btn-secondary min-h-11 w-full justify-center min-[360px]:w-auto"
                 :disabled="generatedResults.length === 0"
                 @click="copyGeneratedResults"
               >
@@ -202,7 +205,7 @@
               </button>
             </div>
 
-            <div v-if="generatedResults.length === 0" class="flex min-h-44 flex-1 items-center justify-center text-sm text-gray-500 dark:text-dark-400">
+            <div v-if="generatedResults.length === 0" class="flex min-h-28 flex-1 items-center justify-center py-6 text-sm text-gray-500 dark:text-dark-400 lg:min-h-44">
               {{ t('adminWorkbench.balanceTransfer.noGeneratedNow') }}
             </div>
             <div v-else data-test="workbench-generated-results" class="admin-workbench-generated-results max-h-72 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1 lg:max-h-none">
@@ -236,6 +239,9 @@
               <h2 class="text-base font-semibold text-gray-950 dark:text-white">
                 {{ t('adminWorkbench.balanceTransfer.generatedList') }}
               </h2>
+              <p class="mt-1 text-xs leading-5 text-gray-500 dark:text-dark-400">
+                {{ t('adminWorkbench.balanceTransfer.generatedListHint') }}
+              </p>
               <p v-if="selectedGeneratedCodeIds.length > 0" class="mt-1 text-xs text-gray-500 dark:text-dark-400">
                 {{ t('adminWorkbench.balanceTransfer.selectedCount', { count: selectedGeneratedCodeIds.length }) }}
               </p>
@@ -243,7 +249,7 @@
             <div class="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
               <label
                 v-if="deletableGeneratedCodes.length > 0"
-                class="inline-flex h-10 min-w-0 items-center justify-center gap-2 rounded-lg border border-gray-200 px-3 text-sm text-gray-700 dark:border-dark-700 dark:text-dark-300"
+                class="inline-flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-lg border border-gray-200 px-3 text-sm text-gray-700 dark:border-dark-700 dark:text-dark-300"
               >
                 <input
                   data-test="select-all-generated-codes"
@@ -761,14 +767,20 @@ onBeforeUnmount(() => {
 }
 
 .admin-workbench-console .workbench-tab {
+  position: relative;
   border-bottom: 2px solid transparent;
+  border-radius: 6px 6px 0 0;
   color: var(--workspace-muted);
   transition: color 150ms ease, background-color 150ms ease;
 }
 .admin-workbench-console .workbench-tab:hover { background: var(--workspace-hover); }
 .admin-workbench-console .workbench-tab[aria-selected='true'] {
   border-bottom-color: rgb(var(--brand-rgb));
+  background: rgb(var(--brand-rgb) / 0.045);
   color: rgb(var(--brand-rgb));
+}
+.admin-workbench-console .workbench-tool-heading {
+  border-bottom: 1px solid var(--workspace-divider);
 }
 .admin-workbench-console :is(.workbench-tool, .workbench-history-record) {
   border: 1px solid var(--workspace-rule);

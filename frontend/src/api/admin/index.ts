@@ -131,6 +131,8 @@ export type {
   SubAdminCommissionGrant,
   ReplaceSubAdminCommissionGrantsRequest,
   SubAdminCommissionCalendarDay,
+  SubAdminCommissionMonthlyGroup,
+  SubAdminCommissionMonthlyReport,
   SubAdminCommissionDayGroup,
   SubAdminCommissionExclusion,
   CommissionExclusionsQuery,

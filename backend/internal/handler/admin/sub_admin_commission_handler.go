@@ -23,6 +23,7 @@ type subAdminCommissionService interface {
 	ListAllGrants(ctx context.Context) ([]service.SubAdminCommissionGrant, error)
 	ReplaceGrants(ctx context.Context, input service.ReplaceSubAdminCommissionGrantsInput) ([]service.SubAdminCommissionGrant, error)
 	ListWorkbenchGrants(ctx context.Context, subAdminID int64) ([]service.SubAdminCommissionGrant, error)
+	ListMonthlyReport(ctx context.Context, subAdminID int64, month string, now time.Time) (service.SubAdminCommissionMonthlyReport, error)
 	ListCalendar(ctx context.Context, subAdminID int64, month string, now time.Time) ([]service.SubAdminCommissionCalendarDay, error)
 	ListDayGroups(ctx context.Context, subAdminID int64, date string) ([]service.SubAdminCommissionDayGroup, error)
 	ListDayGroupLogs(ctx context.Context, subAdminID, groupID int64, date string, params pagination.PaginationParams) ([]service.SubAdminCommissionUsageLog, pagination.PaginationResult, error)
@@ -66,6 +67,17 @@ type subAdminCommissionCalendarDayResponse struct {
 	Enabled          bool    `json:"enabled"`
 	ActualCost       float64 `json:"actual_cost"`
 	CommissionAmount float64 `json:"commission_amount"`
+}
+
+type subAdminCommissionMonthlyReportResponse struct {
+	Days   []subAdminCommissionCalendarDayResponse  `json:"days"`
+	Groups []subAdminCommissionMonthlyGroupResponse `json:"groups"`
+}
+
+type subAdminCommissionMonthlyGroupResponse struct {
+	GroupID   int64                                   `json:"group_id"`
+	GroupName string                                  `json:"group_name"`
+	Days      []subAdminCommissionCalendarDayResponse `json:"days"`
 }
 
 type subAdminCommissionDayGroupResponse struct {
@@ -205,6 +217,35 @@ func (h *SubAdminCommissionHandler) GetWorkbenchCalendar(c *gin.Context) {
 		return
 	}
 	response.Success(c, subAdminCommissionCalendarDaysResponse(days))
+}
+
+func (h *SubAdminCommissionHandler) GetWorkbenchMonthlyReport(c *gin.Context) {
+	if !h.ensureService(c) {
+		return
+	}
+	subject, ok := requireSubAdminCommissionSubject(c)
+	if !ok {
+		return
+	}
+	month := strings.TrimSpace(c.Query("month"))
+	if month != "" {
+		if _, err := time.Parse("2006-01", month); err != nil {
+			response.BadRequest(c, "Invalid month")
+			return
+		}
+	}
+	report, err := h.service.ListMonthlyReport(c.Request.Context(), subject.UserID, month, time.Now())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	groups := make([]subAdminCommissionMonthlyGroupResponse, 0, len(report.Groups))
+	for _, group := range report.Groups {
+		groups = append(groups, subAdminCommissionMonthlyGroupResponse{
+			GroupID: group.GroupID, GroupName: group.GroupName, Days: subAdminCommissionCalendarDaysResponse(group.Days),
+		})
+	}
+	response.Success(c, subAdminCommissionMonthlyReportResponse{Days: subAdminCommissionCalendarDaysResponse(report.Days), Groups: groups})
 }
 
 func (h *SubAdminCommissionHandler) GetWorkbenchDayGroups(c *gin.Context) {

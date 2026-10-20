@@ -247,6 +247,7 @@ func registerAdminWorkbenchRoutes(workbench *gin.RouterGroup, h *handler.Handler
 		{
 			commission.GET("/grants", h.Admin.SubAdminCommission.GetWorkbenchGrants)
 			commission.GET("/calendar", h.Admin.SubAdminCommission.GetWorkbenchCalendar)
+			commission.GET("/monthly-report", h.Admin.SubAdminCommission.GetWorkbenchMonthlyReport)
 			commission.GET("/days/:date/groups", h.Admin.SubAdminCommission.GetWorkbenchDayGroups)
 		}
 	}

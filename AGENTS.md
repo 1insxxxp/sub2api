@@ -636,6 +636,47 @@ x-api-key: admin-xxx
 
 ### 1. 账号管理
 
+#### 模型首字超时运行设置（2026-10-21）
+
+```
+GET /api/v1/admin/settings/model-first-output-timeout
+PUT /api/v1/admin/settings/model-first-output-timeout
+```
+
+PUT 接收完整设置对象：`enabled`、`default`、`profiles`，以及可选的
+`platforms`、`models`。策略字段为 `enabled`、`target_seconds`、
+`switch_seconds`、`hard_cap_seconds`，单位均为秒；满足
+`0 < target_seconds <= switch_seconds <= hard_cap_seconds <= 900`。
+更新前先 GET 并备份，合并需要新增的覆盖项，保留其他设置。
+
+`models` 按入口实际模型名精确匹配，不支持通配符。带前缀的模型别名需逐条配置；
+账号的模型映射不会自动补齐入口策略。运行设置保存在共享数据库，两个入口的
+新请求立即读取，在途请求保持原策略。Gemini 文本流式请求启用该策略时，
+首字前的可换号错误优先切换其他账号；该时间限制不限制出字后的输出长度。
+
+```bash
+curl -fsS "${BASE}/api/v1/admin/settings/model-first-output-timeout" \
+  -H "x-api-key: ${KEY}"
+# updated-first-output.json 必须基于上述 GET 结果合并生成，不得清空其他覆盖项。
+curl -fsS -X PUT "${BASE}/api/v1/admin/settings/model-first-output-timeout" \
+  -H "x-api-key: ${KEY}" -H "Content-Type: application/json" \
+  --data-binary @updated-first-output.json
+```
+
+明确无渠道的 Gemini 503 可沿用下述账号更新接口，读取现有 `credentials` 后
+合并 `temp_unschedulable_enabled: true` 及 `temp_unschedulable_rules` 条目：
+`{"error_code":503,"keywords":["No available channel"],"duration_minutes":1,"description":"上游模型无可用渠道","scope":"model"}`。
+只冷却失败模型；不要改为账号级暂停。追加前核对已有规则及
+`custom_error_codes_enabled`，避免覆盖原策略。账号 PUT 中的非敏感 credentials
+采用替换语义，必须保留原有模型映射、上游地址等字段；敏感字段不得写入文档。
+
+2026-10-21 已通过该接口给 `gemini-4-argon` 和 12 个 `按量vet/` 文本别名补齐
+覆盖项：Flash 单账号 30 秒、Pro/Argon 60 秒，首字前总预算 300 秒；原有默认和
+profile 保持不变。账号 5505、5853、5890、5913、5926 已追加上述一分钟模型冷却规则。
+两个入口均已回读核对；真实新请求已验证故障账号一次 503 后直接换号。
+备份及应用记录位于服务器 `/opt/backups/sub2api-gemini-latency-20261021`，
+该目录仅供运维使用，不应提交其中内容。此变更为共享运行设置，无需重建应用镜像。
+
 #### 1.1 获取账号列表
 
 ```
@@ -1271,6 +1312,23 @@ curl -s -X DELETE "${BASE}/api/v1/admin/sub-admin-commissions/exclusions/123" \
 生效时间由数据库生成，按用量记录 `created_at` 匹配 `[加入时间, 移除时间)`。加入前的收益不变，移除后新用量恢复计入，之前排除期间的收益不会恢复计入。历史区间保留用于统计，不能直接删除区间行。历史分组日桶的 `commission_excluded_cost` 仅供收益计算扣除，原 `actual_cost` 保持全部真实消耗。
 
 收益页只展示月份/日/分组汇总。原 `/api/v1/admin/workbench/commission/days/:date/groups/:group_id/logs` 流水接口已移除；正常管理员用量管理接口保持不变。
+
+#### 收益月报与分组趋势
+
+```
+GET /api/v1/admin/workbench/commission/monthly-report?month=2026-10
+```
+
+`month` 为可选的 `YYYY-MM`；默认当前月份。主管理员和二级管理员均可访问，
+沿用收益工作台的共享分组授权范围，只返回获授权分组的金额汇总，不返回客户身份、
+备注或排除名单。响应 `data.days` 是总计逐日数据，`data.groups` 包含
+`group_id`、`group_name`、`days`；每日字段为 `date`、`enabled`、`actual_cost`、
+`commission_amount`。一次请求供概览、分组趋势及日历复用，不读取完整请求流水。
+
+```bash
+curl -fsS "${BASE}/api/v1/admin/workbench/commission/monthly-report?month=2026-10" \
+  -H "x-api-key: ${KEY}"
+```
 
 **部署 249 迁移后的兼容约束**：启用排除名单前，必须停止旧镜像的后台分组日汇总任务。旧代码重建日桶时不写 `commission_excluded_cost`，可能把排除金额重置为 0。不能将旧应用容器长期运行作为静态资源回退；应单独保留旧静态文件，或先停止旧应用后台任务。应用回退也不能继续使用忽略此字段的旧聚合器。
 

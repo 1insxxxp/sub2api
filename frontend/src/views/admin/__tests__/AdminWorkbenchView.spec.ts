@@ -14,7 +14,7 @@ const {
   updateCommissionSettings,
   listCommissionGrants,
   replaceCommissionGrants,
-  getWorkbenchCommissionCalendar,
+  getWorkbenchCommissionMonthlyReport,
   getWorkbenchCommissionDayGroups,
   getWorkbenchCommissionDayGroupLogs,
   getWorkbenchCommissionGrants,
@@ -42,7 +42,7 @@ const {
   updateCommissionSettings: vi.fn(),
   listCommissionGrants: vi.fn(),
   replaceCommissionGrants: vi.fn(),
-  getWorkbenchCommissionCalendar: vi.fn(),
+  getWorkbenchCommissionMonthlyReport: vi.fn(),
   getWorkbenchCommissionDayGroups: vi.fn(),
   getWorkbenchCommissionDayGroupLogs: vi.fn(),
   getWorkbenchCommissionGrants: vi.fn(),
@@ -70,7 +70,7 @@ vi.mock('@/api/admin', () => ({
       updateSettings: updateCommissionSettings,
       listGrants: listCommissionGrants,
       replaceGrants: replaceCommissionGrants,
-      getWorkbenchCalendar: getWorkbenchCommissionCalendar,
+      getWorkbenchMonthlyReport: getWorkbenchCommissionMonthlyReport,
       getWorkbenchDayGroups: getWorkbenchCommissionDayGroups,
       getWorkbenchDayGroupLogs: getWorkbenchCommissionDayGroupLogs,
       getWorkbenchGrants: getWorkbenchCommissionGrants
@@ -130,6 +130,7 @@ const mountWorkbench = () => {
         AppLayout: { template: '<div><slot /></div>' },
         Icon: true,
         Transition: true,
+        Teleport: true,
         Pagination: true,
         AdminAffiliateLeaderboardPanel: {
           template: '<div data-test="affiliate-leaderboard-panel-stub" />'
@@ -191,7 +192,7 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     updateCommissionSettings.mockReset()
     listCommissionGrants.mockReset()
     replaceCommissionGrants.mockReset()
-    getWorkbenchCommissionCalendar.mockReset()
+    getWorkbenchCommissionMonthlyReport.mockReset()
     getWorkbenchCommissionDayGroups.mockReset()
     getWorkbenchCommissionDayGroupLogs.mockReset()
     getWorkbenchCommissionGrants.mockReset()
@@ -219,14 +220,14 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     ])
     replaceCommissionGrants.mockResolvedValue([])
     getWorkbenchCommissionGrants.mockResolvedValue([])
-    getWorkbenchCommissionCalendar.mockResolvedValue([
+    getWorkbenchCommissionMonthlyReport.mockResolvedValue({ days: [
       {
         date: '2026-08-22',
         enabled: true,
         actual_cost: 12,
         commission_amount: 1.44
       }
-    ])
+    ], groups: [] })
     getWorkbenchCommissionDayGroups.mockResolvedValue([
       {
         group_id: 3,
@@ -314,6 +315,13 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     const admin = mountWorkbench()
     await flushPromises()
 
+    expect(getCommissionSettings).not.toHaveBeenCalled()
+    expect(getAllGroups).not.toHaveBeenCalled()
+    expect(listCommissionGrants).not.toHaveBeenCalled()
+    expect(admin.find('[data-test="commission-rate-controls"]').exists()).toBe(false)
+    await admin.get('[data-test="commission-settings-open"]').trigger('click')
+    await flushPromises()
+
     const controls = admin.get('[data-test="commission-rate-controls"]')
     expect(controls.get('[data-test="sub-admin-commission-rate"]').element).toBeTruthy()
     await controls.get('[data-test="sub-admin-commission-rate"]').setValue('0.2')
@@ -351,8 +359,8 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     expect(wrapper.find('[data-test="workbench-balance-transfer-panel"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="sub-admin-commission-panel"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="affiliate-leaderboard-panel-stub"]').exists()).toBe(false)
-    expect(getWorkbenchCommissionCalendar).toHaveBeenCalled()
-    const initialCommissionCalendarCalls = getWorkbenchCommissionCalendar.mock.calls.length
+    expect(getWorkbenchCommissionMonthlyReport).toHaveBeenCalled()
+    const initialCommissionCalendarCalls = getWorkbenchCommissionMonthlyReport.mock.calls.length
 
     await balanceTab.trigger('click')
     await flushPromises()
@@ -372,7 +380,7 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     expect(wrapper.find('[data-test="workbench-balance-transfer-panel"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="sub-admin-commission-panel"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="affiliate-leaderboard-panel-stub"]').exists()).toBe(true)
-    expect(getWorkbenchCommissionCalendar).toHaveBeenCalledTimes(initialCommissionCalendarCalls)
+    expect(getWorkbenchCommissionMonthlyReport).toHaveBeenCalledTimes(initialCommissionCalendarCalls)
 
     await commissionTab.trigger('click')
     await flushPromises()
@@ -381,7 +389,7 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     expect(commissionTab.attributes('aria-selected')).toBe('true')
     expect(wrapper.find('[data-test="workbench-balance-transfer-panel"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="sub-admin-commission-panel"]').exists()).toBe(true)
-    expect(getWorkbenchCommissionCalendar).toHaveBeenCalledTimes(initialCommissionCalendarCalls + 1)
+    expect(getWorkbenchCommissionMonthlyReport).toHaveBeenCalledTimes(initialCommissionCalendarCalls + 1)
   })
 
   it('supports standard keyboard navigation between workbench tabs', async () => {
@@ -689,6 +697,12 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     const wrapper = mountWorkbench()
     await openCommissionTab(wrapper)
 
+    expect(getCommissionSettings).not.toHaveBeenCalled()
+    expect(getAllGroups).not.toHaveBeenCalled()
+    expect(listCommissionGrants).not.toHaveBeenCalled()
+    await wrapper.get('[data-test="commission-settings-open"]').trigger('click')
+    await flushPromises()
+
     expect(getCommissionSettings).toHaveBeenCalled()
     expect(getAllGroups).toHaveBeenCalled()
     expect(listCommissionGrants).toHaveBeenCalled()
@@ -715,7 +729,7 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     const wrapper = mountWorkbench()
     await openCommissionTab(wrapper)
 
-    expect(getWorkbenchCommissionCalendar).toHaveBeenCalledWith({ month: '2026-09' })
+    expect(getWorkbenchCommissionMonthlyReport).toHaveBeenCalledWith({ month: '2026-09' })
   })
 
   it('renders commission calendar for sub-admins and loads day details', async () => {
@@ -730,7 +744,7 @@ describe('AdminWorkbenchView balance transfer codes', () => {
     const wrapper = mountWorkbench()
     await openCommissionTab(wrapper)
 
-    expect(getWorkbenchCommissionCalendar).toHaveBeenCalled()
+    expect(getWorkbenchCommissionMonthlyReport).toHaveBeenCalled()
     expect(wrapper.text()).toContain('$12.00')
 
     await wrapper.get('[data-test="commission-calendar-day-2026-08-22"]').trigger('click')
@@ -751,7 +765,7 @@ describe('AdminWorkbenchView balance transfer codes', () => {
       value: 390,
       configurable: true
     })
-    getWorkbenchCommissionCalendar.mockResolvedValueOnce([
+    getWorkbenchCommissionMonthlyReport.mockResolvedValueOnce({ days: [
       {
         date: '2026-08-22',
         enabled: true,
@@ -764,7 +778,7 @@ describe('AdminWorkbenchView balance transfer codes', () => {
         actual_cost: 12.34,
         commission_amount: 1.23
       }
-    ])
+    ], groups: [] })
 
     const wrapper = mountWorkbench()
     await openCommissionTab(wrapper)
@@ -806,14 +820,14 @@ describe('AdminWorkbenchView balance transfer codes', () => {
       value: 390,
       configurable: true
     })
-    getWorkbenchCommissionCalendar.mockResolvedValueOnce([
+    getWorkbenchCommissionMonthlyReport.mockResolvedValueOnce({ days: [
       {
         date: '2026-08-22',
         enabled: true,
         actual_cost: 3828.41,
         commission_amount: 459.4092
       }
-    ])
+    ], groups: [] })
 
     const wrapper = mountWorkbench()
     await openCommissionTab(wrapper)

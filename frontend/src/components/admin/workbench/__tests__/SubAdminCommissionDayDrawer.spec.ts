@@ -19,6 +19,20 @@ function deferred<T>() {
 }
 afterEach(() => { wrappers.splice(0).forEach((wrapper) => wrapper.unmount()); vi.clearAllMocks() })
 describe('commission day summary', () => {
+  it('limits date details to the selected group without loading request logs', async () => {
+    getWorkbenchDayGroups.mockResolvedValueOnce([group(3), group(4)])
+    const wrapper = create()
+    await wrapper.setProps({ groupId: 3 })
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="commission-day-group-3"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="commission-day-group-4"]').exists()).toBe(false)
+    await wrapper.setProps({ groupId: 4 })
+    expect(wrapper.find('[data-test="commission-day-group-3"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="commission-day-group-4"]').exists()).toBe(true)
+    expect(getWorkbenchDayGroups).toHaveBeenCalledTimes(1)
+    expect(getWorkbenchDayGroupLogs).not.toHaveBeenCalled()
+  })
   it('keeps group totals without request-level controls or logs', async () => {
     getWorkbenchDayGroups.mockResolvedValueOnce([group(3)])
     const wrapper = create()

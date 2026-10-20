@@ -36,6 +36,17 @@ type SubAdminCommissionCalendarDay struct {
 	CommissionAmount float64
 }
 
+type SubAdminCommissionMonthlyReport struct {
+	Days   []SubAdminCommissionCalendarDay
+	Groups []SubAdminCommissionMonthlyGroup
+}
+
+type SubAdminCommissionMonthlyGroup struct {
+	GroupID   int64
+	GroupName string
+	Days      []SubAdminCommissionCalendarDay
+}
+
 type SubAdminCommissionDayGroup struct {
 	GroupID          int64
 	GroupName        string
@@ -86,6 +97,7 @@ type SubAdminCommissionRepository interface {
 	ListAllGrants(ctx context.Context) ([]SubAdminCommissionGrant, error)
 	ListGrantsForSubAdmin(ctx context.Context, subAdminID int64) ([]SubAdminCommissionGrant, error)
 	ReplaceGrants(ctx context.Context, input ReplaceSubAdminCommissionGrantsInput, grantedDate string) ([]SubAdminCommissionGrant, error)
+	ListMonthlyReport(ctx context.Context, subAdminID int64, month string, commissionRate float64, now time.Time) (SubAdminCommissionMonthlyReport, error)
 	ListCalendar(ctx context.Context, subAdminID int64, month string, commissionRate float64, now time.Time) ([]SubAdminCommissionCalendarDay, error)
 	ListDayGroups(ctx context.Context, subAdminID int64, date string, commissionRate float64) ([]SubAdminCommissionDayGroup, error)
 	ListDayGroupLogs(ctx context.Context, subAdminID, groupID int64, date string, params pagination.PaginationParams) ([]SubAdminCommissionUsageLog, pagination.PaginationResult, error)
@@ -193,6 +205,17 @@ func (s *SubAdminCommissionService) ListCalendar(ctx context.Context, subAdminID
 	}
 	rate, _ := s.GetSettings(ctx)
 	return s.repo.ListCalendar(ctx, subAdminID, month, rate, now)
+}
+
+func (s *SubAdminCommissionService) ListMonthlyReport(ctx context.Context, subAdminID int64, month string, now time.Time) (SubAdminCommissionMonthlyReport, error) {
+	if s == nil || s.repo == nil {
+		return SubAdminCommissionMonthlyReport{}, ErrSubAdminCommissionRepoMissing
+	}
+	if now.IsZero() {
+		now = time.Now()
+	}
+	rate, _ := s.GetSettings(ctx)
+	return s.repo.ListMonthlyReport(ctx, subAdminID, month, rate, now)
 }
 
 func (s *SubAdminCommissionService) ListDayGroups(ctx context.Context, subAdminID int64, date string) ([]SubAdminCommissionDayGroup, error) {

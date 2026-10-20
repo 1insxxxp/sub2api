@@ -76,6 +76,12 @@ describe.each([
     expect(getMessage(messages, 'adminWorkbench.commission.requestLogs')).toBeUndefined()
   })
 
+  it('resolves the group statistics, scope, and metric controls', () => {
+    for (const key of ['allGroups', 'backToAllGroups', 'groupStats', 'groupStatsHint', 'groupName', 'searchGroups', 'earningsShare', 'monthTrend', 'viewGroup', 'selectedGroup', 'groupsEmpty', 'groupsNoMatch', 'groupsUnavailable', 'groupsPagination', 'previousPage', 'nextPage', 'chartMetric', 'dailyConsumptionTitle']) {
+      expect(getMessage(messages, `adminWorkbench.commission.${key}`)).toEqual(expect.any(String))
+    }
+  })
+
   it('does not retain a separate balance-spend chart series label', () => {
     expect(getMessage(messages, 'adminWorkbench.commission.dailyChartActualCost')).toBeUndefined()
   })

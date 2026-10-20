@@ -58,6 +58,20 @@ describe('admin sub-admin commission api', () => {
     expect(subAdminCommissionAPI).not.toHaveProperty('getWorkbenchDayGroupLogs')
   })
 
+  it('loads the month and every group trend in one read-only request', async () => {
+    const day = { date: '2026-10-18', enabled: true, actual_cost: 12, commission_amount: 1.2 }
+    const report = { days: [day], groups: [{ group_id: 3, group_name: 'Claude', days: [day] }] }
+    get.mockResolvedValueOnce({ data: report })
+
+    expect(await subAdminCommissionAPI.getWorkbenchMonthlyReport({ month: '2026-10' })).toEqual(report)
+    expect(get).toHaveBeenCalledTimes(1)
+    expect(get).toHaveBeenCalledWith('/admin/workbench/commission/monthly-report', {
+      params: { month: '2026-10' },
+    })
+    expect(post).not.toHaveBeenCalled()
+    expect(put).not.toHaveBeenCalled()
+  })
+
   it('lists exclusions with pagination and preserves the server effective time', async () => {
     const result = { items: [{ id: 1, user_id: 42, user_email: 'client@example.com', username: 'Client', started_at: '2026-10-18T10:00:00Z' }], total: 21, page: 2, page_size: 10, pages: 3 }
     get.mockResolvedValueOnce({ data: result })

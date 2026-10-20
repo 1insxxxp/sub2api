@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -37,5 +38,33 @@ func TestSubAdminCommissionRoutesHideLogsAndProtectExclusions(t *testing.T) {
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
 		require.Equal(t, http.StatusNotFound, rec.Code, path)
+	}
+}
+
+func TestSubAdminCommissionMonthlyReportRouteUsesWorkbenchAuth(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, allowed := range []bool{false, true} {
+		t.Run(fmt.Sprintf("workbench_allowed_%t", allowed), func(t *testing.T) {
+			router := gin.New()
+			h := &handler.Handlers{Admin: &handler.AdminHandlers{SubAdminCommission: &adminhandler.SubAdminCommissionHandler{}}}
+			adminAuth := middleware.AdminAuthMiddleware(func(c *gin.Context) { c.AbortWithStatus(http.StatusForbidden) })
+			workbenchAuth := middleware.AdminWorkbenchAuthMiddleware(func(c *gin.Context) {
+				if !allowed {
+					c.AbortWithStatus(http.StatusUnauthorized)
+					return
+				}
+				c.Next()
+			})
+			audit := middleware.AuditLogMiddleware(func(c *gin.Context) { c.Next() })
+			stepUp := middleware.StepUpAuthMiddleware(func(c *gin.Context) { c.Next() })
+			RegisterAdminRoutes(router.Group("/api/v1"), h, adminAuth, workbenchAuth, audit, stepUp, nil, &middleware.PanelRateLimiter{})
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/admin/workbench/commission/monthly-report?month=2026-10", nil))
+			if allowed {
+				require.Equal(t, http.StatusServiceUnavailable, rec.Code)
+			} else {
+				require.Equal(t, http.StatusUnauthorized, rec.Code)
+			}
+		})
 	}
 }
