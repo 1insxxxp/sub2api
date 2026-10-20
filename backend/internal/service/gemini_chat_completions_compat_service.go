@@ -289,6 +289,7 @@ func (s *GeminiMessagesCompatService) forwardClaudeBodyAsChatCompletions(
 	var firstTokenMs *int
 	var streamOutcome *ResponseOutcome
 	var clientDisconnect bool
+	var streamFinished bool
 	var forwardErr error
 	if clientStream {
 		streamRes, streamErr := s.handleChatCompletionsStreamingResponseFromGemini(requestContext, c, resp, startTime, originalModel, account, account.Type == AccountTypeOAuth, includeUsage, firstOutputGuard, firstOutputPolicy)
@@ -296,6 +297,7 @@ func (s *GeminiMessagesCompatService) forwardClaudeBodyAsChatCompletions(
 			usage = streamRes.usage
 			firstTokenMs = streamRes.firstTokenMs
 			clientDisconnect = streamRes.clientDisconnect
+			streamFinished = streamRes.finished
 			streamOutcome = &streamRes.outcome
 		}
 		if streamErr != nil {
@@ -340,6 +342,10 @@ func (s *GeminiMessagesCompatService) forwardClaudeBodyAsChatCompletions(
 	imageSize := normalizeOpenAIImageSizeTier(imageInputSize)
 	if isImageGenerationModel(originalModel) {
 		imageCount = 1
+	}
+	// Do not apply the image-model fallback to an unfinished disconnected stream.
+	if clientDisconnect && !streamFinished {
+		imageCount = observedGeminiImageOutputs(c)
 	}
 
 	return &ForwardResult{
@@ -635,19 +641,23 @@ func (s *GeminiMessagesCompatService) handleChatCompletionsStreamingResponseFrom
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	imageCounter := beginGeminiImageOutputObservation(c)
 	_, outcomeCollector := EnsureResponseOutcomeCollector(ctx, c, resp.StatusCode, resp.StatusCode)
 	clientDisconnected := false
+	finishReason := ""
 	defer func() {
 		if clientDisconnected {
 			outcomeCollector.MarkStreamError(context.Canceled, true)
 		} else if err != nil && !outcomeCollector.Snapshot().StreamCompleted {
-			clientCanceled := errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
+			clientCanceled := errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) ||
+				(c.Request != nil && c.Request.Context().Err() != nil)
 			outcomeCollector.MarkStreamError(err, clientCanceled)
 		} else if err == nil && !outcomeCollector.Snapshot().StreamCompleted {
 			outcomeCollector.MarkStreamError(errors.New("missing terminal event"), false)
 		}
 		if result != nil {
 			result.clientDisconnect = clientDisconnected
+			result.finished = finishReason != ""
 			result.outcome = outcomeCollector.Snapshot()
 		}
 	}()
@@ -748,7 +758,6 @@ func (s *GeminiMessagesCompatService) handleChatCompletionsStreamingResponseFrom
 		return false
 	}
 
-	finishReason := ""
 	sawToolUse := false
 	nextBlockIndex := 0
 	openBlockIndex := -1
@@ -899,8 +908,13 @@ func (s *GeminiMessagesCompatService) handleChatCompletionsStreamingResponseFrom
 								mimeType, _ := inlineData["mimeType"].(string)
 								data, _ := inlineData["data"].(string)
 								if isGeminiInlineImageMIMEType(mimeType) && isValidBase64(data) {
+									writtenBefore := c.Writer.Size()
 									if emitVisibleText(fmt.Sprintf("![image](data:%s;base64,%s)", mimeType, data)) {
 										return &geminiStreamResult{usage: &usage, firstTokenMs: firstTokenMs}, nil
+									}
+									if !clientDisconnected && c.Writer.Size() > writtenBefore {
+										// Preserve Chat's existing one-image billing, counting only delivered output.
+										imageCounter.count = 1
 									}
 									continue
 								}
@@ -986,6 +1000,15 @@ func (s *GeminiMessagesCompatService) handleChatCompletionsStreamingResponseFrom
 				_ = resp.Body.Close()
 				return nil, newModelFirstOutputTimeoutFailoverError(c, account, originalModel, firstOutputPolicy, resp.Header)
 			}
+			if geminiStreamAbortedWithBillableOutput(c, err, &usage) {
+				logger.LegacyPrintf("service.gemini_messages_compat", "[GeminiAPI] Client disconnected during chat completions stream, billing collected usage: %v", err)
+				clientDisconnected = true
+				return &geminiStreamResult{usage: &usage, firstTokenMs: firstTokenMs}, nil
+			}
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) ||
+				(c.Request != nil && c.Request.Context().Err() != nil) {
+				return nil, fmt.Errorf("stream read error: %w", err)
+			}
 			streamReadErr = err
 			break
 		}
@@ -993,6 +1016,9 @@ func (s *GeminiMessagesCompatService) handleChatCompletionsStreamingResponseFrom
 	if firstOutputGuard != nil && firstOutputGuard.TimedOut() && !sawVisibleOutput {
 		_ = resp.Body.Close()
 		return nil, newModelFirstOutputTimeoutFailoverError(c, account, originalModel, firstOutputPolicy, resp.Header)
+	}
+	if clientDisconnected {
+		return &geminiStreamResult{usage: &usage, firstTokenMs: firstTokenMs}, nil
 	}
 
 	if strings.TrimSpace(finishReason) == "" {

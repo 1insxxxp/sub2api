@@ -1179,6 +1179,8 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 
 	var usage *ClaudeUsage
 	var firstTokenMs *int
+	clientDisconnect := false
+	streamFinished := false
 	if req.Stream {
 		streamRes, err := s.handleStreamingResponseWithContext(requestContext, c, resp, startTime, originalModel, account, firstOutputGuard, firstOutputPolicy)
 		if err != nil {
@@ -1186,6 +1188,8 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 		}
 		usage = streamRes.usage
 		firstTokenMs = streamRes.firstTokenMs
+		clientDisconnect = streamRes.clientDisconnect
+		streamFinished = streamRes.finished
 		if firstTokenMs != nil {
 			recordGeminiFirstOutput(account.ID, originalModel, time.Duration(*firstTokenMs)*time.Millisecond, false)
 		}
@@ -1221,6 +1225,10 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 	imageInputSize := s.extractImageInputSize(body)
 	imageSize := normalizeOpenAIImageSizeTier(imageInputSize)
 	imageCount := resolveGeminiImageCount(c, originalModel, mappedModel)
+	// Claude-compatible streams do not deliver Gemini image parts.
+	if clientDisconnect && !streamFinished {
+		imageCount = 0
+	}
 
 	return &ForwardResult{
 		RequestID:                     requestID,
@@ -1233,6 +1241,7 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 		Stream:                        req.Stream,
 		Duration:                      time.Since(startTime),
 		FirstTokenMs:                  firstTokenMs,
+		ClientDisconnect:              clientDisconnect,
 		ReasoningEffort:               extractGeminiReasoningEffortFromBody(geminiReq),
 		ImageCount:                    imageCount,
 		ImageSize:                     imageSize,
@@ -1742,6 +1751,8 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 
 	var usage *ClaudeUsage
 	var firstTokenMs *int
+	clientDisconnect := false
+	streamFinished := false
 	_, outcomeCollector := EnsureResponseOutcomeCollector(ctx, c, http.StatusOK, resp.StatusCode)
 
 	if stream {
@@ -1751,6 +1762,8 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 		}
 		usage = streamRes.usage
 		firstTokenMs = streamRes.firstTokenMs
+		clientDisconnect = streamRes.clientDisconnect
+		streamFinished = streamRes.finished
 		if firstTokenMs != nil {
 			recordGeminiFirstOutput(account.ID, originalModel, time.Duration(*firstTokenMs)*time.Millisecond, false)
 		}
@@ -1793,6 +1806,10 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 	imageInputSize := s.extractImageInputSize(body)
 	imageSize := normalizeOpenAIImageSizeTier(imageInputSize)
 	imageCount := resolveGeminiImageCount(c, originalModel, mappedModel)
+	// An unfinished disconnected native stream bills only observed images.
+	if clientDisconnect && !streamFinished {
+		imageCount = observedGeminiImageOutputs(c)
+	}
 
 	return &ForwardResult{
 		RequestID:                     requestID,
@@ -1806,6 +1823,7 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 		ReasoningEffort:               extractGeminiReasoningEffortFromBody(body),
 		Duration:                      time.Since(startTime),
 		FirstTokenMs:                  firstTokenMs,
+		ClientDisconnect:              clientDisconnect,
 		ImageCount:                    imageCount,
 		ImageSize:                     imageSize,
 		ImageInputSize:                imageInputSize,
@@ -2319,6 +2337,7 @@ type geminiStreamResult struct {
 	usage            *ClaudeUsage
 	firstTokenMs     *int
 	clientDisconnect bool
+	finished         bool // Whether an upstream finishReason arrived before disconnect.
 	outcome          ResponseOutcome
 }
 
@@ -2378,7 +2397,9 @@ func (s *GeminiMessagesCompatService) handleStreamingResponseWithContext(ctx con
 	}
 	_, outcomeCollector := EnsureResponseOutcomeCollector(ctx, c, resp.StatusCode, resp.StatusCode)
 	defer func() {
-		if err != nil && !outcomeCollector.Snapshot().StreamCompleted {
+		if result != nil && result.clientDisconnect {
+			outcomeCollector.MarkStreamError(context.Canceled, true)
+		} else if err != nil && !outcomeCollector.Snapshot().StreamCompleted {
 			outcomeCollector.MarkStreamError(err, false)
 		} else if err == nil && !outcomeCollector.Snapshot().StreamCompleted {
 			outcomeCollector.MarkStreamError(errors.New("missing terminal event"), false)
@@ -2486,6 +2507,10 @@ func (s *GeminiMessagesCompatService) handleStreamingResponseWithContext(ctx con
 			if firstOutputGuard != nil && firstOutputGuard.TimedOut() && !semanticCommitted {
 				_ = resp.Body.Close()
 				return nil, newModelFirstOutputTimeoutFailoverError(c, account, originalModel, firstOutputPolicy, resp.Header)
+			}
+			if geminiStreamAbortedWithBillableOutput(c, err, &usage) {
+				logger.LegacyPrintf("service.gemini_messages_compat", "[GeminiAPI] Client disconnected during messages stream, billing collected usage: %v", err)
+				return &geminiStreamResult{usage: &usage, firstTokenMs: firstTokenMs, clientDisconnect: true, finished: finishReason != ""}, nil
 			}
 			return nil, fmt.Errorf("stream read error: %w", err)
 		}
@@ -2770,7 +2795,7 @@ func (s *GeminiMessagesCompatService) handleStreamingResponseWithContext(ctx con
 	}
 	flusher.Flush()
 
-	return &geminiStreamResult{usage: &usage, firstTokenMs: firstTokenMs, outcome: outcomeCollector.Snapshot()}, nil
+	return &geminiStreamResult{usage: &usage, firstTokenMs: firstTokenMs, finished: finishReason != "", outcome: outcomeCollector.Snapshot()}, nil
 }
 
 func writeSSE(w io.Writer, event string, data any) {
@@ -3010,9 +3035,11 @@ func mergeCollectedTextParts(response map[string]any, textParts []string) map[st
 }
 
 type geminiNativeStreamResult struct {
-	usage        *ClaudeUsage
-	firstTokenMs *int
-	outcome      ResponseOutcome
+	usage            *ClaudeUsage
+	firstTokenMs     *int
+	clientDisconnect bool
+	finished         bool // Whether an upstream finishReason arrived before disconnect.
+	outcome          ResponseOutcome
 }
 
 func isGeminiInsufficientScope(headers http.Header, body []byte) bool {
@@ -3167,7 +3194,9 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponse(c *gin.Conte
 func (s *GeminiMessagesCompatService) handleNativeStreamingResponseWithContext(ctx context.Context, c *gin.Context, resp *http.Response, startTime time.Time, originalModel string, isOAuth bool, account *Account, upstreamRequestID string, firstOutputGuard *modelFirstOutputGuard, firstOutputPolicy ModelFirstOutputTimeoutPolicy) (result *geminiNativeStreamResult, err error) {
 	_, outcomeCollector := EnsureResponseOutcomeCollector(ctx, c, resp.StatusCode, resp.StatusCode)
 	defer func() {
-		if err != nil && !outcomeCollector.Snapshot().StreamCompleted {
+		if result != nil && result.clientDisconnect {
+			outcomeCollector.MarkStreamError(context.Canceled, true)
+		} else if err != nil && !outcomeCollector.Snapshot().StreamCompleted {
 			outcomeCollector.MarkStreamError(err, false)
 		} else if err == nil && !outcomeCollector.Snapshot().StreamCompleted {
 			outcomeCollector.MarkStreamError(errors.New("missing terminal event"), false)
@@ -3216,6 +3245,8 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponseWithContext(c
 	var best geminiResponseSignal
 	sawDataEvent := false
 	fallback := &geminiSSEFallbackBody{}
+	clientDisconnect := false
+	finished := false
 	semanticCommitted := firstOutputGuard == nil || !modelFirstOutputTimeoutEnabled(ctx, firstOutputPolicy)
 	stagedLines := make([]string, 0, 8)
 	writeNative := func(line string, semantic bool) {
@@ -3239,7 +3270,8 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponseWithContext(c
 
 	for {
 		line, err := reader.ReadString('\n')
-		if len(line) > 0 {
+		// Ignore a partial line returned with a read error; an EOF tail is valid.
+		if len(line) > 0 && (err == nil || errors.Is(err, io.EOF)) {
 			trimmed := strings.TrimRight(line, "\r\n")
 			if strings.HasPrefix(trimmed, "data:") {
 				payload := strings.TrimSpace(strings.TrimPrefix(trimmed, "data:"))
@@ -3272,6 +3304,10 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponseWithContext(c
 					observer.ObserveGemini(rawBytes)
 					observeGeminiImageOutputs(c, rawBytes)
 
+					if gjson.GetBytes(rawBytes, "candidates.0.finishReason").String() != "" {
+						finished = true
+					}
+
 					semantic := geminiNativePayloadHasSemanticContent(rawBytes)
 					if firstTokenMs == nil && semantic {
 						ms := int(time.Since(startTime).Milliseconds())
@@ -3301,7 +3337,12 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponseWithContext(c
 				_ = resp.Body.Close()
 				return nil, newModelFirstOutputTimeoutFailoverError(c, account, originalModel, firstOutputPolicy, resp.Header)
 			}
-			return nil, err
+			if !geminiStreamAbortedWithBillableOutput(c, err, usage) {
+				return nil, err
+			}
+			clientDisconnect = true
+			logger.LegacyPrintf("service.gemini_messages_compat", "[GeminiAPI] Client disconnected during native stream (account=%d), billing collected usage: %v", account.ID, err)
+			break
 		}
 	}
 	if len(stagedLines) > 0 {
@@ -3314,7 +3355,7 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponseWithContext(c
 
 	s.finalizeGeminiSSESignal(c, account, true, upstreamRequestID, best, sawDataEvent, fallback)
 
-	return &geminiNativeStreamResult{usage: usage, firstTokenMs: firstTokenMs, outcome: outcomeCollector.Snapshot()}, nil
+	return &geminiNativeStreamResult{usage: usage, firstTokenMs: firstTokenMs, clientDisconnect: clientDisconnect, finished: finished, outcome: outcomeCollector.Snapshot()}, nil
 }
 
 func geminiNativePayloadHasSemanticContent(raw []byte) bool {
@@ -3461,9 +3502,10 @@ func extractGeminiUsage(data []byte) *ClaudeUsage {
 	}
 
 	// 注意：Gemini 的 promptTokenCount 包含 cachedContentTokenCount，
-	// 但 Claude 的 input_tokens 不包含 cache_read_input_tokens，需要减去
+	// 但 Claude 的 input_tokens 不包含 cache_read_input_tokens，需要减去。
+	// Prompt 拦截时可能只有 cachedContentTokenCount，因此下限为 0。
 	return &ClaudeUsage{
-		InputTokens:          prompt - cached,
+		InputTokens:          max(prompt-cached, 0),
 		OutputTokens:         cand + thoughts,
 		CacheReadInputTokens: cached,
 		ImageOutputTokens:    imageTokens,
