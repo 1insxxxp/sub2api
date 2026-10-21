@@ -246,6 +246,9 @@ func (s *GeminiMessagesCompatService) forwardClaudeBodyAsChatCompletions(
 
 	if resp.StatusCode >= 400 {
 		respBody := s.readUpstreamErrorBody(resp)
+		if failoverErr := s.handleGeminiModelNotFound(ctx, c, account, resp, respBody, originalModel); failoverErr != nil {
+			return nil, failoverErr
+		}
 		policy := ErrorPolicyNone
 		if s.rateLimitService != nil {
 			policy = s.finalErrorPolicy(ctx, account, resp.StatusCode, respBody, mappedModel, checkedPolicy)

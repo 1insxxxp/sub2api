@@ -1044,6 +1044,9 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 
 	if resp.StatusCode >= 400 {
 		respBody := s.readUpstreamErrorBody(resp)
+		if failoverErr := s.handleGeminiModelNotFound(ctx, c, account, resp, respBody, originalModel); failoverErr != nil {
+			return nil, failoverErr
+		}
 		// 统一错误策略：自定义错误码 + 临时不可调度
 		if s.rateLimitService != nil {
 			policy := s.finalErrorPolicy(ctx, account, resp.StatusCode, respBody, mappedModel, checkedPolicy)
@@ -1623,6 +1626,9 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 		if isGeminiBoundCacheUpstreamPassthrough(ctx, account, resp.StatusCode) {
 			return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode, ResponseBody: respBody, BoundUpstreamPassthrough: true}
 		}
+		if failoverErr := s.handleGeminiModelNotFound(ctx, c, account, resp, respBody, originalModel); failoverErr != nil {
+			return nil, failoverErr
+		}
 		// Best-effort fallback for OAuth tokens missing AI Studio scopes when calling countTokens.
 		// This avoids Gemini SDKs failing hard during preflight token counting.
 		// Checked before error policy so it always works regardless of custom error codes.
@@ -1832,7 +1838,7 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 }
 
 // checkErrorPolicyInLoop 在重试循环内对上游错误响应检查错误策略，resp 已重建可直接使用。
-// checked 为 nil 表示未检查（非错误响应或未配置限流服务）；否则指向检查结果，
+// checked 为 nil 表示未检查（非错误响应、模型不存在或未配置限流服务）；否则指向检查结果，
 // 非 ErrorPolicyNone 时调用者应 break 并由循环外的错误处理复用该结果。
 func (s *GeminiMessagesCompatService) checkErrorPolicyInLoop(
 	ctx context.Context, account *Account, resp *http.Response, mappedModel string,
@@ -1846,6 +1852,14 @@ func (s *GeminiMessagesCompatService) checkErrorPolicyInLoop(
 		StatusCode: resp.StatusCode,
 		Header:     resp.Header.Clone(),
 		Body:       io.NopCloser(bytes.NewReader(body)),
+	}
+	// Deterministic model 404s are classified outside the retry loop before
+	// account-wide rules can pause other, still-supported models.
+	if resp.StatusCode == http.StatusNotFound {
+		errorBody := unwrapIfNeeded(account.Type == AccountTypeOAuth, body)
+		if !isGeminiCachedContentNotFound(resp.StatusCode, errorBody) && isUpstreamModelNotFoundError(resp.StatusCode, errorBody) {
+			return nil, rebuilt
+		}
 	}
 	policy := s.rateLimitService.CheckErrorPolicy(ctx, account, resp.StatusCode, body, mappedModel)
 	return &policy, rebuilt
