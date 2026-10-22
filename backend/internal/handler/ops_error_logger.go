@@ -1110,6 +1110,13 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 		}
 
 		status := c.Writer.Status()
+		// Only a cancellation after a real Gemini inference call gets a neutral
+		// diagnostic summary. Preflight/client-only cancellation keeps its existing
+		// skip behavior, and earlier genuine failures remain provider telemetry.
+		if status == statusClientClosedRequest && hasOpsGeminiInferenceCancellation(c) {
+			logOpsRecoveredUpstream(c, ops, http.StatusOK)
+			return
+		}
 		body := w.capturedBytes()
 		parsed := parseOpsErrorResponse(body)
 		if !parsed.StreamFailure {
@@ -1317,14 +1324,12 @@ func logOpsRecoveredUpstream(c *gin.Context, ops *service.OpsService, finalStatu
 		lastStatus = *entry.UpstreamStatusCode
 	}
 	lastStage := ""
-	for i := len(entry.UpstreamErrors) - 1; i >= 0; i-- {
-		if event := entry.UpstreamErrors[i]; event != nil {
-			lastStage = event.Stage
-			if event.AccountID > 0 {
-				accountID := event.AccountID
-				entry.AccountID = &accountID
-			}
-			break
+	lastEvent := lastOpsAttributionEvent(entry.UpstreamErrors)
+	if lastEvent != nil {
+		lastStage = lastEvent.Stage
+		if lastEvent.AccountID > 0 {
+			accountID := lastEvent.AccountID
+			entry.AccountID = &accountID
 		}
 	}
 	if entry.AccountID == nil {
@@ -1353,6 +1358,14 @@ func logOpsRecoveredUpstream(c *gin.Context, ops *service.OpsService, finalStatu
 		entry.ErrorMessage += ": " + strings.TrimSpace(*entry.UpstreamErrorMessage)
 	}
 	entry.ErrorMessage = truncateString(entry.ErrorMessage, 2048)
+	if lastEvent.IsClientCancelDiagnostic() {
+		entry.ErrorPhase = "request"
+		entry.ErrorType = "client_cancel"
+		entry.ErrorSource = "client_request"
+		entry.ErrorOwner = "client"
+		entry.Severity = "P3"
+		entry.ErrorMessage = "Client canceled upstream inference; provider usage may be unreported"
+	}
 
 	if c.Request != nil {
 		entry.UserAgent = c.GetHeader("User-Agent")
@@ -1647,7 +1660,7 @@ func shouldSkipFinalOpsFailure(c *gin.Context) bool {
 	if v, ok := c.Get(service.OpsUpstreamErrorsKey); ok {
 		if events, ok := v.([]*service.OpsUpstreamErrorEvent); ok {
 			for i := len(events) - 1; i >= 0; i-- {
-				if events[i] != nil {
+				if events[i] != nil && !events[i].IsClientCancelDiagnostic() {
 					return events[i].SkipMonitoring
 				}
 			}
@@ -1723,13 +1736,7 @@ func applyOpsUpstreamFieldsFromContext(c *gin.Context, entry *service.OpsInsertE
 
 func applyOpsUpstreamErrorEvents(entry *service.OpsInsertErrorLogInput, events []*service.OpsUpstreamErrorEvent) {
 	entry.UpstreamErrors = events
-	var last *service.OpsUpstreamErrorEvent
-	for i := len(events) - 1; i >= 0; i-- {
-		if events[i] != nil {
-			last = events[i]
-			break
-		}
-	}
+	last := lastOpsAttributionEvent(events)
 	if last == nil {
 		return
 	}
@@ -1750,6 +1757,36 @@ func applyOpsUpstreamErrorEvents(entry *service.OpsInsertErrorLogInput, events [
 	if detail := strings.TrimSpace(last.Detail); detail != "" {
 		entry.UpstreamErrorDetail = &detail
 	}
+}
+
+func lastOpsAttributionEvent(events []*service.OpsUpstreamErrorEvent) *service.OpsUpstreamErrorEvent {
+	var neutral *service.OpsUpstreamErrorEvent
+	for i := len(events) - 1; i >= 0; i-- {
+		if events[i] == nil {
+			continue
+		}
+		if !events[i].IsClientCancelDiagnostic() {
+			return events[i]
+		}
+		if neutral == nil {
+			neutral = events[i]
+		}
+	}
+	return neutral
+}
+
+func hasOpsGeminiInferenceCancellation(c *gin.Context) bool {
+	if c == nil || c.Request == nil || c.Request.Context().Err() == nil {
+		return false
+	}
+	value, _ := c.Get(service.OpsUpstreamErrorsKey)
+	events, _ := value.([]*service.OpsUpstreamErrorEvent)
+	for i := len(events) - 1; i >= 0; i-- {
+		if events[i] != nil {
+			return events[i].ClientCanceled && events[i].Attempt > 0
+		}
+	}
+	return false
 }
 
 func suppressOpsUpstreamAttributionForLocalModelConfiguration(c *gin.Context, entry *service.OpsInsertErrorLogInput) {

@@ -128,7 +128,7 @@ data: {"error":{"code":429,"message":"Resource has been exhausted (e.g. check qu
 
 	result, err := svc.ForwardNative(context.Background(), c, geminiSignalTestAccount(),
 		"gemini-3.7-flash", "streamGenerateContent", true, geminiSignalTestRequest())
-	require.NoError(t, err)
+	require.Error(t, err)
 	require.NotNil(t, result)
 	require.Equal(t, body, rec.Body.String(), "错误信封也原样透传，交给 SDK 客户端按错误处理")
 	require.Equal(t, 10, result.Usage.InputTokens)
@@ -210,7 +210,7 @@ func TestGeminiForwardNative_EmptyStreamMarksUpstreamFailure(t *testing.T) {
 
 	result, err := svc.ForwardNative(context.Background(), c, geminiSignalTestAccount(),
 		"gemini-3.7-flash", "streamGenerateContent", true, geminiSignalTestRequest())
-	require.NoError(t, err)
+	require.Error(t, err)
 	require.NotNil(t, result)
 	require.Equal(t, http.StatusOK, rec.Code)
 	require.Zero(t, rec.Body.Len())
@@ -350,7 +350,7 @@ func TestGeminiForwardNative_StreamNonSSEJSONBodyIsInspected(t *testing.T) {
 		c, _ := newGeminiNativeTestContext(t)
 		_, err := svc.ForwardNative(context.Background(), c, geminiSignalTestAccount(),
 			"gemini-3.7-flash", "streamGenerateContent", true, geminiSignalTestRequest())
-		require.NoError(t, err)
+		require.Error(t, err)
 		streamErrs := GetOpsStreamErrors(c)
 		require.Len(t, streamErrs, 1)
 		require.Equal(t, "RESOURCE_EXHAUSTED", streamErrs[0].Code)
@@ -395,7 +395,7 @@ func TestGeminiForwardNative_StreamNonSSEEmptyBodyIsEmpty(t *testing.T) {
 			c, rec := newGeminiNativeTestContext(t)
 			_, err := svc.ForwardNative(context.Background(), c, geminiSignalTestAccount(),
 				"gemini-3.7-flash", "streamGenerateContent", true, geminiSignalTestRequest())
-			require.NoError(t, err)
+			require.Error(t, err)
 			require.Equal(t, body, rec.Body.String())
 			streamErrs := GetOpsStreamErrors(c)
 			require.Len(t, streamErrs, 1)
@@ -418,7 +418,7 @@ func TestGeminiForwardNative_StreamWithoutDataEventsIsEmpty(t *testing.T) {
 			c, rec := newGeminiNativeTestContext(t)
 			_, err := svc.ForwardNative(context.Background(), c, geminiSignalTestAccount(),
 				"gemini-3.7-flash", "streamGenerateContent", true, geminiSignalTestRequest())
-			require.NoError(t, err)
+			require.Error(t, err)
 			require.Equal(t, body, rec.Body.String())
 			streamErrs := GetOpsStreamErrors(c)
 			require.Len(t, streamErrs, 1)

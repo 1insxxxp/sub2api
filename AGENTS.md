@@ -634,6 +634,45 @@ x-api-key: admin-xxx
 
 ---
 
+### Gemini 流式计费隔离验收（2026-10-23）
+
+新版本验收可创建专用普通用户、独占 Gemini 分组与假上游账号，不得借用客户身份、余额、密钥或真实付费渠道。管理接口只调用已核对容器的回环端口，Admin key 仅在内存读取；用户密钥接口使用本次测试用户的短期 JWT。随机测试名称必须先检查无碰撞，记录创建后的 ID 和归属，以便异常清理。
+
+创建接口及关键字段：
+
+- `POST /api/v1/admin/groups`：`name`、`platform: "gemini"`、`rate_multiplier: 1`、`is_exclusive: true`、`subscription_type: "standard"`、`empty_response_compensation_enabled: false`。可通过 `model_pricing` 设置测试模型的单 token 价格，通过 `model_allowlist` 限定仅该模型；不复制现有分组账号。
+- `POST /api/v1/admin/users`：`email`、随机 `password`、`username`、`notes`、`role: "user"`、少量测试 `balance`、`concurrency: 1`、`allowed_groups: [测试分组ID]`、`restrict_public_groups: true`。不授予管理员权限。
+- `POST /api/v1/admin/accounts`：`name`、`platform: "gemini"`、`type: "apikey"`、`credentials`、`group_ids: [测试分组ID]`、`concurrency: 1`、`priority: 1`、`rate_multiplier: 1`、`upstream_billing_probe_enabled: false`。`credentials` 包含模拟器专用 `api_key`、私网 `base_url` 和精确 `model_mapping`，不使用真实上游凭证。
+- `POST /api/v1/keys`：本次测试用户 Bearer JWT；`name`、`group_id`、少量 `quota`、`expires_in_days: 1`。返回密钥仅保存在内存，不写日志。
+
+示例中的 JSON 文件只能包含本次隔离资源；凭证由调用进程在内存设置，不写入仓库：
+
+```bash
+curl -fsS -X POST "${BASE}/api/v1/admin/groups" \
+  -H "x-api-key: ${KEY}" -H 'Content-Type: application/json' --data-binary @test-group.json
+curl -fsS -X POST "${BASE}/api/v1/admin/users" \
+  -H "x-api-key: ${KEY}" -H 'Content-Type: application/json' --data-binary @test-user.json
+curl -fsS -X POST "${BASE}/api/v1/admin/accounts" \
+  -H "x-api-key: ${KEY}" -H 'Content-Type: application/json' --data-binary @test-account.json
+curl -fsS -X POST "${BASE}/api/v1/keys" \
+  -H "Authorization: Bearer ${TEST_USER_JWT}" -H 'Content-Type: application/json' --data-binary @test-key.json
+```
+
+假上游只监听两个新容器共用的 Docker 桥接私网地址；必须复核现有 URL 安全策略允许私网 HTTP，不允许为验收放宽全局安全配置。模拟器不含外部转发功能，要求专用随机密钥与每例 marker 匹配。推理请求可经 `api.passionapi.com` 和 `direct.passionapi.com` 的真实 HTTPS 入口发送，管理操作仍只用回环端口。
+
+验收覆盖 `/v1/chat/completions`、`/v1/messages`、`/v1beta/models/<model>:streamGenerateContent?alt=sse`：未上报 usage 即取消、只有思考后取消均不扣费；部分正文后取消仅按成功下发的输出估算计费；正常完成保留 provider usage；空正文及部分正文 SAFETY 分别验证零账和部分结算。以响应 `X-Client-Request-ID` 关联，账务 request_id 为 `client:<UUID>`，Ops client_request_id 为原 UUID；客户端自填 ID 不作为账务关联依据。
+
+只读核对 `users.balance`、`api_keys.quota_used`、`usage_logs`、`usage_billing_dedup`、`usage_response_outcomes`、`ops_error_logs`。每例账务至多一笔，余额及额度变化必须与该笔 actual_cost 一致。Ops 的 `usage_state: "unreported"` 表示上游尚未上报，不能当成已报告零 token。
+
+清理接口（每步先 GET 对应资源，核对本次随机名称及精确归属）：
+
+1. 用户 JWT：`GET /api/v1/keys/:id`；`PUT /api/v1/keys/:id` body `{"status":"inactive"}`；`DELETE /api/v1/keys/:id`。
+2. Admin：`GET /api/v1/admin/users/:id`；`PUT /api/v1/admin/users/:id` body `{"status":"disabled"}`，保留测试钱包证据。
+3. Admin：`GET /api/v1/admin/accounts/:id`；`PUT /api/v1/admin/accounts/:id` body `{"status":"inactive","group_ids":[]}`；`DELETE /api/v1/admin/accounts/:id`。
+4. Admin：`GET /api/v1/admin/groups/:id`；`PUT /api/v1/admin/groups/:id` body `{"status":"inactive"}`；`DELETE /api/v1/admin/groups/:id`。
+
+停止模拟器并销毁内存凭证，不删除 usage、dedup、outcome、Ops 或调整测试后余额。POST 已提交但响应丢失时，仅按本次碰撞检查通过的唯一名称、创建时间及模拟器 base_url 恢复 ID 后清理；清理失败必须报告，不能标记验收成功。
+
 ### 1. 账号管理
 
 #### 模型首字超时运行设置（2026-10-21）

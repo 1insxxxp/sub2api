@@ -221,9 +221,10 @@ func (c *ResponseOutcomeCollector) ObserveOpenAISSEData(data string) {
 func (c *ResponseOutcomeCollector) observeGeminiJSON(root gjson.Result) {
 	root.Get("candidates").ForEach(func(_, candidate gjson.Result) bool {
 		candidate.Get("content.parts").ForEach(func(_, part gjson.Result) bool {
-			c.ObserveText(part.Get("text").String())
 			if part.Get("thought").Bool() {
 				c.ObserveReasoning(part.Get("text").String())
+			} else {
+				c.ObserveText(part.Get("text").String())
 			}
 			if part.Get("functionCall").Exists() {
 				c.ObserveToolCall()

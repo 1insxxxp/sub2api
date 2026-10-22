@@ -93,7 +93,8 @@ func (f *geminiClientCancelFixture) serve(t *testing.T, route, path, body string
 	return rec, OpsErrorLogQueueLength()
 }
 
-// 原生入口：上游响应前客户端断开，响应未提交，标记 499；纯客户端取消不落 ops 错误日志。
+// 原生入口：已向上游发送推理但客户端断开，wire 仍是 499；
+// 仅保留不计入 SLA/provider health 的中性诊断，用量明确未知。
 func TestGeminiV1BetaModels_ClientCancelBeforeUpstreamResponseMarks499(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	f := newGeminiClientCancelFixture(t)
@@ -108,7 +109,8 @@ func TestGeminiV1BetaModels_ClientCancelBeforeUpstreamResponseMarks499(t *testin
 	require.Equal(t, int32(1), f.upstream.calls.Load())
 	require.Equal(t, statusClientClosedRequest, rec.Code)
 	require.Zero(t, rec.Body.Len())
-	require.Zero(t, opsQueued)
+	require.EqualValues(t, 1, opsQueued)
+	requireNeutralGeminiCancelDiagnostic(t)
 }
 
 // Chat Completions 兼容入口（Gemini 分组）：同一场景标记 499，不再补写 502。
@@ -126,5 +128,24 @@ func TestGatewayChatCompletions_GeminiClientCancelBeforeUpstreamResponseMarks499
 	require.Equal(t, int32(1), f.upstream.calls.Load())
 	require.Equal(t, statusClientClosedRequest, rec.Code)
 	require.Zero(t, rec.Body.Len())
-	require.Zero(t, opsQueued)
+	require.EqualValues(t, 1, opsQueued)
+	requireNeutralGeminiCancelDiagnostic(t)
+}
+
+func requireNeutralGeminiCancelDiagnostic(t *testing.T) {
+	t.Helper()
+	entry := (<-opsErrorLogQueue).entry
+	require.Equal(t, http.StatusOK, entry.StatusCode)
+	require.Equal(t, "client", entry.ErrorOwner)
+	require.Equal(t, "request", entry.ErrorPhase)
+	require.Equal(t, "client_cancel", entry.ErrorType)
+	require.Nil(t, entry.UpstreamStatusCode, "未收到上游响应不能伪造状态码")
+	require.NotNil(t, entry.UpstreamErrorsJSON)
+	events, err := service.ParseOpsUpstreamErrors(*entry.UpstreamErrorsJSON)
+	require.NoError(t, err)
+	require.Len(t, events, 1)
+	require.True(t, events[0].IsClientCancelDiagnostic())
+	require.Equal(t, "unreported", events[0].UsageState)
+	require.Equal(t, 1, events[0].Attempt)
+	require.Empty(t, events[0].UpstreamRequestID)
 }

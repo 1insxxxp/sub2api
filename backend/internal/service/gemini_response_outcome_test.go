@@ -66,7 +66,7 @@ func TestGeminiNativeStreamingResponseOutcomeMarksMissingFinishAsInterrupted(t *
 	svc := &GeminiMessagesCompatService{cfg: &config.Config{}}
 
 	result, err := svc.handleNativeStreamingResponse(c, resp, time.Now(), false, nil, "")
-	require.NoError(t, err)
+	require.Error(t, err)
 	require.NotNil(t, result)
 	outcome := collector.Snapshot()
 	require.True(t, outcome.HasText)
