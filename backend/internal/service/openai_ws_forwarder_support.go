@@ -532,6 +532,7 @@ func (s *OpenAIGatewayService) resolveAccountByPreviousResponseIDForCapability(
 	if s == nil {
 		return 0, nil, "", nil
 	}
+	ctx = withGroupAccountAccessScope(ctx, groupID)
 	responseID := strings.TrimSpace(previousResponseID)
 	if responseID == "" {
 		return 0, nil, "", nil
@@ -549,6 +550,10 @@ func (s *OpenAIGatewayService) resolveAccountByPreviousResponseIDForCapability(
 		if _, excluded := excludedIDs[accountID]; excluded {
 			return 0, nil, "", nil
 		}
+	}
+	// A user's private rule must not erase a shared continuation binding.
+	if !IsGroupAccountAllowedForUser(ctx, groupID, accountID) {
+		return 0, nil, "", nil
 	}
 
 	account, err := s.getSchedulableAccount(ctx, accountID)

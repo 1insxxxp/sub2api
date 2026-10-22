@@ -1285,6 +1285,39 @@ curl -X PUT "${BASE}/api/v1/admin/groups/123" \
   -d '{"model_allowlist":{"enabled":true,"models":["gpt-image-2"]}}'
 ```
 
+#### 5.6 分组内的账号用户限制（仅超级管理员）
+
+```
+GET    /api/v1/admin/groups/:id/account-user-exclusions
+POST   /api/v1/admin/groups/:id/account-user-exclusions
+DELETE /api/v1/admin/groups/:id/account-user-exclusions/:exclusion_id
+```
+
+仅 `role=admin` 可以读取或修改；二级管理员不可查看被限制用户的身份或规则。
+规则按内部用户 ID 生效，覆盖该用户现有及后续密钥，但只作用于指定分组。
+同一账号在其他分组中的使用不受这条规则影响；删除规则后恢复使用。
+
+GET 支持 `page`、`page_size`，返回普通分页结构
+`data.items`、`data.total`、`data.page`、`data.page_size`。每条规则包含
+`id`、`group_id`、`account_id`、`account_name`、`user_id`、`user_email`、
+`username`、`notes`（用户管理员备注）和 `created_at`。
+POST 请求体为 `{"account_id":21,"user_id":7}`，重复提交返回已有规则。
+用户必须存在且正常启用，账号必须属于该分组且未删除。
+
+```bash
+curl -fsS "${BASE}/api/v1/admin/groups/10/account-user-exclusions?page=1&page_size=20" \
+  -H "x-api-key: ${KEY}"
+curl -fsS -X POST "${BASE}/api/v1/admin/groups/10/account-user-exclusions" \
+  -H "x-api-key: ${KEY}" -H "Content-Type: application/json" \
+  -d '{"account_id":21,"user_id":7}'
+curl -fsS -X DELETE "${BASE}/api/v1/admin/groups/10/account-user-exclusions/1" \
+  -H "x-api-key: ${KEY}"
+```
+
+修改与认证缓存失效事件在同一数据库事务中提交，并主动清除该用户的认证缓存。
+认证仅在缓存未命中或重新读取密钥时加载规则，查询失败时拒绝继续认证。
+这些规则不出现在普通用户、分组或公共快照接口中。
+
 ---
 
 ### 6. 收益管理客户排除名单

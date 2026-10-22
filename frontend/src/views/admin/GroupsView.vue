@@ -513,6 +513,16 @@
                 }}</span>
               </button>
               <button
+                v-if="authStore.isAdmin && !isSystemCustomGroup(row)"
+                data-testid="group-account-user-exclusions"
+                type="button"
+                @click="handleAccountUserExclusions(row)"
+                class="admin-inline-action min-h-11"
+              >
+                <Icon name="lock" size="sm" />
+                <span class="text-xs">{{ t("admin.groups.accountUserExclusions.action") }}</span>
+              </button>
+              <button
                 v-if="!isSystemCustomGroup(row)"
                 @click="handleDelete(row)"
                 class="admin-inline-action admin-inline-action-danger"
@@ -4602,6 +4612,12 @@
       @close="showRPMOverridesModal = false"
       @success="loadGroups"
     />
+    <GroupAccountUserExclusionsModal
+      v-if="authStore.isAdmin && showAccountUserExclusionsModal"
+      :show="showAccountUserExclusionsModal"
+      :group="accountUserExclusionsGroup"
+      @close="closeAccountUserExclusions"
+    />
   </AppLayout>
 </template>
 
@@ -4653,6 +4669,7 @@ import GroupTagBadge from "@/components/common/GroupTagBadge.vue";
 import GroupModelStatusVisibilityField from "@/components/admin/group/GroupModelStatusVisibilityField.vue";
 import CodexManifestAccountsField from "@/components/admin/group/CodexManifestAccountsField.vue";
 import GroupRPMOverridesModal from "@/components/admin/group/GroupRPMOverridesModal.vue";
+import GroupAccountUserExclusionsModal from "@/components/admin/group/GroupAccountUserExclusionsModal.vue";
 import GroupCapacityBadge from "@/components/common/GroupCapacityBadge.vue";
 import ReasoningEffortPolicyFields from "@/components/admin/group/ReasoningEffortPolicyFields.vue";
 import SystemCustomGroupDialog from "@/components/admin/groups/SystemCustomGroupDialog.vue";
@@ -5251,6 +5268,8 @@ const showRateMultipliersModal = ref(false);
 const rateMultipliersGroup = ref<AdminGroup | null>(null);
 const showRPMOverridesModal = ref(false);
 const rpmOverridesGroup = ref<AdminGroup | null>(null);
+const showAccountUserExclusionsModal = ref(false);
+const accountUserExclusionsGroup = ref<AdminGroup | null>(null);
 const sortableGroups = ref<AdminGroup[]>([]);
 type ConcreteGroupPlatform = Exclude<GroupPlatform, "composite">;
 type CompositeRouteFormState = {
@@ -7182,6 +7201,21 @@ const handleRPMOverrides = (group: AdminGroup) => {
   rpmOverridesGroup.value = group;
   showRPMOverridesModal.value = true;
 };
+
+const handleAccountUserExclusions = (group: AdminGroup) => {
+  if (!authStore.isAdmin || isSystemCustomGroup(group)) return;
+  accountUserExclusionsGroup.value = group;
+  showAccountUserExclusionsModal.value = true;
+};
+
+const closeAccountUserExclusions = () => {
+  showAccountUserExclusionsModal.value = false;
+  accountUserExclusionsGroup.value = null;
+};
+
+watch(() => authStore.isAdmin, (isAdmin) => {
+  if (!isAdmin) closeAccountUserExclusions();
+});
 
 const handleDuplicate = async (group: AdminGroup) => {
   if (duplicatingGroupIds.has(group.id)) return;

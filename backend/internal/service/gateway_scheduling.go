@@ -65,6 +65,7 @@ func (s *GatewayService) SelectAccountForModelWithExclusions(ctx context.Context
 		// 无分组时只使用原生 anthropic 平台
 		platform = PlatformAnthropic
 	}
+	ctx = withGroupAccountAccessScope(ctx, groupID)
 	ctx = s.withGatewayProfitControlGate(ctx, groupID)
 
 	// Claude Code 限制可能已将 groupID 解析为 fallback group，
@@ -132,6 +133,7 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 		return nil, err
 	}
 	ctx = s.withGroupContext(ctx, group)
+	ctx = withGroupAccountAccessScope(ctx, groupID)
 	ctx = s.withGatewayProfitControlGate(ctx, groupID)
 	ctx = withPricingAdmissionRequest(ctx, groupID, requestedModel)
 
@@ -1055,7 +1057,7 @@ func (s *GatewayService) listSchedulableAccounts(ctx context.Context, groupID *i
 			if platform == PlatformGrok || strings.EqualFold(platform, PlatformGrok) {
 				accounts = s.filterGrokFreeQuotaAccountsForGateway(ctx, accounts)
 			}
-			accounts = filterSystemCustomAllowedAccounts(ctx, accounts)
+			accounts = filterGroupAccountAllowedAccounts(ctx, groupID, filterSystemCustomAllowedAccounts(ctx, accounts))
 			slog.Debug("account_scheduling_list_snapshot",
 				"group_id", derefGroupID(groupID),
 				"platform", platform,
@@ -1118,7 +1120,7 @@ func (s *GatewayService) listSchedulableAccounts(ctx context.Context, groupID *i
 			}
 		}
 		filtered = s.filterAccountsBySchedulingThreshold(ctx, filtered)
-		return filterSystemCustomAllowedAccounts(ctx, filtered), useMixed, nil
+		return filterGroupAccountAllowedAccounts(ctx, groupID, filterSystemCustomAllowedAccounts(ctx, filtered)), useMixed, nil
 	}
 
 	var accounts []Account
@@ -1157,7 +1159,7 @@ func (s *GatewayService) listSchedulableAccounts(ctx context.Context, groupID *i
 	if platform == PlatformGrok || strings.EqualFold(platform, PlatformGrok) {
 		accounts = s.filterGrokFreeQuotaAccountsForGateway(ctx, accounts)
 	}
-	return filterSystemCustomAllowedAccounts(ctx, accounts), useMixed, nil
+	return filterGroupAccountAllowedAccounts(ctx, groupID, filterSystemCustomAllowedAccounts(ctx, accounts)), useMixed, nil
 }
 
 // IsSingleAntigravityAccountGroup 检查指定分组是否只有一个 antigravity 平台的可调度账号。
@@ -1562,7 +1564,7 @@ func (s *GatewayService) getSchedulableAccount(ctx context.Context, accountID in
 	if err != nil || account == nil {
 		return account, err
 	}
-	if !systemCustomAccountAllowed(ctx, account.ID) {
+	if !systemCustomAccountAllowed(ctx, account.ID) || !groupAccountAllowedInSchedulingContext(ctx, account.ID) {
 		return nil, nil
 	}
 	if s.isAccountBlockedBySchedulingThreshold(ctx, account) {
@@ -1603,7 +1605,7 @@ func (s *GatewayService) hydrateSelectedAccount(ctx context.Context, account *Ac
 	if account == nil {
 		return account, nil
 	}
-	if !systemCustomAccountAllowed(ctx, account.ID) {
+	if !systemCustomAccountAllowed(ctx, account.ID) || !groupAccountAllowedInSchedulingContext(ctx, account.ID) {
 		return nil, ErrNoAvailableAccounts
 	}
 	if s.schedulerSnapshot == nil {
@@ -1616,7 +1618,7 @@ func (s *GatewayService) hydrateSelectedAccount(ctx context.Context, account *Ac
 	if hydrated == nil {
 		return nil, fmt.Errorf("selected gateway account %d not found during hydration", account.ID)
 	}
-	if !systemCustomAccountAllowed(ctx, hydrated.ID) {
+	if !systemCustomAccountAllowed(ctx, hydrated.ID) || !groupAccountAllowedInSchedulingContext(ctx, hydrated.ID) {
 		return nil, ErrNoAvailableAccounts
 	}
 	return hydrated, nil
@@ -1948,6 +1950,7 @@ func shuffleWithinPriority(accounts []*Account) {
 
 // selectAccountForModelWithPlatform 选择单平台账户（完全隔离）
 func (s *GatewayService) selectAccountForModelWithPlatform(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, platform string) (*Account, error) {
+	ctx = withGroupAccountAccessScope(ctx, groupID)
 	preferOAuth := platform == PlatformGemini
 	routingAccountIDs := s.routingAccountIDsForRequest(ctx, groupID, requestedModel, platform)
 
@@ -2214,6 +2217,7 @@ func (s *GatewayService) selectAccountForModelWithPlatform(ctx context.Context, 
 // selectAccountWithMixedScheduling 选择账户（支持混合调度）
 // 查询原生平台账户 + 启用 mixed_scheduling 的 antigravity 账户
 func (s *GatewayService) selectAccountWithMixedScheduling(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, nativePlatform string) (*Account, error) {
+	ctx = withGroupAccountAccessScope(ctx, groupID)
 	preferOAuth := nativePlatform == PlatformGemini
 	routingAccountIDs := s.routingAccountIDsForRequest(ctx, groupID, requestedModel, nativePlatform)
 

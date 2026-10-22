@@ -996,3 +996,70 @@ func (r *publicBatchImageUserGroupRateRepo) GetByUserAndGroup(_ context.Context,
 
 var _ BatchImageGroupPricingRepository = (*publicBatchImageGroupRepo)(nil)
 var _ BatchImageUserGroupRateRepository = (*publicBatchImageUserGroupRateRepo)(nil)
+
+func TestBatchImagePublicAccountExclusions(t *testing.T) {
+	groupID := int64(7)
+	owner := testBatchImageOwner()
+	owner.GroupID = &groupID
+	ctx := WithGroupAccountExclusions(context.Background(), owner.UserID, GroupAccountExclusions{groupID: {101}})
+	t.Run("skip blocked priority account and preserve group scope", func(t *testing.T) {
+		svc, _, _, _, _ := newTestBatchImagePublicService(true)
+		_, account, err := svc.selectProviderAndAccount(ctx, owner, BatchImageProviderGeminiAPI, "gemini-2.5-flash-image")
+		require.NoError(t, err)
+		require.EqualValues(t, 202, account.ID)
+		otherGroupID := int64(8)
+		owner.GroupID = &otherGroupID
+		_, account, err = svc.selectProviderAndAccount(ctx, owner, BatchImageProviderGeminiAPI, "gemini-2.5-flash-image")
+		require.NoError(t, err)
+		require.EqualValues(t, 101, account.ID)
+		owner.GroupID = &groupID
+	})
+	t.Run("blocked accounts cannot advertise exclusive models", func(t *testing.T) {
+		svc, _, _, _, _ := newTestBatchImagePublicService(true)
+		svc.GroupRepo = &publicBatchImageGroupRepo{groups: map[int64]*Group{groupID: {ID: groupID, Platform: PlatformGemini, AllowBatchImageGeneration: true}}}
+		svc.AccountRepo = &publicBatchImageAccountRepo{accounts: []Account{
+			testBatchImageMappedAccount(101, AccountTypeAPIKey, map[string]any{"gemini-2.5-flash-image": "gemini-2.5-flash-image"}),
+			testBatchImageMappedAccount(202, AccountTypeAPIKey, map[string]any{"gemini-3-pro-image-preview": "gemini-3-pro-image-preview"}),
+		}}
+		models, err := svc.ListModels(ctx, owner)
+		require.NoError(t, err)
+		require.NotEmpty(t, models.Data)
+		for _, model := range models.Data {
+			require.NotEqual(t, "gemini-2.5-flash-image", model.ID)
+		}
+	})
+	t.Run("all blocked stops before balance hold or new upstream submission", func(t *testing.T) {
+		svc, repo, queue, gemini, vertex := newTestBatchImagePublicService(true)
+		svc.GroupRepo = &publicBatchImageGroupRepo{groups: map[int64]*Group{groupID: {ID: groupID, Platform: PlatformGemini, AllowBatchImageGeneration: true}}}
+		allBlocked := WithGroupAccountExclusions(context.Background(), owner.UserID, GroupAccountExclusions{groupID: {101, 202}})
+		req := validBatchImageSubmitRequest()
+		req.Metadata = map[string]string{"user_id": "99", "group_id": "8", "account_id": "101"}
+		got, err := svc.Submit(allBlocked, owner, req, "")
+		require.ErrorIs(t, err, ErrBatchImageNoAccountAvailable)
+		require.Nil(t, got)
+		require.Empty(t, repo.jobs)
+		require.Empty(t, queue.enqueued)
+		require.Empty(t, gemini.submits)
+		require.Empty(t, vertex.submits)
+		require.Empty(t, svc.BillingRepo.(*fakeBatchImageBillingRepo).reserves)
+	})
+}
+
+func TestBatchImagePublicExclusionsPreserveOwnedStatusAndCancel(t *testing.T) {
+	svc, _, _, gemini, _ := newTestBatchImagePublicService(true)
+	groupID := int64(7)
+	owner := testBatchImageOwner()
+	owner.GroupID = &groupID
+	svc.GroupRepo = &publicBatchImageGroupRepo{groups: map[int64]*Group{groupID: {ID: groupID, Platform: PlatformGemini, AllowBatchImageGeneration: true}}}
+	submitted, err := svc.Submit(context.Background(), owner, validBatchImageSubmitRequest(), "")
+	require.NoError(t, err)
+	blocked := WithGroupAccountExclusions(context.Background(), owner.UserID, GroupAccountExclusions{groupID: {101, 202}})
+	status, err := svc.Get(blocked, owner, submitted.ID)
+	require.NoError(t, err)
+	require.Equal(t, submitted.ID, status.ID)
+	cancelled, err := svc.Cancel(blocked, owner, submitted.ID)
+	require.NoError(t, err)
+	require.Equal(t, submitted.ID, cancelled.ID)
+	require.Equal(t, 1, gemini.cancelCount)
+	require.Len(t, gemini.submits, 1, "blocking new generation must preserve cancellation of existing upstream jobs")
+}

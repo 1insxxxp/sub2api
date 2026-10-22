@@ -394,6 +394,9 @@ func isOpenAICompatibleAccountEligibleForRequestBeforeProfit(ctx context.Context
 }
 
 func openAICompatibleAccountEligibilityFailureReasonBeforeProfit(ctx context.Context, account *Account, platform string, requestedModel string, requireCompact bool, requiredCapability OpenAIEndpointCapability) string {
+	if account != nil && !groupAccountAllowedInSchedulingContext(ctx, account.ID) {
+		return "account_unavailable"
+	}
 	platform = NormalizeOpenAICompatiblePlatform(platform)
 	if account == nil {
 		return "account_nil"
@@ -910,6 +913,7 @@ func (s *OpenAIGatewayService) selectAccountForModelWithExclusions(ctx context.C
 // selectAccountForModelWithExclusionsStickyHit 与 selectAccountForModelWithExclusions 相同，
 // 另返回账号是否来自粘性会话命中。
 func (s *OpenAIGatewayService) selectAccountForModelWithExclusionsStickyHit(ctx context.Context, groupID *int64, platform string, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, requireCompact bool, stickyAccountID int64, requiredCapability OpenAIEndpointCapability, preferLowUpstreamRate bool) (*Account, bool, error) {
+	ctx = withGroupAccountAccessScope(ctx, groupID)
 	platform = NormalizeOpenAICompatiblePlatform(platform)
 	if s.checkChannelPricingRestriction(ctx, groupID, requestedModel) {
 		slog.Warn("channel pricing restriction blocked request",
@@ -1143,6 +1147,7 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 }
 
 func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Context, groupID *int64, platform string, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, requireCompact bool, requiredCapability OpenAIEndpointCapability, useUpstreamTokenCost bool) (*AccountSelectionResult, error) {
+	ctx = withGroupAccountAccessScope(ctx, groupID)
 	platform = NormalizeOpenAICompatiblePlatform(platform)
 	ctx = withPricingAdmissionRequest(ctx, groupID, requestedModel)
 	if s.checkChannelPricingRestriction(ctx, groupID, requestedModel) {
@@ -1516,7 +1521,7 @@ func (s *OpenAIGatewayService) listSchedulableAccounts(ctx context.Context, grou
 		if platform == PlatformGrok {
 			accounts = s.filterGrokFreeQuotaAccountsForOpenAI(ctx, accounts)
 		}
-		return filterSystemCustomAllowedAccounts(ctx, accounts), nil
+		return filterGroupAccountAllowedAccounts(ctx, groupID, filterSystemCustomAllowedAccounts(ctx, accounts)), nil
 	}
 	var accounts []Account
 	var err error
@@ -1534,7 +1539,7 @@ func (s *OpenAIGatewayService) listSchedulableAccounts(ctx context.Context, grou
 	if platform == PlatformGrok {
 		accounts = s.filterGrokFreeQuotaAccountsForOpenAI(ctx, accounts)
 	}
-	return filterSystemCustomAllowedAccounts(ctx, accounts), nil
+	return filterGroupAccountAllowedAccounts(ctx, groupID, filterSystemCustomAllowedAccounts(ctx, accounts)), nil
 }
 
 func (s *OpenAIGatewayService) tryAcquireAccountSlot(ctx context.Context, accountID int64, maxConcurrency int) (*AcquireResult, error) {
@@ -1685,7 +1690,7 @@ func (s *OpenAIGatewayService) getSchedulableAccount(ctx context.Context, accoun
 	if err != nil || account == nil {
 		return account, err
 	}
-	if !systemCustomAccountAllowed(ctx, account.ID) {
+	if !systemCustomAccountAllowed(ctx, account.ID) || !groupAccountAllowedInSchedulingContext(ctx, account.ID) {
 		return nil, nil
 	}
 	if s.isOpenAIAccountBlockedBySchedulingThreshold(ctx, account) {
@@ -1735,7 +1740,7 @@ func (s *OpenAIGatewayService) hydrateSelectedAccount(ctx context.Context, accou
 	if account == nil {
 		return account, nil
 	}
-	if !systemCustomAccountAllowed(ctx, account.ID) {
+	if !systemCustomAccountAllowed(ctx, account.ID) || !groupAccountAllowedInSchedulingContext(ctx, account.ID) {
 		return nil, ErrNoAvailableAccounts
 	}
 	if s.schedulerSnapshot == nil {
@@ -1748,7 +1753,7 @@ func (s *OpenAIGatewayService) hydrateSelectedAccount(ctx context.Context, accou
 	if hydrated == nil {
 		return nil, fmt.Errorf("selected openai account %d not found during hydration", account.ID)
 	}
-	if !systemCustomAccountAllowed(ctx, hydrated.ID) {
+	if !systemCustomAccountAllowed(ctx, hydrated.ID) || !groupAccountAllowedInSchedulingContext(ctx, hydrated.ID) {
 		return nil, ErrNoAvailableAccounts
 	}
 	return hydrated, nil

@@ -920,7 +920,9 @@ func (s *APIKeyService) GetDefaultImageStudioAPIKey(ctx context.Context, userID 
 		if key.Status != StatusAPIKeyActive {
 			continue
 		}
-		return s.prepareImageStudioAPIKey(&key, userID), nil
+		// List projections omit private authorization fields; load the owned
+		// key's current snapshot before starting a billable image request.
+		return s.GetImageStudioAPIKeyByID(ctx, userID, key.ID)
 	}
 	return nil, ErrAPIKeyNotFound
 }
@@ -941,7 +943,14 @@ func (s *APIKeyService) GetImageStudioAPIKeyForGroup(ctx context.Context, userID
 		if key.Status != StatusAPIKeyActive || key.GroupID == nil || *key.GroupID != groupID {
 			continue
 		}
-		return s.prepareImageStudioAPIKey(&key, userID), nil
+		fresh, err := s.GetImageStudioAPIKeyByID(ctx, userID, key.ID)
+		if err != nil {
+			return nil, err
+		}
+		if fresh.GroupID == nil || *fresh.GroupID != groupID {
+			return nil, ErrAPIKeyNotFound
+		}
+		return fresh, nil
 	}
 	return nil, ErrAPIKeyNotFound
 }
@@ -954,7 +963,7 @@ func (s *APIKeyService) GetImageStudioAPIKeyByID(ctx context.Context, userID int
 	if err != nil {
 		return nil, fmt.Errorf("get image studio api key: %w", err)
 	}
-	if key == nil || key.UserID != userID || key.Status != StatusAPIKeyActive {
+	if key == nil || key.UserID != userID || key.Status != StatusAPIKeyActive || key.User == nil || key.User.ID != userID {
 		return nil, ErrAPIKeyNotFound
 	}
 	return s.prepareImageStudioAPIKey(key, userID), nil

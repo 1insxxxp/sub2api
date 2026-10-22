@@ -102,6 +102,12 @@ func newOpenAIWSPassthroughHandlerHarness(t *testing.T, upstreamURL string, sett
 		GroupID: &groupID,
 		User:    &service.User{ID: 1751, Status: service.StatusActive},
 	}
+	// Follow-up turns refresh the authenticated user's private account policy.
+	// Use a real auth snapshot lookup rather than an unconfigured service stub.
+	keyRepo := newWSGroupPricingAPIKeyRepoStub(1)
+	keyRepo.apiKey = *apiKey
+	keyRepo.group.ID = groupID
+	h.apiKeyService = newWSGroupPricingAPIKeyService(keyRepo)
 	handlerDone := make(chan struct{})
 	router := gin.New()
 	router.Use(func(c *gin.Context) {

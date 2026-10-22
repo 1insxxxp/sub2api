@@ -32,6 +32,14 @@ func newAPIKeyRepoSQLite(t *testing.T) (*apiKeyRepository, *dbent.Client) {
 	client := enttest.NewClient(t, enttest.WithOptions(dbent.Driver(drv)))
 	t.Cleanup(func() { _ = client.Close() })
 
+	// This private raw-SQL authorization table is intentionally outside Ent's public schemas.
+	_, err = db.Exec(`CREATE TABLE group_account_user_exclusions (
+     id INTEGER PRIMARY KEY, group_id BIGINT NOT NULL, account_id BIGINT NOT NULL,
+     user_id BIGINT NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+     UNIQUE (group_id, account_id, user_id)
+ )`)
+	require.NoError(t, err)
+
 	return &apiKeyRepository{client: client, sql: db}, client
 }
 

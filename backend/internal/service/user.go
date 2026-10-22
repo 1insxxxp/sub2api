@@ -27,6 +27,8 @@ type User struct {
 	// BalanceRedeemCodeEnabled allows the user to convert their own balance into redeem codes.
 	BalanceRedeemCodeEnabled bool
 	AllowedGroups            []int64
+	// GroupAccountExclusions is a private gateway authorization policy, never a public user DTO field.
+	GroupAccountExclusions GroupAccountExclusions `json:"-"`
 	// RestrictPublicGroups narrows the public groups this user may bind to the
 	// ones listed in AllowedGroups. False keeps the default, where every public
 	// group is bindable.

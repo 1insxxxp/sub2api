@@ -157,6 +157,9 @@ func (e *ImageStudioGatewayExecutor) execute(ctx context.Context, input imageStu
 		return nil, ErrAPIKeyNotFound
 	}
 	ensureImageStudioAPIKeyContext(apiKey, input.UserID)
+	// Studio runs from JWT/background contexts rather than API-key middleware.
+	// Bind the freshly loaded owned key's policy for both provider paths.
+	ctx = WithGroupAccountExclusions(ctx, apiKey.UserID, apiKey.User.GroupAccountExclusions)
 	if !GroupAllowsImageGeneration(apiKey.Group) {
 		return nil, infraerrors.Forbidden("IMAGE_GENERATION_NOT_ALLOWED", ImageGenerationPermissionMessage())
 	}

@@ -2194,14 +2194,15 @@ type openAIWSTurnAPIKeyLookup interface {
 // 取快照，缓存失效后即生效。
 //
 // 因此后续 turn 在 BeforeTurn（与 HTTP 请求进入认证中间件同位）经同一认证缓存
-// 重取快照，只采用其中的分组，作为该 turn 利润门准入与用量计费共同的分组；用户、
-// Key 限额、订阅仍沿用建连快照。只在同一把 Key、同一分组且平台与订阅类型未变时
-// 采用：Key 换组或分组改平台/订阅类型不是调价，该连接按建连分组调度，继续按建连
-// 快照计费；重取失败同样保留建连快照，不断连。
+// 重取快照，更新用户的私有账号限制；兼容的分组快照同时用于本 turn 的利润门和
+// 计费，其余计费字段沿用建连快照。Key 换组或分组改平台/订阅类型时仍保留建连
+// 的计费分组，但访问限制始终使用最新同用户快照。认证刷新失败则在转发前要求重连。
 //
 // 首轮沿用刚经认证中间件取得的建连快照；没有经过 BeforeTurn 的 turn 回退建连
 // 快照。只保留当前与上一个 turn：下一 turn 的 BeforeTurn 先于上一 turn 的
 // AfterTurn 执行时，上一 turn 仍取到自己的快照。
+type openAIWSTurnAccessRefreshFailedContextKey struct{}
+
 type openAIWSTurnBillingAPIKeys struct {
 	mu   sync.Mutex
 	keys map[int]*service.APIKey
@@ -2211,8 +2212,18 @@ type openAIWSTurnBillingAPIKeys struct {
 // 返回换入该分组的上下文供本 turn 的利润门使用。
 func (k *openAIWSTurnBillingAPIKeys) begin(ctx context.Context, apiKeyService *service.APIKeyService, turn int, conn *service.APIKey) context.Context {
 	turnKey := conn
-	if turn > 1 && apiKeyService != nil {
-		turnKey = refreshOpenAIWSTurnBillingAPIKey(ctx, apiKeyService, conn)
+	// Authenticated GetByKey snapshots always retain the nonempty credential.
+	// Credential-less subjects exist only for internal handler invocations.
+	if turn > 1 && apiKeyService != nil && conn != nil && conn.Key != "" {
+		latest, err := refreshOpenAIWSTurnAPIKey(ctx, apiKeyService, conn)
+		if err != nil {
+			ctx = context.WithValue(ctx, openAIWSTurnAccessRefreshFailedContextKey{}, true)
+		} else {
+			turnKey = latest
+		}
+	}
+	if turnKey != nil && turnKey.User != nil {
+		ctx = service.WithGroupAccountExclusions(ctx, turnKey.User.ID, turnKey.User.GroupAccountExclusions)
 	}
 	k.set(turn, turnKey)
 	return withOpenAIWSTurnBillingGroup(ctx, turnKey)
@@ -2241,25 +2252,33 @@ func (k *openAIWSTurnBillingAPIKeys) forTurn(turn int, conn *service.APIKey) *se
 	return conn
 }
 
-// refreshOpenAIWSTurnBillingAPIKey 返回本 turn 计费用的 API Key：分组取当前认证
-// 快照，其余字段与建连快照共享。不满足采用条件时原样返回建连快照。
-func refreshOpenAIWSTurnBillingAPIKey(ctx context.Context, lookup openAIWSTurnAPIKeyLookup, conn *service.APIKey) *service.APIKey {
-	if lookup == nil || conn == nil || conn.Key == "" || conn.GroupID == nil || conn.Group == nil {
-		return conn
+// Each new turn must refresh authorization together with pricing. A failed
+// refresh cannot reuse the old access policy on a connection bound to one account.
+func refreshOpenAIWSTurnAPIKey(ctx context.Context, lookup openAIWSTurnAPIKeyLookup, conn *service.APIKey) (*service.APIKey, error) {
+	if lookup == nil || conn == nil || conn.Key == "" {
+		return nil, errors.New("connection authorization could not be refreshed")
 	}
 	latest, err := lookup.GetByKey(ctx, conn.Key)
-	if err != nil || latest == nil || latest.ID != conn.ID || latest.GroupID == nil || *latest.GroupID != *conn.GroupID {
-		return conn
-	}
-	group := latest.Group
-	if group == nil || group.ID != conn.Group.ID ||
-		group.Platform != conn.Group.Platform ||
-		group.SubscriptionType != conn.Group.SubscriptionType {
-		return conn
+	if err != nil || latest == nil || latest.ID != conn.ID || latest.User == nil || conn.User == nil || latest.User.ID != conn.User.ID {
+		return nil, errors.New("connection authorization could not be refreshed")
 	}
 	turnKey := *conn
-	turnKey.Group = group
-	return &turnKey
+	if conn.GroupID != nil && latest.GroupID != nil && *latest.GroupID == *conn.GroupID &&
+		conn.Group != nil && latest.Group != nil && latest.Group.ID == conn.Group.ID &&
+		latest.Group.Platform == conn.Group.Platform && latest.Group.SubscriptionType == conn.Group.SubscriptionType {
+		turnKey.Group = latest.Group
+	}
+	// The refreshed policy covers all source groups, independent of whether
+	// billing can adopt the current key's group on this existing connection.
+	if len(latest.User.GroupAccountExclusions) > 0 || len(conn.User.GroupAccountExclusions) > 0 {
+		turnUser := *conn.User
+		turnUser.GroupAccountExclusions = latest.User.GroupAccountExclusions
+		turnKey.User = &turnUser
+	}
+	if turnKey.Group == conn.Group && turnKey.User == conn.User {
+		return conn, nil
+	}
+	return &turnKey, nil
 }
 
 // withOpenAIWSTurnBillingGroup 把本 turn 的计费分组换进认证分组上下文，使利润门
@@ -3106,6 +3125,14 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				// 当前账号，越线即要求客户端重连重选（连接绑定单一上游账号，
 				// 无法中途换号）。本 turn 的准入与计费共用同一 pricingAt。
 				turnBillingCtx := turnBillingAPIKeys.begin(ctx, h.apiKeyService, turn, apiKey)
+				refreshFailed, _ := turnBillingCtx.Value(openAIWSTurnAccessRefreshFailedContextKey{}).(bool)
+				accessGroupID := apiKey.GroupID
+				if resolution, ok := service.SystemCustomGroupResolutionFromContext(turnBillingCtx); ok {
+					accessGroupID = &resolution.SourceGroupID
+				}
+				if refreshFailed || !service.IsGroupAccountAllowedForUser(turnBillingCtx, accessGroupID, account.ID) {
+					return service.NewOpenAIWSClientCloseError(coderws.StatusTryAgainLater, "account is no longer eligible for this connection, please reconnect", nil)
+				}
 				turnCtx, turnAt := h.gatewayService.WithOpenAITurnPricingContext(turnBillingCtx, apiKey.GroupID)
 				if _, vetoed, reason := h.gatewayService.ProfitControlVetoLatest(turnCtx, account); vetoed {
 					reqLog.Info("openai.websocket_turn_profit_vetoed",

@@ -23,11 +23,12 @@ import (
 
 // GroupHandler handles admin group management
 type GroupHandler struct {
-	adminService         service.AdminService
-	dashboardService     *service.DashboardService
-	groupCapacityService *service.GroupCapacityService
-	pricingCoverage      *service.GroupPricingCoverageService
-	cfg                  *config.Config
+	adminService          service.AdminService
+	dashboardService      *service.DashboardService
+	groupCapacityService  *service.GroupCapacityService
+	pricingCoverage       *service.GroupPricingCoverageService
+	accountUserExclusions *service.GroupAccountUserExclusionService
+	cfg                   *config.Config
 }
 
 // GetLiveCapability 返回当前服务端是否具备生成 Live attestation 的运行环境。

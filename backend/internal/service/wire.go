@@ -958,6 +958,7 @@ var ProviderSet = wire.NewSet(
 	NewPromoService,
 	NewUsageService,
 	NewSubAdminCommissionService,
+	NewGroupAccountUserExclusionService,
 	NewEmptyResponseCompensationService,
 	NewEmptyResponseClaimService,
 	NewEmptyResponseClaimAdminService,

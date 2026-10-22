@@ -566,6 +566,52 @@ export async function getCapacitySummary(): Promise<
   return data
 }
 
+/** Private, super-administrator-only user exclusions within one group's account pool. */
+export interface GroupAccountUserExclusion {
+  id: number
+  group_id: number
+  account_id: number
+  account_name: string
+  user_id: number
+  user_email: string
+  username?: string | null
+  notes?: string | null
+  created_at: string
+}
+
+export async function listAccountUserExclusions(
+  groupID: number,
+  page = 1,
+  pageSize = 10,
+  options?: { signal?: AbortSignal }
+): Promise<PaginatedResponse<GroupAccountUserExclusion>> {
+  const { data } = await apiClient.get<PaginatedResponse<GroupAccountUserExclusion>>(
+    `/admin/groups/${groupID}/account-user-exclusions`,
+    { params: { page, page_size: pageSize }, signal: options?.signal }
+  )
+  return data
+}
+
+export async function addAccountUserExclusion(
+  groupID: number,
+  request: { account_id: number; user_id: number }
+): Promise<GroupAccountUserExclusion> {
+  const { data } = await apiClient.post<GroupAccountUserExclusion>(
+    `/admin/groups/${groupID}/account-user-exclusions`, request
+  )
+  return data
+}
+
+export async function removeAccountUserExclusion(
+  groupID: number,
+  exclusionID: number
+): Promise<{ message: string }> {
+  const { data } = await apiClient.delete<{ message: string }>(
+    `/admin/groups/${groupID}/account-user-exclusions/${exclusionID}`
+  )
+  return data
+}
+
 export const groupsAPI = {
   list,
   getAll,
@@ -602,7 +648,10 @@ export const groupsAPI = {
   batchSetGroupRPMOverrides,
   updateSortOrder,
   getUsageSummary,
-  getCapacitySummary
+  getCapacitySummary,
+  listAccountUserExclusions,
+  addAccountUserExclusion,
+  removeAccountUserExclusion
 }
 
 export default groupsAPI

@@ -411,6 +411,10 @@ func (h *GatewayHandler) GeminiCachedContentsPatch(c *gin.Context) {
 	if !ok {
 		return
 	}
+	if !service.IsGroupAccountAllowedForUser(c.Request.Context(), apiKey.GroupID, record.AccountID) {
+		googleError(c, http.StatusServiceUnavailable, geminiCachedContentUnavailableMessage)
+		return
+	}
 	account, err := svc.BoundAccount(c.Request.Context(), record)
 	if err != nil {
 		reqLog.Error("gemini.cached_content.load_account_failed", zap.Int64("account_id", record.AccountID), zap.Error(err))
@@ -601,6 +605,10 @@ func (h *GatewayHandler) resolveGeminiCachedContentBinding(c *gin.Context, reqLo
 		}
 		reqLog.Error("gemini.cached_content.lookup_failed", zap.Error(err))
 		googleError(c, http.StatusInternalServerError, "Failed to load cached content")
+		return nil, nil, false
+	}
+	if !service.IsGroupAccountAllowedForUser(c.Request.Context(), apiKey.GroupID, record.AccountID) {
+		googleError(c, http.StatusServiceUnavailable, geminiCachedContentUnavailableMessage)
 		return nil, nil, false
 	}
 	if record.Model != modelName {

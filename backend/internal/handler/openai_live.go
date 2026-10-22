@@ -227,6 +227,10 @@ func (h *OpenAIGatewayHandler) LiveSideband(c *gin.Context) {
 		h.errorResponse(c, http.StatusNotFound, "not_found_error", "Live call not found")
 		return
 	}
+	if !service.IsGroupAccountAllowedForUser(c.Request.Context(), &record.GroupID, record.AccountID) {
+		h.errorResponse(c, http.StatusServiceUnavailable, "api_error", "Live is unavailable")
+		return
+	}
 	downstream, err := coderws.Accept(c.Writer, c.Request, &coderws.AcceptOptions{
 		InsecureSkipVerify: true,
 	})
