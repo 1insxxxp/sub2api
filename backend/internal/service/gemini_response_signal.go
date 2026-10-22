@@ -203,6 +203,13 @@ func isGeminiEmptyResponseObject(item gjson.Result) bool {
 	return candidates.IsArray() && len(candidates.Array()) == 0 && !item.Get("promptFeedback").Exists()
 }
 
+// GeminiOutcomeHasContentPolicyFailure recognizes only content-policy finish
+// reasons retained in the normalized outcome. It does not classify every Gemini
+// failure; prompt blocks and error envelopes use their existing error signals.
+func GeminiOutcomeHasContentPolicyFailure(outcome *ResponseOutcome) bool {
+	return outcome != nil && isGeminiContentFilterFinishReason(strings.ToUpper(strings.TrimSpace(outcome.FinishReason)))
+}
+
 // isGeminiContentFilterFinishReason 的集合与 gemini-cli 遥测的 CONTENT_FILTER 归类一致，并纳入同语义的图片枚举。
 func isGeminiContentFilterFinishReason(reason string) bool {
 	switch reason {

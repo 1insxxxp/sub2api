@@ -362,8 +362,11 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 			accountReleaseFunc()
 		}
 
+		service.ApplyDeliveredOutputTokens(result, deliveredOutputTokens)
+		interruptedGemini := account.Platform == service.PlatformGemini && geminiForwardInterrupted(c, result, err)
+		billablePartial := interruptedGemini && geminiForwardHasBillablePartialOutput(c, result, err, deliveredOutputTokens)
 		if err != nil {
-			if budgetExpired() {
+			if !billablePartial && budgetExpired() {
 				return
 			}
 			var failoverErr *service.UpstreamFailoverError
@@ -400,6 +403,13 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 				zap.Bool("upstream_error_response_already_written", upstreamErrorAlreadyCommunicated),
 				zap.Error(err),
 			)
+			if !billablePartial {
+				return
+			}
+		}
+		// A canceled metadata-only attempt can return collected provider usage
+		// without an error. It still has no delivered answer to settle.
+		if interruptedGemini && !billablePartial {
 			return
 		}
 
@@ -412,7 +422,6 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 
 		quotaPlatform := service.QuotaPlatform(c.Request.Context(), apiKey)
 		sessionID := service.ExtractClientSessionID(c)
-		service.ApplyDeliveredOutputTokens(result, deliveredOutputTokens)
 		stampForwardRequestedReasoningEffort(result, service.RequestedReasoningEffortFromContext(c.Request.Context()))
 		h.submitUsageRecordTask(c.Request.Context(), func(ctx context.Context) {
 			if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
@@ -440,6 +449,68 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 		})
 		return
 	}
+}
+
+// geminiForwardInterrupted also recognizes adapters that return an interrupted
+// result without an error after collecting usage during client cancellation.
+func geminiForwardInterrupted(c *gin.Context, result *service.ForwardResult, err error) bool {
+	if err != nil || geminiForwardHasContentPolicyFailure(c, result) {
+		return true
+	}
+	if result == nil {
+		return false
+	}
+	if result.ClientDisconnect {
+		return true
+	}
+	if outcome := result.Outcome; outcome != nil {
+		return !outcome.StreamCompleted || outcome.HTTPStatus >= 400 || outcome.UpstreamStatus >= 400 ||
+			(outcome.UpstreamErrorKind != "" && outcome.UpstreamErrorKind != service.UpstreamErrorNone) ||
+			(outcome.DisconnectSource != "" && outcome.DisconnectSource != service.DisconnectSourceNone)
+	}
+	return false
+}
+
+func geminiForwardHasBillablePartialOutput(c *gin.Context, result *service.ForwardResult, err error, collector *service.DownstreamOutputTokenCollector) bool {
+	var failoverErr *service.UpstreamFailoverError
+	if errors.As(err, &failoverErr) || result == nil || result.Outcome == nil {
+		return false
+	}
+	// An upstream text signal can precede a failed downstream write. Only the
+	// successful-write collector can prove answer text actually reached the client.
+	if collector.HasDeliveredText() && result.DeliveredOutputTokens != nil && *result.DeliveredOutputTokens > 0 {
+		// Upstream finishReason may arrive in the very chunk whose downstream
+		// write failed. Customer settlement must not treat that as fully delivered.
+		// Copy the outcome so the provider diagnostic snapshot remains intact.
+		if result.Outcome.StreamCompleted && (!collector.HasDeliveredTerminal() || geminiForwardHasContentPolicyFailure(c, result)) {
+			outcome := *result.Outcome
+			outcome.StreamCompleted = false
+			result.Outcome = &outcome
+		}
+		return true
+	}
+	// Keep the existing image settlement rule outside this text-only guard.
+	return result.Outcome.HasMedia && result.ImageCount > 0
+}
+
+func geminiForwardHasContentPolicyFailure(c *gin.Context, result *service.ForwardResult) bool {
+	if result == nil || !result.Stream {
+		return false
+	}
+	// Compatibility adapters can map a policy terminal to a normal protocol
+	// finish. The retained Gemini reason still proves this stream was blocked.
+	if service.GeminiOutcomeHasContentPolicyFailure(result.Outcome) {
+		return true
+	}
+	for _, streamErr := range service.GetOpsStreamErrors(c) {
+		// An explicit policy failure can have a complete wire terminal and nil
+		// adapter error. It is still a failed request. Ordinary transport errors
+		// after a successful terminal retain their existing completion semantics.
+		if streamErr.RequestScoped && streamErr.IntendedStatus >= http.StatusBadRequest {
+			return true
+		}
+	}
+	return false
 }
 
 // chatCompletionsErrorResponse writes an error in OpenAI Chat Completions format.

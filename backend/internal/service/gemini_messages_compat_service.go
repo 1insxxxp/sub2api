@@ -890,6 +890,8 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 	}
 
 	var resp *http.Response
+	var upstreamAttempt *GeminiUpstreamAttempt
+	defer func() { finishGeminiUpstreamAttempt(upstreamAttempt, result, returnErr) }()
 	// checkedPolicy 是循环内对当前 resp 的错误策略检查结果，未检查时为 nil。
 	var checkedPolicy *ErrorPolicyResult
 	signatureRetryStage := 0
@@ -921,7 +923,9 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 		}
 		requestIDHeader = idHeader
 
+		upstreamAttempt = BeginGeminiUpstreamAttempt(c, account, mappedModel, useUpstreamStream)
 		resp, err = s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
+		upstreamAttempt.ObserveResponse(resp)
 		if err != nil {
 			if req.Stream && firstOutputGuard != nil && firstOutputGuard.TimedOut() && (ctx.Err() == nil || ModelFirstOutputTraversalBudgetExceeded(ctx)) {
 				return nil, newModelFirstOutputTimeoutFailoverError(c, account, originalModel, firstOutputPolicy, nil)
@@ -988,6 +992,7 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 					// 降级只改写历史块，思考参数沿用客户端原始请求。
 					geminiReq = applyGeminiCompatThinkingConfig(retryGeminiReq, originalClaudeBody, mappedModel, includeThoughts)
 					// Consume one retry budget attempt and continue with the updated request payload.
+					upstreamAttempt.End(fmt.Errorf("gemini upstream HTTP status %d", resp.StatusCode))
 					sleepGeminiBackoff(1)
 					continue
 				}
@@ -1055,6 +1060,7 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 				})
 
 				logger.LegacyPrintf("service.gemini_messages_compat", "Gemini account %d: upstream status %d, retry %d/%d", account.ID, resp.StatusCode, attempt, geminiRetryLimit(resp.StatusCode))
+				upstreamAttempt.End(fmt.Errorf("gemini upstream HTTP status %d", resp.StatusCode))
 				sleepGeminiBackoff(attempt)
 				continue
 			}
@@ -1213,11 +1219,13 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 	var firstTokenMs *int
 	clientDisconnect := false
 	streamFinished := false
+	var forwardErr error
 	if req.Stream {
 		streamRes, err := s.handleStreamingResponseWithContext(requestContext, c, resp, startTime, originalModel, account, firstOutputGuard, firstOutputPolicy)
-		if err != nil {
+		if streamRes == nil {
 			return nil, err
 		}
+		forwardErr = err
 		usage = streamRes.usage
 		firstTokenMs = streamRes.firstTokenMs
 		clientDisconnect = streamRes.clientDisconnect
@@ -1227,7 +1235,7 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 		}
 	} else {
 		if useUpstreamStream {
-			collected, usageObj, err := collectGeminiSSE(resp.Body, true)
+			collected, usageObj, _, err := collectGeminiSSEObserved(resp.Body, true, func(raw []byte) { ObserveGeminiUpstreamAttemptUsage(c, raw) })
 			if err != nil {
 				return nil, s.writeClaudeError(c, http.StatusBadGateway, "upstream_error", "Failed to read upstream stream")
 			}
@@ -1279,7 +1287,7 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 		ImageSize:                     imageSize,
 		ImageInputSize:                imageInputSize,
 		Outcome:                       ResponseOutcomeSnapshotFromContext(c.Request.Context()),
-	}, nil
+	}, forwardErr
 }
 
 func isGeminiSignatureRelatedError(respBody []byte) bool {
@@ -1491,6 +1499,8 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 	}
 
 	var resp *http.Response
+	var upstreamAttempt *GeminiUpstreamAttempt
+	defer func() { finishGeminiUpstreamAttempt(upstreamAttempt, result, returnErr) }()
 	// checkedPolicy 是循环内对当前 resp 的错误策略检查结果，未检查时为 nil。
 	var checkedPolicy *ErrorPolicyResult
 	for attempt := 1; attempt <= geminiMaxRetries; attempt++ {
@@ -1521,7 +1531,11 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 		}
 		requestIDHeader = idHeader
 
+		if action != "countTokens" {
+			upstreamAttempt = BeginGeminiUpstreamAttempt(c, account, mappedModel, useUpstreamStream)
+		}
 		resp, err = s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
+		upstreamAttempt.ObserveResponse(resp)
 		if err != nil {
 			if stream && firstOutputGuard != nil && firstOutputGuard.TimedOut() && (ctx.Err() == nil || ModelFirstOutputTraversalBudgetExceeded(ctx)) {
 				return nil, newModelFirstOutputTimeoutFailoverError(c, account, originalModel, firstOutputPolicy, nil)
@@ -1606,6 +1620,7 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 				})
 
 				logger.LegacyPrintf("service.gemini_messages_compat", "Gemini account %d: upstream status %d, retry %d/%d", account.ID, resp.StatusCode, attempt, geminiRetryLimit(resp.StatusCode))
+				upstreamAttempt.End(fmt.Errorf("gemini upstream HTTP status %d", resp.StatusCode))
 				sleepGeminiBackoff(attempt)
 				continue
 			}
@@ -1788,13 +1803,15 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 	var firstTokenMs *int
 	clientDisconnect := false
 	streamFinished := false
+	var forwardErr error
 	_, outcomeCollector := EnsureResponseOutcomeCollector(ctx, c, http.StatusOK, resp.StatusCode)
 
 	if stream {
 		streamRes, err := s.handleNativeStreamingResponseWithContext(requestContext, c, resp, startTime, originalModel, isOAuth, account, requestID, firstOutputGuard, firstOutputPolicy)
-		if err != nil {
+		if streamRes == nil {
 			return nil, err
 		}
+		forwardErr = err
 		usage = streamRes.usage
 		firstTokenMs = streamRes.firstTokenMs
 		clientDisconnect = streamRes.clientDisconnect
@@ -1806,6 +1823,7 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 		if useUpstreamStream {
 			var best geminiResponseSignal
 			collected, usageObj, stats, err := collectGeminiSSEObserved(resp.Body, isOAuth, func(rawBytes []byte) {
+				ObserveGeminiUpstreamAttemptUsage(c, rawBytes)
 				if sig, ok := detectGeminiResponseSignal(rawBytes); ok && sig.Kind > best.Kind {
 					best = sig
 				}
@@ -1863,7 +1881,7 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 		ImageSize:                     imageSize,
 		ImageInputSize:                imageInputSize,
 		Outcome:                       ResponseOutcomeSnapshotFromContext(c.Request.Context()),
-	}, nil
+	}, forwardErr
 }
 
 // checkErrorPolicyInLoop 在重试循环内对上游错误响应检查错误策略，resp 已重建可直接使用。
@@ -2410,6 +2428,7 @@ func (s *GeminiMessagesCompatService) handleNonStreamingResponse(c *gin.Context,
 	if err := json.Unmarshal(unwrappedBody, &geminiResp); err != nil {
 		return nil, s.writeClaudeError(c, http.StatusBadGateway, "upstream_error", "Failed to parse upstream response")
 	}
+	ObserveGeminiUpstreamAttemptUsage(c, unwrappedBody)
 	outcomeCollector.ObserveEvent(len(unwrappedBody))
 	_ = outcomeCollector.ObserveJSONPayload(ResponseOutcomeProtocolGemini, unwrappedBody)
 
@@ -2442,7 +2461,7 @@ func (s *GeminiMessagesCompatService) handleStreamingResponseWithContext(ctx con
 	defer func() {
 		if result != nil && result.clientDisconnect {
 			outcomeCollector.MarkStreamError(context.Canceled, true)
-		} else if err != nil && !outcomeCollector.Snapshot().StreamCompleted {
+		} else if err != nil {
 			outcomeCollector.MarkStreamError(err, false)
 		} else if err == nil && !outcomeCollector.Snapshot().StreamCompleted {
 			outcomeCollector.MarkStreamError(errors.New("missing terminal event"), false)
@@ -2450,6 +2469,7 @@ func (s *GeminiMessagesCompatService) handleStreamingResponseWithContext(ctx con
 		if result != nil {
 			result.outcome = outcomeCollector.Snapshot()
 		}
+		markGeminiInterruptedStream(c, err, result != nil && result.clientDisconnect)
 	}()
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
@@ -2530,6 +2550,7 @@ func (s *GeminiMessagesCompatService) handleStreamingResponseWithContext(ctx con
 
 	var firstTokenMs *int
 	var usage ClaudeUsage
+	var usageMetadata geminiUsageAccumulator
 	finishReason := ""
 	sawToolUse := false
 
@@ -2555,7 +2576,7 @@ func (s *GeminiMessagesCompatService) handleStreamingResponseWithContext(ctx con
 				logger.LegacyPrintf("service.gemini_messages_compat", "[GeminiAPI] Client disconnected during messages stream, billing collected usage: %v", err)
 				return &geminiStreamResult{usage: &usage, firstTokenMs: firstTokenMs, clientDisconnect: true, finished: finishReason != ""}, nil
 			}
-			return nil, fmt.Errorf("stream read error: %w", err)
+			return &geminiStreamResult{usage: &usage, firstTokenMs: firstTokenMs, clientDisconnect: geminiStreamClientDisconnected(c, err), finished: finishReason != ""}, fmt.Errorf("stream read error: %w", err)
 		}
 
 		if !strings.HasPrefix(line, "data:") {
@@ -2576,6 +2597,7 @@ func (s *GeminiMessagesCompatService) handleStreamingResponseWithContext(ctx con
 		if err != nil {
 			continue
 		}
+		ObserveGeminiUpstreamAttemptUsage(c, unwrappedBytes)
 		outcomeCollector.ObserveGeminiSSEData(string(unwrappedBytes))
 		observer := upstreamResponseModelObserverFromContext(c)
 		if observer == nil {
@@ -2785,7 +2807,7 @@ func (s *GeminiMessagesCompatService) handleStreamingResponseWithContext(ctx con
 			}
 		}
 
-		if u := extractGeminiUsage(unwrappedBytes); u != nil {
+		if u := usageMetadata.Observe(unwrappedBytes); u != nil {
 			usage = *u
 		}
 
@@ -2795,6 +2817,9 @@ func (s *GeminiMessagesCompatService) handleStreamingResponseWithContext(ctx con
 		}
 	}
 
+	if finishReason == "" {
+		return &geminiStreamResult{usage: &usage, firstTokenMs: firstTokenMs}, errors.New("gemini upstream stream is missing terminal event")
+	}
 	if openBlockIndex >= 0 {
 		emitSSE("content_block_stop", map[string]any{
 			"type":  "content_block_stop",
@@ -2902,11 +2927,6 @@ func unwrapIfNeeded(isOAuth bool, raw []byte) []byte {
 	return inner
 }
 
-func collectGeminiSSE(body io.Reader, isOAuth bool) (map[string]any, *ClaudeUsage, error) {
-	collected, usage, _, err := collectGeminiSSEObserved(body, isOAuth, nil)
-	return collected, usage, err
-}
-
 // geminiSSECollectStats 记录一次 SSE 聚合读到的 data 事件数，以及非 data 行的兜底内容。
 type geminiSSECollectStats struct {
 	dataEvents int
@@ -2921,6 +2941,7 @@ func collectGeminiSSEObserved(body io.Reader, isOAuth bool, observe func(rawByte
 	var lastWithParts map[string]any
 	var collectedTextParts []string // Collect all text parts for aggregation
 	usage := &ClaudeUsage{}
+	var usageMetadata geminiUsageAccumulator
 	stats := geminiSSECollectStats{fallback: &geminiSSEFallbackBody{}}
 
 	for {
@@ -2959,7 +2980,7 @@ func collectGeminiSSEObserved(body io.Reader, isOAuth bool, observe func(rawByte
 					}
 					if parsed != nil {
 						last = parsed
-						if u := extractGeminiUsage(rawBytes); u != nil {
+						if u := usageMetadata.Observe(rawBytes); u != nil {
 							usage = u
 						}
 						if parts := extractGeminiParts(parsed); len(parts) > 0 {
@@ -3197,6 +3218,7 @@ func (s *GeminiMessagesCompatService) handleNativeNonStreamingResponse(c *gin.Co
 			respBody = unwrappedBody
 		}
 	}
+	ObserveGeminiUpstreamAttemptUsage(c, respBody)
 	outcomeCollector.ObserveEvent(len(respBody))
 	_ = outcomeCollector.ObserveJSONPayload(ResponseOutcomeProtocolGemini, respBody)
 	observer := upstreamResponseModelObserverFromContext(c)
@@ -3239,7 +3261,7 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponseWithContext(c
 	defer func() {
 		if result != nil && result.clientDisconnect {
 			outcomeCollector.MarkStreamError(context.Canceled, true)
-		} else if err != nil && !outcomeCollector.Snapshot().StreamCompleted {
+		} else if err != nil {
 			outcomeCollector.MarkStreamError(err, false)
 		} else if err == nil && !outcomeCollector.Snapshot().StreamCompleted {
 			outcomeCollector.MarkStreamError(errors.New("missing terminal event"), false)
@@ -3247,6 +3269,7 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponseWithContext(c
 		if result != nil {
 			result.outcome = outcomeCollector.Snapshot()
 		}
+		markGeminiInterruptedStream(c, err, result != nil && result.clientDisconnect)
 	}()
 	if s.cfg != nil && s.cfg.Gateway.GeminiDebugResponseHeaders {
 		logger.LegacyPrintf("service.gemini_messages_compat", "[GeminiAPI] ========== Streaming Response Headers ==========")
@@ -3280,6 +3303,7 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponseWithContext(c
 
 	reader := bufio.NewReader(resp.Body)
 	usage := &ClaudeUsage{}
+	var usageMetadata geminiUsageAccumulator
 	observer := upstreamResponseModelObserverFromContext(c)
 	if observer == nil {
 		observer = beginUpstreamResponseModelObservation(c)
@@ -3340,9 +3364,10 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponseWithContext(c
 					if sig, ok := detectGeminiResponseSignal(rawBytes); ok && sig.Kind > best.Kind {
 						best = sig
 					}
-					if u := extractGeminiUsage(rawBytes); u != nil {
+					if u := usageMetadata.Observe(rawBytes); u != nil {
 						usage = u
 					}
+					ObserveGeminiUpstreamAttemptUsage(c, rawBytes)
 					outcomeCollector.ObserveGeminiSSEData(string(rawBytes))
 					observer.ObserveGemini(rawBytes)
 					observeGeminiImageOutputs(c, rawBytes)
@@ -3381,7 +3406,7 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponseWithContext(c
 				return nil, newModelFirstOutputTimeoutFailoverError(c, account, originalModel, firstOutputPolicy, resp.Header)
 			}
 			if !geminiStreamAbortedWithBillableOutput(c, err, usage) {
-				return nil, err
+				return &geminiNativeStreamResult{usage: usage, firstTokenMs: firstTokenMs, clientDisconnect: geminiStreamClientDisconnected(c, err), finished: finished}, err
 			}
 			clientDisconnect = true
 			logger.LegacyPrintf("service.gemini_messages_compat", "[GeminiAPI] Client disconnected during native stream (account=%d), billing collected usage: %v", account.ID, err)
@@ -3396,7 +3421,42 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponseWithContext(c
 		flusher.Flush()
 	}
 
+	// Some upstreams ignore alt=sse and return a bounded JSON object/array.
+	// Inspect its real terminal signal before treating EOF as an interrupted SSE.
+	if !sawDataEvent && !fallback.Truncated() && gjson.ValidBytes(fallback.Bytes()) {
+		root := gjson.ParseBytes(fallback.Bytes())
+		items := []gjson.Result{root}
+		if root.IsArray() {
+			items = root.Array()
+		}
+		for _, item := range items {
+			raw, _ := unwrapGeminiResponse([]byte(item.Raw))
+			ObserveGeminiUpstreamAttemptUsage(c, raw)
+			outcomeCollector.ObserveGeminiSSEData(string(raw))
+			observer.ObserveGemini(raw)
+			observeGeminiImageOutputs(c, raw)
+			if u := usageMetadata.Observe(raw); u != nil {
+				usage = u
+			}
+			if gjson.GetBytes(raw, "candidates.0.finishReason").String() != "" {
+				finished = true
+			}
+		}
+	}
 	s.finalizeGeminiSSESignal(c, account, true, upstreamRequestID, best, sawDataEvent, fallback)
+	if !finished && !clientDisconnect && !fallback.Truncated() && best.Kind != geminiSignalPromptBlocked && best.Kind != geminiSignalContentFilter {
+		// Explicit content-policy events already carry their intended status.
+		policyBlocked := false
+		for _, streamErr := range GetOpsStreamErrors(c) {
+			if streamErr.RequestScoped && streamErr.IntendedStatus == http.StatusBadRequest && !streamErr.CountTowardsSLA {
+				policyBlocked = true
+				break
+			}
+		}
+		if !policyBlocked {
+			return &geminiNativeStreamResult{usage: usage, firstTokenMs: firstTokenMs}, errors.New("gemini upstream stream is missing terminal event")
+		}
+	}
 
 	return &geminiNativeStreamResult{usage: usage, firstTokenMs: firstTokenMs, clientDisconnect: clientDisconnect, finished: finished, outcome: outcomeCollector.Snapshot()}, nil
 }
@@ -3522,36 +3582,66 @@ func isValidBase64(data string) bool {
 }
 
 func extractGeminiUsage(data []byte) *ClaudeUsage {
+	var accumulator geminiUsageAccumulator
+	return accumulator.Observe(data)
+}
+
+// Gemini can report cumulative usage fields in separate events. Only fields
+// actually observed may replace previous values; missing/null metadata is not a
+// new all-zero usage report. No response payload is retained.
+type geminiUsageAccumulator struct {
+	prompt, candidates, cached, thoughts, image int
+}
+
+func (a *geminiUsageAccumulator) Observe(data []byte) *ClaudeUsage {
 	usage := gjson.GetBytes(data, "usageMetadata")
-	if !usage.Exists() {
+	if !usage.IsObject() {
 		return nil
 	}
-	prompt := int(usage.Get("promptTokenCount").Int())
-	cand := int(usage.Get("candidatesTokenCount").Int())
-	cached := int(usage.Get("cachedContentTokenCount").Int())
-	thoughts := int(usage.Get("thoughtsTokenCount").Int())
+	observed := false
+	for _, field := range []struct {
+		name  string
+		value *int
+	}{
+		{"promptTokenCount", &a.prompt},
+		{"candidatesTokenCount", &a.candidates},
+		{"cachedContentTokenCount", &a.cached},
+		{"thoughtsTokenCount", &a.thoughts},
+	} {
+		count := usage.Get(field.name)
+		if count.Type == gjson.Number && count.Int() >= 0 {
+			*field.value = int(count.Int())
+			observed = true
+		}
+	}
+	if count := usage.Get("totalTokenCount"); count.Type == gjson.Number && count.Int() >= 0 {
+		observed = true
+	}
 
 	// 从 candidatesTokensDetails 提取 IMAGE 模态 token 数
-	imageTokens := 0
 	candidateDetails := usage.Get("candidatesTokensDetails")
-	if candidateDetails.Exists() {
+	if candidateDetails.IsArray() {
 		candidateDetails.ForEach(func(_, detail gjson.Result) bool {
-			if detail.Get("modality").String() == "IMAGE" {
-				imageTokens = int(detail.Get("tokenCount").Int())
+			if count := detail.Get("tokenCount"); detail.Get("modality").String() == "IMAGE" && count.Type == gjson.Number && count.Int() >= 0 {
+				a.image = int(count.Int())
+				observed = true
 				return false
 			}
 			return true
 		})
+	}
+	if !observed {
+		return nil
 	}
 
 	// 注意：Gemini 的 promptTokenCount 包含 cachedContentTokenCount，
 	// 但 Claude 的 input_tokens 不包含 cache_read_input_tokens，需要减去。
 	// Prompt 拦截时可能只有 cachedContentTokenCount，因此下限为 0。
 	return &ClaudeUsage{
-		InputTokens:          max(prompt-cached, 0),
-		OutputTokens:         cand + thoughts,
-		CacheReadInputTokens: cached,
-		ImageOutputTokens:    imageTokens,
+		InputTokens:          max(a.prompt-a.cached, 0),
+		OutputTokens:         a.candidates + a.thoughts,
+		CacheReadInputTokens: a.cached,
+		ImageOutputTokens:    a.image,
 	}
 }
 

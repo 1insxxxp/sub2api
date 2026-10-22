@@ -10,14 +10,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestChatCompletionUsageSubmissionStaysAfterForwardErrorReturn(t *testing.T) {
+// Gemini's partial-result error settlement is covered by actual handler and
+// wallet tests in gemini_partial_usage_error_test.go. The OpenAI path retains
+// its separate success boundary.
+func TestOpenAIChatCompletionUsageSubmissionStaysAfterForwardErrorReturn(t *testing.T) {
 	tests := []struct {
 		file     string
 		function string
 		submit   string
 	}{
 		{file: "openai_chat_completions.go", function: "ChatCompletions", submit: "submitChatUsage"},
-		{file: "gateway_handler_chat_completions.go", function: "ChatCompletions", submit: "submitUsageRecordTask"},
 	}
 
 	for _, tt := range tests {

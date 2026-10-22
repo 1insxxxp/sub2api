@@ -13,14 +13,16 @@ import (
 // successfully written to the downstream client. Transport metadata and opaque
 // signatures are excluded.
 type DownstreamOutputTokenCollector struct {
-	mu                 sync.Mutex
-	model              string
-	pending            string
-	text               strings.Builder
-	frozen             bool
-	cancelDone         <-chan struct{}
-	upstreamCancel     context.CancelFunc
-	upstreamCancelOnce sync.Once
+	mu                   sync.Mutex
+	model                string
+	pending              string
+	text                 strings.Builder
+	hasDeliveredText     bool
+	hasDeliveredTerminal bool
+	frozen               bool
+	cancelDone           <-chan struct{}
+	upstreamCancel       context.CancelFunc
+	upstreamCancelOnce   sync.Once
 }
 
 func NewDownstreamOutputTokenCollector(model string) *DownstreamOutputTokenCollector {
@@ -155,6 +157,31 @@ func (c *DownstreamOutputTokenCollector) VisibleText() string {
 	return c.text.String()
 }
 
+// HasDeliveredText reports nonempty answer text parsed from successful writes.
+// Reasoning, tool arguments and transport metadata do not prove an answer was
+// delivered. The token counter deliberately continues to include those tokens.
+func (c *DownstreamOutputTokenCollector) HasDeliveredText() bool {
+	if c == nil {
+		return false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.freezeIfCanceledLocked()
+	return c.hasDeliveredText
+}
+
+// HasDeliveredTerminal is set only after a complete terminal protocol frame
+// was parsed from successfully written bytes, not merely observed upstream.
+func (c *DownstreamOutputTokenCollector) HasDeliveredTerminal() bool {
+	if c == nil {
+		return false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.freezeIfCanceledLocked()
+	return c.hasDeliveredTerminal
+}
+
 func (c *DownstreamOutputTokenCollector) TokenCount() int {
 	if c == nil {
 		return 0
@@ -199,7 +226,11 @@ func (c *DownstreamOutputTokenCollector) appendSSEFrame(frame string) {
 
 func (c *DownstreamOutputTokenCollector) appendSSEPayload(payload, eventType string) {
 	payload = strings.TrimSpace(payload)
-	if payload == "" || payload == "[DONE]" || !gjson.Valid(payload) {
+	if payload == "[DONE]" {
+		// DONE closes the transport but cannot prove a successful finish reason.
+		return
+	}
+	if payload == "" || !gjson.Valid(payload) {
 		return
 	}
 
@@ -208,26 +239,32 @@ func (c *DownstreamOutputTokenCollector) appendSSEPayload(payload, eventType str
 	if payloadType == "" {
 		payloadType = eventType
 	}
+	if payloadType == "message_stop" {
+		c.hasDeliveredTerminal = true
+	}
+	c.observeDeliveredTerminal(data)
 	switch payloadType {
 	case "content_block_start":
 		block := data.Get("content_block")
 		if block.Get("type").String() == "text" {
-			c.appendText(block.Get("text").String())
+			c.appendAnswerText(block.Get("text").String())
 		}
 		return
 	case "content_block_delta":
 		delta := data.Get("delta")
 		switch delta.Get("type").String() {
 		case "text_delta":
-			c.appendText(delta.Get("text").String())
+			c.appendAnswerText(delta.Get("text").String())
 		case "thinking_delta":
 			c.appendText(delta.Get("thinking").String())
 		case "input_json_delta":
 			c.appendText(delta.Get("partial_json").String())
 		}
 		return
-	case "response.output_text.delta", "response.refusal.delta",
-		"response.reasoning_summary_text.delta", "response.reasoning_text.delta", "response.reasoning.delta",
+	case "response.output_text.delta", "response.refusal.delta":
+		c.appendAnswerText(data.Get("delta").String())
+		return
+	case "response.reasoning_summary_text.delta", "response.reasoning_text.delta", "response.reasoning.delta",
 		"response.function_call_arguments.delta", "response.custom_tool_call_input.delta":
 		c.appendText(data.Get("delta").String())
 		return
@@ -235,7 +272,7 @@ func (c *DownstreamOutputTokenCollector) appendSSEPayload(payload, eventType str
 
 	data.Get("choices").ForEach(func(_, choice gjson.Result) bool {
 		delta := choice.Get("delta")
-		c.appendText(delta.Get("content").String())
+		c.appendAnswerText(delta.Get("content").String())
 		c.appendText(delta.Get("reasoning_content").String())
 		delta.Get("tool_calls").ForEach(func(_, toolCall gjson.Result) bool {
 			c.appendText(toolCall.Get("function.arguments").String())
@@ -246,7 +283,11 @@ func (c *DownstreamOutputTokenCollector) appendSSEPayload(payload, eventType str
 	})
 	data.Get("candidates").ForEach(func(_, candidate gjson.Result) bool {
 		candidate.Get("content.parts").ForEach(func(_, part gjson.Result) bool {
-			c.appendText(part.Get("text").String())
+			if part.Get("thought").Bool() {
+				c.appendText(part.Get("text").String())
+			} else {
+				c.appendAnswerText(part.Get("text").String())
+			}
 			return true
 		})
 		return true
@@ -259,15 +300,23 @@ func (c *DownstreamOutputTokenCollector) appendText(text string) {
 	}
 }
 
+func (c *DownstreamOutputTokenCollector) appendAnswerText(text string) {
+	if strings.TrimSpace(text) != "" {
+		c.hasDeliveredText = true
+	}
+	c.appendText(text)
+}
+
 func (c *DownstreamOutputTokenCollector) appendJSONResponse(data gjson.Result) {
 	responseError := data.Get("error")
 	if (responseError.Exists() && responseError.Type != gjson.Null) || data.Get("type").String() == "error" || data.Get("status").String() == "failed" {
 		return
 	}
+	c.observeDeliveredTerminal(data)
 	data.Get("content").ForEach(func(_, block gjson.Result) bool {
 		switch block.Get("type").String() {
 		case "text":
-			c.appendText(block.Get("text").String())
+			c.appendAnswerText(block.Get("text").String())
 		case "thinking":
 			c.appendText(block.Get("thinking").String())
 		case "tool_use", "server_tool_use":
@@ -279,7 +328,7 @@ func (c *DownstreamOutputTokenCollector) appendJSONResponse(data gjson.Result) {
 	})
 	data.Get("choices").ForEach(func(_, choice gjson.Result) bool {
 		message := choice.Get("message")
-		c.appendJSONMessageContent(message.Get("content"))
+		c.appendJSONMessageContent(message.Get("content"), true)
 		c.appendText(message.Get("reasoning_content").String())
 		if reasoning := message.Get("reasoning"); reasoning.Type == gjson.String {
 			c.appendText(reasoning.String())
@@ -294,10 +343,10 @@ func (c *DownstreamOutputTokenCollector) appendJSONResponse(data gjson.Result) {
 	data.Get("output").ForEach(func(_, item gjson.Result) bool {
 		switch item.Get("type").String() {
 		case "message":
-			c.appendJSONMessageContent(item.Get("content"))
+			c.appendJSONMessageContent(item.Get("content"), true)
 		case "reasoning":
-			c.appendJSONMessageContent(item.Get("summary"))
-			c.appendJSONMessageContent(item.Get("content"))
+			c.appendJSONMessageContent(item.Get("summary"), false)
+			c.appendJSONMessageContent(item.Get("content"), false)
 		case "function_call":
 			c.appendText(item.Get("arguments").String())
 		case "custom_tool_call":
@@ -307,24 +356,52 @@ func (c *DownstreamOutputTokenCollector) appendJSONResponse(data gjson.Result) {
 	})
 	data.Get("candidates").ForEach(func(_, candidate gjson.Result) bool {
 		candidate.Get("content.parts").ForEach(func(_, part gjson.Result) bool {
-			c.appendText(part.Get("text").String())
+			if part.Get("thought").Bool() {
+				c.appendText(part.Get("text").String())
+			} else {
+				c.appendAnswerText(part.Get("text").String())
+			}
 			return true
 		})
 		return true
 	})
 }
 
-func (c *DownstreamOutputTokenCollector) appendJSONMessageContent(content gjson.Result) {
+func (c *DownstreamOutputTokenCollector) observeDeliveredTerminal(data gjson.Result) {
+	data.Get("choices").ForEach(func(_, choice gjson.Result) bool {
+		if strings.TrimSpace(choice.Get("finish_reason").String()) != "" {
+			c.hasDeliveredTerminal = true
+		}
+		return true
+	})
+	data.Get("candidates").ForEach(func(_, candidate gjson.Result) bool {
+		if strings.TrimSpace(candidate.Get("finishReason").String()) != "" {
+			c.hasDeliveredTerminal = true
+		}
+		return true
+	})
+	if strings.TrimSpace(data.Get("stop_reason").String()) != "" {
+		c.hasDeliveredTerminal = true
+	}
+}
+
+func (c *DownstreamOutputTokenCollector) appendJSONMessageContent(content gjson.Result, answer bool) {
+	appendContent := c.appendText
+	if answer {
+		appendContent = c.appendAnswerText
+	}
 	if content.Type == gjson.String {
-		c.appendText(content.String())
+		appendContent(content.String())
 		return
 	}
 	content.ForEach(func(_, part gjson.Result) bool {
 		switch part.Get("type").String() {
-		case "text", "output_text", "summary_text", "reasoning_text":
+		case "text", "output_text":
+			appendContent(part.Get("text").String())
+		case "summary_text", "reasoning_text":
 			c.appendText(part.Get("text").String())
 		case "refusal":
-			c.appendText(part.Get("refusal").String())
+			appendContent(part.Get("refusal").String())
 		}
 		return true
 	})

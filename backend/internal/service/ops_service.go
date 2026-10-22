@@ -608,6 +608,20 @@ func sanitizeOpsUpstreamErrors(entry *OpsInsertErrorLogInput) error {
 		out.Stage = truncateString(strings.TrimSpace(out.Stage), 64)
 		out.Scope = truncateString(strings.TrimSpace(out.Scope), 64)
 		out.Reason = truncateString(strings.TrimSpace(out.Reason), 128)
+		out.Model = truncateString(strings.TrimSpace(out.Model), 128)
+		out.Attempt = max(out.Attempt, 0)
+		if out.DurationMs < 0 {
+			out.DurationMs = 0
+		}
+		if out.UsageState != "observed" && out.UsageState != "unreported" {
+			out.UsageState = ""
+		}
+		out.UsageFields &= 31
+		for _, count := range []*int64{&out.InputTokens, &out.OutputTokens, &out.CacheReadTokens, &out.ThoughtTokens, &out.TotalTokens} {
+			if *count < 0 {
+				*count = 0
+			}
+		}
 
 		if out.AccountID < 0 {
 			out.AccountID = 0

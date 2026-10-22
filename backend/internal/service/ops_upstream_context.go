@@ -360,7 +360,7 @@ func currentOpsFailureSkipMonitoring(c *gin.Context) bool {
 	if value, ok := c.Get(OpsUpstreamErrorsKey); ok {
 		if events, ok := value.([]*OpsUpstreamErrorEvent); ok {
 			for i := len(events) - 1; i >= 0; i-- {
-				if events[i] != nil {
+				if events[i] != nil && !events[i].IsClientCancelDiagnostic() {
 					return events[i].SkipMonitoring
 				}
 			}
@@ -444,6 +444,22 @@ type OpsUpstreamErrorEvent struct {
 	// bounds forced earlier attempts of the same request to be discarded.
 	DroppedEarlierAttempts int `json:"dropped_earlier_attempts,omitempty"`
 
+	// Gemini inference diagnostics are scalar snapshots, never billing inputs.
+	// UsageState distinguishes explicitly reported zero from absent metadata;
+	// UsageFields bits 1/2/4/8/16 represent prompt/candidates/thoughts/cache/total.
+	Attempt         int    `json:"attempt,omitempty"`
+	Model           string `json:"model,omitempty"`
+	Stream          bool   `json:"stream,omitempty"`
+	DurationMs      int64  `json:"duration_ms,omitempty"`
+	UsageState      string `json:"usage_state,omitempty"`
+	UsageFields     uint8  `json:"usage_fields,omitempty"`
+	InputTokens     int64  `json:"input_tokens,omitempty"`  // raw prompt count, including cached tokens
+	OutputTokens    int64  `json:"output_tokens,omitempty"` // candidates plus thoughts
+	CacheReadTokens int64  `json:"cache_read_tokens,omitempty"`
+	ThoughtTokens   int64  `json:"thought_tokens,omitempty"`
+	TotalTokens     int64  `json:"total_tokens,omitempty"`
+	ClientCanceled  bool   `json:"client_canceled,omitempty"` // local cancellation; not proof the provider stopped
+
 	// Outcome
 	UpstreamStatusCode int    `json:"upstream_status_code,omitempty"`
 	UpstreamRequestID  string `json:"upstream_request_id,omitempty"`
@@ -455,7 +471,7 @@ type OpsUpstreamErrorEvent struct {
 	// Best-effort upstream response capture (sanitized+trimmed).
 	UpstreamResponseBody string `json:"upstream_response_body,omitempty"`
 
-	// Kind: http_error | request_error | retry_exhausted | failover
+	// Kind: http_error | request_error | retry_exhausted | failover | client_cancel
 	Kind string `json:"kind,omitempty"`
 	// Stage/Scope/Reason distinguish credential acquisition from inference
 	// without overloading upstream_status_code with a synthetic HTTP status.
@@ -471,6 +487,12 @@ type OpsUpstreamErrorEvent struct {
 	// the final client-visible failure; recovered attempts remain provider-health
 	// telemetry and do not count as failed requests.
 	SkipMonitoring bool `json:"-"`
+}
+
+// IsClientCancelDiagnostic identifies neutral inference cancellation telemetry,
+// not an upstream failure. Earlier genuine failures remain separate events.
+func (e *OpsUpstreamErrorEvent) IsClientCancelDiagnostic() bool {
+	return e != nil && e.ClientCanceled && e.Kind == "client_cancel" && e.Stage == "inference"
 }
 
 const (

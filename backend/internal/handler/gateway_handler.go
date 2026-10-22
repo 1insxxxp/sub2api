@@ -550,8 +550,11 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			if accountReleaseFunc != nil {
 				accountReleaseFunc()
 			}
+			service.ApplyDeliveredOutputTokens(result, deliveredOutputTokens)
+			interruptedGemini := account.Platform == service.PlatformGemini && geminiForwardInterrupted(c, result, err)
+			billablePartial := interruptedGemini && geminiForwardHasBillablePartialOutput(c, result, err, deliveredOutputTokens)
 			if err != nil {
-				if budgetExpired() {
+				if !billablePartial && budgetExpired() {
 					return
 				}
 				var failoverErr *service.UpstreamFailoverError
@@ -599,6 +602,14 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 					forwardFailedFields = append(forwardFailedFields, zap.Int64p("proxy_id", account.ProxyID))
 				}
 				reqLog.Error("gateway.forward_failed", forwardFailedFields...)
+				if !billablePartial {
+					return
+				}
+			}
+			// Interrupted Gemini attempts are customer-billable only after an answer
+			// was actually written downstream. Metadata and reasoning alone do not
+			// authorize a charge, even when the adapter returns collected usage.
+			if interruptedGemini && !billablePartial {
 				return
 			}
 
@@ -611,7 +622,6 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				}
 			}
 
-			service.ApplyDeliveredOutputTokens(result, deliveredOutputTokens)
 			// 捕获请求信息（用于异步记录，避免在 goroutine 中访问 gin.Context）
 			userAgent := c.GetHeader("User-Agent")
 			clientIP := ip.GetClientIP(c)
