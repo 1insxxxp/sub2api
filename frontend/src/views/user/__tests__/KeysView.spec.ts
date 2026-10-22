@@ -768,6 +768,143 @@ describe('user KeysView column settings', () => {
     )
   })
 
+  describe('quick group selector provider filters', () => {
+    const availableGroups = [
+      { id: 31, platform: 'openai', key_display_category: 'domestic', description: 'Batch friendly' },
+      { id: 32, platform: 'anthropic' },
+      { id: 33, platform: 'composite', key_display_category: 'anthropic' },
+      { id: 34, platform: 'openai', key_display_category: '' },
+      { id: 35, platform: 'deepseek', key_display_category: 'future-category' },
+      { id: 36, platform: 'gemini' },
+      { id: 37, platform: 'grok' },
+      { id: 38, platform: 'anthropic', key_display_category: 'other' },
+    ].map((group) => ({
+      name: `Shared group ${group.id}`,
+      rate_multiplier: 1,
+      subscription_type: 'standard',
+      ...group,
+    }))
+    const providerButton = (wrapper: VueWrapper, provider: string) =>
+      wrapper.get(`[data-test="group-selector-provider"][data-provider="${provider}"]`)
+    const optionNames = (wrapper: VueWrapper) => wrapper.findAll('[data-test="group-selector-option"]')
+      .map((option) => option.findComponent({ name: 'GroupOptionItem' }).props('name'))
+    const expectedNames = (...ids: number[]) => ids.map((id) => `Shared group ${id}`)
+    const openSelector = async () => {
+      const wrapper = await mountView()
+      await wrapper.get('[data-test="group-selector-trigger"]').trigger('click')
+      return wrapper
+    }
+
+    beforeEach(() => {
+      getAvailableGroups.mockResolvedValue(availableGroups)
+    })
+
+    it('defaults to all providers and preserves the available group order', async () => {
+      const wrapper = await openSelector()
+      try {
+        expect(wrapper.findAll('[data-test="group-selector-provider"]')
+          .map((button) => button.attributes('data-provider')))
+          .toEqual(['all', 'anthropic', 'openai', 'domestic', 'other'])
+        expect(providerButton(wrapper, 'all').attributes('aria-pressed')).toBe('true')
+        for (const provider of ['anthropic', 'openai', 'domestic', 'other']) {
+          expect(providerButton(wrapper, provider).attributes('aria-pressed')).toBe('false')
+        }
+        expect(optionNames(wrapper)).toEqual(availableGroups.map((group) => group.name))
+      } finally {
+        wrapper.unmount()
+      }
+    })
+
+    it('uses explicit display categories before platform and falls back for automatic or unknown categories', async () => {
+      const wrapper = await openSelector()
+      try {
+        const cases: Array<[string, number[]]> = [
+          ['anthropic', [32, 33]],
+          ['openai', [34]],
+          ['domestic', [31, 35]],
+          ['other', [36, 37, 38]],
+        ]
+        for (const [provider, ids] of cases) {
+          await providerButton(wrapper, provider).trigger('click')
+          expect(providerButton(wrapper, provider).attributes('aria-pressed')).toBe('true')
+          expect(optionNames(wrapper)).toEqual(expectedNames(...ids))
+        }
+        await providerButton(wrapper, 'all').trigger('click')
+        expect(optionNames(wrapper)).toEqual(availableGroups.map((group) => group.name))
+      } finally {
+        wrapper.unmount()
+      }
+    })
+
+    it('combines provider filters with name or description search and keeps empty categories selectable', async () => {
+      getAvailableGroups.mockResolvedValue(availableGroups.filter((group) => group.id !== 34))
+      const wrapper = await openSelector()
+      try {
+        expect(providerButton(wrapper, 'openai').attributes('disabled')).toBeUndefined()
+        await providerButton(wrapper, 'openai').trigger('click')
+        expect(optionNames(wrapper)).toEqual([])
+        expect(wrapper.text()).toContain('keys.noGroupFound')
+
+        await providerButton(wrapper, 'domestic').trigger('click')
+        const search = wrapper.get('[data-test="group-selector-search"]')
+        await search.setValue('shared')
+        expect(optionNames(wrapper)).toEqual(expectedNames(31, 35))
+        await search.setValue('  BATCH  ')
+        expect(optionNames(wrapper)).toEqual(expectedNames(31))
+        await providerButton(wrapper, 'anthropic').trigger('click')
+        expect(optionNames(wrapper)).toEqual([])
+        await search.setValue('  SHARED GROUP 33  ')
+        expect(optionNames(wrapper)).toEqual(expectedNames(33))
+        await search.setValue('missing group')
+        expect(optionNames(wrapper)).toEqual([])
+        expect(wrapper.text()).toContain('keys.noGroupFound')
+        await search.setValue('')
+        expect(optionNames(wrapper)).toEqual(expectedNames(32, 33))
+      } finally {
+        wrapper.unmount()
+      }
+    })
+
+    it('only updates the original group ID when a filtered group is selected', async () => {
+      updateKey.mockResolvedValue({ ...createApiKey(), group_id: 31 })
+      const wrapper = await openSelector()
+      try {
+        await providerButton(wrapper, 'domestic').trigger('click')
+        await wrapper.get('[data-test="group-selector-search"]').setValue('batch')
+        expect(updateKey).not.toHaveBeenCalled()
+        expect(optionNames(wrapper)).toEqual(expectedNames(31))
+
+        await wrapper.get('[data-test="group-selector-option"]').trigger('click')
+        await flushPromises()
+        expect(updateKey).toHaveBeenCalledOnce()
+        expect(updateKey).toHaveBeenCalledWith(1, { group_id: 31 })
+        expect(wrapper.find('[data-test="group-selector-provider"]').exists()).toBe(false)
+      } finally {
+        wrapper.unmount()
+      }
+    })
+
+    it('resets provider and search each time the group selector is reopened', async () => {
+      const wrapper = await openSelector()
+      try {
+        await providerButton(wrapper, 'domestic').trigger('click')
+        await wrapper.get('[data-test="group-selector-search"]').setValue('batch')
+        expect(optionNames(wrapper)).toEqual(expectedNames(31))
+
+        const trigger = wrapper.get('[data-test="group-selector-trigger"]')
+        await trigger.trigger('click')
+        expect(wrapper.find('[data-test="group-selector-provider"]').exists()).toBe(false)
+        await trigger.trigger('click')
+        expect(providerButton(wrapper, 'all').attributes('aria-pressed')).toBe('true')
+        expect(wrapper.get<HTMLInputElement>('[data-test="group-selector-search"]').element.value).toBe('')
+        expect(optionNames(wrapper)).toEqual(availableGroups.map((group) => group.name))
+        expect(updateKey).not.toHaveBeenCalled()
+      } finally {
+        wrapper.unmount()
+      }
+    })
+  })
+
   describe('create provider selection', () => {
     const platforms = ['anthropic', 'openai', 'kimi', 'zhipu', 'deepseek', 'minimax', 'gemini', 'grok', 'antigravity', 'composite', 'opencode_go', 'typesafe']
     const availableGroups = platforms.map((platform, index) => ({

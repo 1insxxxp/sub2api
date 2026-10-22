@@ -1462,7 +1462,7 @@
         role="dialog"
         :aria-modal="isMobileGroupSelector ? 'true' : undefined"
         :class="[
-          'animate-in fade-in fixed z-[100000020] overflow-hidden rounded-xl bg-white shadow-lg ring-1 ring-black/5 duration-200 dark:bg-dark-800 dark:ring-white/10',
+          'keys-group-dropdown animate-in fade-in fixed z-[100000020] flex flex-col overflow-hidden rounded-xl bg-white shadow-lg ring-1 ring-black/5 duration-200 dark:bg-dark-800 dark:ring-white/10',
           isMobileGroupSelector
             ? 'inset-x-2 bottom-2 max-h-[calc(100dvh-16px)] w-auto slide-in-from-bottom-2'
             : 'w-[480px] slide-in-from-top-2'
@@ -1471,29 +1471,48 @@
         :style="isMobileGroupSelector ? undefined : {
           top: dropdownPosition.top !== undefined ? dropdownPosition.top + 'px' : undefined,
           bottom: dropdownPosition.bottom !== undefined ? dropdownPosition.bottom + 'px' : undefined,
-          left: dropdownPosition.left + 'px'
+          left: dropdownPosition.left + 'px',
+          maxHeight: `calc(100dvh - ${(dropdownPosition.top ?? dropdownPosition.bottom ?? 0) + dropdownViewportPadding}px)`
         }"
       >
         <!-- Search box -->
-        <div class="border-b border-gray-100 p-2 dark:border-dark-700">
+        <div class="shrink-0 border-b border-gray-100 p-2 dark:border-dark-700">
           <div class="relative">
             <svg class="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
             <input
               v-model="groupSearchQuery"
+              data-test="group-selector-search"
               type="text"
               class="w-full rounded-lg border border-gray-200 bg-gray-50 py-1.5 pl-8 pr-3 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-primary-300 focus:ring-1 focus:ring-primary-300 dark:border-dark-600 dark:bg-dark-700 dark:text-white dark:placeholder-gray-500 dark:focus:border-primary-600 dark:focus:ring-primary-600"
               :placeholder="t('keys.searchGroup')"
+              :aria-label="t('keys.searchGroup')"
               @click.stop
             />
           </div>
+          <div class="keys-group-provider-filters" role="group" :aria-label="t('keys.providerLabel')">
+            <button
+              v-for="provider in groupProviderFilters"
+              :key="provider.value"
+              type="button"
+              class="keys-group-provider-filter"
+              data-test="group-selector-provider"
+              :data-provider="provider.value"
+              :aria-pressed="groupProviderFilter === provider.value"
+              @click="groupProviderFilter = provider.value"
+            >
+              {{ provider.label }}
+            </button>
+          </div>
         </div>
         <!-- Group list -->
-        <div :class="[isMobileGroupSelector ? 'max-h-[70dvh]' : 'max-h-80', 'space-y-2 overflow-y-auto bg-gray-50/80 p-2 dark:bg-black/10']">
+        <div :class="[isMobileGroupSelector ? 'max-h-[70dvh]' : 'max-h-80', 'min-h-0 space-y-2 overflow-y-auto bg-gray-50/80 p-2 dark:bg-black/10']">
           <button
             v-for="option in filteredGroupOptions"
             :key="option.value ?? 'null'"
+            type="button"
+            data-test="group-selector-option"
             @click="changeGroup(selectedKeyForGroup!, option.value)"
             class="flex w-full items-center justify-between rounded-lg text-sm focus-visible:outline-none"
             :title="option.description || undefined"
@@ -2031,10 +2050,18 @@ watch([showCreateModal, createProviderOptions], ([isOpen, providers], [wasOpen])
 
 // Group dropdown search
 const groupSearchQuery = ref('')
+const groupProviderFilter = ref<'all' | KeyGroupProvider>('all')
+const groupProviderFilters = computed(() => [
+  { value: 'all' as const, label: t('common.all') },
+  ...KEY_GROUP_PROVIDERS.map((value) => ({ value, label: t(`keys.providers.${value}`) }))
+])
 const filteredGroupOptions = computed(() => {
   const query = groupSearchQuery.value.trim().toLowerCase()
-  if (!query) return groupOptions.value
   return groupOptions.value.filter((opt) => {
+    if (groupProviderFilter.value !== 'all' && getKeyGroupProvider(opt) !== groupProviderFilter.value) {
+      return false
+    }
+    if (!query) return true
     return opt.label.toLowerCase().includes(query) ||
       (opt.description && opt.description.toLowerCase().includes(query))
   })
@@ -2222,7 +2249,7 @@ const openGroupSelector = (key: ApiKey) => {
     const buttonEl = groupButtonRefs.value.get(key.id)
     if (buttonEl) {
       const rect = buttonEl.getBoundingClientRect()
-      const dropdownEstHeight = 400 // estimated max dropdown height
+      const dropdownEstHeight = 440 // includes search, provider filters and group list
       const dropdownEstWidth = Math.min(480, window.innerWidth - dropdownViewportPadding * 2)
       const spaceBelow = window.innerHeight - rect.bottom
       const spaceAbove = rect.top
@@ -2248,6 +2275,7 @@ const openGroupSelector = (key: ApiKey) => {
     }
     groupSelectorKeyId.value = key.id
     groupSearchQuery.value = ''
+    groupProviderFilter.value = 'all'
   }
 }
 
@@ -2624,6 +2652,46 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.keys-group-provider-filters {
+  display: flex;
+  min-width: 0;
+  gap: 0.25rem;
+  overflow-x: auto;
+  padding-top: 0.375rem;
+}
+.keys-group-provider-filter {
+  flex: none;
+  min-height: 2.75rem;
+  padding: 0.375rem 0.625rem;
+  border: 1px solid transparent;
+  border-radius: 0.375rem;
+  color: #64748b;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.keys-group-provider-filter:hover { background: rgb(148 163 184 / 8%); }
+.keys-group-provider-filter[aria-pressed='true'] {
+  border-color: rgb(var(--brand-rgb) / 18%);
+  background: rgb(var(--brand-rgb) / 7%);
+  color: rgb(var(--brand-rgb));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 45%);
+}
+.keys-group-provider-filter:focus-visible {
+  outline: 2px solid rgb(var(--brand-rgb) / 55%);
+  outline-offset: -2px;
+}
+.dark .keys-group-provider-filter { color: #94a3b8; }
+.dark .keys-group-provider-filter[aria-pressed='true'] {
+  border-color: rgb(var(--brand-rgb) / 30%);
+  background: rgb(var(--brand-rgb) / 14%);
+  color: #93c5fd;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 6%);
+}
+@media (prefers-reduced-motion: reduce) {
+  .keys-group-provider-filter { transition: none; }
+}
 .keys-groups-content {
   display: flex;
   min-height: 0;
