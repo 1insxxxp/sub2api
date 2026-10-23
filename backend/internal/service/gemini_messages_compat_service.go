@@ -2552,7 +2552,6 @@ func (s *GeminiMessagesCompatService) handleStreamingResponseWithContext(ctx con
 		},
 	}
 	emitSSE("message_start", messageStart)
-	flusher.Flush()
 
 	var firstTokenMs *int
 	var usage ClaudeUsage
@@ -2630,7 +2629,7 @@ func (s *GeminiMessagesCompatService) handleStreamingResponseWithContext(ctx con
 					continue
 				}
 				if openToolIndex >= 0 {
-					writeSSE(c.Writer, "content_block_stop", map[string]any{
+					emitSSE("content_block_stop", map[string]any{
 						"type":  "content_block_stop",
 						"index": openToolIndex,
 					})
@@ -2640,7 +2639,7 @@ func (s *GeminiMessagesCompatService) handleStreamingResponseWithContext(ctx con
 				}
 				if openBlockType != "thinking" {
 					if openBlockIndex >= 0 {
-						writeSSE(c.Writer, "content_block_stop", map[string]any{
+						emitSSE("content_block_stop", map[string]any{
 							"type":  "content_block_stop",
 							"index": openBlockIndex,
 						})
@@ -2648,7 +2647,7 @@ func (s *GeminiMessagesCompatService) handleStreamingResponseWithContext(ctx con
 					openBlockType = "thinking"
 					openBlockIndex = nextBlockIndex
 					nextBlockIndex++
-					writeSSE(c.Writer, "content_block_start", map[string]any{
+					emitSSE("content_block_start", map[string]any{
 						"type":  "content_block_start",
 						"index": openBlockIndex,
 						"content_block": map[string]any{
@@ -2662,7 +2661,7 @@ func (s *GeminiMessagesCompatService) handleStreamingResponseWithContext(ctx con
 					ms := int(time.Since(startTime).Milliseconds())
 					firstTokenMs = &ms
 				}
-				writeSSE(c.Writer, "content_block_delta", map[string]any{
+				emitSSE("content_block_delta", map[string]any{
 					"type":  "content_block_delta",
 					"index": openBlockIndex,
 					"delta": map[string]any{
@@ -2670,7 +2669,6 @@ func (s *GeminiMessagesCompatService) handleStreamingResponseWithContext(ctx con
 						"thinking": delta,
 					},
 				})
-				flusher.Flush()
 				continue
 			}
 			if text, ok := part["text"].(string); ok && text != "" {
@@ -2728,7 +2726,6 @@ func (s *GeminiMessagesCompatService) handleStreamingResponseWithContext(ctx con
 						"text": delta,
 					},
 				})
-				flusher.Flush()
 				continue
 			}
 
@@ -2809,7 +2806,6 @@ func (s *GeminiMessagesCompatService) handleStreamingResponseWithContext(ctx con
 						},
 					})
 				}
-				flusher.Flush()
 			}
 		}
 
