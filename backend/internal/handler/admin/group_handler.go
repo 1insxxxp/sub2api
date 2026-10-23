@@ -251,7 +251,7 @@ func sanitizeUpdateGroupRequestForSimpleMode(req *UpdateGroupRequest) {
 
 // CreateGroupRequest represents create group request
 type CreateGroupRequest struct {
-	KeyDisplayCategory               string                        `json:"key_display_category" binding:"omitempty,oneof=anthropic openai domestic other"`
+	KeyDisplayCategory               string                        `json:"key_display_category" binding:"omitempty,oneof=anthropic openai gemini grok domestic image other"`
 	Name                             string                        `json:"name" binding:"required"`
 	Description                      string                        `json:"description"`
 	Tag                              string                        `json:"tag"`
@@ -332,7 +332,7 @@ type CreateGroupRequest struct {
 
 // UpdateGroupRequest represents update group request
 type UpdateGroupRequest struct {
-	KeyDisplayCategory               *string                        `json:"key_display_category" binding:"omitempty,oneof='' anthropic openai domestic other"`
+	KeyDisplayCategory               *string                        `json:"key_display_category" binding:"omitempty,oneof='' anthropic openai gemini grok domestic image other"`
 	Name                             string                         `json:"name"`
 	Description                      *string                        `json:"description"`
 	Tag                              *string                        `json:"tag"`

@@ -12,14 +12,14 @@ import (
 )
 
 func TestGroupEntityPreservesKeyDisplayCategory(t *testing.T) {
-	for _, category := range []string{"", "anthropic", "openai", "domestic", "other"} {
+	for _, category := range []string{"", "anthropic", "openai", "gemini", "grok", "domestic", "image", "other"} {
 		entity := &dbent.Group{Platform: "openai", KeyDisplayCategory: category}
 		require.NoError(t, group.KeyDisplayCategoryValidator(category))
 		mapped := groupEntityToService(entity)
 		require.Equal(t, category, mapped.KeyDisplayCategory)
 		require.Equal(t, entity.Platform, mapped.Platform)
 	}
-	for _, category := range []string{"unknown", "DOMESTIC", " domestic ", "gemini"} {
+	for _, category := range []string{"unknown", "DOMESTIC", " domestic ", "Gemini", "images"} {
 		require.Error(t, group.KeyDisplayCategoryValidator(category))
 	}
 }

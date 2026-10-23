@@ -748,6 +748,12 @@
               >
                 <span class="keys-provider-icons flex shrink-0 items-center justify-center" aria-hidden="true">
                   <span
+                    v-if="provider.value === 'image' || provider.value === 'other'"
+                    class="flex h-6 w-6 items-center justify-center rounded bg-gray-100 text-gray-500 dark:bg-dark-700 dark:text-gray-400"
+                  >
+                    <Icon :name="provider.value === 'image' ? 'sparkles' : 'grid'" size="sm" />
+                  </span>
+                  <span
                     v-for="platform in KEY_GROUP_PROVIDER_ICONS[provider.value]"
                     :key="platform"
                     class="flex h-6 w-6 items-center justify-center rounded"

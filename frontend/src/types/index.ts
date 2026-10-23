@@ -658,7 +658,7 @@ export type GroupTag = string
 export interface ModelAlias { alias: string; upstream_model: string; anti_truncation?: { enabled: boolean; max_rounds?: number; max_output_tokens?: number; max_duration_seconds?: number } }
 
 
-export type KeyDisplayCategory = '' | 'anthropic' | 'openai' | 'domestic' | 'other'
+export type KeyDisplayCategory = '' | 'anthropic' | 'openai' | 'gemini' | 'grok' | 'domestic' | 'image' | 'other'
 
 export interface Group {
   id: number

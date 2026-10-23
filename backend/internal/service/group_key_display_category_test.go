@@ -19,7 +19,7 @@ func TestGroupKeyDisplayCategoryLifecycle(t *testing.T) {
 			require.NoError(t, err)
 			require.Empty(t, created.KeyDisplayCategory)
 			repo.getByID = created
-			for _, category := range []string{"domestic", "anthropic", "openai", "other", ""} {
+			for _, category := range []string{"domestic", "anthropic", "openai", "gemini", "grok", "image", "other", ""} {
 				updated, err := svc.UpdateGroup(context.Background(), created.ID, &UpdateGroupInput{KeyDisplayCategory: &category})
 				require.NoError(t, err)
 				require.Equal(t, category, updated.KeyDisplayCategory)
@@ -35,7 +35,7 @@ func TestGroupKeyDisplayCategoryLifecycle(t *testing.T) {
 }
 
 func TestGroupKeyDisplayCategoryCreateAcceptsAllowedValues(t *testing.T) {
-	for _, category := range []string{"", "anthropic", "openai", "domestic", "other"} {
+	for _, category := range []string{"", "anthropic", "openai", "gemini", "grok", "domestic", "image", "other"} {
 		repo := &groupRepoStubForAdmin{}
 		svc := &adminServiceImpl{groupRepo: repo}
 		created, err := svc.CreateGroup(context.Background(), &CreateGroupInput{Name: "group", Platform: PlatformOpenAI, RateMultiplier: 1, KeyDisplayCategory: category})
@@ -46,7 +46,7 @@ func TestGroupKeyDisplayCategoryCreateAcceptsAllowedValues(t *testing.T) {
 }
 
 func TestGroupKeyDisplayCategoryRejectsUnknownBeforePersistence(t *testing.T) {
-	for _, category := range []string{"unknown", "DOMESTIC", " domestic ", "gemini"} {
+	for _, category := range []string{"unknown", "DOMESTIC", " domestic ", "Gemini", "images"} {
 		repo := &groupRepoStubForAdmin{getByID: &Group{ID: 82, Name: "group", Platform: PlatformOpenAI, KeyDisplayCategory: "domestic"}}
 		svc := &adminServiceImpl{groupRepo: repo}
 		_, err := svc.CreateGroup(context.Background(), &CreateGroupInput{Name: "group", RateMultiplier: 1, KeyDisplayCategory: category})
@@ -81,7 +81,7 @@ func TestSystemCustomGroupKeyDisplayCategoryLifecycle(t *testing.T) {
 	for _, step := range []struct {
 		category *string
 		want     string
-	}{{nil, "domestic"}, {ptrString("other"), "other"}, {ptrString(""), ""}} {
+	}{{nil, "domestic"}, {ptrString("gemini"), "gemini"}, {ptrString("grok"), "grok"}, {ptrString("image"), "image"}, {ptrString("other"), "other"}, {ptrString(""), ""}} {
 		updated, err := svc.Update(context.Background(), created.Group.ID, UpdateSystemCustomGroupRequest{
 			Name: created.Group.Name, SourceGroupIDs: []int64{10}, KeyDisplayCategory: step.category,
 		})
@@ -106,7 +106,7 @@ func TestGroupServiceKeyDisplayCategoryLifecycle(t *testing.T) {
 	for _, step := range []struct {
 		category *string
 		want     string
-	}{{nil, "domestic"}, {ptrString("other"), "other"}, {ptrString(""), ""}} {
+	}{{nil, "domestic"}, {ptrString("gemini"), "gemini"}, {ptrString("grok"), "grok"}, {ptrString("image"), "image"}, {ptrString("other"), "other"}, {ptrString(""), ""}} {
 		updated, err := svc.Update(context.Background(), created.ID, UpdateGroupRequest{KeyDisplayCategory: step.category})
 		require.NoError(t, err)
 		require.Equal(t, step.want, updated.KeyDisplayCategory)

@@ -11,7 +11,7 @@ import (
 )
 
 func TestGroupKeyDisplayCategoryVisibleInAllResponses(t *testing.T) {
-	for _, category := range []string{"", "domestic", "openai", "anthropic", "other"} {
+	for _, category := range []string{"", "anthropic", "openai", "gemini", "grok", "domestic", "image", "other"} {
 		group := &service.Group{Platform: service.PlatformOpenAI, KeyDisplayCategory: category}
 		for _, mapped := range []any{GroupFromService(group), GroupFromServiceAdmin(group), GroupFromServiceShallow(group)} {
 			raw, err := json.Marshal(mapped)

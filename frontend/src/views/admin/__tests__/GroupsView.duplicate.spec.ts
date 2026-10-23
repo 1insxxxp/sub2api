@@ -187,19 +187,19 @@ function mountView() {
 describe('GroupsView duplicate action', () => {
   it.each([false, true])('creates a display category and resets it when reopening (simple mode: %s)', async (simpleMode) => {
     authState.isSimpleMode = simpleMode
-    createGroup.mockResolvedValue({ ...sourceGroup, key_display_category: 'domestic' })
+    createGroup.mockResolvedValue({ ...sourceGroup, key_display_category: 'image' })
     const wrapper = mountView()
     await flushPromises()
     const openCreate = () => wrapper.get('[data-tour="groups-create-btn"]').trigger('click')
     await openCreate()
     const category = wrapper.get<HTMLSelectElement>('[data-test="create-group-key-display-category"]')
     expect(category.element.value).toBe('')
-    expect(category.findAll('option').map(option => option.attributes('value'))).toEqual(['', 'anthropic', 'openai', 'domestic', 'other'])
+    expect(category.findAll('option').map(option => option.attributes('value'))).toEqual(['', 'anthropic', 'openai', 'gemini', 'grok', 'domestic', 'image', 'other'])
     await wrapper.get('[data-tour="group-form-name"]').setValue('Custom protocol group')
-    await category.setValue('domestic')
+    await category.setValue('image')
     await wrapper.get('#create-group-form').trigger('submit')
     await flushPromises()
-    expect(createGroup).toHaveBeenCalledWith(expect.objectContaining({ name: 'Custom protocol group', platform: 'anthropic', key_display_category: 'domestic' }))
+    expect(createGroup).toHaveBeenCalledWith(expect.objectContaining({ name: 'Custom protocol group', platform: 'anthropic', key_display_category: 'image' }))
     await openCreate()
     expect(wrapper.get<HTMLSelectElement>('[data-test="create-group-key-display-category"]').element.value).toBe('')
     expect(wrapper.get<HTMLInputElement>('[data-tour="group-form-name"]').element.value).toBe('')
@@ -208,9 +208,9 @@ describe('GroupsView duplicate action', () => {
 
   it.each([false, true])('restores and saves a display category, including an automatic reset (simple mode: %s)', async (simpleMode) => {
     authState.isSimpleMode = simpleMode
-    const saved = { ...sourceGroup, key_display_category: 'domestic' }
+    const saved = { ...sourceGroup, key_display_category: 'gemini' }
     listGroups.mockResolvedValue({ items: [saved], total: 1, page: 1, page_size: 20, pages: 1 })
-    updateGroup.mockResolvedValue({ ...saved, key_display_category: 'other' })
+    updateGroup.mockResolvedValue({ ...saved, key_display_category: 'grok' })
     const wrapper = mountView()
     await flushPromises()
     const openEditor = async () => {
@@ -218,14 +218,14 @@ describe('GroupsView duplicate action', () => {
       await flushPromises()
     }
     await openEditor()
-    expect(wrapper.get<HTMLSelectElement>('[data-test="edit-group-key-display-category"]').element.value).toBe('domestic')
-    await wrapper.get('[data-test="edit-group-key-display-category"]').setValue('other')
-    listGroups.mockResolvedValue({ items: [{ ...saved, key_display_category: 'other' }], total: 1, page: 1, page_size: 20, pages: 1 })
+    expect(wrapper.get<HTMLSelectElement>('[data-test="edit-group-key-display-category"]').element.value).toBe('gemini')
+    await wrapper.get('[data-test="edit-group-key-display-category"]').setValue('grok')
+    listGroups.mockResolvedValue({ items: [{ ...saved, key_display_category: 'grok' }], total: 1, page: 1, page_size: 20, pages: 1 })
     await wrapper.get('#edit-group-form').trigger('submit')
     await flushPromises()
-    expect(updateGroup).toHaveBeenCalledWith(42, expect.objectContaining({ key_display_category: 'other' }))
+    expect(updateGroup).toHaveBeenCalledWith(42, expect.objectContaining({ key_display_category: 'grok' }))
     await openEditor()
-    expect(wrapper.get<HTMLSelectElement>('[data-test="edit-group-key-display-category"]').element.value).toBe('other')
+    expect(wrapper.get<HTMLSelectElement>('[data-test="edit-group-key-display-category"]').element.value).toBe('grok')
     await wrapper.get('[data-test="edit-group-key-display-category"]').setValue('')
     updateGroup.mockResolvedValue({ ...saved, key_display_category: '' })
     listGroups.mockResolvedValue({ items: [{ ...saved, key_display_category: '' }], total: 1, page: 1, page_size: 20, pages: 1 })

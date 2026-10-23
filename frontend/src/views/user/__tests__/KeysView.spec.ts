@@ -778,6 +778,9 @@ describe('user KeysView column settings', () => {
       { id: 36, platform: 'gemini' },
       { id: 37, platform: 'grok' },
       { id: 38, platform: 'anthropic', key_display_category: 'other' },
+      { id: 39, platform: 'gemini', key_display_category: 'image' },
+      { id: 40, platform: 'openai', tag: 'image' },
+      { id: 41, platform: 'openai', tag: 'image', key_display_category: 'gemini' },
     ].map((group) => ({
       name: `Shared group ${group.id}`,
       rate_multiplier: 1,
@@ -804,9 +807,9 @@ describe('user KeysView column settings', () => {
       try {
         expect(wrapper.findAll('[data-test="group-selector-provider"]')
           .map((button) => button.attributes('data-provider')))
-          .toEqual(['all', 'anthropic', 'openai', 'domestic', 'other'])
+          .toEqual(['all', 'anthropic', 'openai', 'gemini', 'grok', 'domestic', 'image', 'other'])
         expect(providerButton(wrapper, 'all').attributes('aria-pressed')).toBe('true')
-        for (const provider of ['anthropic', 'openai', 'domestic', 'other']) {
+        for (const provider of ['anthropic', 'openai', 'gemini', 'grok', 'domestic', 'image', 'other']) {
           expect(providerButton(wrapper, provider).attributes('aria-pressed')).toBe('false')
         }
         expect(optionNames(wrapper)).toEqual(availableGroups.map((group) => group.name))
@@ -821,8 +824,11 @@ describe('user KeysView column settings', () => {
         const cases: Array<[string, number[]]> = [
           ['anthropic', [32, 33]],
           ['openai', [34]],
+          ['gemini', [36, 41]],
+          ['grok', [37]],
           ['domestic', [31, 35]],
-          ['other', [36, 37, 38]],
+          ['image', [39, 40]],
+          ['other', [38]],
         ]
         for (const [provider, ids] of cases) {
           await providerButton(wrapper, provider).trigger('click')
@@ -907,14 +913,18 @@ describe('user KeysView column settings', () => {
 
   describe('create provider selection', () => {
     const platforms = ['anthropic', 'openai', 'kimi', 'zhipu', 'deepseek', 'minimax', 'gemini', 'grok', 'antigravity', 'composite', 'opencode_go', 'typesafe']
-    const availableGroups = platforms.map((platform, index) => ({
-      id: index + 1,
-      // Deliberately ambiguous names: classification must follow the platform.
-      name: `Shared group ${index + 1}`,
-      platform,
-      rate_multiplier: 1,
-      subscription_type: 'standard',
-    }))
+    const availableGroups = [
+      ...platforms.map((platform, index) => ({
+        id: index + 1,
+        // Deliberately ambiguous names: classification must follow the platform.
+        name: `Shared group ${index + 1}`,
+        platform,
+        rate_multiplier: 1,
+        subscription_type: 'standard',
+      })),
+      { id: 13, name: 'Shared group 13', platform: 'openai', key_display_category: 'image', rate_multiplier: 1, subscription_type: 'standard' },
+      { id: 14, name: 'Shared group 14', platform: 'gemini', tag: 'image', rate_multiplier: 1, subscription_type: 'standard' },
+    ]
     const groupSelect = (wrapper: VueWrapper) => wrapper.findComponent('[data-tour="key-form-group"]')
     const optionIds = (wrapper: VueWrapper) => groupSelect(wrapper).props('options').map((option: { value: number }) => option.value)
     const chooseProvider = (wrapper: VueWrapper, value: string) => wrapper.get(`input[name="key-provider"][value="${value}"]`).setValue()
@@ -930,15 +940,22 @@ describe('user KeysView column settings', () => {
 
     it('classifies all configured platforms and retains the complete table filter', async () => {
       const wrapper = await openCreate()
-      expect(wrapper.findAll('input[name="key-provider"]')).toHaveLength(4)
+      expect(wrapper.findAll('input[name="key-provider"]').map((input) => input.attributes('value')))
+        .toEqual(['anthropic', 'openai', 'gemini', 'grok', 'domestic', 'image', 'other'])
       expect(optionIds(wrapper)).toEqual([1])
       await chooseProvider(wrapper, 'openai')
       expect(optionIds(wrapper)).toEqual([2])
+      await chooseProvider(wrapper, 'gemini')
+      expect(optionIds(wrapper)).toEqual([7])
+      await chooseProvider(wrapper, 'grok')
+      expect(optionIds(wrapper)).toEqual([8])
       await chooseProvider(wrapper, 'domestic')
       expect(optionIds(wrapper)).toEqual([3, 4, 5, 6])
+      await chooseProvider(wrapper, 'image')
+      expect(optionIds(wrapper)).toEqual([13, 14])
       await chooseProvider(wrapper, 'other')
-      expect(optionIds(wrapper)).toEqual([7, 8, 9, 10, 11, 12])
-      expect(wrapper.findAllComponents({ name: 'Select' })[0].props('options')).toHaveLength(14)
+      expect(optionIds(wrapper)).toEqual([9, 10, 11, 12])
+      expect(wrapper.findAllComponents({ name: 'Select' })[0].props('options')).toHaveLength(16)
     })
 
     it('enables explicit categories, filters their groups, and creates with the original group ID', async () => {
@@ -1045,7 +1062,7 @@ describe('user KeysView column settings', () => {
       await wrapper.get('[data-test="close-dialog"]').trigger('click')
       await getButtonByText(wrapper, 'common.edit').trigger('click')
       expect(wrapper.find('[data-tour="key-form-provider"]').exists()).toBe(false)
-      expect(optionIds(wrapper)).toHaveLength(12)
+      expect(optionIds(wrapper)).toHaveLength(14)
     })
   })
 })

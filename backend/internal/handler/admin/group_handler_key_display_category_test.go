@@ -12,7 +12,7 @@ import (
 )
 
 func TestGroupKeyDisplayCategoryBindingAndSimpleMode(t *testing.T) {
-	for _, category := range []string{"", "anthropic", "openai", "domestic", "other"} {
+	for _, category := range []string{"", "anthropic", "openai", "gemini", "grok", "domestic", "image", "other"} {
 		t.Run(category, func(t *testing.T) {
 			for _, req := range []any{&CreateGroupRequest{}, &UpdateGroupRequest{}} {
 				require.NoError(t, bindGroupPlatformJSON(t, req, fmt.Sprintf(`{"name":"group","key_display_category":%q}`, category)))
@@ -54,7 +54,7 @@ func TestGroupKeyDisplayCategoryAdminResponses(t *testing.T) {
 }
 
 func TestGroupKeyDisplayCategoryBindingRejectsUnknown(t *testing.T) {
-	for _, category := range []string{"unknown", "DOMESTIC", " domestic ", "gemini"} {
+	for _, category := range []string{"unknown", "DOMESTIC", " domestic ", "Gemini", "images"} {
 		for _, req := range []any{&CreateGroupRequest{}, &UpdateGroupRequest{}} {
 			require.Error(t, bindGroupPlatformJSON(t, req, fmt.Sprintf(`{"name":"group","key_display_category":%q}`, category)))
 		}

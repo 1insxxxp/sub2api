@@ -140,18 +140,24 @@ export default {
     nameLabel: '名称',
     namePlaceholder: '我的 API 密钥',
     groupLabel: '分组',
-    providerLabel: '厂商',
+    providerLabel: '分类',
     providers: {
       anthropic: 'Anthropic',
       openai: 'OpenAI',
+      gemini: 'Gemini',
+      grok: 'Grok',
       domestic: '国产模型',
+      image: '生图',
       other: '其他'
     },
     providerHints: {
       anthropic: '选择 Anthropic / Claude 的可用分组',
       openai: '选择 OpenAI / GPT 的可用分组',
+      gemini: '选择 Gemini 的可用分组',
+      grok: '选择 Grok 的可用分组',
       domestic: '包含 DeepSeek、Kimi、智谱 GLM、MiniMax',
-      other: '包含 Gemini、Grok、Antigravity、OpenCode 和混合分组'
+      image: '选择图片生成的可用分组',
+      other: '包含 Antigravity、OpenCode 和其他混合分组'
     },
     selectGroup: '选择分组',
     statusLabel: '状态',

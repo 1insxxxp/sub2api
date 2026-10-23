@@ -140,18 +140,24 @@ export default {
     nameLabel: 'Name',
     namePlaceholder: 'My API Key',
     groupLabel: 'Group',
-    providerLabel: 'Provider',
+    providerLabel: 'Category',
     providers: {
       anthropic: 'Anthropic',
       openai: 'OpenAI',
+      gemini: 'Gemini',
+      grok: 'Grok',
       domestic: 'Chinese AI',
+      image: 'Image',
       other: 'Other'
     },
     providerHints: {
       anthropic: 'Choose an available Anthropic / Claude group',
       openai: 'Choose an available OpenAI / GPT group',
+      gemini: 'Choose an available Gemini group',
+      grok: 'Choose an available Grok group',
       domestic: 'Includes DeepSeek, Kimi, Zhipu GLM and MiniMax',
-      other: 'Includes Gemini, Grok, Antigravity, OpenCode and mixed groups'
+      image: 'Choose an available image generation group',
+      other: 'Includes Antigravity, OpenCode and other mixed groups'
     },
     selectGroup: 'Select a group',
     statusLabel: 'Status',
