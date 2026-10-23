@@ -562,6 +562,9 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		SimpleModeKeyRateLimitOnly: simpleModeKeyRateLimitOnly,
 	}, s.billingDeps(), s.usageBillingRepo)
 
+	if usageLog.durablePersistenceAttempted {
+		return billingErr
+	}
 	if billingErr != nil {
 		if s.usageBillingRepo != nil {
 			usageLog.ActualCost = 0

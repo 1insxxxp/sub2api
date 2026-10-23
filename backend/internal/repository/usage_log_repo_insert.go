@@ -643,14 +643,18 @@ func (r *usageLogRepository) flushBestEffortBatch(db *sql.DB, batch []usageLogBe
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
 	query, args := buildUsageLogBestEffortInsertQuery(preparedList)
-	if _, err := db.ExecContext(ctx, query, args...); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	_, err := db.ExecContext(ctx, query, args...)
+	cancel()
+	if err != nil {
 		logger.LegacyPrintf("repository.usage_log", "best-effort batch insert failed: %v", err)
 		for _, group := range groupOrder {
-			singleErr := execUsageLogInsertNoResult(ctx, db, group.prepared)
+			// The batch (or an earlier key) may have exhausted its budget.
+			// Each unique-key fallback is an independent, bounded insert.
+			singleCtx, singleCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			singleErr := execUsageLogInsertNoResult(singleCtx, db, group.prepared)
+			singleCancel()
 			if singleErr != nil {
 				logger.LegacyPrintf("repository.usage_log", "best-effort single fallback insert failed: %v", singleErr)
 			} else if group.prepared.requestID != "" && r != nil && r.bestEffortRecent != nil {

@@ -72,6 +72,10 @@ func ValidateUsageBillingCommandAmounts(cmd *UsageBillingCommand) error {
 
 // UsageBillingCommand describes one billable request that must be applied at most once.
 type UsageBillingCommand struct {
+	// UsageLog is a settlement snapshot for durable detail persistence. It is
+	// deliberately excluded from the historical request fingerprint.
+	UsageLog *UsageLog
+
 	RequestID          string
 	APIKeyID           int64
 	RequestFingerprint string

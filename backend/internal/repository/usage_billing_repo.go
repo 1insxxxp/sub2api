@@ -30,6 +30,10 @@ func NewUsageBillingRepository(_ *dbent.Client, sqlDB *sql.DB) service.UsageBill
 	return &usageBillingRepository{db: sqlDB}
 }
 
+// UsagePersistenceEnabled identifies settlement repositories that durably own
+// usage detail writes. Callers must not race them with legacy placeholders.
+func (*usageBillingRepository) UsagePersistenceEnabled() bool { return true }
+
 func (r *usageBillingRepository) Apply(ctx context.Context, cmd *service.UsageBillingCommand) (_ *service.UsageBillingApplyResult, err error) {
 	if cmd == nil {
 		return &service.UsageBillingApplyResult{}, nil
@@ -74,6 +78,9 @@ func (r *usageBillingRepository) Apply(ctx context.Context, cmd *service.UsageBi
 	}
 	result.ThresholdExemptCost = clampUsageBillingDedupThresholdExemptCost(result.ThresholdExemptCost, cmd.BalanceCost)
 	if err := persistUsageBillingThresholdExemptCost(ctx, tx, cmd.RequestID, cmd.APIKeyID, result.ThresholdExemptCost); err != nil {
+		return nil, err
+	}
+	if err := enqueueUsagePersistence(ctx, tx, cmd, result.ThresholdExemptCost); err != nil {
 		return nil, err
 	}
 

@@ -205,6 +205,9 @@ type UsageLog struct {
 	// Outcome is privacy-safe server-derived response evidence. It is persisted
 	// after the usage row and is not a usage_logs table column.
 	Outcome *ResponseOutcome
+	// durablePersistenceAttempted is internal per-call state, never an API or
+	// persisted field. It also covers an uncertain transaction acknowledgement.
+	durablePersistenceAttempted bool
 	// AntiTruncationRounds is the number of continuation requests made for this usage row.
 	AntiTruncationRounds int
 

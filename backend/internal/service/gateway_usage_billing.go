@@ -414,6 +414,7 @@ func buildUsageBillingCommand(requestID string, usageLog *UsageLog, p *postUsage
 		RequestPayloadHash: strings.TrimSpace(p.RequestPayloadHash),
 	}
 	if usageLog != nil {
+		cmd.UsageLog = usageLog
 		cmd.Model = usageLog.Model
 		cmd.BillingType = usageLog.BillingType
 		cmd.InputTokens = usageLog.InputTokens
@@ -497,6 +498,12 @@ func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog
 	billingCtx, cancel := detachedBillingContext(ctx)
 	defer cancel()
 
+	if durable, ok := repo.(DurableUsageBillingRepository); ok && durable.UsagePersistenceEnabled() && cmd.UsageLog != nil {
+		// Mark the actual durable Apply attempt, including an uncertain COMMIT
+		// acknowledgement. A direct zero-cost placeholder must never race the
+		// already committed snapshot. Legacy fallbacks above are not marked.
+		usageLog.durablePersistenceAttempted = true
+	}
 	result, err := repo.Apply(billingCtx, cmd)
 	if err != nil {
 		return false, err
@@ -796,13 +803,10 @@ func writeUsageLogBestEffort(ctx context.Context, repo UsageLogRepository, usage
 			// 计费已在此前完成，日志必须落库：dropped（批处理队列超时）同样走同步兜底，
 			// 否则会出现“已扣费但无 usage_log”的对账缺口（issue #3656）。
 			// 重复写入由 usage_logs 的 ON CONFLICT (request_id, api_key_id) DO NOTHING 防护。
-			fallbackCtx := usageCtx
-			if usageCtx.Err() != nil {
-				// usageCtx 已耗尽（best-effort 入队阻塞到期限）：换新的 detached 窗口，避免兜底必然失败。
-				var fallbackCancel context.CancelFunc
-				fallbackCtx, fallbackCancel = detachedBillingContext(context.Background())
-				defer fallbackCancel()
-			}
+			// A batch can leave only a fraction of its budget without being
+			// expired yet. Every fallback needs its own complete bounded window.
+			fallbackCtx, fallbackCancel := detachedBillingContext(ctx)
+			defer fallbackCancel()
 			_, syncErr := repo.Create(fallbackCtx, usageLog)
 			if syncErr == nil {
 				syncErr = writeResponseOutcome(fallbackCtx, repo, usageLog)
@@ -1206,6 +1210,11 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		SimpleModeKeyRateLimitOnly: simpleModeKeyRateLimitOnly,
 	}, s.billingDeps(), s.usageBillingRepo)
 
+	if usageLog.durablePersistenceAttempted {
+		// Committed snapshots are the sole source of usage detail. Recovery is
+		// durable across timeouts/restarts and never repeats settlement.
+		return billingErr
+	}
 	if billingErr != nil {
 		if s.usageBillingRepo != nil {
 			usageLog.ActualCost = 0
