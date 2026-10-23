@@ -214,7 +214,16 @@ func (s *GatewayService) ForwardAsResponses(
 	var result *ForwardResult
 	var handleErr error
 	if clientStream {
+		writerSizeBeforeStream := c.Writer.Size()
 		result, handleErr = s.handleResponsesStreamingResponse(resp, c, originalModel, mappedModel, cacheCreationTTLTarget, reasoningEffort, startTime, clientToolMapping)
+		var sseErr *sseStreamErrorEventError
+		switch {
+		case result == nil && !IsResponseCommitted(c) && errors.As(handleErr, &sseErr):
+			return nil, s.sseStreamErrorEventFailover(ctx, c, account, resp, sseErr.RawData, mappedModel, c.Writer.Size() != writerSizeBeforeStream)
+		case errors.Is(handleErr, errAnthropicNativeStreamIdle) && s.rateLimitService != nil:
+			s.rateLimitService.HandleStreamTimeout(ctx, account, originalModel)
+		}
+
 	} else {
 		result, handleErr = s.handleResponsesBufferedStreamingResponse(resp, c, originalModel, mappedModel, cacheCreationTTLTarget, reasoningEffort, startTime, clientToolMapping)
 	}
@@ -592,18 +601,16 @@ func (s *GatewayService) handleResponsesStreamingResponse(
 	var firstTokenMs *int
 	firstChunk := true
 	clientDisconnected := false
+	writerSizeBeforeStream := c.Writer.Size()
 
-	scanner := bufio.NewScanner(resp.Body)
-	maxLineSize := defaultMaxLineSize
-	if s.cfg != nil && s.cfg.Gateway.MaxLineSize > 0 {
-		maxLineSize = s.cfg.Gateway.MaxLineSize
-	}
-	scanner.Buffer(make([]byte, 0, 64*1024), maxLineSize)
+	stream := newAnthropicCompatStream(s.cfg, c, resp, "forward_as_responses", requestID)
+	defer stream.stop()
 
 	resultWithUsage := func() *ForwardResult {
 		outcome := outcomeCollector.Snapshot()
 		return &ForwardResult{
 			RequestID:              requestID,
+			UpstreamHeaders:        resp.Header,
 			Usage:                  usage,
 			Model:                  originalModel,
 			CacheCreationTTLTarget: cacheCreationTTLTarget,
@@ -633,8 +640,10 @@ func (s *GatewayService) handleResponsesStreamingResponse(
 		if event.Type == "message_start" && event.Message != nil {
 			mergeAnthropicUsage(&usage, event.Message.Usage)
 		}
-		if clientDisconnected {
-			return false
+		if clientDisconnected || ccRequestCanceled(c) {
+			clientDisconnected = true
+			stream.markClientDisconnected()
+			return true
 		}
 
 		// Keep the terminal Responses usage aligned with the normalized billing
@@ -670,7 +679,8 @@ func (s *GatewayService) handleResponsesStreamingResponse(
 						zap.String("request_id", requestID),
 					)
 					clientDisconnected = true
-					return false
+					stream.markClientDisconnected()
+					return true
 				}
 			}
 		}
@@ -681,8 +691,16 @@ func (s *GatewayService) handleResponsesStreamingResponse(
 	}
 
 	finalizeStream := func() (*ForwardResult, error) {
-		if clientDisconnected {
+		if clientDisconnected || stream.clientDisconnected || ccRequestCanceled(c) {
+			clientDisconnected = true
+			outcomeCollector.MarkStreamError(context.Canceled, true)
 			return resultWithUsage(), nil
+		}
+		if failure := stream.failure(); failure != nil {
+			outcomeCollector.MarkStreamError(failure.err, false)
+			return finishAnthropicCompatStreamFailure(c, writerSizeBeforeStream, failure, resultWithUsage(), func() {
+				writeAnthropicCompatResponsesStreamFailure(c, state, clientToolRestorer, failure)
+			})
 		}
 		if finalEvents := apicompat.FinalizeAnthropicResponsesStream(state); len(finalEvents) > 0 {
 			for _, evt := range finalEvents {
@@ -699,18 +717,21 @@ func (s *GatewayService) handleResponsesStreamingResponse(
 	}
 
 	// Read Anthropic SSE events
-	for scanner.Scan() {
-		line := scanner.Text()
+	for {
+		line, ok := stream.nextLine()
+		if !ok {
+			break
+		}
 		eventType, ok := parseAnthropicSSEField(line, "event")
 		if !ok {
 			continue
 		}
 
 		// Read data line
-		if !scanner.Scan() {
+		dataLine, ok := stream.nextLine()
+		if !ok {
 			break
 		}
-		dataLine := scanner.Text()
 		payload, ok := parseAnthropicSSEField(dataLine, "data")
 		if !ok {
 			continue
@@ -727,25 +748,14 @@ func (s *GatewayService) handleResponsesStreamingResponse(
 			continue
 		}
 
+		stream.observe(&event, payload)
+		if stream.upstreamErrType != "" {
+			break
+		}
 		if processEvent(&event) {
 			outcomeCollector.MarkStreamError(errors.New("client disconnected"), true)
 			return resultWithUsage(), nil
 		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		outcomeCollector.MarkStreamError(err, clientDisconnected)
-		if !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
-			logger.L().Warn("forward_as_responses stream: read error",
-				zap.Error(err),
-				zap.String("request_id", requestID),
-			)
-		}
-	} else if !outcomeCollector.Snapshot().StreamCompleted {
-		outcomeCollector.MarkStreamError(errors.New("missing terminal event"), clientDisconnected)
-	}
-	if clientDisconnected {
-		outcomeCollector.MarkStreamError(errors.New("client disconnected"), true)
 	}
 
 	return finalizeStream()

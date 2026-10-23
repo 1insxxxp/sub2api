@@ -32,8 +32,8 @@ func TestAccountTestService_OpenAIOAuthGPT6InvalidUAPreservesSyncedVersion(t *te
 	require.Len(t, upstream.requests, 1)
 	req := upstream.lastReq
 	require.Equal(t, "0.153.4", req.Header.Get("Version"))
-	require.Equal(t, "codex-tui/0.153.4"+codexCLIUserAgentSuffix, req.Header.Get("User-Agent"))
-	require.Equal(t, "codex-tui", req.Header.Get("Originator"))
+	require.Equal(t, "codex_cli_rs/0.153.4"+codexCLIUserAgentSuffix, req.Header.Get("User-Agent"))
+	require.Equal(t, "codex_cli_rs", req.Header.Get("Originator"))
 	require.Equal(t, "gpt-6-astra", gjson.GetBytes(upstream.lastBody, "model").String())
 }
 

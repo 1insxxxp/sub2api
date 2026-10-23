@@ -310,7 +310,7 @@ func TestHandleResponsesStreamingResponse_PreservesMessageStartCacheUsage(t *tes
 	require.Contains(t, rec.Body.String(), `response.completed`)
 }
 
-func TestHandleResponsesStreamingResponse_ClientDisconnectDrainsFinalUsage(t *testing.T) {
+func TestHandleResponsesStreamingResponse_ClientDisconnectStopsBeforeFinalUsage(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	rec := httptest.NewRecorder()
@@ -344,7 +344,7 @@ func TestHandleResponsesStreamingResponse_ClientDisconnectDrainsFinalUsage(t *te
 	result, err := (&GatewayService{}).handleResponsesStreamingResponse(resp, c, "gpt-5", "claude-sonnet-4.5", "", nil, time.Now(), apicompat.ResponsesClientToolMapping{})
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	require.Equal(t, 321, result.Usage.OutputTokens)
+	require.Zero(t, result.Usage.OutputTokens, "downstream write failure must not drain final provider usage")
 	require.True(t, result.ClientDisconnect)
 }
 

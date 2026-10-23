@@ -105,6 +105,9 @@ func (s *GeminiMessagesCompatService) forwardClaudeBodyAsChatCompletions(
 	} else if applied {
 		geminiReq = injectedBody
 	}
+	if geminiImageGenerationDenied(c, geminiReq, originalModel, req.Model, mappedModel) {
+		return nil, s.writeChatCompletionsError(c, http.StatusBadRequest, "invalid_request_error", ImageGenerationPermissionMessage())
+	}
 	geminiReq = ensureGeminiFunctionCallThoughtSignatures(geminiReq)
 	geminiReq = applyGeminiCompatThinkingConfig(geminiReq, claudeBody, mappedModel, clientStream)
 

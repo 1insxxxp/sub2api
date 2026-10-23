@@ -40,10 +40,11 @@ const gatewayCCFinalUsageSSE = "event: content_block_stop\n" +
 // Use a real HTTP transport so cancellation must reach the server-side request,
 // including while Client.Do is waiting for headers or the SSE scanner is blocked.
 type gatewayCCCancellationHTTPUpstream struct {
-	client       *http.Client
-	bodyReady    chan struct{}
-	initialBytes int
-	requests     atomic.Int32
+	client         *http.Client
+	bodyReady      chan struct{}
+	deliveredReady chan struct{}
+	initialBytes   int
+	requests       atomic.Int32
 }
 
 func (u *gatewayCCCancellationHTTPUpstream) Do(req *http.Request, _ string, _ int64, _ int) (*http.Response, error) {
@@ -119,6 +120,9 @@ func TestGatewayCC_ClientCancellationReachesAnthropicUpstream(t *testing.T) {
 				if phase == "during_thinking" {
 					upstream.initialBytes = len(gatewayCCThinkingSSE)
 				}
+				if stream && phase == "during_thinking" {
+					upstream.deliveredReady = make(chan struct{})
+				}
 				ctx, cancel := context.WithCancel(context.Background())
 				resultCh, finished := startGatewayCCCancellationForward(t, ctx, server.URL, upstream, stream, nil)
 				t.Cleanup(func() {
@@ -132,6 +136,9 @@ func TestGatewayCC_ClientCancellationReachesAnthropicUpstream(t *testing.T) {
 				awaitGatewayCCSignal(t, upstreamStarted, "upstream request was not dispatched")
 				if phase != "before_headers" {
 					awaitGatewayCCSignal(t, bodyReady, "forwarder did not reach the expected SSE read")
+				}
+				if upstream.deliveredReady != nil {
+					awaitGatewayCCSignal(t, upstream.deliveredReady, "thinking output was not delivered before cancellation")
 				}
 				cancel()
 				awaitGatewayCCSignal(t, upstreamCanceled, "client cancellation did not reach the Anthropic upstream promptly")
@@ -376,6 +383,32 @@ func TestGatewayCC_DownstreamWriteFailureStopsBeforeFinalUsage(t *testing.T) {
 	}
 }
 
+// The asynchronous line pump may prefetch before conversion. Synchronize this
+// cancellation test on a downstream flush, so it cancels after actual delivery.
+type gatewayCCDeliveredSignalWriter struct {
+	gin.ResponseWriter
+	ready    chan struct{}
+	once     sync.Once
+	thinking bool
+}
+
+func (w *gatewayCCDeliveredSignalWriter) Write(data []byte) (int, error) {
+	n, err := w.ResponseWriter.Write(data)
+	if n > 0 && strings.Contains(string(data[:n]), "still thinking") {
+		w.thinking = true
+	}
+	return n, err
+}
+func (w *gatewayCCDeliveredSignalWriter) WriteString(data string) (int, error) {
+	return w.Write([]byte(data))
+}
+func (w *gatewayCCDeliveredSignalWriter) Flush() {
+	w.ResponseWriter.Flush()
+	if w.thinking {
+		w.once.Do(func() { close(w.ready) })
+	}
+}
+
 func startGatewayCCCancellationForward(t *testing.T, ctx context.Context, baseURL string, upstream *gatewayCCCancellationHTTPUpstream, stream bool, failed chan struct{}) (<-chan gatewayCCCancellationResult, <-chan struct{}) {
 	t.Helper()
 	body := []byte(fmt.Sprintf(`{"model":"claude-sonnet-4-5","max_tokens":1024,"messages":[{"role":"user","content":"hello"}],"stream":%t}`, stream))
@@ -385,6 +418,9 @@ func startGatewayCCCancellationForward(t *testing.T, ctx context.Context, baseUR
 	c.Request.Header.Set("Content-Type", "application/json")
 	if failed != nil {
 		c.Writer = &gatewayCCDisconnectWriter{ResponseWriter: c.Writer, failed: failed}
+	}
+	if upstream.deliveredReady != nil {
+		c.Writer = &gatewayCCDeliveredSignalWriter{ResponseWriter: c.Writer, ready: upstream.deliveredReady}
 	}
 	var collector *DownstreamOutputTokenCollector
 	restoreCollector := func() {}

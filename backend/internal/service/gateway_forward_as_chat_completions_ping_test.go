@@ -190,15 +190,20 @@ func TestHandleCCStreamingFromAnthropic_PingWriteFailureStopsDownstream(t *testi
 			)
 			require.NoError(t, err)
 			require.True(t, writer.failed)
+			require.True(t, result.ClientDisconnect)
 			require.Zero(t, writer.writesAfterError)
 			require.Zero(t, writer.flushesAfterError)
 			require.NotContains(t, writer.Body.String(), "[DONE]")
-			require.Zero(t, result.Usage.OutputTokens)
+			require.Zero(t, result.Usage.OutputTokens, "heartbeat write failure stops before final provider usage")
+			if withUsage {
+				require.NotNil(t, result.FirstTokenMs)
+			} else {
+				require.Nil(t, result.FirstTokenMs)
+			}
 			if withUsage {
 				require.Equal(t, 10, result.Usage.InputTokens)
 			} else {
 				require.Zero(t, result.Usage.InputTokens)
-				require.Nil(t, result.FirstTokenMs)
 			}
 		})
 	}

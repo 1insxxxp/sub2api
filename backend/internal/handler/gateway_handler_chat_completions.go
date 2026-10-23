@@ -132,6 +132,10 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 			"This group is restricted to Claude Code clients (/v1/messages only)")
 		return
 	}
+	if geminiImageGenerationRejected(c, apiKey, nil, reqModel, channelMapping.MappedModel) {
+		h.chatCompletionsErrorResponse(c, http.StatusBadRequest, "invalid_request_error", service.ImageGenerationPermissionMessage())
+		return
+	}
 
 	if decision := h.checkSecurityAudit(c, reqLog, apiKey, subject, service.ContentModerationProtocolOpenAIChat, reqModel, body); decision != nil && !decision.AllowNextStage {
 		h.openAISecurityAuditError(c, decision)
@@ -363,8 +367,52 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 		}
 
 		service.ApplyDeliveredOutputTokens(result, deliveredOutputTokens)
-		interruptedGemini := account.Platform == service.PlatformGemini && geminiForwardInterrupted(c, result, err)
-		billablePartial := interruptedGemini && geminiForwardHasBillablePartialOutput(c, result, err, deliveredOutputTokens)
+		interruptedForward := (account.Platform == service.PlatformGemini || (result != nil && result.Outcome != nil)) && geminiForwardInterrupted(c, result, err)
+		billablePartial := interruptedForward && geminiForwardHasBillablePartialOutput(c, result, err, deliveredOutputTokens)
+		if interruptedForward && account.Platform != service.PlatformGemini {
+			billablePartial = compatForwardHasBillablePartialOutput(c, result, err, deliveredOutputTokens)
+		}
+		// 提交 usage 记录。成功路径与"流中断但 Forward 已观测到 usage 的部分结果"
+		// 错误路径共用；failover 错误恒定 result=nil，不会重复计费。
+		submitForwardUsage := func(result *service.ForwardResult) {
+			if result == nil {
+				return
+			}
+			userAgent := c.GetHeader("User-Agent")
+			clientIP := ip.GetClientIP(c)
+			requestPayloadHash := service.HashUsageRequestPayload(body)
+			inboundEndpoint := GetInboundEndpoint(c)
+			upstreamEndpoint := GetUpstreamEndpoint(c, account.Platform)
+
+			quotaPlatform := service.QuotaPlatform(c.Request.Context(), apiKey)
+			sessionID := service.ExtractClientSessionID(c)
+			stampForwardRequestedReasoningEffort(result, service.RequestedReasoningEffortFromContext(c.Request.Context()))
+			h.submitUsageRecordTask(c.Request.Context(), func(ctx context.Context) {
+				if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
+					Result:             result,
+					QuotaPlatform:      quotaPlatform,
+					APIKey:             apiKey,
+					User:               apiKey.User,
+					Account:            account,
+					Subscription:       subscription,
+					PricingAt:          pricingAt,
+					InboundEndpoint:    inboundEndpoint,
+					UpstreamEndpoint:   upstreamEndpoint,
+					UserAgent:          userAgent,
+					IPAddress:          clientIP,
+					RequestPayloadHash: requestPayloadHash,
+					APIKeyService:      h.apiKeyService,
+					SessionID:          sessionID,
+					ChannelUsageFields: clientRequestedUsageFields(c, channelMapping, reqModel, result.UpstreamModel),
+				}); err != nil {
+					reqLog.Error("gateway.cc.record_usage_failed",
+						zap.Int64("account_id", account.ID),
+						zap.Error(err),
+					)
+				}
+			})
+		}
+
 		if err != nil {
 			if !billablePartial && budgetExpired() {
 				return
@@ -409,46 +457,28 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 		}
 		// A canceled metadata-only attempt can return collected provider usage
 		// without an error. It still has no delivered answer to settle.
-		if interruptedGemini && !billablePartial {
+		if interruptedForward && !billablePartial {
 			return
 		}
 
 		// 6. Record usage
-		userAgent := c.GetHeader("User-Agent")
-		clientIP := ip.GetClientIP(c)
-		requestPayloadHash := service.HashUsageRequestPayload(body)
-		inboundEndpoint := GetInboundEndpoint(c)
-		upstreamEndpoint := GetUpstreamEndpoint(c, account.Platform)
-
-		quotaPlatform := service.QuotaPlatform(c.Request.Context(), apiKey)
-		sessionID := service.ExtractClientSessionID(c)
-		stampForwardRequestedReasoningEffort(result, service.RequestedReasoningEffortFromContext(c.Request.Context()))
-		h.submitUsageRecordTask(c.Request.Context(), func(ctx context.Context) {
-			if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
-				Result:             result,
-				QuotaPlatform:      quotaPlatform,
-				APIKey:             apiKey,
-				User:               apiKey.User,
-				Account:            account,
-				Subscription:       subscription,
-				PricingAt:          pricingAt,
-				InboundEndpoint:    inboundEndpoint,
-				UpstreamEndpoint:   upstreamEndpoint,
-				UserAgent:          userAgent,
-				IPAddress:          clientIP,
-				RequestPayloadHash: requestPayloadHash,
-				APIKeyService:      h.apiKeyService,
-				SessionID:          sessionID,
-				ChannelUsageFields: clientRequestedUsageFields(c, channelMapping, reqModel, result.UpstreamModel),
-			}); err != nil {
-				reqLog.Error("gateway.cc.record_usage_failed",
-					zap.Int64("account_id", account.ID),
-					zap.Error(err),
-				)
-			}
-		})
+		submitForwardUsage(result)
 		return
 	}
+}
+
+// compatForwardHasBillablePartialOutput requires successful downstream writes,
+// so a failed metadata-only attempt cannot settle prompt usage. Tool calls and
+// reasoning deltas count only when their serialized content reached the client.
+func compatForwardHasBillablePartialOutput(c *gin.Context, result *service.ForwardResult, err error, collector *service.DownstreamOutputTokenCollector) bool {
+	if geminiForwardHasBillablePartialOutput(c, result, err, collector) {
+		return true
+	}
+	var failoverErr *service.UpstreamFailoverError
+	if errors.As(err, &failoverErr) || result == nil || result.Outcome == nil || result.DeliveredOutputTokens == nil || *result.DeliveredOutputTokens <= 0 {
+		return false
+	}
+	return result.Outcome.HasToolCall || result.Outcome.HasReasoning
 }
 
 // geminiForwardInterrupted also recognizes adapters that return an interrupted

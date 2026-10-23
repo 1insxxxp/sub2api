@@ -248,8 +248,8 @@ func TestBuildOpenAIOAuthModelsRequestInvalidUAPreservesSyncedVersion(t *testing
 	require.NoError(t, err)
 	require.Equal(t, "0.153.4", req.URL.Query().Get("client_version"))
 	require.Equal(t, "0.153.4", req.Header.Get("Version"))
-	require.Equal(t, "codex-tui/0.153.4"+codexCLIUserAgentSuffix, req.Header.Get("User-Agent"))
-	require.Equal(t, "codex-tui", req.Header.Get("Originator"))
+	require.Equal(t, "codex_cli_rs/0.153.4"+codexCLIUserAgentSuffix, req.Header.Get("User-Agent"))
+	require.Equal(t, "codex_cli_rs", req.Header.Get("Originator"))
 }
 
 func TestExtractGrokUpstreamModelIDs(t *testing.T) {
