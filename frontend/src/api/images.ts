@@ -24,6 +24,8 @@ export interface ImageStudioModelOption {
   label: string
   mapped_model?: string
   capabilities: string[]
+  qualities?: ImageStudioQualityOption[]
+  prices?: ImageStudioPricePreviewItem[]
 }
 
 export interface ImageStudioQualityOption {

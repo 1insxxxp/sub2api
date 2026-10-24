@@ -686,6 +686,8 @@ func (s *GeminiMessagesCompatService) SelectAccountForAIStudioEndpoints(ctx cont
 }
 
 func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Context, account *Account, body []byte) (result *ForwardResult, returnErr error) {
+	var lastUpstreamRequest *http.Request
+	defer func() { prepareGeminiInputTokenEstimateFromRequest(result, lastUpstreamRequest) }()
 	beginUpstreamResponseModelObservation(c)
 	beginGeminiImageOutputObservation(c)
 	startTime := time.Now()
@@ -927,6 +929,7 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 		requestIDHeader = idHeader
 
 		upstreamAttempt = BeginGeminiUpstreamAttempt(c, account, mappedModel, useUpstreamStream)
+		lastUpstreamRequest = upstreamReq
 		resp, err = s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
 		upstreamAttempt.ObserveResponse(resp)
 		if err != nil {
@@ -1302,6 +1305,12 @@ func isGeminiSignatureRelatedError(respBody []byte) bool {
 }
 
 func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.Context, account *Account, originalModel string, action string, stream bool, body []byte) (result *ForwardResult, returnErr error) {
+	var lastUpstreamRequest *http.Request
+	defer func() {
+		if action != "countTokens" {
+			prepareGeminiInputTokenEstimateFromRequest(result, lastUpstreamRequest)
+		}
+	}()
 	beginUpstreamResponseModelObservation(c)
 	beginGeminiImageOutputObservation(c)
 	startTime := time.Now()
@@ -1540,6 +1549,7 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 		if action != "countTokens" {
 			upstreamAttempt = BeginGeminiUpstreamAttempt(c, account, mappedModel, useUpstreamStream)
 		}
+		lastUpstreamRequest = upstreamReq
 		resp, err = s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
 		upstreamAttempt.ObserveResponse(resp)
 		if err != nil {

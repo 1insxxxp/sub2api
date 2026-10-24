@@ -80,6 +80,8 @@ func (s *GeminiMessagesCompatService) forwardClaudeBodyAsChatCompletions(
 	includeUsage bool,
 	startTime time.Time,
 ) (result *ForwardResult, returnErr error) {
+	var lastUpstreamRequest *http.Request
+	defer func() { prepareGeminiInputTokenEstimateFromRequest(result, lastUpstreamRequest) }()
 	var req struct {
 		Model  string `json:"model"`
 		Stream bool   `json:"stream"`
@@ -177,6 +179,7 @@ func (s *GeminiMessagesCompatService) forwardClaudeBodyAsChatCompletions(
 		requestIDHeader = idHeader
 
 		upstreamAttempt = BeginGeminiUpstreamAttempt(c, account, mappedModel, useUpstreamStream)
+		lastUpstreamRequest = upstreamReq
 		resp, err = s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
 		upstreamAttempt.ObserveResponse(resp)
 		if err != nil {

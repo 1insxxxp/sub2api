@@ -1104,6 +1104,30 @@ curl -X PUT "${BASE}/api/v1/admin/settings/image-studio" \
   --data-binary @image-studio.json
 ```
 
+#### 3.4.1 AI 生图价格验收（2026-10-24）
+
+用户工作台接口使用本次测试普通用户的 Bearer JWT，不使用 Admin key：
+
+- `GET /api/v1/user/images/options`：返回可用分组、模型、清晰度与价格预估；按选定分组和模型核对价格，不把预估字段当成钱包结算证据。
+- `POST /api/v1/user/images/tasks`：JSON 字段为 `mode: "generation"`、`api_key_id`、`group_id`、`model`、`prompt`、`aspect_ratio`、`quality`、`output_format`；成功返回 202 和任务 ID。创建有真实上游成本，只有用户已授权测试该渠道时才使用真实渠道。
+- `GET /api/v1/user/images/tasks/:id`：只读取本次测试用户的任务，终态为 `succeeded` 或 `failed`；成功任务可含 `image.cost`、`estimated_cost` 和图片元数据。
+- `GET /api/v1/user/profile`：核对本次测试用户的余额。
+
+真实价格验收创建专用普通用户（`POST /api/v1/admin/users`），仅授予目标分组、少量测试余额，设置 `restrict_public_groups: true`。使用该用户自己的 `POST /api/v1/auth/login`（`email`、`password`）取得短期 JWT，再创建仅绑定目标分组、限额且一天到期的测试密钥。不得借用客户身份、密钥、余额；凭证只留在进程内存，不写日志或仓库。
+
+```bash
+curl -fsS "${BASE}/api/v1/user/images/options" \
+  -H "Authorization: Bearer ${TEST_USER_JWT}"
+# test-image-task.json 仅含本次专用用户的 key/group ID 和测试参数，不含凭证。
+curl -fsS -X POST "${BASE}/api/v1/user/images/tasks" \
+  -H "Authorization: Bearer ${TEST_USER_JWT}" -H 'Content-Type: application/json' \
+  --data-binary @test-image-task.json
+curl -fsS "${BASE}/api/v1/user/images/tasks/${TEST_TASK_ID}" \
+  -H "Authorization: Bearer ${TEST_USER_JWT}"
+```
+
+管理操作只调用已核对应用容器的回环端口。对每模型至多生成一张测试图，以测试用户余额变化、密钥 `quota_used` 和 `usage_logs.actual_cost` 核对实际扣费，并单独检查任务/图片的展示价格。完成后先 GET 核对精确归属，再停用、删除测试密钥并停用测试用户；保留账务和生成证据，不回写客户余额或修改渠道/分组定价。
+
 ### 3.5 支付取消频率限制
 
 ```

@@ -57,10 +57,12 @@ type ImageStudioGroupOption struct {
 }
 
 type ImageStudioModelOption struct {
-	Model        string   `json:"model"`
-	Label        string   `json:"label"`
-	MappedModel  string   `json:"mapped_model,omitempty"`
-	Capabilities []string `json:"capabilities"`
+	Model        string                        `json:"model"`
+	Label        string                        `json:"label"`
+	MappedModel  string                        `json:"mapped_model,omitempty"`
+	Capabilities []string                      `json:"capabilities"`
+	Qualities    []ImageStudioQualityOption    `json:"qualities,omitempty"`
+	Prices       []ImageStudioPricePreviewItem `json:"prices,omitempty"`
 }
 
 type ImageStudioQualityOption struct {

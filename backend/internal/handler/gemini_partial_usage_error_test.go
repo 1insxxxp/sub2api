@@ -183,9 +183,12 @@ func TestGeminiHandlers_InterruptedUsageBilling(t *testing.T) {
 			{name: "partial reset", parts: `{"text":"partial answer"}`, readErr: io.ErrUnexpectedEOF, wantBilling: true},
 			{name: "partial client cancellation", parts: `{"text":"partial answer"}`, readErr: context.Canceled, clientGone: true, wantBilling: true},
 			{name: "metadata only cancellation", readErr: context.Canceled, clientGone: true},
+			{name: "metadata only cancellation without usage", readErr: context.Canceled, clientGone: true, omitUsage: true},
 			{name: "thought only cancellation", parts: `{"text":"private reasoning","thought":true}`, readErr: context.Canceled, clientGone: true},
+			{name: "thought only cancellation without usage", parts: `{"text":"private reasoning","thought":true}`, readErr: context.Canceled, clientGone: true, omitUsage: true},
 			{name: "cancellation before upstream response", clientGone: true, initialCancel: true},
 			{name: "failed downstream write", parts: `{"text":"partial answer"}`, readErr: io.ErrUnexpectedEOF, rejectWrites: true},
+			{name: "failed downstream write without usage", parts: `{"text":"partial answer"}`, readErr: io.ErrUnexpectedEOF, rejectWrites: true, omitUsage: true},
 			{name: "thought delivered then answer write fails", parts: `{"text":"partial answer"}`, readErr: io.ErrUnexpectedEOF, rejectAnswerAfterThought: true},
 			{name: "partial delivered then terminal answer write fails", parts: `{"text":"hidden final answer"}`, finish: `,"finishReason":"STOP"`, wantBilling: true, rejectTerminalAfterPartial: true},
 			{name: "thought delivered then terminal answer write fails", parts: `{"text":"partial answer"}`, finish: `,"finishReason":"STOP"`, rejectAnswerAfterThought: true},
@@ -327,6 +330,7 @@ func TestGeminiHandlers_InterruptedUsageBilling(t *testing.T) {
 					require.Equal(t, 12, log.InputTokens)
 					require.Equal(t, providerOutput, log.UpstreamOutputTokens, "keep provider measurement separately")
 				} else {
+					require.Positive(t, log.InputTokens, "delivered Gemini responses without provider usage must settle the prepared input estimate")
 					require.Zero(t, log.UpstreamOutputTokens, "unknown provider usage must not be fabricated")
 				}
 				require.Equal(t, upstream.accounts[len(upstream.accounts)-1], log.AccountID)

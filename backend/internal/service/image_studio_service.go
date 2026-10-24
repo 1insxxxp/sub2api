@@ -152,6 +152,14 @@ func (s *ImageStudioService) GetOptions(ctx context.Context, userID int64) (*Ima
 		}
 		option := imageStudioGroupOptionFromGroup(&group)
 		option.Models = imageStudioModelOptions(models)
+		for i := range option.Models {
+			qualities, prices, err := s.imageStudioModelPrices(ctx, userID, &group, option.Models[i].Model)
+			if err != nil {
+				return nil, fmt.Errorf("estimate image model price: %w", err)
+			}
+			option.Models[i].Qualities = qualities
+			option.Models[i].Prices = prices
+		}
 		if len(option.Models) == 0 {
 			continue
 		}
@@ -183,6 +191,17 @@ func (s *ImageStudioService) CreateTask(ctx context.Context, input ImageStudioTa
 		task = s.taskFromEditInput(cfg, normalized)
 	} else {
 		return nil, infraerrors.BadRequest("INVALID_IMAGE_TASK", "image task payload is required")
+	}
+	if estimator, ok := s.executor.(ImageStudioCostEstimator); ok {
+		group, err := s.resolveSelectedImageStudioGroup(ctx, task.UserID, task.GroupID)
+		if err != nil {
+			return nil, err
+		}
+		cost, err := estimator.EstimateImageStudioCost(ctx, task.UserID, group, task.Model, task.Size, 1)
+		if err != nil {
+			return nil, fmt.Errorf("estimate image task price: %w", err)
+		}
+		task.EstimatedCost = cost
 	}
 	if err := s.taskRepo.Create(ctx, task); err != nil {
 		return nil, fmt.Errorf("create image task: %w", err)
@@ -1120,7 +1139,7 @@ func (s *ImageStudioService) generateTaskWithRecovery(ctx context.Context, input
 	for _, attempt := range attempts {
 		image, err := s.Generate(ctx, attempt)
 		if err == nil {
-			return image, attempt.Quality, imageStudioEstimatedCostForAttempt(attempt, initialEstimatedCost), nil
+			return image, attempt.Quality, image.Cost, nil
 		}
 		lastErr = err
 		if !imageStudioProviderTimedOutOrDisconnected(err) {
@@ -1170,14 +1189,6 @@ func imageStudioTaskAttemptWithQuality(input ImageStudioGenerateInput, quality s
 	out.Size = size
 	out.BillingTier = billingTier
 	return out, true
-}
-
-func imageStudioEstimatedCostForAttempt(input ImageStudioGenerateInput, fallback float64) float64 {
-	cost := estimateImageStudioCost(nil, input.BillingTier)
-	if cost > 0 {
-		return cost
-	}
-	return fallback
 }
 
 func firstNonEmptyTrimmed(values ...string) string {

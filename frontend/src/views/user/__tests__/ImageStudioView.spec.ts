@@ -189,6 +189,28 @@ function cssRulesFor(selector: string): string[] {
   return Array.from(matches, (match) => match[1] ?? '')
 }
 
+function pricedImageModel(model: string, cost: number) {
+  const qualities = ['1K', '2K', '4K'].map((quality) => ({
+    quality,
+    label: quality,
+    billing_tier: quality,
+    estimated_cost: cost,
+  }))
+  return {
+    model,
+    label: model,
+    capabilities: ['generation', 'edit'],
+    qualities,
+    prices: config.aspect_ratios.flatMap(({ ratio }) => qualities.map(({ quality, billing_tier }) => ({
+      ratio,
+      quality,
+      size: `${model}-${ratio}-${quality}`,
+      billing_tier,
+      estimated_cost: cost,
+    }))),
+  }
+}
+
 describe('ImageStudioView', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
@@ -295,6 +317,101 @@ describe('ImageStudioView', () => {
     await flushPromises()
     expect(wrapper.get('[data-testid="image-studio-generate-button"]').attributes('disabled')).toBeDefined()
     expect(wrapper.get('[data-testid="image-studio-model-select"]').text()).not.toContain('gpt-image')
+    wrapper.unmount()
+  })
+
+  it('quotes the selected NAI model for each quality and output count without mixing group prices', async () => {
+    const nai45 = pricedImageModel('nai-diffusion-4-5-full', 0.06)
+    const nai5 = pricedImageModel('nai-diffusion-5-full', 0.25)
+    getOptions.mockResolvedValueOnce({ ...options, groups: [{ ...options.groups[0], models: [nai45, nai5] }] })
+    const wrapper = mount(ImageStudioView, { global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Icon: true } } })
+    await flushPromises()
+
+    for (const [modelIndex, model, expectedCosts] of [
+      [0, nai45, ['$0.06', '$0.12', '$0.24']],
+      [1, nai5, ['$0.25', '$0.50', '$1.00']],
+    ] as const) {
+      await wrapper.get('[data-testid="image-studio-model-select"]').trigger('click')
+      await wrapper.findAll('[data-testid="image-studio-model-menu"] button')[modelIndex].trigger('click')
+      for (const quality of ['1K', '2K', '4K']) {
+        expect(wrapper.get(`[data-testid="image-studio-quality-${quality}"] small`).text()).toBe(expectedCosts[0])
+        await wrapper.get(`[data-testid="image-studio-quality-${quality}"]`).trigger('click')
+        for (const [count, cost] of [[1, expectedCosts[0]], [2, expectedCosts[1]], [4, expectedCosts[2]]] as const) {
+          await wrapper.get(`[data-testid="image-studio-output-count-${count}"]`).trigger('click')
+          expect(wrapper.get('.image-studio-cost-preview strong').text()).toBe(cost)
+        }
+        await wrapper.get('[data-testid="image-studio-ratio-16:9"]').trigger('click')
+        expect(wrapper.get('[data-testid="image-studio-ratio-16:9"] small').text()).toContain(`${model.model}-16:9-${quality}`)
+        expect(wrapper.get('.image-studio-cost-preview small').text()).toContain(`${model.model}-16:9-${quality}`)
+      }
+    }
+    expect(getOptions).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
+
+  it('uses legacy group quotes after switching away from a model-priced group', async () => {
+    const nai = pricedImageModel('nai-diffusion-4-5-full', 0.06)
+    getOptions.mockResolvedValueOnce({ ...options, groups: [
+      { ...options.groups[0], models: [nai] },
+      { ...options.groups[0], id: 10, name: 'Legacy image group' },
+    ] })
+    listKeys.mockResolvedValueOnce({ ...apiKeys, items: [...apiKeys.items, { ...apiKeys.items[0], id: 16, name: 'Legacy key', group_id: 10 }] })
+    const wrapper = mount(ImageStudioView, { global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Icon: true } } })
+    await flushPromises()
+    expect(wrapper.get('.image-studio-cost-preview strong').text()).toBe('$0.06')
+    await wrapper.get('[data-testid="image-studio-api-key-select"]').trigger('click')
+    await wrapper.findAll('[data-testid="image-studio-api-key-menu"] button')[1].trigger('click')
+    expect(wrapper.get('[data-testid="image-studio-quality-1K"] small').text()).toBe('$0.03')
+    expect(wrapper.get('.image-studio-cost-preview strong').text()).toBe('$0.03')
+    await wrapper.get('[data-testid="image-studio-quality-4K"]').trigger('click')
+    await wrapper.get('[data-testid="image-studio-ratio-16:9"]').trigger('click')
+    expect(wrapper.get('.image-studio-cost-preview strong').text()).toBe('$0.16')
+    expect(wrapper.get('[data-testid="image-studio-ratio-16:9"] small').text()).toBe('3840x2160 / 4K')
+    await wrapper.get('[data-testid="image-studio-api-key-select"]').trigger('click')
+    await wrapper.findAll('[data-testid="image-studio-api-key-menu"] button')[0].trigger('click')
+    expect(wrapper.get('.image-studio-cost-preview strong').text()).toBe('$0.06')
+    wrapper.unmount()
+  })
+
+  it('preserves explicitly free model prices instead of falling back to the group price', async () => {
+    getOptions.mockResolvedValueOnce({ ...options, groups: [{ ...options.groups[0], models: [pricedImageModel('free-image', 0)] }] })
+    const wrapper = mount(ImageStudioView, { global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Icon: true } } })
+    await flushPromises()
+    for (const quality of ['1K', '2K', '4K']) {
+      expect(wrapper.get(`[data-testid="image-studio-quality-${quality}"] small`).text()).toBe('$0.00')
+      await wrapper.get(`[data-testid="image-studio-quality-${quality}"]`).trigger('click')
+      await wrapper.get('[data-testid="image-studio-output-count-4"]').trigger('click')
+      expect(wrapper.get('.image-studio-cost-preview strong').text()).toBe('$0.00')
+    }
+    wrapper.unmount()
+  })
+
+  it('does not borrow legacy ratio prices when only model quality quotes are provided', async () => {
+    const { prices: _prices, ...nai } = pricedImageModel('nai-diffusion-4-5-full', 0.06)
+    getOptions.mockResolvedValueOnce({ ...options, groups: [{ ...options.groups[0], models: [nai] }] })
+    const wrapper = mount(ImageStudioView, { global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Icon: true } } })
+    await flushPromises()
+    await wrapper.get('[data-testid="image-studio-quality-4K"]').trigger('click')
+    await wrapper.get('[data-testid="image-studio-ratio-16:9"]').trigger('click')
+    expect(wrapper.get('.image-studio-cost-preview strong').text()).toBe('$0.06')
+    expect(wrapper.get('[data-testid="image-studio-ratio-16:9"] small').text()).not.toContain('3840x2160')
+    wrapper.unmount()
+  })
+
+  it.each([
+    { qualities: [], prices: [] },
+    { qualities: [] },
+    { prices: [] },
+  ])('shows an unknown estimate for an explicitly empty model quote domain: %j', async (quotes) => {
+    getOptions.mockResolvedValueOnce({ ...options, groups: [{ ...options.groups[0], models: [{
+      ...options.groups[0].models[0],
+      ...quotes,
+    }] }] })
+    const wrapper = mount(ImageStudioView, { global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Icon: true } } })
+    await flushPromises()
+    expect(wrapper.get('.image-studio-cost-preview strong').text()).toBe('-')
+    expect(wrapper.findAll('.image-studio-quality-picker small').map((item) => item.text())).not.toContain('$0.00')
+    expect(wrapper.findAll('.image-studio-quality-picker small').map((item) => item.text())).not.toContain('$0.03')
     wrapper.unmount()
   })
 
@@ -1801,7 +1918,7 @@ describe('ImageStudioView', () => {
     expect(galleryGridRule).toMatch(/gap:\s*0\.42rem/)
     expect(galleryGridRule).toMatch(/overflow-y:\s*auto/)
     expect(galleryGridRule).not.toMatch(/grid-auto-flow:\s*column/)
-    expect(wrapper.get('.image-studio-workspace > .image-studio-action-bar').exists()).toBe(true)
+    expect(wrapper.find('.image-studio-workspace > .image-studio-action-bar').exists()).toBe(true)
     expect(wrapper.find('.image-studio-command-surface .image-studio-action-bar').exists()).toBe(false)
   })
 

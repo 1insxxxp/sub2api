@@ -326,7 +326,7 @@
                       @click="quality = item.quality"
                     >
                       <strong>{{ item.label || item.quality }}</strong>
-                      <small>{{ formatCurrency(item.estimated_cost || 0) }}</small>
+                      <small>{{ qualityCostLabel(item.quality) }}</small>
                       <em v-if="item.quality === '4K'">{{ t('imageStudio.quality4KRisk') }}</em>
                     </button>
                   </div>
@@ -898,7 +898,23 @@ const selectedGroup = computed(() =>
 const modelOptions = computed<ImageStudioModelOption[]>(() =>
   (selectedGroup.value?.models ?? []).filter((item) => item.capabilities.includes(mode.value)),
 )
+const selectedModelOption = computed(() => modelOptions.value.find((item) => item.model === model.value))
+const hasModelPricing = computed(() =>
+  selectedModelOption.value?.qualities !== undefined || selectedModelOption.value?.prices !== undefined,
+)
+// A partial or empty model quote must never borrow another model's group estimate.
+const quotedQualities = computed(() => hasModelPricing.value
+  ? selectedModelOption.value?.qualities ?? []
+  : selectedGroup.value?.qualities ?? [],
+)
+const pricePreviews = computed(() => hasModelPricing.value
+  ? selectedModelOption.value?.prices ?? []
+  : selectedGroup.value?.prices ?? [],
+)
 const qualityOptions = computed<ImageStudioQualityOption[]>(() => {
+  if (quotedQualities.value.length) {
+    return quotedQualities.value
+  }
   if (selectedGroup.value?.qualities?.length) {
     return selectedGroup.value.qualities
   }
@@ -912,7 +928,6 @@ const qualityOptions = computed<ImageStudioQualityOption[]>(() => {
 const aspectRatioOptions = computed<ImageStudioAspectRatio[]>(() => config.value?.aspect_ratios ?? [])
 const selectedRatio = computed(() => aspectRatioOptions.value.find((item) => item.ratio === aspectRatio.value))
 const selectedQuality = computed(() => qualityOptions.value.find((item) => item.quality === quality.value))
-const selectedModelOption = computed(() => modelOptions.value.find((item) => item.model === model.value))
 const selectedModelLabel = computed(() => selectedModelOption.value?.label || selectedModelOption.value?.model || model.value)
 const selectedAPIKeyLabel = computed(() =>
   selectedAPIKey.value ? apiKeyOptionLabel(selectedAPIKey.value) : t('imageStudio.apiKeyPlaceholder'),
@@ -921,7 +936,7 @@ const selectedAPIKeyMeta = computed(() =>
   selectedAPIKey.value ? apiKeyOptionMeta(selectedAPIKey.value) : t('imageStudio.noApiKeysDescription'),
 )
 const selectedPricePreview = computed(() =>
-  selectedGroup.value?.prices?.find((item) => item.ratio === aspectRatio.value && item.quality === quality.value),
+  pricePreviews.value.find((item) => item.ratio === aspectRatio.value && item.quality === quality.value),
 )
 const maxReferenceImageMB = computed(() => config.value?.max_reference_image_mb ?? 20)
 const canUse = computed(() =>
@@ -944,10 +959,10 @@ const canSubmit = computed(() => {
 const submitLabel = computed(() =>
   mode.value === 'edit' ? t('imageStudio.editButton') : t('imageStudio.generateButton'),
 )
-const selectedUnitCost = computed(() => selectedPricePreview.value?.estimated_cost ?? selectedQuality.value?.estimated_cost)
+const selectedUnitCost = computed(() => unitCostForQuality(quality.value))
 const estimatedCostLabel = computed(() => {
   const cost = selectedUnitCost.value
-  return typeof cost === 'number' ? formatCurrency(cost * outputCount.value) : '-'
+  return typeof cost === 'number' && Number.isFinite(cost) ? formatCurrency(cost * outputCount.value) : '-'
 })
 const selectedPreviewMeta = computed(() => {
   const size = selectedPricePreview.value?.size ?? selectedRatio.value?.size ?? '-'
@@ -1664,12 +1679,22 @@ function chooseModel(models: ImageStudioModelOption[]): string {
 }
 
 function ratioPreviewLabel(item: ImageStudioAspectRatio): string {
-  const preview = selectedGroup.value?.prices?.find(
+  const preview = pricePreviews.value.find(
     (price) => price.ratio === item.ratio && price.quality === quality.value,
   )
   const size = preview?.size ?? item.size
   const tier = preview?.billing_tier ?? quality.value ?? item.billing_tier
   return `${size} / ${tier}`
+}
+
+function unitCostForQuality(qualityValue: string): number | undefined {
+  return pricePreviews.value.find((item) => item.ratio === aspectRatio.value && item.quality === qualityValue)?.estimated_cost
+    ?? quotedQualities.value.find((item) => item.quality === qualityValue)?.estimated_cost
+}
+
+function qualityCostLabel(qualityValue: string): string {
+  const cost = unitCostForQuality(qualityValue)
+  return typeof cost === 'number' && Number.isFinite(cost) ? formatCurrency(cost) : '-'
 }
 
 function cssAspectRatio(ratio: string): string {

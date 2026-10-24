@@ -270,13 +270,17 @@ func (e *ImageStudioGatewayExecutor) execute(ctx context.Context, input imageStu
 		RequestPayloadHash: imageStudioUsagePayloadHash(parsed, input.Body),
 		ChannelUsageFields: channelMapping.ToUsageFields(parsed.Model, result.UpstreamModel),
 	}
+	cost, err := e.imageStudioExecutionCost(ctx, usageInput)
+	if err != nil {
+		return nil, fmt.Errorf("calculate image result cost: %w", err)
+	}
 
 	return &ImageStudioExecutionResult{
 		ImageBytes:       imageBytes,
 		MimeType:         mimeType,
 		OutputFormat:     firstNonEmptyTrimmed(outputFormat, input.OutputFormat),
 		Background:       firstNonEmptyTrimmed(background, input.Background),
-		Cost:             estimateImageStudioGatewayCost(apiKey, result),
+		Cost:             cost,
 		RequestID:        result.RequestID,
 		SourceImageCount: input.SourceImageCount,
 		CommitUsage: func(commitCtx context.Context) error {
@@ -344,13 +348,17 @@ func (e *ImageStudioGatewayExecutor) executeGemini(ctx context.Context, apiKey *
 			BillingModelSource: BillingModelSourceRequested,
 		},
 	}
+	cost, err := e.imageStudioExecutionCost(ctx, usageInput)
+	if err != nil {
+		return nil, fmt.Errorf("calculate image result cost: %w", err)
+	}
 
 	return &ImageStudioExecutionResult{
 		ImageBytes:       imageBytes,
 		MimeType:         mimeType,
 		OutputFormat:     firstNonEmptyTrimmed(input.OutputFormat, imageStudioOutputFormatFromMIMEType(mimeType)),
 		Background:       input.Background,
-		Cost:             estimateImageStudioGatewayCost(apiKey, result),
+		Cost:             cost,
 		RequestID:        result.RequestID,
 		SourceImageCount: input.SourceImageCount,
 		CommitUsage: func(commitCtx context.Context) error {

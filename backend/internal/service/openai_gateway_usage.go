@@ -219,42 +219,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	videoMultiplier := resolveVideoRateMultiplier(apiKey, baseMultiplier)
 
 	var cost *CostBreakdown
-	billingModel := forwardResultBillingModel(result.Model, result.UpstreamModel)
-	if result.BillingModel != "" {
-		billingModel = strings.TrimSpace(result.BillingModel)
-	}
-	billingMappedModel := billingModelFromMappedUsageField(ctx, input.ChannelMappedModel)
-	if input.BillingModelSource == BillingModelSourceChannelMapped && input.ChannelMappedModel != "" &&
-		(input.ChannelMappedModel != input.OriginalModel || !strings.EqualFold(billingMappedModel, strings.TrimSpace(input.ChannelMappedModel))) {
-		billingModel = billingMappedModel
-	}
-	billingRequestedModel := billingModelFromOriginalUsageField(ctx, input.OriginalModel)
-	if input.BillingModelSource == BillingModelSourceRequested && billingRequestedModel != "" {
-		billingModel = billingRequestedModel
-	}
-	billingModels := usageBillingModelCandidates(
-		billingModel,
-		result.BillingModel,
-		billingMappedModel,
-		billingRequestedModel,
-		result.UpstreamModel,
-		result.Model,
-	)
-	if apiKey.Group != nil && len(apiKey.Group.ModelAliases) > 0 {
-		for i, model := range billingModels {
-			billingModels[i] = groupAliasBillingModel(apiKey.Group, model, func(alias string) bool {
-				return s.resolver.hasConfiguredModelPricing(ctx, PricingInput{Model: alias, GroupID: apiKey.GroupID, Group: apiKey.Group})
-			})
-		}
-		if len(billingModels) > 0 {
-			billingModels = usageBillingModelCandidates(billingModels[0], billingModels[1:]...)
-		}
-	}
-	// 映射后的上游模型可能先命中模糊 token 兜底价，从而抢在公开请求模型的
-	// 明确渠道按次价之前完成结算。管理员显式配置的分组/渠道价格必须优先于
-	// LiteLLM/系列兜底；显式候选之间、兜底候选之间仍保持原有计费源顺序。
-	billingModels = s.preferConfiguredOpenAIBillingModels(ctx, apiKey, billingModels)
-	billingModels = s.filterCNProviderBillingModelCandidates(ctx, account, apiKey, billingModels)
+	billingModels := s.openAIRecordUsageBillingModels(ctx, input)
 	serviceTier := ""
 	if result.ServiceTier != nil {
 		serviceTier = strings.TrimSpace(*result.ServiceTier)
@@ -579,6 +544,49 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.openai_gateway")
 
 	return nil
+}
+
+// openAIRecordUsageBillingModels keeps estimation and settlement on the same
+// configured-price, channel mapping and public-alias precedence.
+func (s *OpenAIGatewayService) openAIRecordUsageBillingModels(ctx context.Context, input *OpenAIRecordUsageInput) []string {
+	result, apiKey, account := input.Result, input.APIKey, input.Account
+	billingModel := forwardResultBillingModel(result.Model, result.UpstreamModel)
+	if result.BillingModel != "" {
+		billingModel = strings.TrimSpace(result.BillingModel)
+	}
+	billingMappedModel := billingModelFromMappedUsageField(ctx, input.ChannelMappedModel)
+	if input.BillingModelSource == BillingModelSourceChannelMapped && input.ChannelMappedModel != "" &&
+		(input.ChannelMappedModel != input.OriginalModel || !strings.EqualFold(billingMappedModel, strings.TrimSpace(input.ChannelMappedModel))) {
+		billingModel = billingMappedModel
+	}
+	billingRequestedModel := billingModelFromOriginalUsageField(ctx, input.OriginalModel)
+	if input.BillingModelSource == BillingModelSourceRequested && billingRequestedModel != "" {
+		billingModel = billingRequestedModel
+	}
+	billingModels := usageBillingModelCandidates(
+		billingModel,
+		result.BillingModel,
+		billingMappedModel,
+		billingRequestedModel,
+		result.UpstreamModel,
+		result.Model,
+	)
+	if apiKey.Group != nil && len(apiKey.Group.ModelAliases) > 0 {
+		for i, model := range billingModels {
+			billingModels[i] = groupAliasBillingModel(apiKey.Group, model, func(alias string) bool {
+				return s.resolver.hasConfiguredModelPricing(ctx, PricingInput{Model: alias, GroupID: apiKey.GroupID, Group: apiKey.Group})
+			})
+		}
+		if len(billingModels) > 0 {
+			billingModels = usageBillingModelCandidates(billingModels[0], billingModels[1:]...)
+		}
+	}
+	// 映射后的上游模型可能先命中模糊 token 兜底价，从而抢在公开请求模型的
+	// 明确渠道按次价之前完成结算。管理员显式配置的分组/渠道价格必须优先于
+	// LiteLLM/系列兜底；显式候选之间、兜底候选之间仍保持原有计费源顺序。
+	billingModels = s.preferConfiguredOpenAIBillingModels(ctx, apiKey, billingModels)
+	billingModels = s.filterCNProviderBillingModelCandidates(ctx, account, apiKey, billingModels)
+	return billingModels
 }
 
 func (s *OpenAIGatewayService) preferConfiguredOpenAIBillingModels(ctx context.Context, apiKey *APIKey, candidates []string) []string {
