@@ -554,6 +554,12 @@ func (s *RateLimitService) HandleUpstreamError(ctx context.Context, account *Acc
 			shouldDisable = true
 			break
 		}
+		// 生图余额不足只影响本次请求，由换号逻辑继续尝试其他账号；
+		// 不要按认证失败永久关闭调度。显式停用证据和上方管理员规则仍优先。
+		if account.Platform == PlatformOpenAI && OpenAIImagesEndpointFromContext(ctx) &&
+			!isOpenAIHTTPUpstreamAccessStateError(statusCode, "", responseBody) {
+			return false
+		}
 		// 支付要求：余额不足或计费问题，停止调度
 		msg := "Payment required (402): insufficient balance or billing issue"
 		if upstreamMsg != "" {

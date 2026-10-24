@@ -1109,6 +1109,8 @@ curl -X PUT "${BASE}/api/v1/admin/settings/image-studio" \
 用户工作台接口使用本次测试普通用户的 Bearer JWT，不使用 Admin key：
 
 - `GET /api/v1/user/images/options`：返回可用分组、模型、清晰度与价格预估；按选定分组和模型核对价格，不把预估字段当成钱包结算证据。
+- `POST /api/v1/user/images/edit`：用户 JWT 认证的同步 `multipart/form-data` 编辑接口；字段包括 `api_key_id`、`group_id`、`model`、`prompt`、`aspect_ratio`、`quality`、`output_format`，多张参考图使用重复的 `image` 文件字段。返回图片记录及 `source_image_count`；该数量证明接收了参考图，实际模型识图能力须结合生成结果验证。真实上游测试需用户明确授权，失败不自动重试生成。
+- `GET /api/v1/user/images/:id/download`：用户 JWT 下载本人生成的图片；验收时仅下载本次专用测试用户的图片，并在停用用户前完成。保留生成结果及账务证据。
 - `POST /api/v1/user/images/tasks`：JSON 字段为 `mode: "generation"`、`api_key_id`、`group_id`、`model`、`prompt`、`aspect_ratio`、`quality`、`output_format`；成功返回 202 和任务 ID。创建有真实上游成本，只有用户已授权测试该渠道时才使用真实渠道。
 - `GET /api/v1/user/images/tasks/:id`：只读取本次测试用户的任务，终态为 `succeeded` 或 `failed`；成功任务可含 `image.cost`、`estimated_cost` 和图片元数据。
 - `GET /api/v1/user/profile`：核对本次测试用户的余额。
