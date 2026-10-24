@@ -314,6 +314,7 @@ export default {
     balanceTransfer: {
       title: 'Balance Redeem Codes',
       subtitle: 'Convert this account balance into one-time redeem codes.',
+      generationNotEnabled: 'Code generation is not enabled for this account. You can still view, copy, and delete your existing codes.',
       amount: 'Single value',
       amountPlaceholder: 'Enter amount',
       count: 'Quantity',

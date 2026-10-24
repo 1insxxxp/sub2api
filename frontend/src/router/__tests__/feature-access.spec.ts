@@ -16,6 +16,7 @@ type NavigationGuard = (
 
 const routerHarness = vi.hoisted(() => ({
   guard: null as NavigationGuard | null,
+  routes: [] as Array<Record<string, any>>,
 }))
 
 const authStore = vi.hoisted(() => ({
@@ -50,13 +51,16 @@ const appStore = vi.hoisted(() => ({
 
 vi.mock('vue-router', () => ({
   createWebHistory: vi.fn(() => ({})),
-  createRouter: vi.fn(() => ({
-    beforeEach: vi.fn((guard: NavigationGuard) => {
-      routerHarness.guard = guard
-    }),
-    afterEach: vi.fn(),
-    onError: vi.fn(),
-  })),
+  createRouter: vi.fn((options) => {
+    routerHarness.routes = options.routes
+    return {
+      beforeEach: vi.fn((guard: NavigationGuard) => {
+        routerHarness.guard = guard
+      }),
+      afterEach: vi.fn(),
+      onError: vi.fn(),
+    }
+  }),
 }))
 
 vi.mock('@/stores/auth', () => ({
@@ -162,6 +166,47 @@ describe('feature route guard', () => {
     expect(routerSource).toMatch(
       /path: '\/admin\/workbench',[\s\S]*?requiresAdminWorkbench: true[\s\S]*?titleKey: 'adminWorkbench\.title'/,
     )
+  })
+
+  it('registers balance transfer as an authenticated user page without workbench privileges', () => {
+    const route = routerHarness.routes.find((item) => item.path === '/balance-transfer')
+    expect(route).toBeDefined()
+    expect(route?.meta).toMatchObject({ requiresAuth: true, requiresAdmin: false })
+    expect(route?.meta.requiresAdminWorkbench).not.toBe(true)
+    expect(route?.meta.requiresManager).not.toBe(true)
+  })
+
+  it('lets an ordinary user manage their own balance-transfer history', async () => {
+    const { navigation, next } = runGuard({}, '/balance-transfer')
+    await navigation
+    expect(next).toHaveBeenCalledWith()
+  })
+
+  it('keeps the workbench unavailable to an ordinary user using the transfer page', async () => {
+    const { navigation, next } = runGuard({ requiresAdminWorkbench: true }, '/admin/workbench')
+    await navigation
+    expect(next).toHaveBeenCalledWith('/dashboard')
+  })
+
+  it('requires login before opening the balance-transfer page', async () => {
+    authStore.isAuthenticated = false
+    const { navigation, next } = runGuard({}, '/balance-transfer')
+    await navigation
+    expect(next).toHaveBeenCalledWith({ path: '/login', query: { redirect: '/balance-transfer' } })
+  })
+
+  it('keeps balance transfer unavailable in simple mode', async () => {
+    authStore.isSimpleMode = true
+    const { navigation, next } = runGuard({}, '/balance-transfer')
+    await navigation
+    expect(next).toHaveBeenCalledWith('/dashboard')
+  })
+
+  it('does not widen backend-mode access for the balance-transfer page', async () => {
+    appStore.backendModeEnabled = true
+    const { navigation, next } = runGuard({}, '/balance-transfer')
+    await navigation
+    expect(next).toHaveBeenCalledWith('/login')
   })
 
   it('allows a sub admin to open the admin workbench route', async () => {

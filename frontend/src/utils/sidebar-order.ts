@@ -22,6 +22,7 @@ export const DEFAULT_USER_SIDEBAR_ORDER = [
   '/purchase',
   '/orders',
   '/redeem',
+  '/balance-transfer',
   '/lottery',
   '/affiliate',
   '/profile',

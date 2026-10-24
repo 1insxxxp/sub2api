@@ -11699,6 +11699,7 @@ const userSidebarOrderLabelKeys: Record<string, string> = {
   "/purchase": "nav.buySubscription",
   "/orders": "nav.myOrders",
   "/redeem": "nav.redeem",
+  "/balance-transfer": "adminWorkbench.balanceTransfer.title",
   "/lottery": "nav.lottery",
   "/affiliate": "nav.affiliate",
   "/profile": "nav.profile",

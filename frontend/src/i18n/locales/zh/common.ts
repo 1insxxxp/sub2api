@@ -315,6 +315,7 @@ export default {
     balanceTransfer: {
       title: '余额兑换码',
       subtitle: '将当前账号余额生成一次性兑换码。',
+      generationNotEnabled: '当前账号未开通生成权限，仍可查看、复制和删除本人已有兑换码。',
       amount: '单个金额',
       amountPlaceholder: '输入金额',
       count: '数量',

@@ -873,6 +873,7 @@ const flagOpsMonitoring = () => adminSettingsStore.opsMonitoringEnabled
 const flagAdminPayment = () => adminSettingsStore.paymentEnabled
 const flagBatchImageAccess = () => canUseBatchImage.value
 const flagLottery = makeSidebarFlag(FeatureFlags.lottery)
+const flagBalanceTransfer = () => authStore.user?.balance_redeem_code_enabled === true
 
 function customMenuIcon(item: Pick<CustomMenuItem, 'label' | 'icon_svg'>): unknown {
   if (item.icon_svg?.trim()) return null
@@ -911,6 +912,7 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
     { path: '/purchase', label: purchaseNavLabel.value, icon: RechargeSubscriptionIcon, hideInSimpleMode: true, featureFlag: flagPayment },
     { path: '/orders', label: t('nav.myOrders'), icon: OrderListIcon, hideInSimpleMode: true, featureFlag: flagPayment },
     { path: '/redeem', label: t('nav.redeem'), icon: GiftIcon, hideInSimpleMode: true },
+    { path: '/balance-transfer', label: t('adminWorkbench.balanceTransfer.title'), icon: GiftIcon, hideInSimpleMode: true, featureFlag: flagBalanceTransfer },
     { path: '/lottery', label: t('nav.lottery'), icon: GiftIcon, hideInSimpleMode: true, featureFlag: flagLottery },
     { path: '/affiliate', label: t('nav.affiliate'), icon: UsersIcon, hideInSimpleMode: true, featureFlag: flagAffiliate },
     { path: '/profile', label: t('nav.profile'), icon: UserIcon },

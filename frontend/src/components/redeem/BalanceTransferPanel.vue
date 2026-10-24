@@ -1,0 +1,708 @@
+<template>
+  <div class="balance-transfer-panel min-w-0 space-y-4 sm:space-y-6">
+    <section v-if="canGenerate" class="grid min-w-0 gap-4 sm:gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+      <form
+        ref="transferFormRef"
+        data-test="workbench-transfer-form"
+        class="workbench-tool min-w-0 p-4 sm:p-5"
+        @submit.prevent="handleGenerate"
+      >
+        <div class="workbench-tool-heading mb-5 pb-4">
+          <h2 class="text-base font-semibold text-gray-950 dark:text-white">
+            {{ t('adminWorkbench.balanceTransfer.title') }}
+          </h2>
+          <p class="mt-1 text-xs leading-5 text-gray-500 dark:text-dark-400">
+            {{ t('adminWorkbench.balanceTransfer.subtitle') }}
+          </p>
+        </div>
+
+        <div class="grid gap-4 sm:grid-cols-2">
+          <label class="block">
+            <span class="input-label">{{ t('adminWorkbench.balanceTransfer.amount') }}</span>
+            <input
+              v-model="form.amount"
+              data-test="workbench-transfer-amount"
+              type="number"
+              min="0.01"
+              step="0.01"
+              class="input"
+              :placeholder="t('adminWorkbench.balanceTransfer.amountPlaceholder')"
+            />
+          </label>
+          <label class="block">
+            <span class="input-label">{{ t('adminWorkbench.balanceTransfer.count') }}</span>
+            <input
+              v-model.number="form.count"
+              data-test="workbench-transfer-count"
+              type="number"
+              min="1"
+              max="100"
+              step="1"
+              class="input"
+            />
+          </label>
+          <label class="block">
+            <span class="input-label">{{ t('adminWorkbench.balanceTransfer.expiresInDays') }}</span>
+            <input
+              v-model.number="form.expires_in_days"
+              data-test="workbench-transfer-expiry"
+              type="number"
+              min="1"
+              max="3650"
+              step="1"
+              class="input"
+            />
+          </label>
+          <div class="min-w-0 self-end py-1">
+            <p class="text-xs text-gray-500 dark:text-dark-400">
+              {{ t('adminWorkbench.balanceTransfer.totalValue') }}
+            </p>
+            <p class="mt-1 text-lg font-semibold tabular-nums text-gray-950 dark:text-white">
+              ${{ totalValue.toFixed(2) }}
+            </p>
+          </div>
+        </div>
+
+        <label class="mt-4 block">
+          <span class="input-label">{{ t('adminWorkbench.balanceTransfer.notes') }}</span>
+          <textarea
+            v-model="form.notes"
+            data-test="workbench-transfer-notes"
+            rows="3"
+            class="input resize-y"
+            :placeholder="t('adminWorkbench.balanceTransfer.notesPlaceholder')"
+          ></textarea>
+        </label>
+
+        <label class="mt-4 flex min-w-0 cursor-pointer items-start gap-3">
+          <input
+            v-model="form.single_use_per_user"
+            data-test="workbench-transfer-single-use"
+            type="checkbox"
+            class="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+          />
+          <span class="min-w-0 break-words">
+            <span class="block text-sm font-medium text-gray-900 dark:text-white">
+              {{ t('adminWorkbench.balanceTransfer.singleUsePerUser') }}
+            </span>
+            <span class="mt-1 block text-xs leading-5 text-gray-500 dark:text-dark-400">
+              {{ t('adminWorkbench.balanceTransfer.singleUsePerUserHint') }}
+            </span>
+          </span>
+        </label>
+
+        <label
+          data-test="workbench-transfer-threshold-exempt-option"
+          class="mt-3 flex w-full min-w-0 cursor-pointer items-start gap-3"
+        >
+          <input
+            v-model="form.threshold_exempt"
+            data-test="workbench-transfer-threshold-exempt"
+            type="checkbox"
+            class="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+          />
+          <span data-test="workbench-transfer-threshold-exempt-copy" class="min-w-0 flex-1">
+            <span class="block break-words text-sm font-medium leading-5 text-gray-900 dark:text-white">
+              {{ t('adminWorkbench.balanceTransfer.giftCredit') }}
+            </span>
+            <span class="mt-1 block break-words text-xs leading-5 text-gray-500 dark:text-dark-400">
+              {{ t('adminWorkbench.balanceTransfer.giftCreditHint') }}
+            </span>
+          </span>
+        </label>
+
+        <p v-if="errorMessage" class="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-300">
+          {{ errorMessage }}
+        </p>
+
+        <button
+          type="submit"
+          class="btn btn-primary mt-5 w-full justify-center"
+          :disabled="generating"
+        >
+          <Icon v-if="generating" name="refresh" size="sm" class="animate-spin" />
+          <span>{{ generating ? t('adminWorkbench.balanceTransfer.generating') : t('adminWorkbench.balanceTransfer.generate') }}</span>
+        </button>
+      </form>
+
+      <section
+        data-test="workbench-generated-now-card"
+        class="admin-workbench-generated-now workbench-tool flex min-h-0 min-w-0 flex-col overflow-hidden p-4 sm:p-5"
+        :style="generatedNowPanelStyle"
+      >
+        <div class="workbench-tool-heading mb-4 flex shrink-0 flex-col items-stretch justify-between gap-3 pb-4 min-[360px]:flex-row min-[360px]:items-center">
+          <div class="min-w-0">
+            <h2 class="text-base font-semibold text-gray-950 dark:text-white">
+              {{ t('adminWorkbench.balanceTransfer.generatedNow') }}
+            </h2>
+          </div>
+          <button
+            type="button"
+            class="btn btn-secondary min-h-11 w-full justify-center min-[360px]:w-auto"
+            :disabled="generatedResults.length === 0"
+            @click="copyGeneratedResults"
+          >
+            <Icon name="copy" size="sm" />
+            <span>{{ t('common.copy') }}</span>
+          </button>
+        </div>
+
+        <div v-if="generatedResults.length === 0" class="flex min-h-28 flex-1 items-center justify-center py-6 text-sm text-gray-500 dark:text-dark-400 lg:min-h-44">
+          {{ t('adminWorkbench.balanceTransfer.noGeneratedNow') }}
+        </div>
+        <div v-else data-test="workbench-generated-results" class="admin-workbench-generated-results max-h-72 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1 lg:max-h-none">
+          <div
+            v-for="item in generatedResults"
+            :key="item.id"
+            data-test="workbench-generated-code"
+            class="workbench-generated-code min-w-0 py-2 text-sm"
+          >
+            <div class="flex min-w-0 flex-wrap items-center gap-2">
+              <span class="min-w-0 break-all font-mono">{{ item.code }}</span>
+              <span
+                v-if="item.threshold_exempt"
+                :data-test="`generated-now-gift-badge-${item.id}`"
+                class="inline-flex shrink-0 rounded bg-teal-100 px-1.5 py-0.5 text-[11px] font-medium text-teal-800 dark:bg-teal-500/15 dark:text-teal-200"
+              >
+                {{ t('adminWorkbench.balanceTransfer.giftBadge') }}
+              </span>
+            </div>
+            <p v-if="item.notes" class="mt-1 break-words text-xs leading-5 text-gray-500 dark:text-dark-400">
+              {{ t('adminWorkbench.balanceTransfer.notes') }}: {{ item.notes }}
+            </p>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <p v-else data-test="balance-transfer-permission-notice" role="status" class="text-sm leading-6 text-gray-500 dark:text-dark-400">
+      {{ t('adminWorkbench.balanceTransfer.generationNotEnabled') }}
+    </p>
+
+    <section data-test="workbench-generated-history" class="min-w-0">
+      <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 class="text-base font-semibold text-gray-950 dark:text-white">
+            {{ t('adminWorkbench.balanceTransfer.generatedList') }}
+          </h2>
+          <p class="mt-1 text-xs leading-5 text-gray-500 dark:text-dark-400">
+            {{ t('adminWorkbench.balanceTransfer.generatedListHint') }}
+          </p>
+          <p v-if="selectedGeneratedCodeIds.length > 0" class="mt-1 text-xs text-gray-500 dark:text-dark-400">
+            {{ t('adminWorkbench.balanceTransfer.selectedCount', { count: selectedGeneratedCodeIds.length }) }}
+          </p>
+        </div>
+        <div class="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
+          <label
+            v-if="deletableGeneratedCodes.length > 0"
+            class="inline-flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-lg border border-gray-200 px-3 text-sm text-gray-700 dark:border-dark-700 dark:text-dark-300"
+          >
+            <input
+              data-test="select-all-generated-codes"
+              type="checkbox"
+              class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              :checked="allDeletableGeneratedCodesSelected"
+              :disabled="batchDeletingGeneratedCodes"
+              @change="handleSelectAllGeneratedCodes"
+            />
+            <span>{{ t('adminWorkbench.balanceTransfer.selectAll') }}</span>
+          </label>
+          <button
+            type="button"
+            data-test="delete-selected-generated-codes"
+            class="btn btn-secondary w-full justify-center text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 sm:w-auto"
+            :disabled="selectedGeneratedCodeIds.length === 0 || batchDeletingGeneratedCodes"
+            @click="handleDeleteSelectedGeneratedCodes"
+          >
+            <Icon
+              :name="batchDeletingGeneratedCodes ? 'refresh' : 'trash'"
+              size="sm"
+              :class="{ 'animate-spin': batchDeletingGeneratedCodes }"
+            />
+            <span>{{ t('adminWorkbench.balanceTransfer.batchDelete') }}</span>
+          </button>
+          <button
+            type="button"
+            data-test="copy-selected-generated-codes"
+            class="btn btn-secondary w-full justify-center sm:w-auto"
+            :disabled="selectedGeneratedCodeIds.length === 0 || batchDeletingGeneratedCodes"
+            @click="copySelectedGeneratedCodes"
+          >
+            <Icon name="copy" size="sm" />
+            <span>{{ t('adminWorkbench.balanceTransfer.copySelected') }}</span>
+          </button>
+          <button type="button" class="btn btn-secondary w-full justify-center sm:w-auto" :disabled="loadingGenerated" @click="fetchGeneratedCodes">
+            <Icon name="refresh" size="sm" :class="{ 'animate-spin': loadingGenerated }" />
+            <span>{{ t('common.refresh') }}</span>
+          </button>
+        </div>
+      </div>
+
+      <div v-if="loadingGenerated" class="py-12 text-center text-sm text-gray-500 dark:text-dark-400">
+        {{ t('common.loading') }}
+      </div>
+      <div v-else-if="generatedCodes.length === 0" class="py-12 text-center text-sm text-gray-500 dark:text-dark-400">
+        {{ t('adminWorkbench.balanceTransfer.empty') }}
+      </div>
+      <div v-else class="space-y-3">
+        <article
+          v-for="item in generatedCodes"
+          :key="item.id"
+          class="workbench-history-record flex min-w-0 flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between sm:px-4"
+        >
+          <div class="flex min-w-0 flex-1 gap-3">
+            <label v-if="canDeleteGeneratedCode(item)" class="mt-1 shrink-0">
+              <input
+                v-model="selectedGeneratedCodeIds"
+                type="checkbox"
+                class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                :value="item.id"
+                :data-test="`select-generated-code-${item.id}`"
+                :disabled="deletingIds.includes(item.id) || batchDeletingGeneratedCodes"
+              />
+            </label>
+            <span v-else class="mt-1 h-4 w-4 shrink-0" aria-hidden="true"></span>
+            <div class="min-w-0 flex-1">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="break-all font-mono text-sm font-semibold text-gray-950 dark:text-white">{{ item.code }}</span>
+                <span class="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
+                  ${{ item.value.toFixed(2) }}
+                </span>
+                <span :class="getGeneratedStatusClass(item.status)">
+                  {{ getGeneratedStatusLabel(item.status) }}
+                </span>
+                <span v-if="item.single_use_per_user" class="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
+                  {{ t('adminWorkbench.balanceTransfer.singleUseBadge') }}
+                </span>
+                <span
+                  v-if="item.threshold_exempt"
+                  :data-test="`generated-gift-badge-${item.id}`"
+                  class="rounded-full bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-700 dark:bg-teal-500/10 dark:text-teal-300"
+                >
+                  {{ t('adminWorkbench.balanceTransfer.giftBadge') }}
+                </span>
+              </div>
+              <p class="mt-1 break-words text-xs leading-5 text-gray-500 dark:text-dark-400">
+                {{ formatDateTime(item.created_at) }}
+                <span v-if="item.expires_at"> · {{ t('adminWorkbench.balanceTransfer.expiresAt') }} {{ formatDateTime(item.expires_at) }}</span>
+                <span v-if="item.used_at"> · {{ t('adminWorkbench.balanceTransfer.usedAt') }} {{ formatDateTime(item.used_at) }}</span>
+              </p>
+              <p v-if="item.notes" class="mt-2 break-words text-xs leading-5 text-gray-600 dark:text-dark-300">
+                {{ t('adminWorkbench.balanceTransfer.notes') }}: {{ item.notes }}
+              </p>
+            </div>
+          </div>
+          <div class="workbench-history-actions flex shrink-0 items-center justify-end gap-2 self-end sm:self-center">
+            <button
+              type="button"
+              :data-test="`generated-code-copy-${item.id}`"
+              class="btn btn-secondary justify-center"
+              :aria-label="t('common.copy')"
+              :title="t('common.copy')"
+              @click="copyCode(item.code)"
+            >
+              <Icon name="copy" size="sm" />
+            </button>
+            <button
+              v-if="canDeleteGeneratedCode(item)"
+              type="button"
+              :data-test="`generated-code-delete-${item.id}`"
+              class="btn btn-danger justify-center"
+              :aria-label="t('common.delete')"
+              :title="t('common.delete')"
+              :disabled="deletingIds.includes(item.id)"
+              @click="handleDeleteGeneratedCode(item)"
+            >
+              <Icon name="trash" size="sm" />
+            </button>
+          </div>
+        </article>
+      </div>
+
+      <Pagination
+        v-if="generatedPagination.total > generatedPagination.page_size"
+        class="mt-5"
+        :page="generatedPagination.page"
+        :page-size="generatedPagination.page_size"
+        :total="generatedPagination.total"
+        :page-size-options="[10, 20, 50]"
+        @update:page="handleGeneratedPageChange"
+        @update:page-size="handleGeneratedPageSizeChange"
+      />
+    </section>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, reactive, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { redeemAPI, type GeneratedRedeemCode } from '@/api'
+import { useAuthStore } from '@/stores/auth'
+import { useAppStore } from '@/stores/app'
+import Pagination from '@/components/common/Pagination.vue'
+import Icon from '@/components/icons/Icon.vue'
+import { formatDateTime } from '@/utils/format'
+import { extractApiErrorMessage } from '@/utils/apiError'
+
+const props = withDefaults(defineProps<{ scope?: 'user' | 'workbench' }>(), {
+  scope: 'workbench'
+})
+
+const { t } = useI18n()
+const authStore = useAuthStore()
+const appStore = useAppStore()
+
+const canGenerate = computed(() => props.scope === 'workbench'
+  || authStore.user?.balance_redeem_code_enabled === true
+  || authStore.user?.role === 'admin'
+  || authStore.user?.role === 'sub_admin')
+const availableBalance = computed(() => authStore.user?.balance ?? 0)
+const transferApi = computed(() => props.scope === 'user' ? {
+  generate: redeemAPI.generateUserBalanceTransferCodes,
+  list: redeemAPI.getUserGenerated,
+  remove: redeemAPI.deleteUserGenerated,
+  removeBatch: redeemAPI.deleteUserGeneratedBatch
+} : {
+  generate: redeemAPI.generateBalanceTransferCodes,
+  list: redeemAPI.getGenerated,
+  remove: redeemAPI.deleteGenerated,
+  removeBatch: redeemAPI.deleteGeneratedBatch
+})
+
+const form = reactive({
+  amount: '',
+  count: 1,
+  expires_in_days: 30,
+  notes: '',
+  single_use_per_user: false,
+  threshold_exempt: false
+})
+
+const generatedResults = ref<GeneratedRedeemCode[]>([])
+const generatedCodes = ref<GeneratedRedeemCode[]>([])
+const loadingGenerated = ref(false)
+const generating = ref(false)
+const batchDeletingGeneratedCodes = ref(false)
+const deletingIds = ref<number[]>([])
+const selectedGeneratedCodeIds = ref<number[]>([])
+const errorMessage = ref('')
+
+const generatedPagination = reactive({
+  page: 1,
+  page_size: 10,
+  total: 0
+})
+const transferFormRef = ref<HTMLElement | null>(null)
+const generatedNowHeight = ref<number | null>(null)
+let transferFormResizeObserver: ResizeObserver | null = null
+
+const generatedNowPanelStyle = computed(() => {
+  if (generatedNowHeight.value == null) {
+    return undefined
+  }
+  return { height: `${generatedNowHeight.value}px` }
+})
+
+const totalValue = computed(() => {
+  const amount = Number(form.amount)
+  const count = Number(form.count)
+  if (!Number.isFinite(amount) || !Number.isFinite(count)) {
+    return 0
+  }
+  return Math.max(0, amount) * Math.max(0, count)
+})
+
+const deletableGeneratedCodes = computed(() => generatedCodes.value.filter(canDeleteGeneratedCode))
+
+const allDeletableGeneratedCodesSelected = computed(() => {
+  if (deletableGeneratedCodes.value.length === 0) {
+    return false
+  }
+  const selected = new Set(selectedGeneratedCodeIds.value)
+  return deletableGeneratedCodes.value.every((item) => selected.has(item.id))
+})
+
+async function fetchGeneratedCodes() {
+  loadingGenerated.value = true
+  try {
+    const response = await transferApi.value.list({
+      page: generatedPagination.page,
+      page_size: generatedPagination.page_size
+    })
+    generatedCodes.value = response.items
+    const visibleDeletableIds = new Set(response.items.filter(canDeleteGeneratedCode).map((item) => item.id))
+    selectedGeneratedCodeIds.value = selectedGeneratedCodeIds.value.filter((id) => visibleDeletableIds.has(id))
+    generatedPagination.total = response.total
+    generatedPagination.page = response.page
+    generatedPagination.page_size = response.page_size
+  } catch (error: any) {
+    appStore.showError(extractApiErrorMessage(error, t('adminWorkbench.balanceTransfer.failedToLoad')))
+  } finally {
+    loadingGenerated.value = false
+  }
+}
+
+function validateForm(): boolean {
+  const amount = Number(form.amount)
+  const count = Number(form.count)
+  const expiresInDays = Number(form.expires_in_days)
+  errorMessage.value = ''
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    errorMessage.value = t('adminWorkbench.balanceTransfer.invalidAmount')
+    appStore.showError(errorMessage.value)
+    return false
+  }
+  if (!Number.isInteger(count) || count < 1 || count > 100) {
+    errorMessage.value = t('adminWorkbench.balanceTransfer.invalidCount')
+    appStore.showError(errorMessage.value)
+    return false
+  }
+  if (amount * count > availableBalance.value) {
+    errorMessage.value = t('adminWorkbench.balanceTransfer.insufficientBalance')
+    appStore.showError(errorMessage.value)
+    return false
+  }
+  if (!Number.isInteger(expiresInDays) || expiresInDays < 1 || expiresInDays > 3650) {
+    errorMessage.value = t('adminWorkbench.balanceTransfer.invalidExpiry')
+    appStore.showError(errorMessage.value)
+    return false
+  }
+  return true
+}
+
+async function handleGenerate() {
+  if (!canGenerate.value || generating.value || !validateForm()) {
+    return
+  }
+
+  const amount = Number(form.amount)
+  const count = Number(form.count)
+  const expiresInDays = Number(form.expires_in_days)
+
+  generating.value = true
+  try {
+    const codes = await transferApi.value.generate({
+      amount,
+      count,
+      expires_in_days: expiresInDays,
+      notes: form.notes.trim(),
+      single_use_per_user: form.single_use_per_user,
+      threshold_exempt: form.threshold_exempt
+    })
+    generatedResults.value = codes
+    form.amount = ''
+    form.notes = ''
+    form.threshold_exempt = false
+    await authStore.refreshUser()
+    generatedPagination.page = 1
+    await fetchGeneratedCodes()
+    appStore.showSuccess(t('adminWorkbench.balanceTransfer.generated'))
+  } catch (error: any) {
+    errorMessage.value = extractApiErrorMessage(error, t('adminWorkbench.balanceTransfer.failedToGenerate'))
+    appStore.showError(errorMessage.value)
+  } finally {
+    generating.value = false
+  }
+}
+
+function canDeleteGeneratedCode(item: GeneratedRedeemCode): boolean {
+  const source = item.source?.trim()
+  return item.type === 'balance' && (!source || source === 'user_balance_transfer')
+}
+
+function getGeneratedStatusLabel(status: GeneratedRedeemCode['status'] | string): string {
+  const labels: Record<string, string> = {
+    unused: t('adminWorkbench.balanceTransfer.status.unused'),
+    used: t('adminWorkbench.balanceTransfer.status.used'),
+    expired: t('adminWorkbench.balanceTransfer.status.expired'),
+    disabled: t('adminWorkbench.balanceTransfer.status.disabled'),
+    active: t('adminWorkbench.balanceTransfer.status.active')
+  }
+  return labels[status] || status
+}
+
+function getGeneratedStatusClass(status: GeneratedRedeemCode['status'] | string): string {
+  const base = 'rounded-full px-2 py-0.5 text-xs font-medium'
+  if (status === 'unused' || status === 'active') {
+    return `${base} bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300`
+  }
+  if (status === 'used') {
+    return `${base} bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300`
+  }
+  if (status === 'expired') {
+    return `${base} bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300`
+  }
+  return `${base} bg-gray-100 text-gray-600 dark:bg-dark-800 dark:text-dark-300`
+}
+
+async function copyText(text: string) {
+  try {
+    await navigator.clipboard.writeText(text)
+    appStore.showSuccess(t('common.copied'))
+  } catch {
+    appStore.showError(t('common.copyFailed'))
+  }
+}
+
+function copyCode(code: string) {
+  void copyText(code)
+}
+
+function copyGeneratedResults() {
+  if (generatedResults.value.length === 0) {
+    return
+  }
+  void copyText(generatedResults.value.map((item) => item.code).join('\n'))
+}
+
+function copySelectedGeneratedCodes() {
+  const selectedIds = new Set(selectedGeneratedCodeIds.value)
+  const codes = generatedCodes.value.filter((item) => selectedIds.has(item.id)).map((item) => item.code)
+  if (codes.length === 0) {
+    return
+  }
+  void copyText(codes.join('\n'))
+}
+
+async function handleDeleteGeneratedCode(item: GeneratedRedeemCode) {
+  if (!canDeleteGeneratedCode(item) || deletingIds.value.includes(item.id)) {
+    return
+  }
+  if (!window.confirm(t('adminWorkbench.balanceTransfer.deleteConfirm'))) {
+    return
+  }
+  deletingIds.value = [...deletingIds.value, item.id]
+  try {
+    await transferApi.value.remove(item.id)
+    await authStore.refreshUser()
+    await fetchGeneratedCodes()
+    selectedGeneratedCodeIds.value = selectedGeneratedCodeIds.value.filter((id) => id !== item.id)
+    appStore.showSuccess(t('adminWorkbench.balanceTransfer.deleted'))
+  } catch (error: any) {
+    appStore.showError(extractApiErrorMessage(error, t('adminWorkbench.balanceTransfer.failedToDelete')))
+  } finally {
+    deletingIds.value = deletingIds.value.filter((id) => id !== item.id)
+  }
+}
+
+function handleSelectAllGeneratedCodes(event: Event) {
+  const checked = (event.target as HTMLInputElement).checked
+  selectedGeneratedCodeIds.value = checked ? deletableGeneratedCodes.value.map((item) => item.id) : []
+}
+
+async function handleDeleteSelectedGeneratedCodes() {
+  const deletableIds = new Set(deletableGeneratedCodes.value.map((item) => item.id))
+  const ids = selectedGeneratedCodeIds.value.filter((id) => deletableIds.has(id))
+  if (ids.length === 0 || batchDeletingGeneratedCodes.value) {
+    return
+  }
+  if (!window.confirm(t('adminWorkbench.balanceTransfer.batchDeleteConfirm'))) {
+    return
+  }
+
+  batchDeletingGeneratedCodes.value = true
+  try {
+    await transferApi.value.removeBatch(ids)
+    selectedGeneratedCodeIds.value = []
+    await authStore.refreshUser()
+    generatedPagination.page = 1
+    await fetchGeneratedCodes()
+    appStore.showSuccess(t('adminWorkbench.balanceTransfer.batchDeleted'))
+  } catch (error: any) {
+    appStore.showError(extractApiErrorMessage(error, t('adminWorkbench.balanceTransfer.failedToBatchDelete')))
+  } finally {
+    batchDeletingGeneratedCodes.value = false
+  }
+}
+
+function handleGeneratedPageChange(page: number) {
+  generatedPagination.page = page
+  void fetchGeneratedCodes()
+}
+
+function handleGeneratedPageSizeChange(pageSize: number) {
+  generatedPagination.page_size = pageSize
+  generatedPagination.page = 1
+  void fetchGeneratedCodes()
+}
+
+function updateGeneratedNowHeight() {
+  if (window.innerWidth < 1024) {
+    generatedNowHeight.value = null
+    return
+  }
+  const height = transferFormRef.value?.getBoundingClientRect().height ?? 0
+  generatedNowHeight.value = height > 0 ? Math.ceil(height) : null
+}
+
+function disconnectTransferFormResizeObserver() {
+  transferFormResizeObserver?.disconnect()
+  transferFormResizeObserver = null
+}
+
+function syncTransferFormLayout() {
+  disconnectTransferFormResizeObserver()
+
+  if (!canGenerate.value) {
+    generatedNowHeight.value = null
+    return
+  }
+
+  updateGeneratedNowHeight()
+  if (typeof ResizeObserver !== 'undefined' && transferFormRef.value) {
+    transferFormResizeObserver = new ResizeObserver(updateGeneratedNowHeight)
+    transferFormResizeObserver.observe(transferFormRef.value)
+  }
+}
+
+watch(canGenerate, () => {
+  void nextTick(syncTransferFormLayout)
+})
+
+onMounted(() => {
+  void fetchGeneratedCodes()
+  syncTransferFormLayout()
+  window.addEventListener('resize', updateGeneratedNowHeight)
+})
+
+onActivated(() => {
+  void nextTick(syncTransferFormLayout)
+  window.addEventListener('resize', updateGeneratedNowHeight)
+})
+
+onDeactivated(() => {
+  disconnectTransferFormResizeObserver()
+  window.removeEventListener('resize', updateGeneratedNowHeight)
+})
+
+onBeforeUnmount(() => {
+  disconnectTransferFormResizeObserver()
+  window.removeEventListener('resize', updateGeneratedNowHeight)
+})
+</script>
+
+<style scoped>
+.balance-transfer-panel .workbench-tool-heading {
+  border-bottom: 1px solid var(--workspace-divider);
+}
+.balance-transfer-panel :is(.workbench-tool, .workbench-history-record) {
+  border: 1px solid var(--workspace-rule);
+  border-radius: 8px;
+  background: linear-gradient(125deg, var(--workspace-highlight) 15%, transparent 70%), var(--workspace-surface);
+  box-shadow: var(--workspace-shadow);
+}
+.balance-transfer-panel .workbench-generated-code {
+  border-bottom: 1px solid var(--workspace-divider);
+  color: var(--workspace-ink);
+}
+.balance-transfer-panel .workbench-generated-code:last-child { border-bottom: 0; }
+.balance-transfer-panel .workbench-history-actions .btn {
+  width: 2.75rem;
+  min-width: 2.75rem;
+  height: 2.75rem;
+  flex: 0 0 2.75rem;
+  padding: 0;
+}
+
+</style>

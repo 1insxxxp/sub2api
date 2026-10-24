@@ -309,6 +309,17 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/balance-transfer',
+    name: 'BalanceTransfer',
+    component: () => import('@/views/user/BalanceTransferView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Balance to Redeem Codes',
+      titleKey: 'adminWorkbench.balanceTransfer.title'
+    }
+  },
+  {
     path: '/available-channels',
     name: 'UserAvailableChannels',
     component: () => import('@/views/user/AvailableChannelsView.vue'),
@@ -1089,7 +1100,8 @@ router.beforeEach(async (to, _from, next) => {
       '/admin/subscriptions',
       '/admin/redeem',
       '/subscriptions',
-      '/redeem'
+      '/redeem',
+      '/balance-transfer'
     ]
 
     if (restrictedPaths.some((path) => to.path.startsWith(path))) {
