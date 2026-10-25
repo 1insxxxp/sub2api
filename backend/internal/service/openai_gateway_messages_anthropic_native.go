@@ -258,6 +258,13 @@ func (s *OpenAIGatewayService) handleNativeAnthropicBufferedResponse(
 	if err := json.Unmarshal(body, &raw); err != nil {
 		return nil, invalidNonStreamingJSONFailoverError(ctx, s.rateLimitService, resp, account, body, err, billingModel)
 	}
+	if failure := anthropicBufferedErrorResponse(resp, body); failure != nil {
+		upstreamMsg := sanitizeUpstreamErrorMessage(strings.TrimSpace(extractUpstreamErrorMessage(body)))
+		if failover := s.failoverOpenAIUpstreamHTTPError(ctx, c, account, failure, body, upstreamMsg, upstreamModel); failover != nil {
+			return nil, failover
+		}
+		return s.handleAnthropicErrorResponse(failure, c, account, billingModel)
+	}
 
 	usage := parseClaudeUsageFromResponseBody(body)
 	if IsForceCacheBilling(ctx) && usage.InputTokens > 0 {

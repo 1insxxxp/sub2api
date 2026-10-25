@@ -1520,6 +1520,9 @@ func (s *GatewayService) handleNonStreamingResponse(ctx context.Context, resp *h
 		}
 		return nil, fmt.Errorf("parse response: %w", err)
 	}
+	if failure := anthropicBufferedErrorResponse(resp, body); failure != nil {
+		return nil, s.handleAnthropicBufferedError(ctx, c, account, failure, body, mappedModel, false)
+	}
 	outcomeCollector.ObserveEvent(len(body))
 	_ = outcomeCollector.ObserveJSONPayload(ResponseOutcomeProtocolAnthropic, body)
 

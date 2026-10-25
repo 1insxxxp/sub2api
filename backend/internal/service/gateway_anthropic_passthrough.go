@@ -286,7 +286,7 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInput(
 		clientDisconnect = streamResult.clientDisconnect
 		outcome = &streamResult.outcome
 	} else {
-		usage, err = s.handleNonStreamingResponseAnthropicAPIKeyPassthrough(ctx, resp, c, account)
+		usage, err = s.handleNonStreamingResponseAnthropicAPIKeyPassthrough(ctx, resp, c, account, input.RequestModel)
 		if err != nil {
 			return nil, err
 		}
@@ -1034,6 +1034,7 @@ func (s *GatewayService) handleNonStreamingResponseAnthropicAPIKeyPassthrough(
 	resp *http.Response,
 	c *gin.Context,
 	account *Account,
+	requestedModel ...string,
 ) (*ClaudeUsage, error) {
 	ctx, outcomeCollector := WithResponseOutcomeCollector(ctx, resp.StatusCode, resp.StatusCode)
 	if s.rateLimitService != nil {
@@ -1053,7 +1054,10 @@ func (s *GatewayService) handleNonStreamingResponseAnthropicAPIKeyPassthrough(
 	if resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices {
 		var raw json.RawMessage
 		if err := json.Unmarshal(body, &raw); err != nil {
-			return nil, invalidNonStreamingJSONFailoverError(ctx, s.rateLimitService, resp, account, body, err)
+			return nil, invalidNonStreamingJSONFailoverError(ctx, s.rateLimitService, resp, account, body, err, requestedModel...)
+		}
+		if failure := anthropicBufferedErrorResponse(resp, body); failure != nil {
+			return nil, s.handleAnthropicBufferedError(ctx, c, account, failure, body, firstRequestedModel(requestedModel), true)
 		}
 		outcomeCollector.ObserveEvent(len(body))
 		_ = outcomeCollector.ObserveJSONPayload(ResponseOutcomeProtocolAnthropic, body)
