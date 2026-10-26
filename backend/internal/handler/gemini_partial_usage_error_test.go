@@ -330,7 +330,9 @@ func TestGeminiHandlers_InterruptedUsageBilling(t *testing.T) {
 					require.Equal(t, 12, log.InputTokens)
 					require.Equal(t, providerOutput, log.UpstreamOutputTokens, "keep provider measurement separately")
 				} else {
-					require.Positive(t, log.InputTokens, "delivered Gemini responses without provider usage must settle the prepared input estimate")
+					require.Zero(t, log.InputTokens, "missing provider input must not be replaced with a local character estimate")
+					require.Zero(t, log.InputCost, "unmeasured Gemini input must not debit the customer")
+					require.Zero(t, wallet.commands[0].InputTokens)
 					require.Zero(t, log.UpstreamOutputTokens, "unknown provider usage must not be fabricated")
 				}
 				require.Equal(t, upstream.accounts[len(upstream.accounts)-1], log.AccountID)

@@ -622,6 +622,7 @@ type ForwardResult struct {
 	// EstimatedInputTokens is a local estimate of the final upstream request.
 	// It is only applied when upstream input/cache usage is missing and there is
 	// evidence of generation. No request-body reference is retained for billing.
+	// Gemini billing never uses this estimate in place of provider input usage.
 	EstimatedInputTokens int
 	InputTokensEstimated bool
 	// DeliveredOutputTokens is the user-visible text successfully written before

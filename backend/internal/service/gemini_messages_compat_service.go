@@ -686,8 +686,6 @@ func (s *GeminiMessagesCompatService) SelectAccountForAIStudioEndpoints(ctx cont
 }
 
 func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Context, account *Account, body []byte) (result *ForwardResult, returnErr error) {
-	var lastUpstreamRequest *http.Request
-	defer func() { prepareGeminiInputTokenEstimateFromRequest(result, lastUpstreamRequest) }()
 	beginUpstreamResponseModelObservation(c)
 	beginGeminiImageOutputObservation(c)
 	startTime := time.Now()
@@ -929,7 +927,6 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 		requestIDHeader = idHeader
 
 		upstreamAttempt = BeginGeminiUpstreamAttempt(c, account, mappedModel, useUpstreamStream)
-		lastUpstreamRequest = upstreamReq
 		resp, err = s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
 		upstreamAttempt.ObserveResponse(resp)
 		if err != nil {
@@ -1305,12 +1302,6 @@ func isGeminiSignatureRelatedError(respBody []byte) bool {
 }
 
 func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.Context, account *Account, originalModel string, action string, stream bool, body []byte) (result *ForwardResult, returnErr error) {
-	var lastUpstreamRequest *http.Request
-	defer func() {
-		if action != "countTokens" {
-			prepareGeminiInputTokenEstimateFromRequest(result, lastUpstreamRequest)
-		}
-	}()
 	beginUpstreamResponseModelObservation(c)
 	beginGeminiImageOutputObservation(c)
 	startTime := time.Now()
@@ -1549,7 +1540,6 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 		if action != "countTokens" {
 			upstreamAttempt = BeginGeminiUpstreamAttempt(c, account, mappedModel, useUpstreamStream)
 		}
-		lastUpstreamRequest = upstreamReq
 		resp, err = s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
 		upstreamAttempt.ObserveResponse(resp)
 		if err != nil {
@@ -2583,6 +2573,9 @@ func (s *GeminiMessagesCompatService) handleStreamingResponseWithContext(ctx con
 	for {
 		line, err := reader.ReadString('\n')
 		if err != nil && !errors.Is(err, io.EOF) {
+			if u := observeGeminiUsageReadErrorTail(c, line, true, &usageMetadata); u != nil {
+				usage = *u
+			}
 			if firstOutputGuard != nil && firstOutputGuard.TimedOut() && !semanticCommitted {
 				_ = resp.Body.Close()
 				return nil, newModelFirstOutputTimeoutFailoverError(c, account, originalModel, firstOutputPolicy, resp.Header)
@@ -3349,7 +3342,13 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponseWithContext(c
 
 	for {
 		line, err := reader.ReadString('\n')
-		// Ignore a partial line returned with a read error; an EOF tail is valid.
+		if err != nil && !errors.Is(err, io.EOF) {
+			if u := observeGeminiUsageReadErrorTail(c, line, isOAuth, &usageMetadata); u != nil {
+				usage = u
+			}
+		}
+		// Recover complete usage above, but do not deliver a failed-read tail.
+		// An EOF tail remains valid for normal processing.
 		if len(line) > 0 && (err == nil || errors.Is(err, io.EOF)) {
 			trimmed := strings.TrimRight(line, "\r\n")
 			if strings.HasPrefix(trimmed, "data:") {
@@ -3596,6 +3595,22 @@ func isValidBase64(data string) bool {
 func extractGeminiUsage(data []byte) *ClaudeUsage {
 	var accumulator geminiUsageAccumulator
 	return accumulator.Observe(data)
+}
+
+// ReadString may return a complete usage JSON together with a transport error.
+// Retain only validated provider measurements without forwarding the failed tail
+// or treating its finish reason as successful stream completion.
+func observeGeminiUsageReadErrorTail(c *gin.Context, line string, unwrapResponse bool, accumulator *geminiUsageAccumulator) *ClaudeUsage {
+	if !strings.HasPrefix(line, "data:") {
+		return nil
+	}
+	raw := []byte(strings.TrimSpace(strings.TrimPrefix(line, "data:")))
+	if !gjson.ValidBytes(raw) {
+		return nil
+	}
+	raw = unwrapIfNeeded(unwrapResponse, raw)
+	ObserveGeminiUpstreamAttemptUsage(c, raw)
+	return accumulator.Observe(raw)
 }
 
 // Gemini can report cumulative usage fields in separate events. Only fields

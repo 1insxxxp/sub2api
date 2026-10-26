@@ -16,7 +16,7 @@ import (
 const geminiInputUsageRegressionModel = "gemini-2.5-flash"
 
 // Exercise all real Gemini adapters and the normal-mode settlement boundary.
-// No fabricated provider input count may stand in for a missing local estimate.
+// Missing provider input must not be replaced with a local estimate.
 func TestGeminiInputUsageForward_MissingUsageBillsDeliveredPartialResponse(t *testing.T) {
 	for _, path := range []string{"chat", "messages", "native"} {
 		for _, clientCancel := range []bool{false, true} {
@@ -46,12 +46,10 @@ func TestGeminiInputUsageForward_MissingUsageBillsDeliveredPartialResponse(t *te
 				require.Contains(t, rec.Body.String(), "hello")
 				require.Zero(t, result.Usage.InputTokens, "local estimates are not provider measurements")
 				require.Zero(t, result.Usage.OutputTokens, "upstream omitted all usage")
-				t.Logf("path=%s ending=%s estimated_input=%d provider_input=%d", path, ending, result.EstimatedInputTokens, result.Usage.InputTokens)
-				require.Positive(t, result.EstimatedInputTokens, "each adapter must retain an estimate of its final upstream request")
+				require.Zero(t, result.EstimatedInputTokens, "Gemini adapters must not prepare a billable input estimate")
 				ApplyDeliveredOutputTokens(result, collector)
 				require.Positive(t, recordedOutputTokens(result), "only text actually written downstream is billable")
 				delivered := recordedOutputTokens(result)
-				estimated := result.EstimatedInputTokens
 				result.RequestID = "gemini-input-" + path + "-" + ending
 
 				billing, logs, commands := newGeminiInputUsageRegressionBilling()
@@ -62,12 +60,12 @@ func TestGeminiInputUsageForward_MissingUsageBillsDeliveredPartialResponse(t *te
 				require.Equal(t, 1, commands.calls)
 				require.NoError(t, commands.lastCtxErr, "client cancellation must not lose settlement")
 				require.NotNil(t, logs.lastLog)
-				require.Equal(t, estimated, logs.lastLog.InputTokens)
-				require.Positive(t, logs.lastLog.InputCost)
-				require.True(t, result.InputTokensEstimated)
+				require.Zero(t, logs.lastLog.InputTokens, "missing provider input must not create an estimated charge")
+				require.Zero(t, logs.lastLog.InputCost)
+				require.False(t, result.InputTokensEstimated)
 				require.Equal(t, delivered, logs.lastLog.OutputTokens)
 				require.Zero(t, logs.lastLog.UpstreamOutputTokens)
-				require.Equal(t, estimated, commands.lastCmd.InputTokens)
+				require.Zero(t, commands.lastCmd.InputTokens)
 				require.Equal(t, delivered, commands.lastCmd.OutputTokens)
 				require.Positive(t, commands.lastCmd.BalanceCost)
 				require.InDelta(t, logs.lastLog.ActualCost, commands.lastCmd.BalanceCost, 1e-8)

@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"log/slog"
+
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 )
 
 // prepareAnthropicInputTokenEstimate snapshots only a scalar estimate of the
@@ -28,16 +30,16 @@ func anthropicInputUsageMissing(usage ClaudeUsage) bool {
 }
 
 // applyMissingInputTokenEstimate repairs missing input accounting only after
-// generation has been observed. Headers, pings and a terminal event alone do
-// not prove that the provider processed a billable generation.
+// generation has been observed. Gemini requires provider input measurements;
+// a local character count must never become its billable input usage.
 func applyMissingInputTokenEstimate(ctx context.Context, result *ForwardResult, account *Account) {
-	if result == nil || result.EstimatedInputTokens <= 0 || !anthropicInputUsageMissing(result.Usage) {
+	if result == nil || !anthropicInputUsageMissing(result.Usage) {
 		return
 	}
 	hasGeneration := result.Usage.OutputTokens > 0 ||
 		(result.DeliveredOutputTokens != nil && *result.DeliveredOutputTokens > 0) ||
 		(result.Outcome != nil && result.Outcome.HasEffectiveOutput())
-	if !hasGeneration {
+	if !hasGeneration || skipGeminiInputTokenEstimate(ctx, result, account) || result.EstimatedInputTokens <= 0 {
 		return
 	}
 	result.Usage.InputTokens = result.EstimatedInputTokens
@@ -55,4 +57,23 @@ func applyMissingInputTokenEstimate(ctx context.Context, result *ForwardResult, 
 		"model", result.Model,
 		"input_tokens", result.EstimatedInputTokens,
 		"reason", "missing_upstream_input_usage")
+}
+
+func skipGeminiInputTokenEstimate(ctx context.Context, result *ForwardResult, account *Account) bool {
+	if account == nil || account.Platform != PlatformGemini {
+		return false
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	requestID, _ := ctx.Value(ctxkey.RequestID).(string)
+	clientRequestID, _ := ctx.Value(ctxkey.ClientRequestID).(string)
+	slog.WarnContext(ctx, "billing.gemini_input_estimate_skipped",
+		"request_id", requestID,
+		"client_request_id", clientRequestID,
+		"upstream_request_id", result.RequestID,
+		"account_id", account.ID,
+		"model", result.Model,
+		"reason", "provider_input_measurement_required")
+	return true
 }

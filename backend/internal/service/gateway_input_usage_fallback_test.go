@@ -138,3 +138,36 @@ func TestPrepareAnthropicInputTokenEstimate_KeepsProviderInputAndCaches(t *testi
 		require.Equal(t, usage, result.Usage)
 	}
 }
+
+func TestApplyMissingInputTokenEstimate_GeminiRequiresProviderMeasurement(t *testing.T) {
+	delivered := 85073
+	for _, tc := range []struct {
+		name  string
+		usage ClaudeUsage
+	}{
+		{name: "missing usage"},
+		{name: "output alone is not measured input", usage: ClaudeUsage{OutputTokens: 96146}},
+		{name: "measured input wins", usage: ClaudeUsage{InputTokens: 55779, OutputTokens: 96146}},
+		{name: "cached input remains measured", usage: ClaudeUsage{InputTokens: 47779, CacheReadInputTokens: 8000}},
+		{name: "fully cached input remains zero", usage: ClaudeUsage{CacheReadInputTokens: 55779}},
+	} {
+		for _, complete := range []bool{false, true} {
+			name := tc.name + "/interrupted"
+			if complete {
+				name = tc.name + "/completed"
+			}
+			t.Run(name, func(t *testing.T) {
+				result := &ForwardResult{
+					RequestID: "gemini-measured-input", Model: "gemini-2.5-pro",
+					Usage: tc.usage, EstimatedInputTokens: 94942, DeliveredOutputTokens: &delivered,
+					Outcome: &ResponseOutcome{HasText: true, StreamCompleted: complete},
+				}
+				applyMissingInputTokenEstimate(context.Background(), result, &Account{ID: 7, Platform: PlatformGemini})
+				require.Equal(t, tc.usage, result.Usage, "Gemini input/cache billing requires a provider measurement")
+				require.False(t, result.InputTokensEstimated)
+				applyMissingInputTokenEstimate(context.Background(), result, &Account{ID: 7, Platform: PlatformGemini})
+				require.Equal(t, tc.usage, result.Usage, "settlement retries must not introduce input estimates")
+			})
+		}
+	}
+}

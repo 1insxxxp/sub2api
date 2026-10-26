@@ -80,8 +80,6 @@ func (s *GeminiMessagesCompatService) forwardClaudeBodyAsChatCompletions(
 	includeUsage bool,
 	startTime time.Time,
 ) (result *ForwardResult, returnErr error) {
-	var lastUpstreamRequest *http.Request
-	defer func() { prepareGeminiInputTokenEstimateFromRequest(result, lastUpstreamRequest) }()
 	var req struct {
 		Model  string `json:"model"`
 		Stream bool   `json:"stream"`
@@ -179,7 +177,6 @@ func (s *GeminiMessagesCompatService) forwardClaudeBodyAsChatCompletions(
 		requestIDHeader = idHeader
 
 		upstreamAttempt = BeginGeminiUpstreamAttempt(c, account, mappedModel, useUpstreamStream)
-		lastUpstreamRequest = upstreamReq
 		resp, err = s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
 		upstreamAttempt.ObserveResponse(resp)
 		if err != nil {
@@ -868,12 +865,12 @@ func (s *GeminiMessagesCompatService) handleChatCompletionsStreamingResponseFrom
 							rawBytes = innerBytes
 						}
 					}
-					ObserveGeminiUpstreamAttemptUsage(c, rawBytes)
 					outcomeCollector.ObserveEvent(len(rawBytes))
 					_ = outcomeCollector.ObserveJSONPayload(ResponseOutcomeProtocolGemini, rawBytes)
 
 					var geminiResp map[string]any
 					if err := json.Unmarshal(rawBytes, &geminiResp); err == nil {
+						ObserveGeminiUpstreamAttemptUsage(c, rawBytes)
 						if fr := extractGeminiFinishReason(geminiResp); fr != "" {
 							finishReason = fr
 						}
