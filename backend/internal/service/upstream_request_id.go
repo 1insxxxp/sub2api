@@ -62,6 +62,16 @@ func usageUpstreamRequestIDPtr(account *Account, h http.Header, wsMode bool) *st
 	return &id
 }
 
+// usageUpstreamRequestIDForResult retains the direct ledger key even when an
+// account has not configured a custom header. Generic header guessing remains
+// disabled; only the separately captured New API response identifier qualifies.
+func usageUpstreamRequestIDForResult(account *Account, result *ForwardResult) *string {
+	if result.RequireMeasuredUsage && result.UsageLedgerRequestID != "" {
+		return optionalTrimmedStringPtr(result.UsageLedgerRequestID)
+	}
+	return usageUpstreamRequestIDPtr(account, result.UpstreamHeaders, false)
+}
+
 // ValidateUpstreamRequestIDHeaderExtra 校验并规范化 extra 中的上游请求标识头名：
 // 必须是合法的 HTTP 头字段名且不超过 64 字节；空白值视为未指定并从 extra 中移除。
 func ValidateUpstreamRequestIDHeaderExtra(extra map[string]any) error {

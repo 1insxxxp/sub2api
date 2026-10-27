@@ -149,6 +149,16 @@ func CollectorVersion(v int16) predicate.UsageResponseOutcome {
 	return predicate.UsageResponseOutcome(sql.FieldEQ(FieldCollectorVersion, v))
 }
 
+// InputTokensSource applies equality check predicate on the "input_tokens_source" field. It's identical to InputTokensSourceEQ.
+func InputTokensSource(v string) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldEQ(FieldInputTokensSource, v))
+}
+
+// OutputTokensSource applies equality check predicate on the "output_tokens_source" field. It's identical to OutputTokensSourceEQ.
+func OutputTokensSource(v string) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldEQ(FieldOutputTokensSource, v))
+}
+
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.UsageResponseOutcome {
 	return predicate.UsageResponseOutcome(sql.FieldEQ(FieldCreatedAt, v))
@@ -882,6 +892,136 @@ func CollectorVersionLT(v int16) predicate.UsageResponseOutcome {
 // CollectorVersionLTE applies the LTE predicate on the "collector_version" field.
 func CollectorVersionLTE(v int16) predicate.UsageResponseOutcome {
 	return predicate.UsageResponseOutcome(sql.FieldLTE(FieldCollectorVersion, v))
+}
+
+// InputTokensSourceEQ applies the EQ predicate on the "input_tokens_source" field.
+func InputTokensSourceEQ(v string) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldEQ(FieldInputTokensSource, v))
+}
+
+// InputTokensSourceNEQ applies the NEQ predicate on the "input_tokens_source" field.
+func InputTokensSourceNEQ(v string) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldNEQ(FieldInputTokensSource, v))
+}
+
+// InputTokensSourceIn applies the In predicate on the "input_tokens_source" field.
+func InputTokensSourceIn(vs ...string) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldIn(FieldInputTokensSource, vs...))
+}
+
+// InputTokensSourceNotIn applies the NotIn predicate on the "input_tokens_source" field.
+func InputTokensSourceNotIn(vs ...string) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldNotIn(FieldInputTokensSource, vs...))
+}
+
+// InputTokensSourceGT applies the GT predicate on the "input_tokens_source" field.
+func InputTokensSourceGT(v string) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldGT(FieldInputTokensSource, v))
+}
+
+// InputTokensSourceGTE applies the GTE predicate on the "input_tokens_source" field.
+func InputTokensSourceGTE(v string) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldGTE(FieldInputTokensSource, v))
+}
+
+// InputTokensSourceLT applies the LT predicate on the "input_tokens_source" field.
+func InputTokensSourceLT(v string) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldLT(FieldInputTokensSource, v))
+}
+
+// InputTokensSourceLTE applies the LTE predicate on the "input_tokens_source" field.
+func InputTokensSourceLTE(v string) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldLTE(FieldInputTokensSource, v))
+}
+
+// InputTokensSourceContains applies the Contains predicate on the "input_tokens_source" field.
+func InputTokensSourceContains(v string) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldContains(FieldInputTokensSource, v))
+}
+
+// InputTokensSourceHasPrefix applies the HasPrefix predicate on the "input_tokens_source" field.
+func InputTokensSourceHasPrefix(v string) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldHasPrefix(FieldInputTokensSource, v))
+}
+
+// InputTokensSourceHasSuffix applies the HasSuffix predicate on the "input_tokens_source" field.
+func InputTokensSourceHasSuffix(v string) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldHasSuffix(FieldInputTokensSource, v))
+}
+
+// InputTokensSourceEqualFold applies the EqualFold predicate on the "input_tokens_source" field.
+func InputTokensSourceEqualFold(v string) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldEqualFold(FieldInputTokensSource, v))
+}
+
+// InputTokensSourceContainsFold applies the ContainsFold predicate on the "input_tokens_source" field.
+func InputTokensSourceContainsFold(v string) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldContainsFold(FieldInputTokensSource, v))
+}
+
+// OutputTokensSourceEQ applies the EQ predicate on the "output_tokens_source" field.
+func OutputTokensSourceEQ(v string) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldEQ(FieldOutputTokensSource, v))
+}
+
+// OutputTokensSourceNEQ applies the NEQ predicate on the "output_tokens_source" field.
+func OutputTokensSourceNEQ(v string) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldNEQ(FieldOutputTokensSource, v))
+}
+
+// OutputTokensSourceIn applies the In predicate on the "output_tokens_source" field.
+func OutputTokensSourceIn(vs ...string) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldIn(FieldOutputTokensSource, vs...))
+}
+
+// OutputTokensSourceNotIn applies the NotIn predicate on the "output_tokens_source" field.
+func OutputTokensSourceNotIn(vs ...string) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldNotIn(FieldOutputTokensSource, vs...))
+}
+
+// OutputTokensSourceGT applies the GT predicate on the "output_tokens_source" field.
+func OutputTokensSourceGT(v string) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldGT(FieldOutputTokensSource, v))
+}
+
+// OutputTokensSourceGTE applies the GTE predicate on the "output_tokens_source" field.
+func OutputTokensSourceGTE(v string) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldGTE(FieldOutputTokensSource, v))
+}
+
+// OutputTokensSourceLT applies the LT predicate on the "output_tokens_source" field.
+func OutputTokensSourceLT(v string) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldLT(FieldOutputTokensSource, v))
+}
+
+// OutputTokensSourceLTE applies the LTE predicate on the "output_tokens_source" field.
+func OutputTokensSourceLTE(v string) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldLTE(FieldOutputTokensSource, v))
+}
+
+// OutputTokensSourceContains applies the Contains predicate on the "output_tokens_source" field.
+func OutputTokensSourceContains(v string) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldContains(FieldOutputTokensSource, v))
+}
+
+// OutputTokensSourceHasPrefix applies the HasPrefix predicate on the "output_tokens_source" field.
+func OutputTokensSourceHasPrefix(v string) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldHasPrefix(FieldOutputTokensSource, v))
+}
+
+// OutputTokensSourceHasSuffix applies the HasSuffix predicate on the "output_tokens_source" field.
+func OutputTokensSourceHasSuffix(v string) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldHasSuffix(FieldOutputTokensSource, v))
+}
+
+// OutputTokensSourceEqualFold applies the EqualFold predicate on the "output_tokens_source" field.
+func OutputTokensSourceEqualFold(v string) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldEqualFold(FieldOutputTokensSource, v))
+}
+
+// OutputTokensSourceContainsFold applies the ContainsFold predicate on the "output_tokens_source" field.
+func OutputTokensSourceContainsFold(v string) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldContainsFold(FieldOutputTokensSource, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

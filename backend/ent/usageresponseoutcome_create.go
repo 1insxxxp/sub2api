@@ -256,6 +256,34 @@ func (_c *UsageResponseOutcomeCreate) SetNillableCollectorVersion(v *int16) *Usa
 	return _c
 }
 
+// SetInputTokensSource sets the "input_tokens_source" field.
+func (_c *UsageResponseOutcomeCreate) SetInputTokensSource(v string) *UsageResponseOutcomeCreate {
+	_c.mutation.SetInputTokensSource(v)
+	return _c
+}
+
+// SetNillableInputTokensSource sets the "input_tokens_source" field if the given value is not nil.
+func (_c *UsageResponseOutcomeCreate) SetNillableInputTokensSource(v *string) *UsageResponseOutcomeCreate {
+	if v != nil {
+		_c.SetInputTokensSource(*v)
+	}
+	return _c
+}
+
+// SetOutputTokensSource sets the "output_tokens_source" field.
+func (_c *UsageResponseOutcomeCreate) SetOutputTokensSource(v string) *UsageResponseOutcomeCreate {
+	_c.mutation.SetOutputTokensSource(v)
+	return _c
+}
+
+// SetNillableOutputTokensSource sets the "output_tokens_source" field if the given value is not nil.
+func (_c *UsageResponseOutcomeCreate) SetNillableOutputTokensSource(v *string) *UsageResponseOutcomeCreate {
+	if v != nil {
+		_c.SetOutputTokensSource(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *UsageResponseOutcomeCreate) SetCreatedAt(v time.Time) *UsageResponseOutcomeCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -357,6 +385,14 @@ func (_c *UsageResponseOutcomeCreate) defaults() {
 		v := usageresponseoutcome.DefaultCollectorVersion
 		_c.mutation.SetCollectorVersion(v)
 	}
+	if _, ok := _c.mutation.InputTokensSource(); !ok {
+		v := usageresponseoutcome.DefaultInputTokensSource
+		_c.mutation.SetInputTokensSource(v)
+	}
+	if _, ok := _c.mutation.OutputTokensSource(); !ok {
+		v := usageresponseoutcome.DefaultOutputTokensSource
+		_c.mutation.SetOutputTokensSource(v)
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := usageresponseoutcome.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
@@ -435,6 +471,22 @@ func (_c *UsageResponseOutcomeCreate) check() error {
 	}
 	if _, ok := _c.mutation.CollectorVersion(); !ok {
 		return &ValidationError{Name: "collector_version", err: errors.New(`ent: missing required field "UsageResponseOutcome.collector_version"`)}
+	}
+	if _, ok := _c.mutation.InputTokensSource(); !ok {
+		return &ValidationError{Name: "input_tokens_source", err: errors.New(`ent: missing required field "UsageResponseOutcome.input_tokens_source"`)}
+	}
+	if v, ok := _c.mutation.InputTokensSource(); ok {
+		if err := usageresponseoutcome.InputTokensSourceValidator(v); err != nil {
+			return &ValidationError{Name: "input_tokens_source", err: fmt.Errorf(`ent: validator failed for field "UsageResponseOutcome.input_tokens_source": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.OutputTokensSource(); !ok {
+		return &ValidationError{Name: "output_tokens_source", err: errors.New(`ent: missing required field "UsageResponseOutcome.output_tokens_source"`)}
+	}
+	if v, ok := _c.mutation.OutputTokensSource(); ok {
+		if err := usageresponseoutcome.OutputTokensSourceValidator(v); err != nil {
+			return &ValidationError{Name: "output_tokens_source", err: fmt.Errorf(`ent: validator failed for field "UsageResponseOutcome.output_tokens_source": %w`, err)}
+		}
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "UsageResponseOutcome.created_at"`)}
@@ -541,6 +593,14 @@ func (_c *UsageResponseOutcomeCreate) createSpec() (*UsageResponseOutcome, *sqlg
 	if value, ok := _c.mutation.CollectorVersion(); ok {
 		_spec.SetField(usageresponseoutcome.FieldCollectorVersion, field.TypeInt16, value)
 		_node.CollectorVersion = value
+	}
+	if value, ok := _c.mutation.InputTokensSource(); ok {
+		_spec.SetField(usageresponseoutcome.FieldInputTokensSource, field.TypeString, value)
+		_node.InputTokensSource = value
+	}
+	if value, ok := _c.mutation.OutputTokensSource(); ok {
+		_spec.SetField(usageresponseoutcome.FieldOutputTokensSource, field.TypeString, value)
+		_node.OutputTokensSource = value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(usageresponseoutcome.FieldCreatedAt, field.TypeTime, value)
@@ -895,6 +955,30 @@ func (u *UsageResponseOutcomeUpsert) UpdateCollectorVersion() *UsageResponseOutc
 // AddCollectorVersion adds v to the "collector_version" field.
 func (u *UsageResponseOutcomeUpsert) AddCollectorVersion(v int16) *UsageResponseOutcomeUpsert {
 	u.Add(usageresponseoutcome.FieldCollectorVersion, v)
+	return u
+}
+
+// SetInputTokensSource sets the "input_tokens_source" field.
+func (u *UsageResponseOutcomeUpsert) SetInputTokensSource(v string) *UsageResponseOutcomeUpsert {
+	u.Set(usageresponseoutcome.FieldInputTokensSource, v)
+	return u
+}
+
+// UpdateInputTokensSource sets the "input_tokens_source" field to the value that was provided on create.
+func (u *UsageResponseOutcomeUpsert) UpdateInputTokensSource() *UsageResponseOutcomeUpsert {
+	u.SetExcluded(usageresponseoutcome.FieldInputTokensSource)
+	return u
+}
+
+// SetOutputTokensSource sets the "output_tokens_source" field.
+func (u *UsageResponseOutcomeUpsert) SetOutputTokensSource(v string) *UsageResponseOutcomeUpsert {
+	u.Set(usageresponseoutcome.FieldOutputTokensSource, v)
+	return u
+}
+
+// UpdateOutputTokensSource sets the "output_tokens_source" field to the value that was provided on create.
+func (u *UsageResponseOutcomeUpsert) UpdateOutputTokensSource() *UsageResponseOutcomeUpsert {
+	u.SetExcluded(usageresponseoutcome.FieldOutputTokensSource)
 	return u
 }
 
@@ -1290,6 +1374,34 @@ func (u *UsageResponseOutcomeUpsertOne) AddCollectorVersion(v int16) *UsageRespo
 func (u *UsageResponseOutcomeUpsertOne) UpdateCollectorVersion() *UsageResponseOutcomeUpsertOne {
 	return u.Update(func(s *UsageResponseOutcomeUpsert) {
 		s.UpdateCollectorVersion()
+	})
+}
+
+// SetInputTokensSource sets the "input_tokens_source" field.
+func (u *UsageResponseOutcomeUpsertOne) SetInputTokensSource(v string) *UsageResponseOutcomeUpsertOne {
+	return u.Update(func(s *UsageResponseOutcomeUpsert) {
+		s.SetInputTokensSource(v)
+	})
+}
+
+// UpdateInputTokensSource sets the "input_tokens_source" field to the value that was provided on create.
+func (u *UsageResponseOutcomeUpsertOne) UpdateInputTokensSource() *UsageResponseOutcomeUpsertOne {
+	return u.Update(func(s *UsageResponseOutcomeUpsert) {
+		s.UpdateInputTokensSource()
+	})
+}
+
+// SetOutputTokensSource sets the "output_tokens_source" field.
+func (u *UsageResponseOutcomeUpsertOne) SetOutputTokensSource(v string) *UsageResponseOutcomeUpsertOne {
+	return u.Update(func(s *UsageResponseOutcomeUpsert) {
+		s.SetOutputTokensSource(v)
+	})
+}
+
+// UpdateOutputTokensSource sets the "output_tokens_source" field to the value that was provided on create.
+func (u *UsageResponseOutcomeUpsertOne) UpdateOutputTokensSource() *UsageResponseOutcomeUpsertOne {
+	return u.Update(func(s *UsageResponseOutcomeUpsert) {
+		s.UpdateOutputTokensSource()
 	})
 }
 
@@ -1851,6 +1963,34 @@ func (u *UsageResponseOutcomeUpsertBulk) AddCollectorVersion(v int16) *UsageResp
 func (u *UsageResponseOutcomeUpsertBulk) UpdateCollectorVersion() *UsageResponseOutcomeUpsertBulk {
 	return u.Update(func(s *UsageResponseOutcomeUpsert) {
 		s.UpdateCollectorVersion()
+	})
+}
+
+// SetInputTokensSource sets the "input_tokens_source" field.
+func (u *UsageResponseOutcomeUpsertBulk) SetInputTokensSource(v string) *UsageResponseOutcomeUpsertBulk {
+	return u.Update(func(s *UsageResponseOutcomeUpsert) {
+		s.SetInputTokensSource(v)
+	})
+}
+
+// UpdateInputTokensSource sets the "input_tokens_source" field to the value that was provided on create.
+func (u *UsageResponseOutcomeUpsertBulk) UpdateInputTokensSource() *UsageResponseOutcomeUpsertBulk {
+	return u.Update(func(s *UsageResponseOutcomeUpsert) {
+		s.UpdateInputTokensSource()
+	})
+}
+
+// SetOutputTokensSource sets the "output_tokens_source" field.
+func (u *UsageResponseOutcomeUpsertBulk) SetOutputTokensSource(v string) *UsageResponseOutcomeUpsertBulk {
+	return u.Update(func(s *UsageResponseOutcomeUpsert) {
+		s.SetOutputTokensSource(v)
+	})
+}
+
+// UpdateOutputTokensSource sets the "output_tokens_source" field to the value that was provided on create.
+func (u *UsageResponseOutcomeUpsertBulk) UpdateOutputTokensSource() *UsageResponseOutcomeUpsertBulk {
+	return u.Update(func(s *UsageResponseOutcomeUpsert) {
+		s.UpdateOutputTokensSource()
 	})
 }
 

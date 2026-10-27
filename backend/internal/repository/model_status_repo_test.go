@@ -529,7 +529,7 @@ CREATE TEMP TABLE usage_logs (
 CREATE TEMP TABLE usage_response_outcomes (
  id bigserial PRIMARY KEY, usage_log_id bigint UNIQUE, http_status integer DEFAULT 0, upstream_status integer DEFAULT 0,
  has_text boolean DEFAULT false, has_tool_call boolean DEFAULT false, has_reasoning boolean DEFAULT false, has_media boolean DEFAULT false,
- stream_completed boolean DEFAULT false, disconnect_source text DEFAULT 'none', upstream_error_kind text DEFAULT 'none');
+ stream_completed boolean DEFAULT false, disconnect_source text DEFAULT 'none', upstream_error_kind text DEFAULT 'none', collector_version smallint DEFAULT 1);
 CREATE TEMP TABLE empty_response_claims (usage_log_id bigint UNIQUE, reason_code text);
 CREATE TEMP TABLE ops_error_logs (
  id bigserial PRIMARY KEY, group_id bigint, api_key_id bigint, request_id text, client_request_id text, requested_model text, model text,

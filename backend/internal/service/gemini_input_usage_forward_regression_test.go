@@ -17,7 +17,7 @@ const geminiInputUsageRegressionModel = "gemini-2.5-flash"
 
 // Exercise all real Gemini adapters and the normal-mode settlement boundary.
 // Missing provider input must not be replaced with a local estimate.
-func TestGeminiInputUsageForward_MissingUsageBillsDeliveredPartialResponse(t *testing.T) {
+func TestGeminiInputUsageForward_MissingUsageRequiresReview(t *testing.T) {
 	for _, path := range []string{"chat", "messages", "native"} {
 		for _, clientCancel := range []bool{false, true} {
 			ending := "upstream_eof"
@@ -48,28 +48,18 @@ func TestGeminiInputUsageForward_MissingUsageBillsDeliveredPartialResponse(t *te
 				require.Zero(t, result.Usage.OutputTokens, "upstream omitted all usage")
 				require.Zero(t, result.EstimatedInputTokens, "Gemini adapters must not prepare a billable input estimate")
 				ApplyDeliveredOutputTokens(result, collector)
-				require.Positive(t, recordedOutputTokens(result), "only text actually written downstream is billable")
-				delivered := recordedOutputTokens(result)
+				require.Zero(t, recordedOutputTokens(result), "delivered text estimates cannot become a Gemini charge")
+				require.True(t, NeedsUsageMeasurementReview(result))
 				result.RequestID = "gemini-input-" + path + "-" + ending
 
 				billing, logs, commands := newGeminiInputUsageRegressionBilling()
-				require.NoError(t, billing.RecordUsage(c.Request.Context(), &RecordUsageInput{
+				require.ErrorIs(t, billing.RecordUsage(c.Request.Context(), &RecordUsageInput{
 					Result: result, APIKey: &APIKey{ID: 501, Quota: 100}, User: &User{ID: 601}, Account: account,
 					APIKeyService: &openAIRecordUsageAPIKeyQuotaStub{},
-				}))
-				require.Equal(t, 1, commands.calls)
-				require.NoError(t, commands.lastCtxErr, "client cancellation must not lose settlement")
-				require.NotNil(t, logs.lastLog)
-				require.Zero(t, logs.lastLog.InputTokens, "missing provider input must not create an estimated charge")
-				require.Zero(t, logs.lastLog.InputCost)
+				}), ErrUsageMeasurementIncomplete)
+				require.Zero(t, commands.calls, "pending review cannot consume wallet or dedup state")
+				require.Nil(t, logs.lastLog)
 				require.False(t, result.InputTokensEstimated)
-				require.Equal(t, delivered, logs.lastLog.OutputTokens)
-				require.Zero(t, logs.lastLog.UpstreamOutputTokens)
-				require.Zero(t, commands.lastCmd.InputTokens)
-				require.Equal(t, delivered, commands.lastCmd.OutputTokens)
-				require.Positive(t, commands.lastCmd.BalanceCost)
-				require.InDelta(t, logs.lastLog.ActualCost, commands.lastCmd.BalanceCost, 1e-8)
-				require.InDelta(t, logs.lastLog.ActualCost, commands.lastCmd.APIKeyQuotaCost, 1e-8)
 			})
 		}
 	}

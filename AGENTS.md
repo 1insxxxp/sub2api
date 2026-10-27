@@ -660,9 +660,9 @@ curl -fsS -X POST "${BASE}/api/v1/keys" \
 
 假上游只监听两个新容器共用的 Docker 桥接私网地址；必须复核现有 URL 安全策略允许私网 HTTP，不允许为验收放宽全局安全配置。模拟器不含外部转发功能，要求专用随机密钥与每例 marker 匹配。推理请求可经 `api.passionapi.com` 和 `direct.passionapi.com` 的真实 HTTPS 入口发送，管理操作仍只用回环端口。
 
-验收覆盖 `/v1/chat/completions`、`/v1/messages`、`/v1beta/models/<model>:streamGenerateContent?alt=sse`：未上报 usage 即取消、只有思考后取消均不扣费；部分正文后取消仅按成功下发的输出估算计费；正常完成保留 provider usage；空正文及部分正文 SAFETY 分别验证零账和部分结算。以响应 `X-Client-Request-ID` 关联，账务 request_id 为 `client:<UUID>`，Ops client_request_id 为原 UUID；客户端自填 ID 不作为账务关联依据。
+验收覆盖 `/v1/chat/completions`、`/v1/messages`、`/v1beta/models/<model>:streamGenerateContent?alt=sse`。2026-10-27 用户最后确认的规则：优先使用本次响应 usage，缺失时按实际直接上游请求 ID 查询同账号逐笔账单；仍无法确认时，输入先尝试同账号同模型的原生 `countTokens`，最后使用最终请求语义分词及经留出样本验证的校准，输出使用实际收到的正文、工具和思考内容兜底，不再因缺失 usage 新建“待核对”。已报告的字段及明确零不得被估算覆盖，估算来源保留在内部和管理员诊断，不得冒充实测 usage；普通用户页面不展示估算诊断，普通用户 API 将估算来源投影为 unknown。计数查询不得换号、继续生成、自动跟随重定向或重复扣费；缺少上游接受/生成证据时不凭空加收输入。取消前无 usage、只有思考后取消、部分正文后取消、终帧写入失败、完整显式零、正常完成、SAFETY、累计流帧、工具参数及显式缓存均需覆盖。以响应 `X-Client-Request-ID` 关联，账务 request_id 为 `client:<UUID>`，Ops client_request_id 为原 UUID；客户端自填 ID 不作为账务关联依据。
 
-只读核对 `users.balance`、`api_keys.quota_used`、`usage_logs`、`usage_billing_dedup`、`usage_response_outcomes`、`ops_error_logs`。每例账务至多一笔，余额及额度变化必须与该笔 actual_cost 一致。Ops 的 `usage_state: "unreported"` 表示上游尚未上报，不能当成已报告零 token。
+只读核对 `users.balance`、`api_keys.quota_used`、`usage_logs`、`usage_billing_dedup`、`usage_response_outcomes`、`usage_pending_records`、`ops_error_logs`。新规则下缺失 usage 的验收用例应进入正常使用记录，且不新增待核对行；兼容保留的历史待核对记录不得占用结算去重键。每例账务至多一笔，余额及额度变化必须与该笔 actual_cost 一致。Ops 的 `usage_state: "unreported"` 表示响应未上报 usage，不能当成已报告零 token，也不能据此断言后续账单恢复或估算结算没有发生。历史记录不得仅凭时间相近自动补扣。
 
 清理接口（每步先 GET 对应资源，核对本次随机名称及精确归属）：
 

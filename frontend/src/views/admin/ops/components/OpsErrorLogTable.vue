@@ -102,17 +102,18 @@
 
         <template #cell-category="{ row }">
           <span class="text-sm text-gray-900 dark:text-white">
-            {{ t('usage.errors.categories.' + mapErrorCategory(row.phase, row.type)) }}
+            {{ t('usage.errors.categories.' + mapErrorCategory(row.phase, row.type, row.client_canceled)) }}
           </span>
         </template>
 
         <template #cell-status="{ row }">
           <div class="flex items-center gap-1.5">
-            <span class="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium" :class="getStatusClass(row.status_code)">
-              {{ row.status_code }}
+            <span data-testid="error-downstream-status" :title="row.client_canceled ? t('usage.errors.downstreamStatus') : undefined" class="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium" :class="getStatusClass(errorDisplayStatus(row))">
+              {{ errorDisplayStatus(row) || '—' }}
             </span>
+            <span v-if="row.client_canceled" data-testid="error-client-canceled" :title="t('usage.errors.clientCanceledHint')" class="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">{{ t('usage.errors.categories.client_cancel') }}</span>
             <span
-              v-if="row.severity"
+              v-if="row.severity && !row.client_canceled"
               :class="['rounded px-1.5 py-0.5 text-[10px] font-medium', getSeverityClass(row.severity)]"
             >{{ row.severity }}</span>
             <span
@@ -123,8 +124,9 @@
         </template>
 
         <template #cell-message="{ row }">
+          <span v-if="row.client_canceled" class="block max-w-[280px] truncate text-sm text-gray-600 dark:text-gray-400" :title="t('usage.errors.clientCanceledHint')">{{ t('usage.errors.clientCanceledHint') }}</span>
           <span
-            v-if="row.message"
+            v-else-if="row.message"
             class="block max-w-[280px] truncate text-sm text-gray-600 dark:text-gray-400"
             :title="row.message"
           >{{ formatSmartMessage(row.message) || '-' }}</span>
@@ -190,7 +192,7 @@ import type { OpsErrorLog } from '@/api/admin/ops'
 import type { Column } from '@/components/common/types'
 import { getSeverityClass, formatDateTime } from '../utils/opsFormatters'
 import { mapErrorCategory } from '@/utils/errorCategory'
-import { mapErrorSortKey, statusCodeBadgeClass } from '@/utils/errorBadges'
+import { errorDisplayStatus, mapErrorSortKey, statusCodeBadgeClass } from '@/utils/errorBadges'
 
 const { t } = useI18n()
 

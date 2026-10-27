@@ -1302,6 +1302,19 @@ func logOpsRecoveredUpstream(c *gin.Context, ops *service.OpsService, finalStatu
 
 	entry := &service.OpsInsertErrorLogInput{StatusCode: finalStatus}
 	applyOpsUpstreamFieldsFromContext(c, entry)
+	// SLA cancellation summaries deliberately retain a neutral status, which
+	// can differ from the response writer's 499. Preserve the latter separately
+	// on the final attempt so request history does not invent an HTTP 200.
+	for i := len(entry.UpstreamErrors) - 1; i >= 0; i-- {
+		event := entry.UpstreamErrors[i]
+		if event == nil {
+			continue
+		}
+		if event.ClientCanceled && event.Stage == "inference" && c.Writer != nil {
+			event.DownstreamStatusCode = c.Writer.Status()
+		}
+		break
+	}
 	if len(entry.UpstreamErrors) > 0 {
 		visibleEvents := make([]*service.OpsUpstreamErrorEvent, 0, len(entry.UpstreamErrors))
 		for _, event := range entry.UpstreamErrors {

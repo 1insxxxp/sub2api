@@ -10,7 +10,7 @@ import (
 
 // geminiStreamAbortedWithBillableOutput preserves the existing completed/image
 // cancellation return shape. Collected usage is provider evidence, not proof of
-// customer delivery; handlers must apply the delivered-output settlement policy.
+// customer delivery; handlers must apply the measured-usage settlement policy.
 func geminiStreamAbortedWithBillableOutput(c *gin.Context, err error, usage *ClaudeUsage) bool {
 	return geminiStreamClientDisconnected(c, err) && (usage.hasObservedTokens() || observedGeminiImageOutputs(c) > 0)
 }
@@ -35,6 +35,12 @@ func markGeminiInterruptedStream(c *gin.Context, err error, clientDisconnected b
 }
 
 func finishGeminiUpstreamAttempt(attempt *GeminiUpstreamAttempt, result *ForwardResult, err error) {
+	if attempt != nil && result != nil {
+		result.UsageLedgerRequestID = attempt.ledgerRequestID
+		result.UsageLedgerIdentityHash = attempt.ledgerIdentityHash
+		result.GeminiUsageFallback = attempt.snapshotUsageFallback()
+		applyGeminiMeasuredUsageEvidence(result, attempt.event.UsageFields)
+	}
 	if err == nil && result != nil && result.ClientDisconnect {
 		attempt.EndClientCanceled()
 		return

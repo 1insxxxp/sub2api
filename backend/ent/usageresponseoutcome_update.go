@@ -375,6 +375,34 @@ func (_u *UsageResponseOutcomeUpdate) AddCollectorVersion(v int16) *UsageRespons
 	return _u
 }
 
+// SetInputTokensSource sets the "input_tokens_source" field.
+func (_u *UsageResponseOutcomeUpdate) SetInputTokensSource(v string) *UsageResponseOutcomeUpdate {
+	_u.mutation.SetInputTokensSource(v)
+	return _u
+}
+
+// SetNillableInputTokensSource sets the "input_tokens_source" field if the given value is not nil.
+func (_u *UsageResponseOutcomeUpdate) SetNillableInputTokensSource(v *string) *UsageResponseOutcomeUpdate {
+	if v != nil {
+		_u.SetInputTokensSource(*v)
+	}
+	return _u
+}
+
+// SetOutputTokensSource sets the "output_tokens_source" field.
+func (_u *UsageResponseOutcomeUpdate) SetOutputTokensSource(v string) *UsageResponseOutcomeUpdate {
+	_u.mutation.SetOutputTokensSource(v)
+	return _u
+}
+
+// SetNillableOutputTokensSource sets the "output_tokens_source" field if the given value is not nil.
+func (_u *UsageResponseOutcomeUpdate) SetNillableOutputTokensSource(v *string) *UsageResponseOutcomeUpdate {
+	if v != nil {
+		_u.SetOutputTokensSource(*v)
+	}
+	return _u
+}
+
 // Mutation returns the UsageResponseOutcomeMutation object of the builder.
 func (_u *UsageResponseOutcomeUpdate) Mutation() *UsageResponseOutcomeMutation {
 	return _u.mutation
@@ -427,6 +455,16 @@ func (_u *UsageResponseOutcomeUpdate) check() error {
 	if v, ok := _u.mutation.UpstreamErrorKind(); ok {
 		if err := usageresponseoutcome.UpstreamErrorKindValidator(v); err != nil {
 			return &ValidationError{Name: "upstream_error_kind", err: fmt.Errorf(`ent: validator failed for field "UsageResponseOutcome.upstream_error_kind": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.InputTokensSource(); ok {
+		if err := usageresponseoutcome.InputTokensSourceValidator(v); err != nil {
+			return &ValidationError{Name: "input_tokens_source", err: fmt.Errorf(`ent: validator failed for field "UsageResponseOutcome.input_tokens_source": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.OutputTokensSource(); ok {
+		if err := usageresponseoutcome.OutputTokensSourceValidator(v); err != nil {
+			return &ValidationError{Name: "output_tokens_source", err: fmt.Errorf(`ent: validator failed for field "UsageResponseOutcome.output_tokens_source": %w`, err)}
 		}
 	}
 	return nil
@@ -536,6 +574,12 @@ func (_u *UsageResponseOutcomeUpdate) sqlSave(ctx context.Context) (_node int, e
 	}
 	if value, ok := _u.mutation.AddedCollectorVersion(); ok {
 		_spec.AddField(usageresponseoutcome.FieldCollectorVersion, field.TypeInt16, value)
+	}
+	if value, ok := _u.mutation.InputTokensSource(); ok {
+		_spec.SetField(usageresponseoutcome.FieldInputTokensSource, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.OutputTokensSource(); ok {
+		_spec.SetField(usageresponseoutcome.FieldOutputTokensSource, field.TypeString, value)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -905,6 +949,34 @@ func (_u *UsageResponseOutcomeUpdateOne) AddCollectorVersion(v int16) *UsageResp
 	return _u
 }
 
+// SetInputTokensSource sets the "input_tokens_source" field.
+func (_u *UsageResponseOutcomeUpdateOne) SetInputTokensSource(v string) *UsageResponseOutcomeUpdateOne {
+	_u.mutation.SetInputTokensSource(v)
+	return _u
+}
+
+// SetNillableInputTokensSource sets the "input_tokens_source" field if the given value is not nil.
+func (_u *UsageResponseOutcomeUpdateOne) SetNillableInputTokensSource(v *string) *UsageResponseOutcomeUpdateOne {
+	if v != nil {
+		_u.SetInputTokensSource(*v)
+	}
+	return _u
+}
+
+// SetOutputTokensSource sets the "output_tokens_source" field.
+func (_u *UsageResponseOutcomeUpdateOne) SetOutputTokensSource(v string) *UsageResponseOutcomeUpdateOne {
+	_u.mutation.SetOutputTokensSource(v)
+	return _u
+}
+
+// SetNillableOutputTokensSource sets the "output_tokens_source" field if the given value is not nil.
+func (_u *UsageResponseOutcomeUpdateOne) SetNillableOutputTokensSource(v *string) *UsageResponseOutcomeUpdateOne {
+	if v != nil {
+		_u.SetOutputTokensSource(*v)
+	}
+	return _u
+}
+
 // Mutation returns the UsageResponseOutcomeMutation object of the builder.
 func (_u *UsageResponseOutcomeUpdateOne) Mutation() *UsageResponseOutcomeMutation {
 	return _u.mutation
@@ -970,6 +1042,16 @@ func (_u *UsageResponseOutcomeUpdateOne) check() error {
 	if v, ok := _u.mutation.UpstreamErrorKind(); ok {
 		if err := usageresponseoutcome.UpstreamErrorKindValidator(v); err != nil {
 			return &ValidationError{Name: "upstream_error_kind", err: fmt.Errorf(`ent: validator failed for field "UsageResponseOutcome.upstream_error_kind": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.InputTokensSource(); ok {
+		if err := usageresponseoutcome.InputTokensSourceValidator(v); err != nil {
+			return &ValidationError{Name: "input_tokens_source", err: fmt.Errorf(`ent: validator failed for field "UsageResponseOutcome.input_tokens_source": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.OutputTokensSource(); ok {
+		if err := usageresponseoutcome.OutputTokensSourceValidator(v); err != nil {
+			return &ValidationError{Name: "output_tokens_source", err: fmt.Errorf(`ent: validator failed for field "UsageResponseOutcome.output_tokens_source": %w`, err)}
 		}
 	}
 	return nil
@@ -1096,6 +1178,12 @@ func (_u *UsageResponseOutcomeUpdateOne) sqlSave(ctx context.Context) (_node *Us
 	}
 	if value, ok := _u.mutation.AddedCollectorVersion(); ok {
 		_spec.AddField(usageresponseoutcome.FieldCollectorVersion, field.TypeInt16, value)
+	}
+	if value, ok := _u.mutation.InputTokensSource(); ok {
+		_spec.SetField(usageresponseoutcome.FieldInputTokensSource, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.OutputTokensSource(); ok {
+		_spec.SetField(usageresponseoutcome.FieldOutputTokensSource, field.TypeString, value)
 	}
 	_node = &UsageResponseOutcome{config: _u.config}
 	_spec.Assign = _node.assignValues

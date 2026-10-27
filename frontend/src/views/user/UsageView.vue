@@ -244,6 +244,7 @@
             :columns="visibleColumns"
             :server-side-sort="true"
             :show-account-billing="false"
+            :show-usage-diagnostics="false"
             :show-upstream-endpoint="false"
             :show-compensation-action="false"
             default-sort-key="created_at"
@@ -523,6 +524,8 @@
 </template>
 
 <script setup lang="ts">
+import { exportUsageTokenCount } from '@/utils/usageTokenSource'
+import { formatUsageBillingCost, usageBillingStatusLabel } from '@/utils/usageBillingState'
 import '@/styles/user-workspace.css'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -1116,6 +1119,7 @@ const exportToCSV = async () => {
       'Original Cost',
       'First Token (ms)',
       'Duration (ms)',
+      'Billing Status',
     ]
     const rows = allLogs.map((log) => [
       log.created_at,
@@ -1126,15 +1130,16 @@ const exportToCSV = async () => {
       log.ip_address || '',
       getRequestTypeExportText(log),
       getBillingModeLabel(getDisplayBillingMode(log), t),
-      log.input_tokens,
-      log.output_tokens,
+      exportUsageTokenCount(log.input_tokens, log.input_tokens_source),
+      exportUsageTokenCount(log.output_tokens, log.output_tokens_source),
       log.cache_read_tokens,
       log.cache_creation_tokens,
       log.rate_multiplier,
-      log.actual_cost.toFixed(8),
-      log.total_cost.toFixed(8),
+      formatUsageBillingCost(log.actual_cost, log, t, 8),
+      formatUsageBillingCost(log.total_cost, log, t, 8),
       log.first_token_ms ?? '',
       log.duration_ms ?? '',
+      usageBillingStatusLabel(log, t),
     ].map(escapeCSVValue))
     const csvContent = [
       headers.map(escapeCSVValue).join(','),

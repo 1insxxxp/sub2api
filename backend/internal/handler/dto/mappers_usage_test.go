@@ -377,3 +377,60 @@ func TestUsageLogFromService_PreservesHistoricalMissingImageSize(t *testing.T) {
 func f64Ptr(value float64) *float64 {
 	return &value
 }
+
+func TestUsageLogFromService_UnknownSourcesAreExplicitForLegacyRecords(t *testing.T) {
+	for _, dto := range []any{UsageLogFromService(&service.UsageLog{}), UsageLogFromServiceAdmin(&service.UsageLog{})} {
+		raw, err := json.Marshal(dto)
+		require.NoError(t, err)
+		var fields map[string]any
+		require.NoError(t, json.Unmarshal(raw, &fields))
+		require.Equal(t, "unknown", fields["input_tokens_source"])
+		require.Equal(t, "unknown", fields["output_tokens_source"])
+	}
+}
+
+func TestUsageLogFromService_RestrictsEstimatedSourcesToAdmin(t *testing.T) {
+	log := &service.UsageLog{InputTokensSource: service.UsageTokenSourceUnreported, OutputTokensSource: service.UsageTokenSourceEstimated, OutputTokens: 5071}
+	for _, tc := range []struct {
+		dto          any
+		outputSource string
+	}{
+		{UsageLogFromService(log), "unknown"},
+		{UsageLogFromServiceAdmin(log), "estimated"},
+	} {
+		raw, err := json.Marshal(tc.dto)
+		require.NoError(t, err)
+		var fields map[string]any
+		require.NoError(t, json.Unmarshal(raw, &fields))
+		require.Equal(t, "unreported", fields["input_tokens_source"])
+		require.Equal(t, tc.outputSource, fields["output_tokens_source"])
+		require.EqualValues(t, 0, fields["input_tokens"])
+		require.EqualValues(t, 5071, fields["output_tokens"])
+	}
+}
+
+func TestUsageLogFromService_HidesEstimatedInputAndPreservesOtherSources(t *testing.T) {
+	for _, tc := range []struct {
+		source, want service.UsageTokenSource
+	}{
+		{service.UsageTokenSourceEstimated, service.UsageTokenSourceUnknown},
+		{service.UsageTokenSourceUpstream, service.UsageTokenSourceUpstream},
+		{service.UsageTokenSourceUnreported, service.UsageTokenSourceUnreported},
+		{service.UsageTokenSourceUnknown, service.UsageTokenSourceUnknown},
+		{"", service.UsageTokenSourceUnknown},
+	} {
+		t.Run(string(tc.source), func(t *testing.T) {
+			log := &service.UsageLog{InputTokens: 21916, OutputTokens: 4055, InputTokensSource: tc.source, OutputTokensSource: tc.source}
+			user := UsageLogFromService(log)
+			require.Equal(t, tc.want, user.InputTokensSource)
+			require.Equal(t, tc.want, user.OutputTokensSource)
+			require.Equal(t, 21916, user.InputTokens)
+			require.Equal(t, 4055, user.OutputTokens)
+			admin := UsageLogFromServiceAdmin(log)
+			require.Equal(t, tc.source.Normalize(), admin.InputTokensSource)
+			require.Equal(t, tc.source.Normalize(), admin.OutputTokensSource)
+			require.Equal(t, tc.source, log.InputTokensSource, "user projection must not change stored/admin provenance")
+			require.Equal(t, tc.source, log.OutputTokensSource)
+		})
+	}
+}

@@ -38,6 +38,8 @@ func (UsageResponseOutcome) Fields() []ent.Field {
 		field.String("disconnect_source").MaxLen(20).Default("none"),
 		field.String("upstream_error_kind").MaxLen(32).Default("none"),
 		field.Int16("collector_version").Default(1),
+		field.String("input_tokens_source").MaxLen(20).Default("unknown"),
+		field.String("output_tokens_source").MaxLen(20).Default("unknown"),
 		field.Time("created_at").Default(time.Now).Immutable(),
 	}
 }

@@ -618,16 +618,31 @@ type ForwardResult struct {
 	// It is used to extract provider-specific request identifiers for usage logs.
 	UpstreamHeaders http.Header
 	Usage           ClaudeUsage
-	Model           string
+	// Direct New API ledger identity, captured from the actual request/response.
+	// The fingerprint binds the lookup to the same origin and credential without
+	// retaining credentials or confusing the provider's next-hop request ID.
+	UsageLedgerRequestID    string
+	UsageLedgerIdentityHash string
+	// Per-field provider presence; output selection is resolved when recording usage.
+	InputTokensSource  UsageTokenSource
+	OutputTokensSource UsageTokenSource
+	// Gemini text uses field-specific evidence, including explicit measured zero.
+	RequireMeasuredUsage  bool
+	MeasuredUsageComplete bool
+	// Fallback finalization permits the explicitly authorized last-resort estimate
+	// without mislabeling missing provider measurements as complete.
+	GeminiUsageFinalized bool
+	GeminiUsageFallback  *GeminiUsageFallback `json:"-"`
+	Model                string
 	// EstimatedInputTokens is a local estimate of the final upstream request.
 	// It is only applied when upstream input/cache usage is missing and there is
 	// evidence of generation. No request-body reference is retained for billing.
-	// Gemini billing never uses this estimate in place of provider input usage.
+	// Gemini resolves its fallback separately, after the upstream ledger/count path.
 	EstimatedInputTokens int
 	InputTokensEstimated bool
 	// DeliveredOutputTokens is the user-visible text successfully written before
-	// the downstream request was canceled. It is only a billing fallback when
-	// the upstream response did not complete with authoritative usage.
+	// the downstream request was canceled. Protocols that allow local fallback
+	// can bill this estimate; Gemini measured mode retains it only as diagnostics.
 	DeliveredOutputTokens *int
 	// CacheCreationTTLTarget records the client's requested Anthropic prompt-cache TTL
 	// ("5m" or "1h") so billing can classify aggregate cache-creation usage when

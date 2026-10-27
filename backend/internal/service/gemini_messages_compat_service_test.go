@@ -456,7 +456,10 @@ func TestGeminiForwardAsChatCompletions_StreamSafetyTerminalReturnsExplicitError
 	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(body))
 
 	result, err := svc.ForwardAsChatCompletions(context.Background(), c, account, body)
-	require.Nil(t, result)
+	require.NotNil(t, result, "a non-retried terminal failure retains measured provider consumption")
+	require.True(t, result.MeasuredUsageComplete)
+	require.Equal(t, 2, result.Usage.InputTokens)
+	require.Zero(t, result.Usage.OutputTokens)
 	require.Error(t, err)
 	var failoverErr *UpstreamFailoverError
 	require.NotErrorAs(t, err, &failoverErr)

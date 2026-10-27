@@ -617,6 +617,10 @@ func sanitizeOpsUpstreamErrors(entry *OpsInsertErrorLogInput) error {
 			out.UsageState = ""
 		}
 		out.UsageFields &= 31
+		out.DownstreamDelivery = out.DownstreamDelivery.sanitizedCopy()
+		if out.DownstreamStatusCode < 100 || out.DownstreamStatusCode > 599 {
+			out.DownstreamStatusCode = 0
+		}
 		for _, count := range []*int64{&out.InputTokens, &out.OutputTokens, &out.CacheReadTokens, &out.ThoughtTokens, &out.TotalTokens} {
 			if *count < 0 {
 				*count = 0
@@ -758,12 +762,13 @@ func (s *OpsService) ListUserErrorRequests(ctx context.Context, userID int64, fi
 	filter.UserQuery = ""
 	filter.Owner = ""
 	filter.Source = ""
-	// 清空 Phase 是防御:用户端一律改走 category→ErrorPhasesAny/ErrorTypesAny
-	//（纯 ANY 过滤,不影响 status>=400 子句）。守卫豁免现在还需要
-	// IncludeRecoveredUpstream(用户端永不设置),recovered upstream
-	//（error_phase='upstream' 但 status<400,最终成功返回）记录对用户不可见——符合预期。
+	// Canceled requests belong in normal usage history, settled or pending.
+	// Keep provider diagnostics available only through the admin Ops view.
 	filter.Phase = ""
 	filter.IncludeRecoveredUpstream = false
+	filter.IncludeCanceledRequests = false
+	filter.CanceledOnly = false
+	filter.ExcludeCanceledRequests = true
 
 	list, err := s.opsRepo.ListErrorLogs(ctx, filter)
 	if err != nil {

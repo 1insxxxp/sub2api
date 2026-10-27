@@ -44,7 +44,7 @@ func TestUsageLogRepositoryUpsertResponseOutcomeLinksExistingUsageRow(t *testing
 		WithArgs(
 			log.RequestID, log.APIKeyID, log.UserID, log.AccountID, log.GroupID,
 			200, 200, true, false, false, false, int64(12), 2, true, "stop",
-			string(service.DisconnectSourceNone), string(service.UpstreamErrorNone), int16(1), 2,
+			string(service.DisconnectSourceNone), string(service.UpstreamErrorNone), int16(1), 2, "unknown", "unknown",
 		).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
@@ -71,7 +71,7 @@ func TestUsageLogRepositoryUpsertResponseOutcomeRequiresLinkedUsageRow(t *testin
 		WithArgs(
 			log.RequestID, log.APIKeyID, log.UserID, log.AccountID, log.GroupID,
 			0, 0, false, false, false, false, int64(0), 0, false, "",
-			string(service.DisconnectSourceNone), string(service.UpstreamErrorNone), int16(1), 0,
+			string(service.DisconnectSourceNone), string(service.UpstreamErrorNone), int16(1), 0, "unknown", "unknown",
 		).
 		WillReturnResult(sqlmock.NewResult(0, 0))
 

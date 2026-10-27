@@ -28,6 +28,12 @@ const { list, exportList, getStats, getSnapshotV2, getById, getModelStats, listE
 })
 
 const messages: Record<string, string> = {
+  'usage.tokensUnreported': 'Not reported',
+  'usage.tokensEstimated': 'Estimated',
+  'usage.tokensSourceUnknown': 'Unknown source',
+  'usage.tokensSourceUpstream': 'Upstream report',
+  'usage.inputTokensSource': 'Input usage source',
+  'usage.outputTokensSource': 'Output usage source',
   'admin.dashboard.timeRange': 'Time Range',
   'admin.dashboard.day': 'Day',
   'admin.dashboard.hour': 'Hour',
@@ -728,6 +734,7 @@ describe('admin UsageView errors tab filter forwarding', () => {
     await flushPromises()
 
     expect(listErrorLogs).toHaveBeenCalledWith(expect.objectContaining({
+      include_canceled: false,
       view: 'all',
       model: 'gpt-5.3-codex',
       account_id: 7,
@@ -865,6 +872,44 @@ describe('admin UsageView model audit export', () => {
 	afterEach(() => {
 		vi.useRealTimers()
 	})
+
+  it('exports pending review status instead of zero monetary values', async () => {
+    exportList.mockResolvedValue({ items: [{
+      id: -42, created_at: '2026-10-27T07:52:46+08:00', model: 'gemini-4-argon',
+      billing_status: 'pending_review', billing_pending_reason: 'upstream_usage_missing',
+      input_tokens: 0, output_tokens: 0, input_tokens_source: 'unreported', output_tokens_source: 'unreported',
+      actual_cost: 0, total_cost: 0,
+    }], total: 1, pages: 1 })
+    const wrapper = mountRouteFilteredUsageView()
+    vi.advanceTimersByTime(120)
+    await flushPromises()
+    await (wrapper.vm as any).exportToExcel()
+    const headers = aoaToSheet.mock.calls[0][0][0]
+    const row = sheetAddAoa.mock.calls[0][1][0]
+    for (const header of ['admin.usage.inputCost', 'admin.usage.outputCost', 'admin.usage.cacheReadCost', 'admin.usage.cacheCreationCost', 'usage.original', 'usage.userBilled', 'usage.accountBilled']) {
+      expect(row[headers.indexOf(header)]).toBe('usage.billingPendingReview')
+    }
+    expect(row[headers.indexOf('usage.billingStatus')]).toBe('usage.billingPendingReview')
+    expect(row[headers.indexOf('admin.usage.inputTokens')]).toBe('')
+    wrapper.unmount()
+  })
+
+  it('exports unreported and estimated sources without claiming a zero input measurement', async () => {
+    exportList.mockResolvedValue({ items: [{
+      id: 1, created_at: '2026-10-27T07:52:46+08:00', model: 'gemini-4-argon',
+      input_tokens: 0, output_tokens: 5071, input_tokens_source: 'unreported', output_tokens_source: 'estimated',
+    }], total: 1, pages: 1 })
+    const wrapper = mountRouteFilteredUsageView()
+    vi.advanceTimersByTime(120)
+    await flushPromises()
+    await (wrapper.vm as any).exportToExcel()
+    const headers = aoaToSheet.mock.calls[0][0][0]
+    const row = sheetAddAoa.mock.calls[0][1][0]
+    expect(row[headers.indexOf('admin.usage.inputTokens')]).toBe('')
+    expect(row[headers.indexOf('Input usage source')]).toBe('Not reported')
+    expect(row[headers.indexOf('Output usage source')]).toBe('Estimated')
+    wrapper.unmount()
+  })
 
 	it('exports requested, sent, response, and mismatch as separate admin columns', async () => {
 		const wrapper = mountRouteFilteredUsageView()

@@ -343,7 +343,7 @@ func (r *usageLogRepository) GetUserActivityHeatmap(ctx context.Context, startTi
 					ELSE 'failure'
 				END AS activity_outcome
 			FROM usage_logs
-			LEFT JOIN usage_response_outcomes outcome ON outcome.usage_log_id = usage_logs.id
+			LEFT JOIN usage_response_outcomes outcome ON outcome.usage_log_id = usage_logs.id AND outcome.collector_version > 0
 			LEFT JOIN empty_response_claims claim ON claim.usage_log_id = usage_logs.id
 			WHERE ` + strings.Join(conditions, " AND ") + `
 		)

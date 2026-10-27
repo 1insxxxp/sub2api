@@ -5,6 +5,7 @@ package handler
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -30,6 +31,17 @@ func (r *geminiPartialBillingRepo) Apply(_ context.Context, cmd *service.UsageBi
 	copy := *cmd
 	r.commands = append(r.commands, &copy)
 	return &service.UsageBillingApplyResult{Applied: true}, nil
+}
+
+type geminiMeasuredUsageRepo struct {
+	partialChatUsageRepo
+	pending []*service.UsageLog
+}
+
+func (r *geminiMeasuredUsageRepo) UpsertPendingUsage(_ context.Context, row *service.UsageLog) error {
+	copy := *row
+	r.pending = append(r.pending, &copy)
+	return nil
 }
 
 type geminiPartialBody struct {
@@ -59,9 +71,25 @@ type geminiPartialUpstream struct {
 	accounts        []int64
 	initialCancel   bool
 	metadataTimeout bool
+	ledgerRecovery  bool
+	ledgerCalls     int
+	countCalls      int
+	countRecovery   bool
 }
 
 func (u *geminiPartialUpstream) Do(req *http.Request, _ string, accountID int64, _ int) (*http.Response, error) {
+	if strings.HasSuffix(req.URL.Path, ":countTokens") {
+		u.countCalls++
+		status, body := 404, `{"error":"unsupported count"}`
+		if u.countRecovery {
+			status, body = 200, `{"totalTokens":21916}`
+		}
+		return &http.Response{StatusCode: status, Header: http.Header{"Content-Type": {"application/json"}}, Body: io.NopCloser(strings.NewReader(body))}, nil
+	}
+	if req.URL.Path == "/api/log/token" {
+		u.ledgerCalls++
+		return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": {"application/json"}}, Body: io.NopCloser(strings.NewReader(`{"success":true,"data":[{"type":2,"request_id":"gemini-ledger-test-request","model_name":"gemini-2.5-flash","prompt_tokens":21916,"completion_tokens":4055,"other":"{\"cache_tokens\":0,\"cache_input_includes_cache\":true}"}]}`))}, nil
+	}
 	u.accounts = append(u.accounts, accountID)
 	if u.initialCancel {
 		u.cancel()
@@ -74,9 +102,13 @@ func (u *geminiPartialUpstream) Do(req *http.Request, _ string, accountID int64,
 			Body:       io.NopCloser(io.MultiReader(strings.NewReader("data: {\"usageMetadata\":{\"promptTokenCount\":99999,\"candidatesTokenCount\":99999}}\n\n"), geminiPartialWaitForCancel{ctx: req.Context()})),
 		}, nil
 	}
+	headers := http.Header{"Content-Type": {"text/event-stream"}, "X-Request-Id": {"gemini-partial-only-once"}}
+	if u.ledgerRecovery {
+		headers.Set("X-Oneapi-Request-Id", "gemini-ledger-test-request")
+	}
 	return &http.Response{
 		StatusCode: http.StatusOK,
-		Header:     http.Header{"Content-Type": {"text/event-stream"}, "X-Request-Id": {"gemini-partial-only-once"}},
+		Header:     headers,
 		Body:       &geminiPartialBody{reader: strings.NewReader(u.sse), err: u.readErr, cancel: u.cancel},
 	}, nil
 }
@@ -153,8 +185,8 @@ func (w *geminiPartialCancelAfterTerminalWriter) Flush() {
 }
 
 // Exercise all three public protocols, the real Gemini adapter, RecordUsage and the
-// normal-mode wallet command. A failed attempt with metadata cannot debit a
-// wallet; a partial answer must settle once using only downstream output.
+// normal-mode wallet command. Provider usage settles regardless of delivery;
+// absent or incomplete measurements enter pending history without a wallet debit.
 func TestGeminiHandlers_InterruptedUsageBilling(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	const usage = `"usageMetadata":{"promptTokenCount":12,"candidatesTokenCount":10000,"totalTokenCount":10012}`
@@ -166,6 +198,10 @@ func TestGeminiHandlers_InterruptedUsageBilling(t *testing.T) {
 			readErr                    error
 			clientGone                 bool
 			wantBilling                bool
+			wantEstimate               bool
+			ledgerRecovery             bool
+			countRecovery              bool
+			customUsage                string
 			completed                  bool
 			omitUsage                  bool
 			initialCancel              bool
@@ -179,24 +215,30 @@ func TestGeminiHandlers_InterruptedUsageBilling(t *testing.T) {
 			zeroOutputUsage            bool
 		}{
 			{name: "partial EOF", parts: `{"text":"partial answer"}`, wantBilling: true},
-			{name: "partial EOF without usage", parts: `{"text":"partial answer"}`, wantBilling: true, omitUsage: true},
+			{name: "count endpoint recovers input", parts: `{"text":"partial answer"}`, readErr: context.Canceled, clientGone: true, omitUsage: true, countRecovery: true, wantEstimate: true},
+			{name: "partial EOF without usage", parts: `{"text":"partial answer"}`, wantEstimate: true, omitUsage: true},
 			{name: "partial reset", parts: `{"text":"partial answer"}`, readErr: io.ErrUnexpectedEOF, wantBilling: true},
+			{name: "cancel recovers exact ledger usage", parts: `{"text":"partial answer"}`, readErr: context.Canceled, clientGone: true, omitUsage: true, ledgerRecovery: true, wantBilling: true},
+			{name: "thought cancel recovers exact ledger usage", parts: `{"text":"private reasoning","thought":true}`, readErr: context.Canceled, clientGone: true, omitUsage: true, ledgerRecovery: true, wantBilling: true},
 			{name: "partial client cancellation", parts: `{"text":"partial answer"}`, readErr: context.Canceled, clientGone: true, wantBilling: true},
-			{name: "metadata only cancellation", readErr: context.Canceled, clientGone: true},
-			{name: "metadata only cancellation without usage", readErr: context.Canceled, clientGone: true, omitUsage: true},
-			{name: "thought only cancellation", parts: `{"text":"private reasoning","thought":true}`, readErr: context.Canceled, clientGone: true},
-			{name: "thought only cancellation without usage", parts: `{"text":"private reasoning","thought":true}`, readErr: context.Canceled, clientGone: true, omitUsage: true},
-			{name: "cancellation before upstream response", clientGone: true, initialCancel: true},
-			{name: "failed downstream write", parts: `{"text":"partial answer"}`, readErr: io.ErrUnexpectedEOF, rejectWrites: true},
-			{name: "failed downstream write without usage", parts: `{"text":"partial answer"}`, readErr: io.ErrUnexpectedEOF, rejectWrites: true, omitUsage: true},
-			{name: "thought delivered then answer write fails", parts: `{"text":"partial answer"}`, readErr: io.ErrUnexpectedEOF, rejectAnswerAfterThought: true},
+			{name: "metadata only cancellation", readErr: context.Canceled, clientGone: true, wantBilling: true},
+			{name: "metadata only cancellation without usage", readErr: context.Canceled, clientGone: true, omitUsage: true, wantEstimate: true},
+			{name: "thought only cancellation", parts: `{"text":"private reasoning","thought":true}`, readErr: context.Canceled, clientGone: true, wantBilling: true},
+			{name: "thought only cancellation without usage", parts: `{"text":"private reasoning","thought":true}`, readErr: context.Canceled, clientGone: true, omitUsage: true, wantEstimate: true},
+			{name: "cancellation before upstream response", clientGone: true, initialCancel: true, wantEstimate: true},
+			{name: "failed downstream write", parts: `{"text":"partial answer"}`, readErr: io.ErrUnexpectedEOF, rejectWrites: true, wantBilling: true},
+			{name: "failed downstream write without usage", parts: `{"text":"partial answer"}`, readErr: io.ErrUnexpectedEOF, rejectWrites: true, omitUsage: true, wantEstimate: true},
+			{name: "thought delivered then answer write fails", parts: `{"text":"partial answer"}`, readErr: io.ErrUnexpectedEOF, rejectAnswerAfterThought: true, wantBilling: true},
 			{name: "partial delivered then terminal answer write fails", parts: `{"text":"hidden final answer"}`, finish: `,"finishReason":"STOP"`, wantBilling: true, rejectTerminalAfterPartial: true},
-			{name: "thought delivered then terminal answer write fails", parts: `{"text":"partial answer"}`, finish: `,"finishReason":"STOP"`, rejectAnswerAfterThought: true},
+			{name: "thought delivered then terminal answer write fails", parts: `{"text":"partial answer"}`, finish: `,"finishReason":"STOP"`, rejectAnswerAfterThought: true, wantBilling: true},
 			{name: "terminal delivered then client cancellation", parts: `{"text":"partial answer"}`, finish: `,"finishReason":"STOP"`, wantBilling: true, completed: true, cancelAfterTerminal: true},
 			{name: "upstream STOP then read reset", parts: `{"text":"partial answer"}`, finish: `,"finishReason":"STOP"`, readErr: io.ErrUnexpectedEOF, wantBilling: true, upstreamTerminalReadError: true},
 			{name: "metadata timeout then next account completes", parts: `{"text":"partial answer"}`, finish: `,"finishReason":"STOP"`, wantBilling: true, completed: true, metadataTimeout: true},
+			{name: "cancellation with prompt only", parts: `{"text":"partial answer"}`, readErr: context.Canceled, clientGone: true, customUsage: `{"promptTokenCount":12}`, wantEstimate: true},
+			{name: "cancellation with output only", parts: `{"text":"partial answer"}`, readErr: context.Canceled, clientGone: true, customUsage: `{"candidatesTokenCount":10000}`, wantEstimate: true},
+			{name: "completed without usage", parts: `{"text":"partial answer"}`, finish: `,"finishReason":"STOP"`, omitUsage: true, wantEstimate: true},
 			{name: "normal completed", parts: `{"text":"partial answer"}`, finish: `,"finishReason":"STOP"`, wantBilling: true, completed: true},
-			{name: "safety failure empty answer", finish: `,"finishReason":"SAFETY"`, zeroOutputUsage: true},
+			{name: "safety failure empty answer", finish: `,"finishReason":"SAFETY"`, zeroOutputUsage: true, wantBilling: true},
 			{name: "safety failure partial answer", parts: `{"text":"partial answer"}`, finish: `,"finishReason":"SAFETY"`, wantBilling: true},
 			{name: "normal empty STOP", finish: `,"finishReason":"STOP"`, protocolOnly: "native", zeroOutputUsage: true, wantBilling: true, completed: true},
 		} {
@@ -216,9 +258,20 @@ func TestGeminiHandlers_InterruptedUsageBilling(t *testing.T) {
 				defer cancel()
 				usageFragment := "," + usage
 				providerOutput := 10000
+				providerInput := 12
+				if tc.ledgerRecovery {
+					providerInput, providerOutput = 21916, 4055
+					account.Credentials["base_url"] = "https://ledger.example.invalid"
+				}
+				if tc.countRecovery {
+					account.Credentials["base_url"] = "https://count.example.invalid"
+				}
 				if tc.zeroOutputUsage {
 					usageFragment = `,"usageMetadata":{"promptTokenCount":12,"candidatesTokenCount":0,"totalTokenCount":12}`
 					providerOutput = 0
+				}
+				if tc.customUsage != "" {
+					usageFragment = `,"usageMetadata":` + tc.customUsage
 				}
 				if tc.omitUsage {
 					usageFragment = ""
@@ -230,11 +283,11 @@ func TestGeminiHandlers_InterruptedUsageBilling(t *testing.T) {
 				if tc.rejectTerminalAfterPartial {
 					sse = "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"partial answer\"}],\"role\":\"model\"}}]}\n\n" + sse
 				}
-				upstream := &geminiPartialUpstream{sse: sse, readErr: tc.readErr, initialCancel: tc.initialCancel, metadataTimeout: tc.metadataTimeout}
+				upstream := &geminiPartialUpstream{sse: sse, readErr: tc.readErr, initialCancel: tc.initialCancel, metadataTimeout: tc.metadataTimeout, ledgerRecovery: tc.ledgerRecovery, countRecovery: tc.countRecovery}
 				if tc.clientGone {
 					upstream.cancel = cancel
 				}
-				usageRepo := &partialChatUsageRepo{}
+				usageRepo := &geminiMeasuredUsageRepo{}
 				wallet := &geminiPartialBillingRepo{}
 				cfg := &config.Config{}
 				cfg.Default.RateMultiplier = 1
@@ -318,37 +371,85 @@ func TestGeminiHandlers_InterruptedUsageBilling(t *testing.T) {
 					require.Contains(t, recorder.Body.String(), "partial answer")
 					require.NotContains(t, recorder.Body.String(), "hidden final answer")
 				}
-				if !tc.wantBilling {
-					require.Empty(t, wallet.commands, "metadata or reasoning without delivered answer must not mutate the wallet")
-					require.Empty(t, usageRepo.logs, "failed outputless attempts must never enter customer usage settlement")
+				if tc.clientGone || tc.rejectWrites || tc.rejectAnswerAfterThought || tc.rejectTerminalAfterPartial {
+					// Even an unbilled cancellation must retain delivery evidence. This
+					// goes to the diagnostic event, never a zero-cost settlement row.
+					value, exists := c.Get(service.OpsUpstreamErrorsKey)
+					require.True(t, exists)
+					raw, marshalErr := json.Marshal(value)
+					require.NoError(t, marshalErr)
+					var events []map[string]any
+					require.NoError(t, json.Unmarshal(raw, &events))
+					require.NotEmpty(t, events)
+					delivery, exists := events[len(events)-1]["downstream_delivery"].(map[string]any)
+					require.True(t, exists, "interrupted attempts need privacy-safe delivery evidence: %s", raw)
+					require.IsType(t, true, delivery["answer_text_delivered"])
+					decision := "skipped"
+					if tc.ledgerRecovery {
+						decision = "recover_usage"
+					} else if tc.wantBilling {
+						decision = "upstream_usage"
+					} else if tc.wantEstimate {
+						decision = "estimate_usage"
+					}
+					require.Equal(t, decision, delivery["settlement_decision"])
+					require.Contains(t, delivery, "estimated_output_tokens")
+					require.NotContains(t, string(raw), "private reasoning")
+					require.NotContains(t, string(raw), "partial answer")
+				}
+				if tc.wantEstimate {
+					require.Empty(t, usageRepo.pending, "final estimation must settle into normal history")
+					require.Len(t, wallet.commands, 1)
+					require.Len(t, usageRepo.logs, 1)
+					log := usageRepo.logs[0]
+					if tc.initialCancel {
+						require.Zero(t, log.InputTokens)
+						require.Zero(t, log.OutputTokens)
+						require.Zero(t, wallet.commands[0].BalanceCost, "no accepted upstream request must not acquire a speculative charge")
+					} else {
+						require.Positive(t, log.InputTokens)
+						require.Positive(t, wallet.commands[0].BalanceCost)
+					}
+					if strings.Contains(tc.customUsage, "promptTokenCount") {
+						require.Equal(t, 12, log.InputTokens)
+						require.Equal(t, service.UsageTokenSourceUpstream, log.InputTokensSource)
+					} else {
+						require.Equal(t, service.UsageTokenSourceEstimated, log.InputTokensSource)
+					}
+					if strings.Contains(tc.customUsage, "candidatesTokenCount") {
+						require.Equal(t, 10000, log.OutputTokens)
+						require.Equal(t, service.UsageTokenSourceUpstream, log.OutputTokensSource)
+					} else {
+						require.Equal(t, service.UsageTokenSourceEstimated, log.OutputTokensSource)
+					}
+					if tc.countRecovery {
+						require.Equal(t, 21916, log.InputTokens)
+						require.Equal(t, 1, upstream.countCalls)
+					}
+					require.InDelta(t, float64(log.InputTokens)*0.000001+float64(log.OutputTokens)*0.00001, wallet.commands[0].BalanceCost, 0.00000001)
 					return
 				}
-				require.Len(t, wallet.commands, 1, "settle the delivered response exactly once in normal billing mode")
+				require.Empty(t, usageRepo.pending)
+				if !tc.wantBilling {
+					require.Empty(t, wallet.commands)
+					require.Empty(t, usageRepo.logs)
+					return
+				}
+				require.Len(t, wallet.commands, 1, "provider usage settles exactly once")
 				require.Len(t, usageRepo.logs, 1)
 				log := usageRepo.logs[0]
-				if !tc.omitUsage {
-					require.Equal(t, 12, log.InputTokens)
-					require.Equal(t, providerOutput, log.UpstreamOutputTokens, "keep provider measurement separately")
-				} else {
-					require.Zero(t, log.InputTokens, "missing provider input must not be replaced with a local character estimate")
-					require.Zero(t, log.InputCost, "unmeasured Gemini input must not debit the customer")
-					require.Zero(t, wallet.commands[0].InputTokens)
-					require.Zero(t, log.UpstreamOutputTokens, "unknown provider usage must not be fabricated")
+				require.Equal(t, providerInput, log.InputTokens)
+				if tc.ledgerRecovery {
+					require.Positive(t, upstream.ledgerCalls)
+					require.NotNil(t, log.UpstreamRequestID)
+					require.Equal(t, "gemini-ledger-test-request", *log.UpstreamRequestID)
 				}
+				require.Equal(t, providerOutput, log.OutputTokens, "the measured provider output must not be replaced by locally tokenized delivery")
+				require.Equal(t, providerOutput, log.UpstreamOutputTokens)
 				require.Equal(t, upstream.accounts[len(upstream.accounts)-1], log.AccountID)
 				require.Positive(t, wallet.commands[0].BalanceCost)
-				if tc.completed || (tc.upstreamTerminalReadError && protocol == "native") {
-					require.Equal(t, providerOutput, log.OutputTokens, "normal complete responses retain existing provider usage billing")
-				} else {
-					collector := service.NewDownstreamOutputTokenCollector("gemini-2.5-flash")
-					collector.ObserveWritten([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"partial answer\"}}]}\n\n"))
-					require.Positive(t, collector.TokenCount())
-					require.Equal(t, collector.TokenCount(), log.OutputTokens, "never charge the provider's unseen 10000 output tokens")
-					require.NotNil(t, log.Outcome)
-					require.False(t, log.Outcome.StreamCompleted)
-				}
-				require.InDelta(t, float64(log.InputTokens)*0.000001+float64(log.OutputTokens)*0.00001, wallet.commands[0].BalanceCost, 0.00000001,
-					"wallet charge must use customer-visible output, not the larger provider output")
+				require.InDelta(t, float64(log.InputTokens)*0.000001+float64(providerOutput)*0.00001, wallet.commands[0].BalanceCost, 0.00000001,
+					"wallet charge follows measured usage even when response delivery fails")
 			})
 		}
 	}

@@ -122,3 +122,16 @@ describe('OpsErrorLogTable i18n keys exist in the errorLog namespace', () => {
     })
   }
 })
+
+
+describe('OpsErrorLogTable interrupted streams', () => {
+  it('shows the final downstream status and cancellation instead of a prior provider error', () => {
+    const wrapper = mountTable({ client_canceled: true, downstream_status_code: 200, status_code: 503, message: 'earlier paused account' })
+    expect(wrapper.get('[data-testid="error-downstream-status"]').text()).toBe('200')
+    expect(wrapper.get('[data-testid="error-client-canceled"]').text()).toBe('usage.errors.categories.client_cancel')
+    expect(wrapper.text()).toContain('usage.errors.clientCanceledHint')
+    expect(wrapper.text()).not.toContain('earlier paused account')
+    expect(wrapper.text()).not.toContain('503')
+    wrapper.unmount()
+  })
+})

@@ -77,3 +77,23 @@ describe('OpsErrorDetailModal', () => {
     expect(wrapper.text()).not.toContain('admin.ops.errorDetail.payloads.upstream_detail')
   })
 })
+
+
+it('shows cancellation as the final outcome while preserving upstream diagnostic evidence', async () => {
+  mocks.getRequestErrorDetail.mockResolvedValue({
+    id: 2, created_at: '2026-10-27T07:52:46+08:00', status_code: 503, downstream_status_code: 200,
+    client_canceled: true, phase: 'upstream', upstream_status_code: 503,
+    upstream_error_message: 'previous account paused', upstream_errors: '[]',
+  })
+  const wrapper = shallowMount(OpsErrorDetailModal, {
+    props: { show: true, errorId: 2, errorType: 'request' },
+    global: { stubs: { BaseDialog: { template: '<div><slot /></div>' }, Icon: true } },
+  })
+  await flushPromises()
+  expect(wrapper.get('[data-testid="error-downstream-status"]').text()).toBe('200')
+  expect(wrapper.get('[data-testid="error-client-canceled"]').text()).toBe('usage.errors.categories.client_cancel')
+  expect(wrapper.text()).toContain('usage.errors.clientCanceledHint')
+  expect(wrapper.text()).toContain('previous account paused')
+  expect(wrapper.text()).toContain('503')
+  wrapper.unmount()
+})

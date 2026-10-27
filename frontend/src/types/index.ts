@@ -2066,8 +2066,14 @@ export type UsageRequestType = 'unknown' | 'sync' | 'stream' | 'ws_v2' | 'cyber'
 export type ImageSizeSource = 'output' | 'input' | 'default' | 'legacy'
 export type ImageSizeBreakdown = Record<string, number>
 
+export type UsageTokenSource = 'upstream' | 'unreported' | 'estimated' | 'unknown'
+export type UsageBillingStatus = 'settled' | 'pending_review'
+
 export interface UsageLog {
+  /** Pending review entries use negative IDs; settled usage entries use positive IDs. */
   id: number
+  billing_status?: UsageBillingStatus
+  billing_pending_reason?: 'upstream_usage_missing'
   user_id: number
   api_key_id: number
   account_id: number | null
@@ -2083,6 +2089,8 @@ export interface UsageLog {
 
   input_tokens: number
   output_tokens: number
+  input_tokens_source?: UsageTokenSource
+  output_tokens_source?: UsageTokenSource
   anti_truncation_rounds?: number
   cache_creation_tokens: number
   cache_read_tokens: number
@@ -2544,6 +2552,7 @@ export interface UserErrorRequest {
   model: string
   inbound_endpoint: string
   status_code: number
+  client_canceled?: boolean
   category: string
   platform: string
   message: string

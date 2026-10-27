@@ -161,11 +161,12 @@
               <div class="flex items-center gap-2">
                 <div class="inline-flex items-center gap-1">
                   <Icon name="arrowDown" size="sm" class="h-3.5 w-3.5 text-emerald-500" />
-                  <span class="font-medium text-gray-900 dark:text-white">{{ row.input_tokens?.toLocaleString() || 0 }}</span>
+                  <span data-testid="input-token-count" :title="showUsageDiagnostics ? usageTokenSourceHint(row.input_tokens_source, 'input', t) : undefined" class="font-medium text-gray-900 dark:text-white">{{ displayUsageTokens(row.input_tokens, row.input_tokens_source, row) }}</span>
                 </div>
                 <div class="inline-flex items-center gap-1">
                   <Icon name="arrowUp" size="sm" class="h-3.5 w-3.5 text-violet-500" />
-                  <span class="font-medium text-gray-900 dark:text-white">{{ row.output_tokens?.toLocaleString() || 0 }}</span>
+                  <span data-testid="output-token-count" :title="showUsageDiagnostics ? usageTokenSourceHint(row.output_tokens_source, 'output', t) : undefined" class="font-medium text-gray-900 dark:text-white">{{ displayUsageTokens(row.output_tokens, row.output_tokens_source, row) }}</span>
+                  <span v-if="showUsageDiagnostics && row.output_tokens_source === 'estimated'" data-testid="output-token-estimated" :title="showUsageDiagnostics ? usageTokenSourceHint(row.output_tokens_source, 'output', t) : undefined" class="rounded bg-gray-100 px-1 py-px text-[10px] leading-tight text-gray-500 dark:bg-dark-700 dark:text-gray-400">{{ t('usage.tokensEstimated') }}</span>
                 </div>
               </div>
               <div v-if="row.cache_read_tokens > 0 || row.cache_creation_tokens > 0" class="flex items-center gap-2">
@@ -207,7 +208,13 @@
         </template>
 
         <template #cell-cost="{ row }">
-          <div class="text-sm">
+          <span
+            v-if="isUsageBillingPending(row)"
+            data-testid="usage-billing-pending"
+            class="inline-flex items-center rounded bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 dark:bg-dark-700 dark:text-gray-300"
+            :title="t('usage.billingPendingReviewHint')"
+          >{{ t('usage.billingPendingReview') }}</span>
+          <div v-else class="text-sm">
             <div class="flex items-center gap-1.5">
               <span class="font-medium text-green-600 dark:text-green-400">${{ row.actual_cost?.toFixed(6) || '0.000000' }}</span>
               <span
@@ -343,9 +350,9 @@
         <div class="space-y-1.5">
           <div>
             <div class="text-xs font-semibold text-gray-300 mb-1">{{ t('usage.tokenDetails') }}</div>
-            <div v-if="tokenTooltipData && tokenTooltipData.input_tokens > 0 && !hasImageInputTokens(tokenTooltipData)" class="flex items-center justify-between gap-4">
+            <div v-if="tokenTooltipData && !hasImageInputTokens(tokenTooltipData)" class="flex items-center justify-between gap-4">
               <span class="text-gray-400">{{ t('admin.usage.inputTokens') }}</span>
-              <span class="font-medium text-white">{{ tokenTooltipData.input_tokens.toLocaleString() }}</span>
+              <span class="font-medium text-white">{{ displayUsageTokens(tokenTooltipData.input_tokens, tokenTooltipData.input_tokens_source, tokenTooltipData) }}</span>
             </div>
             <div v-if="tokenTooltipData && hasImageInputTokens(tokenTooltipData) && textInputTokens(tokenTooltipData) > 0" class="flex items-center justify-between gap-4">
               <span class="text-gray-400">{{ t('admin.usage.inputTokens') }}</span>
@@ -355,9 +362,9 @@
               <span class="text-gray-400">{{ t('usage.imageInputTokens') }}</span>
               <span class="font-medium text-fuchsia-300">{{ tokenTooltipData.image_input_tokens.toLocaleString() }}</span>
             </div>
-            <div v-if="tokenTooltipData && tokenTooltipData.output_tokens > 0 && !hasImageOutputTokens(tokenTooltipData)" class="flex items-center justify-between gap-4">
+            <div v-if="tokenTooltipData && !hasImageOutputTokens(tokenTooltipData)" class="flex items-center justify-between gap-4">
               <span class="text-gray-400">{{ t('admin.usage.outputTokens') }}</span>
-              <span class="font-medium text-white">{{ tokenTooltipData.output_tokens.toLocaleString() }}</span>
+              <span class="font-medium text-white">{{ displayUsageTokens(tokenTooltipData.output_tokens, tokenTooltipData.output_tokens_source, tokenTooltipData) }}</span>
             </div>
             <div v-if="tokenTooltipData && hasImageOutputTokens(tokenTooltipData) && textOutputTokens(tokenTooltipData) > 0" class="flex items-center justify-between gap-4">
               <span class="text-gray-400">{{ t('admin.usage.outputTokens') }}</span>
@@ -403,9 +410,13 @@
               <span class="font-medium text-white">{{ tokenTooltipData.cache_read_tokens.toLocaleString() }}</span>
             </div>
           </div>
+          <div v-if="showUsageDiagnostics && tokenTooltipData" class="max-w-xs space-y-1 whitespace-normal border-t border-gray-700 pt-1.5 text-[11px] text-gray-300">
+            <p>{{ t('usage.inputTokensSource') }}: {{ usageTokenSourceHint(tokenTooltipData.input_tokens_source, 'input', t) }}</p>
+            <p>{{ t('usage.outputTokensSource') }}: {{ usageTokenSourceHint(tokenTooltipData.output_tokens_source, 'output', t) }}</p>
+          </div>
           <div class="flex items-center justify-between gap-6 border-t border-gray-700 pt-1.5">
-            <span class="text-gray-400">{{ t('usage.totalTokens') }}</span>
-            <span class="font-semibold text-blue-400">{{ ((tokenTooltipData?.input_tokens || 0) + (tokenTooltipData?.output_tokens || 0) + (tokenTooltipData?.cache_creation_tokens || 0) + (tokenTooltipData?.cache_read_tokens || 0)).toLocaleString() }}</span>
+            <span class="text-gray-400">{{ t(hasUnreportedUsage(tokenTooltipData) ? 'usage.recordedTokensSubtotal' : 'usage.totalTokens') }}</span>
+            <span data-testid="token-total" class="font-semibold text-blue-400">{{ isUsageBillingPending(tokenTooltipData) && hasUnreportedUsage(tokenTooltipData) ? '—' : ((tokenTooltipData?.input_tokens || 0) + (tokenTooltipData?.output_tokens || 0) + (tokenTooltipData?.cache_creation_tokens || 0) + (tokenTooltipData?.cache_read_tokens || 0)).toLocaleString() }}</span>
           </div>
         </div>
         <div class="absolute right-full top-1/2 h-0 w-0 -translate-y-1/2 border-b-[6px] border-r-[6px] border-t-[6px] border-b-transparent border-r-gray-900 border-t-transparent dark:border-r-gray-800"></div>
@@ -416,7 +427,7 @@
   <!-- Cost Tooltip Portal -->
   <Teleport to="body">
     <div
-      v-if="tooltipVisible"
+      v-if="tooltipVisible && !isUsageBillingPending(tooltipData)"
       class="fixed z-[9999] pointer-events-none -translate-y-1/2"
       :style="{
         left: tooltipPosition.x + 'px',
@@ -560,6 +571,8 @@ import { formatCacheTokens, formatMultiplier } from '@/utils/formatters'
 import { formatTokenPricePerMillion } from '@/utils/usagePricing'
 import { getUsageServiceTierLabel } from '@/utils/usageServiceTier'
 import { resolveUsageRequestType } from '@/utils/usageRequestType'
+import { formatUsageTokenCount, hasUnreportedUsage, usageTokenSourceHint } from '@/utils/usageTokenSource'
+import { isUsageBillingPending } from '@/utils/usageBillingState'
 import {
   LATENCY_BAR_CLASSES,
   LATENCY_BAR_FROM_CLASSES,
@@ -604,7 +617,7 @@ import EmptyState from '@/components/common/EmptyState.vue'
 import IpGeoCell from '@/components/common/IpGeoCell.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { fetchBatch, getEntry } from '@/utils/ipGeoLookup'
-import type { AdminUsageLog } from '@/types'
+import type { AdminUsageLog, UsageTokenSource } from '@/types'
 import type { Column } from '@/components/common/types'
 
 interface Props {
@@ -615,6 +628,7 @@ interface Props {
   defaultSortKey?: string
   defaultSortOrder?: 'asc' | 'desc'
   showAccountBilling?: boolean
+  showUsageDiagnostics?: boolean
   showUpstreamEndpoint?: boolean
   showCompensationAction?: boolean
   /** 嵌入统一卡片内使用：去掉自身卡片外观 */
@@ -628,6 +642,7 @@ const props = withDefaults(defineProps<Props>(), {
   defaultSortKey: '',
   defaultSortOrder: 'asc',
   showAccountBilling: true,
+  showUsageDiagnostics: true,
   showUpstreamEndpoint: true,
   showCompensationAction: false,
   compactMobile: false,
@@ -642,6 +657,9 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const appStore = useAppStore()
 const copiedRequestId = ref<string | null>(null)
+const displayUsageTokens = (value: number | undefined, source: UsageTokenSource | undefined, row: AdminUsageLog): string =>
+  (!props.showUsageDiagnostics || isUsageBillingPending(row)) && source === 'unreported' ? '—' : formatUsageTokenCount(value, source, t)
+
 const showAccountBilling = props.showAccountBilling
 const showUpstreamEndpoint = props.showUpstreamEndpoint
 const showCompensationAction = props.showCompensationAction

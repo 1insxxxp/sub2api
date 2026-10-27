@@ -337,6 +337,7 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 		if targetModel != reqModel {
 			forwardBody = h.gatewayService.ReplaceModelInBody(body, targetModel)
 		}
+		geminiAttemptBeforeForward := service.GeminiUpstreamAttemptCount(c)
 		var result *service.ForwardResult
 		setActualUpstreamEndpoint(c, "")
 		if account.Platform == service.PlatformGemini {
@@ -366,11 +367,16 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 			accountReleaseFunc()
 		}
 
+		result = recoverCanceledGeminiUsage(c, account, result, err, deliveredOutputTokens, reqModel, reqStream, geminiAttemptBeforeForward)
 		service.ApplyDeliveredOutputTokens(result, deliveredOutputTokens)
 		interruptedForward := (account.Platform == service.PlatformGemini || (result != nil && result.Outcome != nil)) && geminiForwardInterrupted(c, result, err)
 		billablePartial := interruptedForward && geminiForwardHasBillablePartialOutput(c, result, err, deliveredOutputTokens)
 		if interruptedForward && account.Platform != service.PlatformGemini {
 			billablePartial = compatForwardHasBillablePartialOutput(c, result, err, deliveredOutputTokens)
+		}
+		recordInterruptedUsage := geminiInterruptedUsageRecordable(result, err, billablePartial)
+		if interruptedForward {
+			service.RecordGeminiAttemptDelivery(c, account, deliveredOutputTokens, result, billablePartial, geminiAttemptBeforeForward)
 		}
 		// 提交 usage 记录。成功路径与"流中断但 Forward 已观测到 usage 的部分结果"
 		// 错误路径共用；failover 错误恒定 result=nil，不会重复计费。
@@ -387,8 +393,9 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 			quotaPlatform := service.QuotaPlatform(c.Request.Context(), apiKey)
 			sessionID := service.ExtractClientSessionID(c)
 			stampForwardRequestedReasoningEffort(result, service.RequestedReasoningEffortFromContext(c.Request.Context()))
+			usageFields := clientRequestedUsageFields(c, channelMapping, reqModel, result.UpstreamModel)
 			h.submitUsageRecordTask(c.Request.Context(), func(ctx context.Context) {
-				if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
+				if err := recordGatewayUsage(ctx, h.gatewayService, &service.RecordUsageInput{
 					Result:             result,
 					QuotaPlatform:      quotaPlatform,
 					APIKey:             apiKey,
@@ -403,7 +410,7 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 					RequestPayloadHash: requestPayloadHash,
 					APIKeyService:      h.apiKeyService,
 					SessionID:          sessionID,
-					ChannelUsageFields: clientRequestedUsageFields(c, channelMapping, reqModel, result.UpstreamModel),
+					ChannelUsageFields: usageFields,
 				}); err != nil {
 					reqLog.Error("gateway.cc.record_usage_failed",
 						zap.Int64("account_id", account.ID),
@@ -414,7 +421,7 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 		}
 
 		if err != nil {
-			if !billablePartial && budgetExpired() {
+			if !recordInterruptedUsage && budgetExpired() {
 				return
 			}
 			var failoverErr *service.UpstreamFailoverError
@@ -451,13 +458,12 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 				zap.Bool("upstream_error_response_already_written", upstreamErrorAlreadyCommunicated),
 				zap.Error(err),
 			)
-			if !billablePartial {
+			if !recordInterruptedUsage {
 				return
 			}
 		}
-		// A canceled metadata-only attempt can return collected provider usage
-		// without an error. It still has no delivered answer to settle.
-		if interruptedForward && !billablePartial {
+		// Preserve measured or pending Gemini usage independently of delivery.
+		if interruptedForward && !recordInterruptedUsage {
 			return
 		}
 

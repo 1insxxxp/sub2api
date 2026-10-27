@@ -11,8 +11,8 @@ import (
 )
 
 // Exercise the real normal-mode pricing and settlement command, not simple-mode
-// logging: retaining provider usage must never charge its undelivered tail.
-func TestGeminiPartialSettlementBillsDeliveredOutputAndRetainsProviderUsage(t *testing.T) {
+// logging: Gemini settlement uses the exact provider measurement despite cancellation.
+func TestGeminiPartialSettlementBillsExactProviderUsage(t *testing.T) {
 	for _, source := range []DisconnectSource{DisconnectSourceUpstream, DisconnectSourceClient} {
 		t.Run(string(source), func(t *testing.T) {
 			logs := &openAIRecordUsageLogRepoStub{}
@@ -27,8 +27,10 @@ func TestGeminiPartialSettlementBillsDeliveredOutputAndRetainsProviderUsage(t *t
 				Model:     "gemini-2.5-flash", UpstreamModel: "gemini-2.5-flash",
 				Stream: true, ClientDisconnect: source == DisconnectSourceClient,
 				DeliveredOutputTokens: &delivered,
-				Usage:                 ClaudeUsage{InputTokens: 1200, OutputTokens: 12000},
-				Duration:              time.Second,
+				RequireMeasuredUsage:  true, MeasuredUsageComplete: true,
+				InputTokensSource: UsageTokenSourceUpstream, OutputTokensSource: UsageTokenSourceUpstream,
+				Usage:    ClaudeUsage{InputTokens: 1200, OutputTokens: 12000},
+				Duration: time.Second,
 				Outcome: &ResponseOutcome{
 					HasText: true, OutputBytes: 18, StreamCompleted: false,
 					DisconnectSource: source, UpstreamErrorKind: UpstreamErrorProtocol,
@@ -59,13 +61,13 @@ func TestGeminiPartialSettlementBillsDeliveredOutputAndRetainsProviderUsage(t *t
 
 			require.Equal(t, 1, billing.calls)
 			require.NoError(t, billing.lastCtxErr, "settlement survives client cancellation")
-			require.Equal(t, delivered, billing.lastCmd.OutputTokens)
+			require.Equal(t, 12000, billing.lastCmd.OutputTokens)
 			require.Equal(t, 1200, billing.lastCmd.InputTokens)
-			require.InDelta(t, wantCost, billing.lastCmd.BalanceCost, 1e-8)
-			require.InDelta(t, wantCost, billing.lastCmd.APIKeyQuotaCost, 1e-8)
-			require.Less(t, billing.lastCmd.BalanceCost, providerCost)
+			require.InDelta(t, providerCost, billing.lastCmd.BalanceCost, 1e-8)
+			require.InDelta(t, providerCost, billing.lastCmd.APIKeyQuotaCost, 1e-8)
+			require.Greater(t, billing.lastCmd.BalanceCost, wantCost)
 			require.NotNil(t, logs.lastLog)
-			require.Equal(t, delivered, logs.lastLog.OutputTokens)
+			require.Equal(t, 12000, logs.lastLog.OutputTokens)
 			require.Equal(t, 12000, logs.lastLog.UpstreamOutputTokens)
 			require.False(t, logs.lastLog.Outcome.StreamCompleted)
 			require.Equal(t, 12000, result.Usage.OutputTokens, "retain provider evidence unchanged")

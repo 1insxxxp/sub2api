@@ -62973,6 +62973,8 @@ type UsageResponseOutcomeMutation struct {
 	upstream_error_kind  *string
 	collector_version    *int16
 	addcollector_version *int16
+	input_tokens_source  *string
+	output_tokens_source *string
 	created_at           *time.Time
 	clearedFields        map[string]struct{}
 	done                 bool
@@ -63990,6 +63992,78 @@ func (m *UsageResponseOutcomeMutation) ResetCollectorVersion() {
 	m.addcollector_version = nil
 }
 
+// SetInputTokensSource sets the "input_tokens_source" field.
+func (m *UsageResponseOutcomeMutation) SetInputTokensSource(s string) {
+	m.input_tokens_source = &s
+}
+
+// InputTokensSource returns the value of the "input_tokens_source" field in the mutation.
+func (m *UsageResponseOutcomeMutation) InputTokensSource() (r string, exists bool) {
+	v := m.input_tokens_source
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInputTokensSource returns the old "input_tokens_source" field's value of the UsageResponseOutcome entity.
+// If the UsageResponseOutcome object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageResponseOutcomeMutation) OldInputTokensSource(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInputTokensSource is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInputTokensSource requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInputTokensSource: %w", err)
+	}
+	return oldValue.InputTokensSource, nil
+}
+
+// ResetInputTokensSource resets all changes to the "input_tokens_source" field.
+func (m *UsageResponseOutcomeMutation) ResetInputTokensSource() {
+	m.input_tokens_source = nil
+}
+
+// SetOutputTokensSource sets the "output_tokens_source" field.
+func (m *UsageResponseOutcomeMutation) SetOutputTokensSource(s string) {
+	m.output_tokens_source = &s
+}
+
+// OutputTokensSource returns the value of the "output_tokens_source" field in the mutation.
+func (m *UsageResponseOutcomeMutation) OutputTokensSource() (r string, exists bool) {
+	v := m.output_tokens_source
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOutputTokensSource returns the old "output_tokens_source" field's value of the UsageResponseOutcome entity.
+// If the UsageResponseOutcome object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageResponseOutcomeMutation) OldOutputTokensSource(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOutputTokensSource is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOutputTokensSource requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOutputTokensSource: %w", err)
+	}
+	return oldValue.OutputTokensSource, nil
+}
+
+// ResetOutputTokensSource resets all changes to the "output_tokens_source" field.
+func (m *UsageResponseOutcomeMutation) ResetOutputTokensSource() {
+	m.output_tokens_source = nil
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *UsageResponseOutcomeMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -64060,7 +64134,7 @@ func (m *UsageResponseOutcomeMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UsageResponseOutcomeMutation) Fields() []string {
-	fields := make([]string, 0, 20)
+	fields := make([]string, 0, 22)
 	if m.usage_log_id != nil {
 		fields = append(fields, usageresponseoutcome.FieldUsageLogID)
 	}
@@ -64118,6 +64192,12 @@ func (m *UsageResponseOutcomeMutation) Fields() []string {
 	if m.collector_version != nil {
 		fields = append(fields, usageresponseoutcome.FieldCollectorVersion)
 	}
+	if m.input_tokens_source != nil {
+		fields = append(fields, usageresponseoutcome.FieldInputTokensSource)
+	}
+	if m.output_tokens_source != nil {
+		fields = append(fields, usageresponseoutcome.FieldOutputTokensSource)
+	}
 	if m.created_at != nil {
 		fields = append(fields, usageresponseoutcome.FieldCreatedAt)
 	}
@@ -64167,6 +64247,10 @@ func (m *UsageResponseOutcomeMutation) Field(name string) (ent.Value, bool) {
 		return m.UpstreamErrorKind()
 	case usageresponseoutcome.FieldCollectorVersion:
 		return m.CollectorVersion()
+	case usageresponseoutcome.FieldInputTokensSource:
+		return m.InputTokensSource()
+	case usageresponseoutcome.FieldOutputTokensSource:
+		return m.OutputTokensSource()
 	case usageresponseoutcome.FieldCreatedAt:
 		return m.CreatedAt()
 	}
@@ -64216,6 +64300,10 @@ func (m *UsageResponseOutcomeMutation) OldField(ctx context.Context, name string
 		return m.OldUpstreamErrorKind(ctx)
 	case usageresponseoutcome.FieldCollectorVersion:
 		return m.OldCollectorVersion(ctx)
+	case usageresponseoutcome.FieldInputTokensSource:
+		return m.OldInputTokensSource(ctx)
+	case usageresponseoutcome.FieldOutputTokensSource:
+		return m.OldOutputTokensSource(ctx)
 	case usageresponseoutcome.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	}
@@ -64359,6 +64447,20 @@ func (m *UsageResponseOutcomeMutation) SetField(name string, value ent.Value) er
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetCollectorVersion(v)
+		return nil
+	case usageresponseoutcome.FieldInputTokensSource:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInputTokensSource(v)
+		return nil
+	case usageresponseoutcome.FieldOutputTokensSource:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOutputTokensSource(v)
 		return nil
 	case usageresponseoutcome.FieldCreatedAt:
 		v, ok := value.(time.Time)
@@ -64610,6 +64712,12 @@ func (m *UsageResponseOutcomeMutation) ResetField(name string) error {
 		return nil
 	case usageresponseoutcome.FieldCollectorVersion:
 		m.ResetCollectorVersion()
+		return nil
+	case usageresponseoutcome.FieldInputTokensSource:
+		m.ResetInputTokensSource()
+		return nil
+	case usageresponseoutcome.FieldOutputTokensSource:
+		m.ResetOutputTokensSource()
 		return nil
 	case usageresponseoutcome.FieldCreatedAt:
 		m.ResetCreatedAt()

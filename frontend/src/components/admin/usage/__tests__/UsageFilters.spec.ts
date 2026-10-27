@@ -305,3 +305,13 @@ describe('UsageFilters — native compaction filter', () => {
     expect(wrapper.emitted('change')).toBeTruthy()
   })
 })
+
+
+it('excludes connection cancellations from usage error filters but retains HTTP 200 stream failures', async () => {
+  const wrapper = mountFilters()
+  await wrapper.setProps({ mode: 'errors' })
+  const optionLists = wrapper.findAllComponents({ name: 'Select' }).map(select => select.props('options'))
+  expect(optionLists.some(options => options.some((option: { value: unknown }) => option.value === 'client_cancel'))).toBe(false)
+  expect(optionLists.some(options => options.some((option: { value: unknown }) => option.value === 200))).toBe(true)
+  wrapper.unmount()
+})

@@ -25,6 +25,7 @@ func TestGeminiMeasuredUsageBilling(t *testing.T) {
 			complete      bool
 			input, cached int
 			providerOut   int
+			forceCache    bool
 		}{
 			{name: "missing_usage_interrupted", sse: "data: {" + answer + "}\n\n"},
 			{name: "missing_usage_completed", sse: "data: {" + completedAnswer + "}\n\n", complete: true},
@@ -32,6 +33,8 @@ func TestGeminiMeasuredUsageBilling(t *testing.T) {
 			{name: "measured_usage_completed", sse: "data: {" + completedAnswer + "," + measuredUsage + "}\n\n", complete: true, input: 55779, providerOut: 96146},
 			{name: "partly_cached_input", sse: "data: {" + completedAnswer + `,"usageMetadata":{"promptTokenCount":55779,"cachedContentTokenCount":12000,"candidatesTokenCount":96146}}` + "\n\n", complete: true, input: 43779, cached: 12000, providerOut: 96146},
 			{name: "fully_cached_input", sse: "data: {" + completedAnswer + `,"usageMetadata":{"promptTokenCount":55779,"cachedContentTokenCount":55779,"candidatesTokenCount":96146}}` + "\n\n", complete: true, cached: 55779, providerOut: 96146},
+			{name: "switched_account_measured_input", sse: "data: {" + answer + "," + measuredUsage + "}\n\n", input: 55779, providerOut: 96146, forceCache: true},
+			{name: "switched_account_partly_cached_input", sse: "data: {" + completedAnswer + `,"usageMetadata":{"promptTokenCount":55779,"cachedContentTokenCount":12000,"candidatesTokenCount":96146}}` + "\n\n", complete: true, input: 43779, cached: 12000, providerOut: 96146, forceCache: true},
 		} {
 			t.Run(path+"/"+tc.name, func(t *testing.T) {
 				svc, c, rec := newGeminiUsageRecoveryService(t, tc.sse, io.EOF)
@@ -56,10 +59,7 @@ func TestGeminiMeasuredUsageBilling(t *testing.T) {
 				ApplyDeliveredOutputTokens(result, collector)
 				require.NotNil(t, result.DeliveredOutputTokens)
 				require.Positive(t, *result.DeliveredOutputTokens)
-				billableOutput := *result.DeliveredOutputTokens
-				if tc.complete && tc.providerOut > 0 {
-					billableOutput = tc.providerOut
-				}
+				billableOutput := tc.providerOut
 				result.RequestID = "gemini-measured-" + path + "-" + tc.name
 
 				logs := &openAIRecordUsageLogRepoStub{inserted: true}
@@ -68,10 +68,18 @@ func TestGeminiMeasuredUsageBilling(t *testing.T) {
 				billing.billingService.pricingService = &PricingService{pricingData: map[string]*LiteLLMModelPricing{
 					model: {InputCostPerToken: 1e-6, OutputCostPerToken: 5e-6, CacheReadInputTokenCost: 1e-7},
 				}}
-				require.NoError(t, billing.RecordUsage(context.Background(), &RecordUsageInput{
+				billingErr := billing.RecordUsage(context.Background(), &RecordUsageInput{
 					Result: result, APIKey: &APIKey{ID: 501, Quota: 100}, User: &User{ID: 601}, Account: account,
-					APIKeyService: &openAIRecordUsageAPIKeyQuotaStub{},
-				}))
+					APIKeyService:     &openAIRecordUsageAPIKeyQuotaStub{},
+					ForceCacheBilling: tc.forceCache,
+				})
+				if tc.providerOut == 0 {
+					require.ErrorIs(t, billingErr, ErrUsageMeasurementIncomplete)
+					require.Zero(t, commands.calls)
+					require.Nil(t, logs.lastLog)
+					return
+				}
+				require.NoError(t, billingErr)
 				require.Equal(t, 1, commands.calls, "settle the request exactly once")
 				require.NotNil(t, logs.lastLog)
 				require.Equal(t, tc.input, logs.lastLog.InputTokens, "provider input is the only billable Gemini input measurement")
@@ -89,4 +97,37 @@ func TestGeminiMeasuredUsageBilling(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestGeminiLedgerRecoveredUsagePreservesMeasuredInputAfterAccountSwitch(t *testing.T) {
+	input, upstream := newGeminiUsageRecoveryFixture()
+	billing, logs, commands := newGeminiInputUsageRegressionBilling()
+	billing.httpUpstream = upstream
+	input.APIKey = &APIKey{ID: 501, Quota: 100}
+	input.User = &User{ID: 601}
+	input.APIKeyService = &openAIRecordUsageAPIKeyQuotaStub{}
+	input.ForceCacheBilling = true
+	input.Result.RequestID = "gemini-ledger-switched-account"
+	input.Result.ClientDisconnect = true
+	deliveredEstimate := 5071
+	input.Result.DeliveredOutputTokens = &deliveredEstimate
+
+	recovered, err := billing.RecoverGeminiUsage(context.Background(), input)
+	require.NoError(t, err)
+	require.True(t, recovered)
+	require.NoError(t, billing.RecordUsage(context.Background(), input))
+	require.Equal(t, 1, commands.calls)
+	require.NotNil(t, logs.lastLog)
+	require.Equal(t, 21916, logs.lastLog.InputTokens, "a sticky account switch must not rewrite measured ledger input as cache")
+	require.Zero(t, logs.lastLog.CacheReadTokens)
+	require.Equal(t, 4055, logs.lastLog.OutputTokens, "provider output must not become the downstream estimate")
+	require.Equal(t, UsageTokenSourceUpstream, logs.lastLog.InputTokensSource)
+	require.Equal(t, UsageTokenSourceUpstream, logs.lastLog.OutputTokensSource)
+	require.InDelta(t, 21916e-6, logs.lastLog.InputCost, 1e-10)
+	require.Zero(t, logs.lastLog.CacheReadCost)
+	require.InDelta(t, 4055*5e-6, logs.lastLog.OutputCost, 1e-10)
+	require.Equal(t, 21916, commands.lastCmd.InputTokens)
+	require.Equal(t, 4055, commands.lastCmd.OutputTokens)
+	require.InDelta(t, logs.lastLog.ActualCost, commands.lastCmd.BalanceCost, 1e-8)
+	require.InDelta(t, logs.lastLog.ActualCost, commands.lastCmd.APIKeyQuotaCost, 1e-8)
 }

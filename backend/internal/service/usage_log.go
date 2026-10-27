@@ -108,6 +108,10 @@ type UsageLog struct {
 	AccountID int64
 	RequestID string
 	Model     string
+	// Pending review records are projections of a separate request store. They
+	// never occupy usage_logs or its billing deduplication identity.
+	BillingStatus        UsageBillingStatus
+	BillingPendingReason string
 	// RequestedModel is the client-requested model name recorded for stable user/admin display.
 	// Empty should be treated as Model for backward compatibility with historical rows.
 	RequestedModel string
@@ -151,8 +155,12 @@ type UsageLog struct {
 	CustomGroupID  *int64
 	SubscriptionID *int64
 
-	InputTokens          int
-	OutputTokens         int
+	InputTokens  int
+	OutputTokens int
+	// Token sources are persisted beside response outcomes, not in usage_logs.
+	// Unknown preserves legacy rows without claiming they were provider measurements.
+	InputTokensSource    UsageTokenSource
+	OutputTokensSource   UsageTokenSource
 	UpstreamOutputTokens int `json:"-"`
 	CacheCreationTokens  int
 	CacheReadTokens      int

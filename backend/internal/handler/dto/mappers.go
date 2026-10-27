@@ -738,6 +738,8 @@ func usageLogFromServiceUser(l *service.UsageLog) UsageLog {
 		requestedModel = l.Model
 	}
 	return UsageLog{
+		BillingStatus:             l.BillingStatus.Normalize(),
+		BillingPendingReason:      l.BillingPendingReason,
 		ID:                        l.ID,
 		UserID:                    l.UserID,
 		APIKeyID:                  l.APIKeyID,
@@ -751,6 +753,8 @@ func usageLogFromServiceUser(l *service.UsageLog) UsageLog {
 		SubscriptionID:            l.SubscriptionID,
 		InputTokens:               l.InputTokens,
 		OutputTokens:              l.OutputTokens,
+		InputTokensSource:         l.InputTokensSource.Normalize(),
+		OutputTokensSource:        l.OutputTokensSource.Normalize(),
 		AntiTruncationRounds:      l.AntiTruncationRounds,
 		CacheCreationTokens:       l.CacheCreationTokens,
 		CacheReadTokens:           l.CacheReadTokens,
@@ -810,6 +814,14 @@ func UsageLogFromService(l *service.UsageLog) *UsageLog {
 		return nil
 	}
 	u := usageLogFromServiceUser(l)
+	// Estimation provenance is an admin diagnostic. Keep the user's recorded
+	// numbers without falsely presenting them as provider measurements.
+	if u.InputTokensSource == service.UsageTokenSourceEstimated {
+		u.InputTokensSource = service.UsageTokenSourceUnknown
+	}
+	if u.OutputTokensSource == service.UsageTokenSourceEstimated {
+		u.OutputTokensSource = service.UsageTokenSourceUnknown
+	}
 	return &u
 }
 
@@ -848,6 +860,9 @@ func UsageLogFromServiceAdmin(l *service.UsageLog) *AdminUsageLog {
 // fabricated as a model failure.
 func usageOutcomeStatus(log *service.UsageLog) string {
 	if log == nil {
+		return string(service.UsageOutcomeUnknown)
+	}
+	if log.BillingStatus == service.UsageBillingStatusPendingReview {
 		return string(service.UsageOutcomeUnknown)
 	}
 	if log.Outcome != nil {

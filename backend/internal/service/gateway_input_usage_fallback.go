@@ -30,8 +30,8 @@ func anthropicInputUsageMissing(usage ClaudeUsage) bool {
 }
 
 // applyMissingInputTokenEstimate repairs missing input accounting only after
-// generation has been observed. Gemini requires provider input measurements;
-// a local character count must never become its billable input usage.
+// generation has been observed. Gemini uses its separate ledger/count/semantic
+// fallback path; this legacy character-based fallback must not overwrite it.
 func applyMissingInputTokenEstimate(ctx context.Context, result *ForwardResult, account *Account) {
 	if result == nil || !anthropicInputUsageMissing(result.Usage) {
 		return
@@ -68,12 +68,12 @@ func skipGeminiInputTokenEstimate(ctx context.Context, result *ForwardResult, ac
 	}
 	requestID, _ := ctx.Value(ctxkey.RequestID).(string)
 	clientRequestID, _ := ctx.Value(ctxkey.ClientRequestID).(string)
-	slog.WarnContext(ctx, "billing.gemini_input_estimate_skipped",
+	slog.DebugContext(ctx, "billing.gemini_input_estimate_skipped",
 		"request_id", requestID,
 		"client_request_id", clientRequestID,
 		"upstream_request_id", result.RequestID,
 		"account_id", account.ID,
 		"model", result.Model,
-		"reason", "provider_input_measurement_required")
+		"reason", "gemini_fallback_resolved_separately")
 	return true
 }

@@ -104,6 +104,15 @@ func (h *OpsHandler) GetErrorLogs(c *gin.Context) {
 	}
 
 	filter := &service.OpsErrorLogFilter{Page: page, PageSize: pageSize}
+	if raw := strings.TrimSpace(c.Query("include_canceled")); raw != "" {
+		includeCanceled, err := strconv.ParseBool(raw)
+		if err != nil {
+			response.BadRequest(c, "Invalid include_canceled")
+			return
+		}
+		filter.IncludeCanceledRequests = includeCanceled
+		filter.ExcludeCanceledRequests = !includeCanceled
+	}
 
 	if !startTime.IsZero() {
 		filter.StartTime = &startTime
@@ -121,10 +130,8 @@ func (h *OpsHandler) GetErrorLogs(c *gin.Context) {
 	// buildOpsErrorLogsWhere 以 COALESCE(requested_model, model) 比对。
 	filter.Model = strings.TrimSpace(c.Query("model"))
 
-	// 请求错误语义:client-visible status>=400 守卫恒生效（未设
-	// IncludeRecoveredUpstream 时 phase=upstream 不再绕过守卫），故
-	// phase=upstream 作为普通过滤条件保留——此前这里清空该值，导致
-	// 错误类型下拉选「上游」等于不过滤。
+	// Phase remains an ordinary filter. Recovered provider-health rows stay
+	// hidden; final cancellation diagnostics have a separate explicit opt-in.
 
 	// 分类(用户侧粗分类码)→ phase/type ANY 条件,与用户端 /usage/errors 同一映射;
 	// 未知分类返回空切片 = 不过滤。与 phase 参数可同时设置(AND 语义)。
@@ -132,6 +139,10 @@ func (h *OpsHandler) GetErrorLogs(c *gin.Context) {
 		phases, types := service.CategoryToFilter(cat)
 		filter.ErrorPhasesAny = phases
 		filter.ErrorTypesAny = types
+		if cat == "client_cancel" {
+			filter.CanceledOnly = true
+			filter.IncludeCanceledRequests = true
+		}
 	}
 
 	if platform := strings.TrimSpace(c.Query("platform")); platform != "" {
@@ -233,7 +244,7 @@ func (h *OpsHandler) ListRequestErrors(c *gin.Context) {
 		return
 	}
 
-	filter := &service.OpsErrorLogFilter{Page: page, PageSize: pageSize}
+	filter := &service.OpsErrorLogFilter{Page: page, PageSize: pageSize, ExcludeCanceledRequests: true}
 	if !startTime.IsZero() {
 		filter.StartTime = &startTime
 	}
@@ -250,10 +261,8 @@ func (h *OpsHandler) ListRequestErrors(c *gin.Context) {
 	// buildOpsErrorLogsWhere 以 COALESCE(requested_model, model) 比对。
 	filter.Model = strings.TrimSpace(c.Query("model"))
 
-	// 请求错误语义:client-visible status>=400 守卫恒生效（未设
-	// IncludeRecoveredUpstream 时 phase=upstream 不再绕过守卫），故
-	// phase=upstream 作为普通过滤条件保留——此前这里清空该值，导致
-	// 错误类型下拉选「上游」等于不过滤。
+	// Phase remains an ordinary filter. Recovered provider-health rows stay
+	// hidden; final cancellation diagnostics have a separate explicit opt-in.
 
 	// 分类(用户侧粗分类码)→ phase/type ANY 条件,与用户端 /usage/errors 同一映射;
 	// 未知分类返回空切片 = 不过滤。与 phase 参数可同时设置(AND 语义)。

@@ -201,6 +201,8 @@
 </template>
 
 <script setup lang="ts">
+import { exportUsageTokenCount, usageTokenSourceLabel } from '@/utils/usageTokenSource'
+import { formatUsageBillingCost, usageBillingStatusLabel } from '@/utils/usageBillingState'
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { saveAs } from 'file-saver'
@@ -592,12 +594,13 @@ const exportToExcel = async () => {
       t('usage.inboundEndpoint'), t('usage.upstreamEndpoint'),
       t('usage.type'),
       t('admin.usage.inputTokens'), t('admin.usage.outputTokens'),
+      t('usage.inputTokensSource'), t('usage.outputTokensSource'),
       t('admin.usage.cacheReadTokens'), t('admin.usage.cacheCreationTokens'),
       t('admin.usage.inputCost'), t('admin.usage.outputCost'),
       t('admin.usage.cacheReadCost'), t('admin.usage.cacheCreationCost'),
       t('usage.rate'), t('usage.accountMultiplier'), t('usage.original'), t('usage.userBilled'), t('usage.accountBilled'),
       t('usage.firstToken'), t('usage.duration'),
-      t('admin.usage.requestId'), t('admin.usage.upstreamRequestId'), t('usage.userAgent'), t('admin.usage.ipAddress')
+      t('admin.usage.requestId'), t('admin.usage.upstreamRequestId'), t('usage.userAgent'), t('admin.usage.ipAddress'), t('usage.billingStatus')
     ]
     const ws = XLSX.utils.aoa_to_sheet([headers])
     while (true) {
@@ -610,13 +613,15 @@ const exportToExcel = async () => {
         log.created_at, log.user?.email || '', log.api_key?.name || '', log.account?.name || '', log.model,
         log.upstream_model || log.model, log.upstream_response_model || '', log.upstream_model_mismatch == null ? '' : t(log.upstream_model_mismatch ? 'common.yes' : 'common.no'), formatReasoningEffort(log.reasoning_effort), formatReasoningEffort(log.upstream_reasoning_effort || log.reasoning_effort), log.group?.name || '',
         log.inbound_endpoint || '', log.upstream_endpoint || '', getRequestTypeLabel(log),
-        log.input_tokens, log.output_tokens, log.cache_read_tokens, log.cache_creation_tokens,
-        log.input_cost?.toFixed(6) || '0.000000', log.output_cost?.toFixed(6) || '0.000000',
-        log.cache_read_cost?.toFixed(6) || '0.000000', log.cache_creation_cost?.toFixed(6) || '0.000000',
+        exportUsageTokenCount(log.input_tokens, log.input_tokens_source), exportUsageTokenCount(log.output_tokens, log.output_tokens_source),
+        usageTokenSourceLabel(log.input_tokens_source, t), usageTokenSourceLabel(log.output_tokens_source, t),
+        log.cache_read_tokens, log.cache_creation_tokens,
+        formatUsageBillingCost(log.input_cost, log, t), formatUsageBillingCost(log.output_cost, log, t),
+        formatUsageBillingCost(log.cache_read_cost, log, t), formatUsageBillingCost(log.cache_creation_cost, log, t),
         log.rate_multiplier?.toPrecision(4) || '1.00', (log.account_rate_multiplier ?? 1).toPrecision(4),
-        log.total_cost?.toFixed(6) || '0.000000', log.actual_cost?.toFixed(6) || '0.000000',
-        ((log.account_stats_cost ?? log.total_cost) * (log.account_rate_multiplier ?? 1)).toFixed(6), log.first_token_ms ?? '', log.duration_ms,
-        log.request_id || '', log.upstream_request_id || '', log.user_agent || '', log.ip_address || ''
+        formatUsageBillingCost(log.total_cost, log, t), formatUsageBillingCost(log.actual_cost, log, t),
+        formatUsageBillingCost((log.account_stats_cost ?? log.total_cost) * (log.account_rate_multiplier ?? 1), log, t), log.first_token_ms ?? '', log.duration_ms,
+        log.request_id || '', log.upstream_request_id || '', log.user_agent || '', log.ip_address || '', usageBillingStatusLabel(log, t)
       ])
       if (rows.length) {
         XLSX.utils.sheet_add_aoa(ws, rows, { origin: -1 })
@@ -838,6 +843,7 @@ const loadAdminErrors = async () => {
       page: errPage.value,
       page_size: errPageSize.value,
       view: 'all',
+      include_canceled: false,
       start_time: toRFC3339(filters.value.start_date),
       end_time: toRFC3339(filters.value.end_date, true),
       user_id: filters.value.user_id ?? undefined,

@@ -925,6 +925,7 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 		}
 		// 5) forward (根据平台分流)
 		writerSizeBeforeForward := service.ModelFirstOutputKeepaliveAdjustedWrittenSize(c)
+		geminiAttemptBeforeForward := service.GeminiUpstreamAttemptCount(c)
 		var result *service.ForwardResult
 		requestCtx := c.Request.Context()
 		if fs.SwitchCount > 0 {
@@ -949,13 +950,18 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 		if accountReleaseFunc != nil {
 			accountReleaseFunc()
 		}
+		result = recoverCanceledGeminiUsage(c, account, result, err, deliveredOutputTokens, modelName, stream, geminiAttemptBeforeForward)
 		if account.Platform == service.PlatformGemini {
 			service.ApplyDeliveredOutputTokens(result, deliveredOutputTokens)
 		}
 		interruptedGemini := account.Platform == service.PlatformGemini && geminiForwardInterrupted(c, result, err)
 		billablePartial := interruptedGemini && geminiForwardHasBillablePartialOutput(c, result, err, deliveredOutputTokens)
+		recordInterruptedUsage := geminiInterruptedUsageRecordable(result, err, billablePartial)
+		if interruptedGemini {
+			service.RecordGeminiAttemptDelivery(c, account, deliveredOutputTokens, result, billablePartial, geminiAttemptBeforeForward)
+		}
 		if err != nil {
-			if !billablePartial && budgetExpired() {
+			if !recordInterruptedUsage && budgetExpired() {
 				return
 			}
 			var failoverErr *service.UpstreamFailoverError
@@ -985,11 +991,11 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 			// 转发层已写出错误响应；客户端断开时转发层不写，响应未提交则标记 499。
 			failoverClientGone(c)
 			reqLog.Error("gemini.forward_failed", zap.Int64("account_id", account.ID), zap.Error(err))
-			if !billablePartial {
+			if !recordInterruptedUsage {
 				return
 			}
 		}
-		if interruptedGemini && !billablePartial {
+		if interruptedGemini && !recordInterruptedUsage {
 			return
 		}
 		if result != nil && groupAliasResolved {
@@ -1024,8 +1030,9 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 		quotaPlatform := service.QuotaPlatform(c.Request.Context(), apiKey)
 		sessionID := service.ExtractClientSessionID(c)
 		// 长上下文阶梯由目录数据驱动，统一在计费路径内生效，入口无需声明。
+		usageFields := clientRequestedUsageFields(c, channelMapping, reqModel, result.UpstreamModel)
 		h.submitUsageRecordTask(c.Request.Context(), func(ctx context.Context) {
-			if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
+			if err := recordGatewayUsage(ctx, h.gatewayService, &service.RecordUsageInput{
 				Result:             result,
 				QuotaPlatform:      quotaPlatform,
 				APIKey:             apiKey,
@@ -1041,7 +1048,7 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 				ForceCacheBilling:  forceCacheBilling,
 				APIKeyService:      h.apiKeyService,
 				SessionID:          sessionID,
-				ChannelUsageFields: clientRequestedUsageFields(c, channelMapping, reqModel, result.UpstreamModel),
+				ChannelUsageFields: usageFields,
 			}); err != nil {
 				logger.L().With(
 					zap.String("component", "handler.gemini_v1beta.models"),

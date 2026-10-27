@@ -51,6 +51,10 @@ const (
 	FieldUpstreamErrorKind = "upstream_error_kind"
 	// FieldCollectorVersion holds the string denoting the collector_version field in the database.
 	FieldCollectorVersion = "collector_version"
+	// FieldInputTokensSource holds the string denoting the input_tokens_source field in the database.
+	FieldInputTokensSource = "input_tokens_source"
+	// FieldOutputTokensSource holds the string denoting the output_tokens_source field in the database.
+	FieldOutputTokensSource = "output_tokens_source"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// Table holds the table name of the usageresponseoutcome in the database.
@@ -79,6 +83,8 @@ var Columns = []string{
 	FieldDisconnectSource,
 	FieldUpstreamErrorKind,
 	FieldCollectorVersion,
+	FieldInputTokensSource,
+	FieldOutputTokensSource,
 	FieldCreatedAt,
 }
 
@@ -127,6 +133,14 @@ var (
 	UpstreamErrorKindValidator func(string) error
 	// DefaultCollectorVersion holds the default value on creation for the "collector_version" field.
 	DefaultCollectorVersion int16
+	// DefaultInputTokensSource holds the default value on creation for the "input_tokens_source" field.
+	DefaultInputTokensSource string
+	// InputTokensSourceValidator is a validator for the "input_tokens_source" field. It is called by the builders before save.
+	InputTokensSourceValidator func(string) error
+	// DefaultOutputTokensSource holds the default value on creation for the "output_tokens_source" field.
+	DefaultOutputTokensSource string
+	// OutputTokensSourceValidator is a validator for the "output_tokens_source" field. It is called by the builders before save.
+	OutputTokensSourceValidator func(string) error
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 )
@@ -232,6 +246,16 @@ func ByUpstreamErrorKind(opts ...sql.OrderTermOption) OrderOption {
 // ByCollectorVersion orders the results by the collector_version field.
 func ByCollectorVersion(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCollectorVersion, opts...).ToFunc()
+}
+
+// ByInputTokensSource orders the results by the input_tokens_source field.
+func ByInputTokensSource(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldInputTokensSource, opts...).ToFunc()
+}
+
+// ByOutputTokensSource orders the results by the output_tokens_source field.
+func ByOutputTokensSource(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldOutputTokensSource, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.

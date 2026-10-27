@@ -526,6 +526,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			}
 
 			// 转发请求 - 根据账号平台分流
+			geminiAttemptBeforeForward := service.GeminiUpstreamAttemptCount(c)
 			var result *service.ForwardResult
 			requestCtx := c.Request.Context()
 			if fs.SwitchCount > 0 {
@@ -551,11 +552,16 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			if accountReleaseFunc != nil {
 				accountReleaseFunc()
 			}
+			result = recoverCanceledGeminiUsage(c, account, result, err, deliveredOutputTokens, reqModel, reqStream, geminiAttemptBeforeForward)
 			service.ApplyDeliveredOutputTokens(result, deliveredOutputTokens)
 			interruptedGemini := account.Platform == service.PlatformGemini && geminiForwardInterrupted(c, result, err)
 			billablePartial := interruptedGemini && geminiForwardHasBillablePartialOutput(c, result, err, deliveredOutputTokens)
+			recordInterruptedUsage := geminiInterruptedUsageRecordable(result, err, billablePartial)
+			if interruptedGemini {
+				service.RecordGeminiAttemptDelivery(c, account, deliveredOutputTokens, result, billablePartial, geminiAttemptBeforeForward)
+			}
 			if err != nil {
-				if !billablePartial && budgetExpired() {
+				if !recordInterruptedUsage && budgetExpired() {
 					return
 				}
 				var failoverErr *service.UpstreamFailoverError
@@ -603,14 +609,12 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 					forwardFailedFields = append(forwardFailedFields, zap.Int64p("proxy_id", account.ProxyID))
 				}
 				reqLog.Error("gateway.forward_failed", forwardFailedFields...)
-				if !billablePartial {
+				if !recordInterruptedUsage {
 					return
 				}
 			}
-			// Interrupted Gemini attempts are customer-billable only after an answer
-			// was actually written downstream. Metadata and reasoning alone do not
-			// authorize a charge, even when the adapter returns collected usage.
-			if interruptedGemini && !billablePartial {
+			// Retain measured or pending Gemini usage even when no answer was delivered.
+			if interruptedGemini && !recordInterruptedUsage {
 				return
 			}
 
@@ -650,8 +654,9 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			forceCacheBilling := fs.ForceCacheBilling
 			quotaPlatform := service.QuotaPlatform(c.Request.Context(), apiKey)
 			sessionID := service.ExtractClientSessionID(c)
+			usageFields := clientRequestedUsageFields(c, channelMapping, reqModel, result.UpstreamModel)
 			h.submitUsageRecordTask(c.Request.Context(), func(ctx context.Context) {
-				if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
+				if err := recordGatewayUsage(ctx, h.gatewayService, &service.RecordUsageInput{
 					Result:             result,
 					QuotaPlatform:      quotaPlatform,
 					APIKey:             apiKey,
@@ -667,7 +672,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 					RequestPayloadHash: requestPayloadHash,
 					ForceCacheBilling:  forceCacheBilling,
 					APIKeyService:      h.apiKeyService,
-					ChannelUsageFields: clientRequestedUsageFields(c, channelMapping, reqModel, result.UpstreamModel),
+					ChannelUsageFields: usageFields,
 				}); err != nil {
 					logger.L().With(
 						zap.String("component", "handler.gateway.messages"),

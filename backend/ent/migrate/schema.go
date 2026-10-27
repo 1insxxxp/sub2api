@@ -2384,6 +2384,8 @@ var (
 		{Name: "disconnect_source", Type: field.TypeString, Size: 20, Default: "none"},
 		{Name: "upstream_error_kind", Type: field.TypeString, Size: 32, Default: "none"},
 		{Name: "collector_version", Type: field.TypeInt16, Default: 1},
+		{Name: "input_tokens_source", Type: field.TypeString, Size: 20, Default: "unknown"},
+		{Name: "output_tokens_source", Type: field.TypeString, Size: 20, Default: "unknown"},
 		{Name: "created_at", Type: field.TypeTime},
 	}
 	// UsageResponseOutcomesTable holds the schema information for the "usage_response_outcomes" table.
@@ -2405,17 +2407,17 @@ var (
 			{
 				Name:    "usageresponseoutcome_user_id_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{UsageResponseOutcomesColumns[4], UsageResponseOutcomesColumns[20]},
+				Columns: []*schema.Column{UsageResponseOutcomesColumns[4], UsageResponseOutcomesColumns[22]},
 			},
 			{
 				Name:    "usageresponseoutcome_group_id_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{UsageResponseOutcomesColumns[6], UsageResponseOutcomesColumns[20]},
+				Columns: []*schema.Column{UsageResponseOutcomesColumns[6], UsageResponseOutcomesColumns[22]},
 			},
 			{
 				Name:    "usageresponseoutcome_account_id_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{UsageResponseOutcomesColumns[5], UsageResponseOutcomesColumns[20]},
+				Columns: []*schema.Column{UsageResponseOutcomesColumns[5], UsageResponseOutcomesColumns[22]},
 			},
 		},
 	}

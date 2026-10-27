@@ -25,6 +25,9 @@ const usageLogSelectColumns = "id, user_id, api_key_id, account_id, request_id, 
 const usageLogNetActualCostExpr = "GREATEST(actual_cost - compensated_cost, 0)"
 
 func (r *usageLogRepository) GetByID(ctx context.Context, id int64) (log *service.UsageLog, err error) {
+	if id < 0 {
+		return r.getPendingUsageByID(ctx, id)
+	}
 	query := "SELECT " + usageLogSelectColumns + " FROM usage_logs WHERE id = $1"
 	rows, err := r.sql.QueryContext(ctx, query, id)
 	if err != nil {
@@ -70,38 +73,62 @@ func (r *usageLogRepository) GetByID(ctx context.Context, id int64) (log *servic
 }
 
 func (r *usageLogRepository) ListByUser(ctx context.Context, userID int64, params pagination.PaginationParams) ([]service.UsageLog, *pagination.PaginationResult, error) {
-	return r.listUsageLogsWithPagination(ctx, "WHERE user_id = $1", []any{userID}, params)
+	logs, page, err := r.listUsageLogsWithPagination(ctx, "WHERE user_id = $1", []any{userID}, params)
+	if err == nil {
+		err = r.hydrateUsageLogCompensation(ctx, logs)
+	}
+	return logs, page, err
 }
 
 func (r *usageLogRepository) ListByAPIKey(ctx context.Context, apiKeyID int64, params pagination.PaginationParams) ([]service.UsageLog, *pagination.PaginationResult, error) {
-	return r.listUsageLogsWithPagination(ctx, "WHERE api_key_id = $1", []any{apiKeyID}, params)
+	logs, page, err := r.listUsageLogsWithPagination(ctx, "WHERE api_key_id = $1", []any{apiKeyID}, params)
+	if err == nil {
+		err = r.hydrateUsageLogCompensation(ctx, logs)
+	}
+	return logs, page, err
 }
 
 func (r *usageLogRepository) ListByAccount(ctx context.Context, accountID int64, params pagination.PaginationParams) ([]service.UsageLog, *pagination.PaginationResult, error) {
-	return r.listUsageLogsWithPagination(ctx, "WHERE account_id = $1", []any{accountID}, params)
+	logs, page, err := r.listUsageLogsWithPagination(ctx, "WHERE account_id = $1", []any{accountID}, params)
+	if err == nil {
+		err = r.hydrateUsageLogCompensation(ctx, logs)
+	}
+	return logs, page, err
 }
 
 func (r *usageLogRepository) ListByUserAndTimeRange(ctx context.Context, userID int64, startTime, endTime time.Time) ([]service.UsageLog, *pagination.PaginationResult, error) {
 	query := "SELECT " + usageLogSelectColumns + " FROM usage_logs WHERE user_id = $1 AND created_at >= $2 AND created_at < $3 ORDER BY id DESC LIMIT 10000"
 	logs, err := r.queryUsageLogs(ctx, query, userID, startTime, endTime)
+	if err == nil {
+		err = r.hydrateUsageLogCompensation(ctx, logs)
+	}
 	return logs, nil, err
 }
 
 func (r *usageLogRepository) ListByAPIKeyAndTimeRange(ctx context.Context, apiKeyID int64, startTime, endTime time.Time) ([]service.UsageLog, *pagination.PaginationResult, error) {
 	query := "SELECT " + usageLogSelectColumns + " FROM usage_logs WHERE api_key_id = $1 AND created_at >= $2 AND created_at < $3 ORDER BY id DESC LIMIT 10000"
 	logs, err := r.queryUsageLogs(ctx, query, apiKeyID, startTime, endTime)
+	if err == nil {
+		err = r.hydrateUsageLogCompensation(ctx, logs)
+	}
 	return logs, nil, err
 }
 
 func (r *usageLogRepository) ListByAccountAndTimeRange(ctx context.Context, accountID int64, startTime, endTime time.Time) ([]service.UsageLog, *pagination.PaginationResult, error) {
 	query := "SELECT " + usageLogSelectColumns + " FROM usage_logs WHERE account_id = $1 AND created_at >= $2 AND created_at < $3 ORDER BY id DESC LIMIT 10000"
 	logs, err := r.queryUsageLogs(ctx, query, accountID, startTime, endTime)
+	if err == nil {
+		err = r.hydrateUsageLogCompensation(ctx, logs)
+	}
 	return logs, nil, err
 }
 
 func (r *usageLogRepository) ListByModelAndTimeRange(ctx context.Context, modelName string, startTime, endTime time.Time) ([]service.UsageLog, *pagination.PaginationResult, error) {
 	query := fmt.Sprintf("SELECT %s FROM usage_logs WHERE %s = $1 AND created_at >= $2 AND created_at < $3 ORDER BY id DESC LIMIT 10000", usageLogSelectColumns, rawUsageLogModelColumn)
 	logs, err := r.queryUsageLogs(ctx, query, modelName, startTime, endTime)
+	if err == nil {
+		err = r.hydrateUsageLogCompensation(ctx, logs)
+	}
 	return logs, nil, err
 }
 
@@ -165,7 +192,9 @@ func (r *usageLogRepository) ListWithFilters(ctx context.Context, params paginat
 		page *pagination.PaginationResult
 		err  error
 	)
-	if shouldUseFastUsageLogTotal(filters) {
+	if filters.IncludePending {
+		logs, page, err = r.listUsageHistoryWithPending(ctx, whereClause, args, params, shouldUseFastUsageLogTotal(filters))
+	} else if shouldUseFastUsageLogTotal(filters) {
 		logs, page, err = r.listUsageLogsWithFastPagination(ctx, whereClause, args, params)
 	} else {
 		logs, page, err = r.listUsageLogsWithPagination(ctx, whereClause, args, params)
@@ -198,7 +227,8 @@ func (r *usageLogRepository) hydrateUsageLogCompensation(ctx context.Context, lo
 			uro.http_status, uro.upstream_status, uro.has_text, uro.has_tool_call,
 			uro.has_reasoning, uro.has_media, uro.output_bytes, uro.event_count,
 			uro.stream_completed, uro.finish_reason, uro.disconnect_source,
-			uro.upstream_error_kind, uro.collector_version, uro.anti_truncation_rounds
+			uro.upstream_error_kind, uro.collector_version, uro.anti_truncation_rounds,
+			uro.input_tokens_source, uro.output_tokens_source
 		FROM usage_logs ul
 		LEFT JOIN empty_response_claims erc ON erc.usage_log_id = ul.id
 		LEFT JOIN usage_response_outcomes uro ON uro.usage_log_id = ul.id
@@ -215,7 +245,7 @@ func (r *usageLogRepository) hydrateUsageLogCompensation(ctx context.Context, lo
 	for rows.Next() {
 		var usageID int64
 		var claimID, httpStatus, upstreamStatus, outputBytes, eventCount, collectorVersion, antiTruncationRounds sql.NullInt64
-		var claimStatus, reasonCode, finishReason, disconnectSource, upstreamErrorKind sql.NullString
+		var claimStatus, reasonCode, finishReason, disconnectSource, upstreamErrorKind, inputTokensSource, outputTokensSource sql.NullString
 		var hasText, hasToolCall, hasReasoning, hasMedia, streamCompleted sql.NullBool
 		if err := rows.Scan(
 			&usageID, &claimID, &claimStatus, &reasonCode,
@@ -223,6 +253,7 @@ func (r *usageLogRepository) hydrateUsageLogCompensation(ctx context.Context, lo
 			&hasReasoning, &hasMedia, &outputBytes, &eventCount,
 			&streamCompleted, &finishReason, &disconnectSource,
 			&upstreamErrorKind, &collectorVersion, &antiTruncationRounds,
+			&inputTokensSource, &outputTokensSource,
 		); err != nil {
 			return err
 		}
@@ -239,7 +270,9 @@ func (r *usageLogRepository) hydrateUsageLogCompensation(ctx context.Context, lo
 		if antiTruncationRounds.Valid {
 			log.AntiTruncationRounds = int(antiTruncationRounds.Int64)
 		}
-		if collectorVersion.Valid {
+		log.InputTokensSource = service.UsageTokenSource(inputTokensSource.String).Normalize()
+		log.OutputTokensSource = service.UsageTokenSource(outputTokensSource.String).Normalize()
+		if collectorVersion.Valid && collectorVersion.Int64 > 0 {
 			log.Outcome = &service.ResponseOutcome{
 				HTTPStatus: int(httpStatus.Int64), UpstreamStatus: int(upstreamStatus.Int64),
 				HasText: hasText.Bool, HasToolCall: hasToolCall.Bool,

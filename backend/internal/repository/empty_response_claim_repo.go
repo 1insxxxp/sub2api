@@ -40,7 +40,7 @@ func (r *emptyResponseClaimRepository) LoadEvaluation(ctx context.Context, userI
 		FROM usage_logs ul
 		LEFT JOIN groups g ON g.id = ul.group_id
 		LEFT JOIN usage_response_outcomes uro
-			ON uro.request_id = ul.request_id AND uro.api_key_id = ul.api_key_id
+			ON uro.request_id = ul.request_id AND uro.api_key_id = ul.api_key_id AND uro.collector_version > 0
 		WHERE ul.user_id = $1 AND ul.id = $2
 	`
 
@@ -166,7 +166,7 @@ func (r *emptyResponseClaimRepository) ListRecentEvaluations(ctx context.Context
 	countQuery := `
 			SELECT COUNT(*)
 			FROM usage_logs ul
-			LEFT JOIN usage_response_outcomes uro ON uro.usage_log_id = ul.id
+			LEFT JOIN usage_response_outcomes uro ON uro.usage_log_id = ul.id AND uro.collector_version > 0
 			LEFT JOIN empty_response_claims erc ON erc.usage_log_id = ul.id
 		LEFT JOIN groups g ON g.id = ul.group_id
 		WHERE ` + whereSQL
@@ -192,7 +192,7 @@ func (r *emptyResponseClaimRepository) ListRecentEvaluations(ctx context.Context
             erc.compensation_amount::float8,
 			COALESCE(erc.original_actual_cost, 0)::float8, COALESCE(erc.rule_version, 0)
 		FROM usage_logs ul
-		LEFT JOIN usage_response_outcomes uro ON uro.usage_log_id = ul.id
+		LEFT JOIN usage_response_outcomes uro ON uro.usage_log_id = ul.id AND uro.collector_version > 0
 		LEFT JOIN empty_response_claims erc ON erc.usage_log_id = ul.id
 		LEFT JOIN api_keys ak ON ak.id = ul.api_key_id
 		LEFT JOIN groups g ON g.id = ul.group_id

@@ -475,7 +475,9 @@ func AttachDownstreamOutputTokenCollector(c *gin.Context, model string) (*Downst
 }
 
 // ApplyDeliveredOutputTokens snapshots output that reached the client. It is
-// used as a billing fallback when upstream usage is incomplete or missing.
+// used as a billing fallback by protocols that allow estimates. Gemini measured
+// mode keeps it as delivery evidence; its own fallback counts received upstream
+// semantics, which may include output whose downstream write failed.
 func ApplyDeliveredOutputTokens(result *ForwardResult, collector *DownstreamOutputTokenCollector) {
 	if result == nil || collector == nil {
 		return
@@ -507,6 +509,9 @@ func ApplyDeliveredOpenAIOutputTokens(result *OpenAIForwardResult, collector *Do
 func recordedOutputTokens(result *ForwardResult) int {
 	if result == nil {
 		return 0
+	}
+	if result.RequireMeasuredUsage {
+		return result.Usage.OutputTokens
 	}
 	if result.Usage.OutputTokens > 0 && (upstreamUsageComplete(result.Outcome) || (!result.Stream && !result.ClientDisconnect)) {
 		return result.Usage.OutputTokens

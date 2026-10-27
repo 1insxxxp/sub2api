@@ -39,9 +39,14 @@ type OpsErrorLog struct {
 
 	Severity string `json:"severity"`
 
-	StatusCode int    `json:"status_code"`
-	Platform   string `json:"platform"`
-	Model      string `json:"model"`
+	StatusCode int `json:"status_code"`
+	// DownstreamStatusCode is the separately captured HTTP response status;
+	// zero means cancellation evidence predates this capture or is unavailable.
+	// StatusCode keeps its existing provider-attribution semantics for Ops.
+	DownstreamStatusCode int    `json:"downstream_status_code"`
+	ClientCanceled       bool   `json:"client_canceled"`
+	Platform             string `json:"platform"`
+	Model                string `json:"model"`
 
 	Resolved           bool       `json:"resolved"`
 	ResolvedAt         *time.Time `json:"resolved_at"`
@@ -141,6 +146,14 @@ type OpsErrorLogFilter struct {
 	// health lists need status<400 recovered rows; request-error endpoints do
 	// not set this flag and retain client-error semantics.
 	IncludeRecoveredUpstream bool
+
+	// IncludeCanceledRequests exposes neutral cancellation diagnostics in
+	// request history without treating them as provider or SLA failures.
+	IncludeCanceledRequests bool
+	// ExcludeCanceledRequests keeps canceled calls in normal usage history,
+	// including legacy diagnostics whose stored status is an error code.
+	ExcludeCanceledRequests bool
+	CanceledOnly            bool
 
 	// ErrorPhasesAny / ErrorTypesAny add plain ANY() filters WITHOUT touching the
 	// special-cased single `Phase` field. With IncludeRecoveredUpstream, an ANY

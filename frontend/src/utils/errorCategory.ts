@@ -3,7 +3,8 @@
  * 镜像后端 service.MapUserErrorCategory(backend/internal/service/ops_user_error.go),
  * 两处修改须同步。返回稳定分类码,展示文案走 i18n `usage.errors.categories.*`。
  */
-export function mapErrorCategory(phase?: string | null, errType?: string | null): string {
+export function mapErrorCategory(phase?: string | null, errType?: string | null, clientCanceled = false): string {
+  if (clientCanceled || (errType || '').toLowerCase() === 'client_cancel') return 'client_cancel'
   switch ((phase || '').toLowerCase()) {
     case 'auth':
       return 'auth'

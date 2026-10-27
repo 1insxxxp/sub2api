@@ -16,6 +16,7 @@ type UserErrorRequest struct {
 	Model           string    `json:"model"`
 	InboundEndpoint string    `json:"inbound_endpoint"`
 	StatusCode      int       `json:"status_code"`
+	ClientCanceled  bool      `json:"client_canceled"`
 	Category        string    `json:"category"`
 	Platform        string    `json:"platform"`
 	Message         string    `json:"message"`
@@ -58,6 +59,8 @@ func MapUserErrorCategory(phase, errType string) string {
 			return "invalid_request"
 		case "cyber_policy":
 			return "cyber"
+		case "client_cancel":
+			return "client_cancel"
 		}
 	}
 	return "other"
@@ -102,15 +105,24 @@ func ToUserErrorRequest(e *OpsErrorLog) *UserErrorRequest {
 	if e.ClientIP != nil {
 		clientIP = *e.ClientIP
 	}
+	category := MapUserErrorCategory(e.Phase, e.Type)
+	statusCode := e.StatusCode
+	message := sanitizeUpstreamErrorMessage(e.Message)
+	if e.ClientCanceled {
+		category = "client_cancel"
+		statusCode = e.DownstreamStatusCode
+		message = "Request canceled after the connection closed; upstream usage may be unreported"
+	}
 	return &UserErrorRequest{
 		ID:              e.ID,
 		CreatedAt:       e.CreatedAt,
 		Model:           model,
 		InboundEndpoint: e.InboundEndpoint,
-		StatusCode:      e.StatusCode,
-		Category:        MapUserErrorCategory(e.Phase, e.Type),
+		StatusCode:      statusCode,
+		ClientCanceled:  e.ClientCanceled,
+		Category:        category,
 		Platform:        e.Platform,
-		Message:         sanitizeUpstreamErrorMessage(e.Message),
+		Message:         message,
 		KeyName:         e.APIKeyName,
 		KeyDeleted:      e.APIKeyDeleted,
 		ClientIP:        clientIP,

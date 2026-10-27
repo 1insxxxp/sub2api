@@ -14,7 +14,10 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
 
-const usagePersistencePayloadVersion = 1
+const (
+	usagePersistencePayloadVersion       = 2
+	usagePersistencePayloadLegacyVersion = 1
+)
 const usagePersistencePayloadMaxBytes = 256 * 1024
 
 // This DTO deliberately enumerates database insert fields. Never marshal the
@@ -40,6 +43,8 @@ type usagePersistenceUsage struct {
 	SubscriptionID            *int64                   `json:"subscription_id"`
 	InputTokens               int                      `json:"input_tokens"`
 	OutputTokens              int                      `json:"output_tokens"`
+	InputTokensSource         service.UsageTokenSource `json:"input_tokens_source,omitempty"`
+	OutputTokensSource        service.UsageTokenSource `json:"output_tokens_source,omitempty"`
 	UpstreamOutputTokens      int                      `json:"upstream_output_tokens"`
 	CacheCreationTokens       int                      `json:"cache_creation_tokens"`
 	CacheReadTokens           int                      `json:"cache_read_tokens"`
@@ -135,6 +140,8 @@ func encodeUsagePersistencePayload(cmd *service.UsageBillingCommand, thresholdEx
 		SubscriptionID:            log.SubscriptionID,
 		InputTokens:               log.InputTokens,
 		OutputTokens:              log.OutputTokens,
+		InputTokensSource:         log.InputTokensSource,
+		OutputTokensSource:        log.OutputTokensSource,
 		UpstreamOutputTokens:      log.UpstreamOutputTokens,
 		CacheCreationTokens:       log.CacheCreationTokens,
 		CacheReadTokens:           log.CacheReadTokens,
@@ -243,8 +250,30 @@ func decodeUsagePersistencePayload(raw []byte, requestID string, apiKeyID int64)
 	if err := decoder.Decode(new(any)); err != io.EOF {
 		return nil, errors.New("invalid trailing usage persistence snapshot")
 	}
+	if payload.Version != usagePersistencePayloadLegacyVersion && payload.Version != usagePersistencePayloadVersion {
+		return nil, errors.New("unsupported usage persistence snapshot version")
+	}
 	usage := payload.Usage
-	if payload.Version != usagePersistencePayloadVersion || usage.RequestID != requestID || usage.APIKeyID != apiKeyID || requestID == "" || apiKeyID <= 0 || usage.UserID <= 0 || usage.AccountID <= 0 || usage.CreatedAt.IsZero() {
+	if payload.Version == usagePersistencePayloadLegacyVersion {
+		// Keep the deployed v1 contract strict: neither provenance key was part
+		// of it, including an explicitly empty or null value. Read old snapshots
+		// without inferring sources from their numeric counts.
+		var legacy struct {
+			Usage map[string]json.RawMessage `json:"usage"`
+		}
+		if err := json.Unmarshal(raw, &legacy); err != nil {
+			return nil, errors.New("invalid legacy usage persistence snapshot")
+		}
+		if _, present := legacy.Usage["input_tokens_source"]; present {
+			return nil, errors.New("v1 usage persistence snapshot contains v2 metadata")
+		}
+		if _, present := legacy.Usage["output_tokens_source"]; present {
+			return nil, errors.New("v1 usage persistence snapshot contains v2 metadata")
+		}
+		usage.InputTokensSource = service.UsageTokenSourceUnknown
+		usage.OutputTokensSource = service.UsageTokenSourceUnknown
+	}
+	if usage.RequestID != requestID || usage.APIKeyID != apiKeyID || requestID == "" || apiKeyID <= 0 || usage.UserID <= 0 || usage.AccountID <= 0 || usage.CreatedAt.IsZero() {
 		return nil, errors.New("invalid usage persistence snapshot identity or version")
 	}
 	log := &service.UsageLog{
@@ -263,6 +292,8 @@ func decodeUsagePersistencePayload(raw []byte, requestID string, apiKeyID int64)
 		SubscriptionID:            usage.SubscriptionID,
 		InputTokens:               usage.InputTokens,
 		OutputTokens:              usage.OutputTokens,
+		InputTokensSource:         usage.InputTokensSource,
+		OutputTokensSource:        usage.OutputTokensSource,
 		UpstreamOutputTokens:      usage.UpstreamOutputTokens,
 		CacheCreationTokens:       usage.CacheCreationTokens,
 		CacheReadTokens:           usage.CacheReadTokens,

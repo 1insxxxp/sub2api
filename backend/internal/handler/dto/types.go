@@ -613,12 +613,14 @@ type BatchUpdateRedeemCodesRequest struct {
 
 // UsageLog 是普通用户接口使用的 usage log DTO（不包含管理员字段）。
 type UsageLog struct {
-	ID        int64  `json:"id"`
-	UserID    int64  `json:"user_id"`
-	APIKeyID  int64  `json:"api_key_id"`
-	AccountID int64  `json:"account_id"`
-	RequestID string `json:"request_id"`
-	Model     string `json:"model"`
+	BillingStatus        service.UsageBillingStatus `json:"billing_status"`
+	BillingPendingReason string                     `json:"billing_pending_reason,omitempty"`
+	ID                   int64                      `json:"id"`
+	UserID               int64                      `json:"user_id"`
+	APIKeyID             int64                      `json:"api_key_id"`
+	AccountID            int64                      `json:"account_id"`
+	RequestID            string                     `json:"request_id"`
+	Model                string                     `json:"model"`
 	// ServiceTier records the OpenAI service tier used for billing, e.g. "priority" / "flex".
 	ServiceTier *string `json:"service_tier,omitempty"`
 	// ReasoningEffort is the client-requested effort (mapping-hidden, like Model).
@@ -633,11 +635,13 @@ type UsageLog struct {
 	GroupID        *int64 `json:"group_id"`
 	SubscriptionID *int64 `json:"subscription_id"`
 
-	InputTokens          int `json:"input_tokens"`
-	OutputTokens         int `json:"output_tokens"`
-	AntiTruncationRounds int `json:"anti_truncation_rounds,omitempty"`
-	CacheCreationTokens  int `json:"cache_creation_tokens"`
-	CacheReadTokens      int `json:"cache_read_tokens"`
+	InputTokens          int                      `json:"input_tokens"`
+	OutputTokens         int                      `json:"output_tokens"`
+	InputTokensSource    service.UsageTokenSource `json:"input_tokens_source"`
+	OutputTokensSource   service.UsageTokenSource `json:"output_tokens_source"`
+	AntiTruncationRounds int                      `json:"anti_truncation_rounds,omitempty"`
+	CacheCreationTokens  int                      `json:"cache_creation_tokens"`
+	CacheReadTokens      int                      `json:"cache_read_tokens"`
 
 	CacheCreation5mTokens int `json:"cache_creation_5m_tokens"`
 	CacheCreation1hTokens int `json:"cache_creation_1h_tokens"`

@@ -59,11 +59,7 @@ func TestGeminiStreamUsageTailPreservesProviderMeasurement(t *testing.T) {
 				ApplyDeliveredOutputTokens(result, collector)
 				require.NotNil(t, result.DeliveredOutputTokens)
 				require.Positive(t, *result.DeliveredOutputTokens)
-				if tc.complete {
-					require.Equal(t, tc.wantOut, recordedOutputTokens(result))
-				} else {
-					require.Equal(t, *result.DeliveredOutputTokens, recordedOutputTokens(result), "interrupted settlement uses only successfully delivered output")
-				}
+				require.Equal(t, tc.wantOut, recordedOutputTokens(result), "Gemini settlement retains measured output even when interrupted")
 
 				billableOutput := recordedOutputTokens(result)
 				result.RequestID = "gemini-tail-" + path + "-" + tc.name

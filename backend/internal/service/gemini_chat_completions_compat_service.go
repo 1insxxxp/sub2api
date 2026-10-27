@@ -177,6 +177,7 @@ func (s *GeminiMessagesCompatService) forwardClaudeBodyAsChatCompletions(
 		requestIDHeader = idHeader
 
 		upstreamAttempt = BeginGeminiUpstreamAttempt(c, account, mappedModel, useUpstreamStream)
+		upstreamAttempt.ObserveRequest(upstreamReq)
 		resp, err = s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
 		upstreamAttempt.ObserveResponse(resp)
 		if err != nil {
@@ -1060,7 +1061,14 @@ func (s *GeminiMessagesCompatService) handleChatCompletionsStreamingResponseFrom
 		return &geminiStreamResult{usage: &usage, firstTokenMs: firstTokenMs}, streamErr
 	}
 	if !sawVisibleOutput {
-		return nil, s.handleEmptyGeminiChatResponse(c, finishReason)
+		err := s.handleEmptyGeminiChatResponse(c, finishReason)
+		var failover *UpstreamFailoverError
+		if errors.As(err, &failover) {
+			return nil, err
+		}
+		// Terminal provider failures can still report measured consumption. Keep
+		// that evidence for settlement or pending review, independently of output.
+		return &geminiStreamResult{usage: &usage, firstTokenMs: firstTokenMs}, err
 	}
 
 	if closeOpenBlock() {

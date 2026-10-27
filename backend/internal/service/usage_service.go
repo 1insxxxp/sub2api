@@ -482,6 +482,7 @@ func (s *UsageService) GetBatchAPIKeyUsageStats(ctx context.Context, apiKeyIDs [
 
 // ListWithFilters lists usage logs with admin filters.
 func (s *UsageService) ListWithFilters(ctx context.Context, params pagination.PaginationParams, filters usagestats.UsageLogFilters) ([]UsageLog, *pagination.PaginationResult, error) {
+	filters.IncludePending = true
 	logs, result, err := s.usageRepo.ListWithFilters(ctx, params, filters)
 	if err != nil {
 		return nil, nil, fmt.Errorf("list usage logs with filters: %w", err)
@@ -495,6 +496,12 @@ func (s *UsageService) ListWithFilters(ctx context.Context, params pagination.Pa
 
 func projectUsageLogCompensation(log *UsageLog, now time.Time) {
 	if log == nil {
+		return
+	}
+	if log.BillingStatus == UsageBillingStatusPendingReview {
+		log.CompensationEligible = false
+		log.CompensationEligibility = UsageCompensationUnavailable
+		log.CompensationEstimatedRefund = 0
 		return
 	}
 	quote := QuoteEmptyResponseCompensation(*log)

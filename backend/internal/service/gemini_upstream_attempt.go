@@ -16,17 +16,51 @@ const (
 	geminiUpstreamAttemptSequenceKey = "gemini_upstream_attempt_sequence"
 )
 
-// GeminiUpstreamAttempt retains only bounded, credential-free metadata for a
-// real inference call. Callers must begin immediately before sending upstream.
-// It never records usage or charges a customer; Ops persists one request summary.
+// GeminiUpstreamAttempt collects request-local evidence for a real inference
+// call. Callers begin immediately before sending upstream. Generated text never
+// leaves the attempt; async settlement receives only its scalar token snapshot.
 type GeminiUpstreamAttempt struct {
 	c               *gin.Context
 	event           OpsUpstreamErrorEvent
 	started         time.Time
 	firstEvent      int
 	requestIDHeader string
-	candidates      int64
-	ended           bool
+	// Only the actually observed configured identifier, separate from fallback IDs.
+	requestIDHeaderValue    string
+	ledgerRequestID         string
+	ledgerIdentityHash      string
+	candidates              int64
+	ended                   bool
+	model                   string
+	inputFallback           *GeminiInputUsageFallback
+	fallbackCandidates      map[int64]*geminiFallbackCandidate
+	upstreamAccepted        bool
+	fallbackOutputBytes     int
+	fallbackStreamCount     int
+	fallbackOutputTruncated bool
+}
+
+func (a *GeminiUpstreamAttempt) ObserveRequest(request *http.Request) {
+	if a == nil || a.ended {
+		return
+	}
+	a.ledgerIdentityHash = geminiUsageLedgerRequestIdentity(request)
+	a.inputFallback = prepareGeminiInputUsageFallback(request, a.event.AccountID, a.model)
+}
+
+func geminiUsageLedgerRequestIdentity(request *http.Request) string {
+	if request == nil || request.URL == nil {
+		return ""
+	}
+	key := request.Header.Get("x-goog-api-key")
+	if key == "" {
+		parts := strings.Fields(request.Header.Get("Authorization"))
+		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
+			return ""
+		}
+		key = parts[1]
+	}
+	return GeminiUsageLedgerIdentity(request.URL.String(), key)
 }
 
 func BeginGeminiUpstreamAttempt(c *gin.Context, account *Account, model string, stream bool) *GeminiUpstreamAttempt {
@@ -38,6 +72,7 @@ func BeginGeminiUpstreamAttempt(c *gin.Context, account *Account, model string, 
 	proxyID, proxyName := opsUpstreamProxyAttribution(account)
 	attempt := &GeminiUpstreamAttempt{
 		c: c, started: time.Now(), firstEvent: len(geminiUpstreamAttemptEvents(c)),
+		model:           model,
 		requestIDHeader: UpstreamRequestIDHeaderName(account),
 		event: OpsUpstreamErrorEvent{Attempt: sequence, Model: truncateString(strings.TrimSpace(model), 128),
 			Stream: stream, Stage: "inference", UsageState: "unreported", ProxyID: proxyID, ProxyName: proxyName},
@@ -56,8 +91,31 @@ func (a *GeminiUpstreamAttempt) ObserveResponse(response *http.Response) {
 		return
 	}
 	a.event.UpstreamStatusCode = response.StatusCode
+	if response.StatusCode >= http.StatusOK && response.StatusCode < http.StatusMultipleChoices {
+		a.upstreamAccepted = true
+	}
+	a.ledgerRequestID = ""
+	ledgerIdentityMatches := true
+	// net/http returns the final request after redirects. Never attach a new
+	// origin's ledger ID to the original origin/key authorization boundary.
+	if response.Request != nil && geminiUsageLedgerRequestIdentity(response.Request) != a.ledgerIdentityHash {
+		a.ledgerIdentityHash = ""
+		ledgerIdentityMatches = false
+		if a.inputFallback != nil {
+			a.inputFallback.CountRequest = nil
+			a.inputFallback.CalibrationKey = ""
+		}
+	}
+	ledgerID := strings.TrimSpace(response.Header.Get("X-Oneapi-Request-Id"))
+	if ledgerIdentityMatches && len(ledgerID) <= maxUsageUpstreamRequestIDLen && !strings.ContainsAny(ledgerID, "\r\n\t") {
+		a.ledgerRequestID = ledgerID
+	}
 	if a.requestIDHeader != "" {
-		a.event.UpstreamRequestID = strings.TrimSpace(response.Header.Get(a.requestIDHeader))
+		a.requestIDHeaderValue = truncateString(strings.TrimSpace(response.Header.Get(a.requestIDHeader)), maxUsageUpstreamRequestIDLen)
+		a.event.UpstreamRequestID = a.requestIDHeaderValue
+	}
+	if a.event.UpstreamRequestID == "" {
+		a.event.UpstreamRequestID = a.ledgerRequestID
 	}
 	if a.event.UpstreamRequestID == "" {
 		// These are actual response identifiers, never an invented local ID.
@@ -81,8 +139,11 @@ func ObserveGeminiUpstreamAttemptUsage(c *gin.Context, raw []byte) {
 }
 
 func (a *GeminiUpstreamAttempt) ObserveUsage(raw []byte) {
-	if a == nil || a.ended {
+	if a == nil || a.ended || !gjson.ValidBytes(raw) {
 		return
+	}
+	if a.event.UsageFields&2 == 0 {
+		a.observeFallbackOutput(raw)
 	}
 	usage := gjson.GetBytes(raw, "usageMetadata")
 	if !usage.IsObject() {
@@ -110,6 +171,16 @@ func (a *GeminiUpstreamAttempt) ObserveUsage(raw []byte) {
 		a.event.UsageState = "observed"
 	}
 	a.event.OutputTokens = a.candidates + a.event.ThoughtTokens
+	if a.event.UsageFields&2 != 0 {
+		// A reported candidate count (including zero) is authoritative. Release
+		// generated content now and avoid unused tokenization on normal calls.
+		a.fallbackCandidates = nil
+		a.fallbackOutputBytes, a.fallbackStreamCount = 0, 0
+		a.fallbackOutputTruncated = false
+	}
+	if a.candidates > 0 || a.event.ThoughtTokens > 0 {
+		a.upstreamAccepted = true
+	}
 	if a.event.OutputTokens < 0 { // defensive overflow guard; never a billing estimate
 		a.event.OutputTokens = 0
 	}

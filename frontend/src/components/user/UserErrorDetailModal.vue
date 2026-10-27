@@ -36,12 +36,13 @@
           <span class="font-medium text-gray-500 dark:text-dark-400">{{ t('usage.errors.status') }}</span>
           <p class="mt-0.5">
             <span class="badge" :class="statusClass(detail.status_code)">{{ detail.status_code || '-' }}</span>
+            <span v-if="detail.client_canceled" data-testid="error-client-canceled" class="badge badge-warning ml-1">{{ t('usage.errors.categories.client_cancel') }}</span>
           </p>
         </div>
         <!-- Category -->
         <div>
           <span class="font-medium text-gray-500 dark:text-dark-400">{{ t('usage.errors.category') }}</span>
-          <p class="mt-0.5 text-gray-900 dark:text-dark-100">{{ t('usage.errors.categories.' + detail.category) }}</p>
+          <p class="mt-0.5 text-gray-900 dark:text-dark-100">{{ t('usage.errors.categories.' + (detail.client_canceled ? 'client_cancel' : detail.category)) }}</p>
         </div>
         <!-- Platform -->
         <div>
@@ -54,6 +55,8 @@
           <p class="mt-0.5 text-gray-900 dark:text-dark-100">{{ detail.upstream_status_code }}</p>
         </div>
       </div>
+
+      <p v-if="detail.client_canceled" class="rounded bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">{{ t('usage.errors.clientCanceledHint') }}</p>
 
       <!-- Message -->
       <div v-if="detail.message">

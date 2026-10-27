@@ -912,6 +912,8 @@ export interface OpsErrorLog {
 
   severity: OpsSeverity
   status_code: number
+  client_canceled?: boolean
+  downstream_status_code?: number
   platform: string
   model: string
 
@@ -1181,6 +1183,7 @@ export type OpsErrorListQueryParams = {
   error_source?: string
   resolved?: string
   view?: OpsErrorListView
+  include_canceled?: boolean
 
   q?: string
   status_codes?: string

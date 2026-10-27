@@ -333,6 +333,8 @@ type UsageLogFilters struct {
 	EndTime               *time.Time
 	// ExactTotal requests exact COUNT(*) for pagination. Default false for fast large-table paging.
 	ExactTotal bool
+	// IncludePending is only used by request-history reads, never by statistics.
+	IncludePending bool
 }
 
 // UsageStats represents usage statistics

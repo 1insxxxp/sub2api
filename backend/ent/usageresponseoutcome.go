@@ -55,6 +55,10 @@ type UsageResponseOutcome struct {
 	UpstreamErrorKind string `json:"upstream_error_kind,omitempty"`
 	// CollectorVersion holds the value of the "collector_version" field.
 	CollectorVersion int16 `json:"collector_version,omitempty"`
+	// InputTokensSource holds the value of the "input_tokens_source" field.
+	InputTokensSource string `json:"input_tokens_source,omitempty"`
+	// OutputTokensSource holds the value of the "output_tokens_source" field.
+	OutputTokensSource string `json:"output_tokens_source,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt    time.Time `json:"created_at,omitempty"`
 	selectValues sql.SelectValues
@@ -69,7 +73,7 @@ func (*UsageResponseOutcome) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case usageresponseoutcome.FieldID, usageresponseoutcome.FieldUsageLogID, usageresponseoutcome.FieldAPIKeyID, usageresponseoutcome.FieldUserID, usageresponseoutcome.FieldAccountID, usageresponseoutcome.FieldGroupID, usageresponseoutcome.FieldHTTPStatus, usageresponseoutcome.FieldUpstreamStatus, usageresponseoutcome.FieldOutputBytes, usageresponseoutcome.FieldEventCount, usageresponseoutcome.FieldCollectorVersion:
 			values[i] = new(sql.NullInt64)
-		case usageresponseoutcome.FieldRequestID, usageresponseoutcome.FieldFinishReason, usageresponseoutcome.FieldDisconnectSource, usageresponseoutcome.FieldUpstreamErrorKind:
+		case usageresponseoutcome.FieldRequestID, usageresponseoutcome.FieldFinishReason, usageresponseoutcome.FieldDisconnectSource, usageresponseoutcome.FieldUpstreamErrorKind, usageresponseoutcome.FieldInputTokensSource, usageresponseoutcome.FieldOutputTokensSource:
 			values[i] = new(sql.NullString)
 		case usageresponseoutcome.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -210,6 +214,18 @@ func (_m *UsageResponseOutcome) assignValues(columns []string, values []any) err
 			} else if value.Valid {
 				_m.CollectorVersion = int16(value.Int64)
 			}
+		case usageresponseoutcome.FieldInputTokensSource:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field input_tokens_source", values[i])
+			} else if value.Valid {
+				_m.InputTokensSource = value.String
+			}
+		case usageresponseoutcome.FieldOutputTokensSource:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field output_tokens_source", values[i])
+			} else if value.Valid {
+				_m.OutputTokensSource = value.String
+			}
 		case usageresponseoutcome.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
@@ -312,6 +328,12 @@ func (_m *UsageResponseOutcome) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("collector_version=")
 	builder.WriteString(fmt.Sprintf("%v", _m.CollectorVersion))
+	builder.WriteString(", ")
+	builder.WriteString("input_tokens_source=")
+	builder.WriteString(_m.InputTokensSource)
+	builder.WriteString(", ")
+	builder.WriteString("output_tokens_source=")
+	builder.WriteString(_m.OutputTokensSource)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))

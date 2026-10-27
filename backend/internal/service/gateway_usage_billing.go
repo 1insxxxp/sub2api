@@ -835,7 +835,7 @@ func writeUsageLogBestEffort(ctx context.Context, repo UsageLogRepository, usage
 }
 
 func writeResponseOutcome(ctx context.Context, repo UsageLogRepository, usageLog *UsageLog) error {
-	if usageLog == nil || usageLog.Outcome == nil {
+	if usageLog == nil || !usageLog.HasResponseMetadata() {
 		return nil
 	}
 	writer, ok := repo.(usageResponseOutcomeWriter)
@@ -846,7 +846,7 @@ func writeResponseOutcome(ctx context.Context, repo UsageLogRepository, usageLog
 }
 
 func writeUsageOutcomeBestEffort(ctx context.Context, repo UsageLogRepository, usageLog *UsageLog, logKey string) {
-	if repo == nil || usageLog == nil || usageLog.Outcome == nil {
+	if repo == nil || usageLog == nil || !usageLog.HasResponseMetadata() {
 		return
 	}
 	usageCtx, cancel := detachedBillingContext(ctx)
@@ -1032,6 +1032,9 @@ func logResponseModelBillingApplied(component string, account *Account, requestI
 // recordUsageCore is shared by normal and legacy-long-context usage recording.
 func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsageCoreInput, opts *recordUsageOpts) error {
 	result := input.Result
+	if NeedsUsageMeasurementReview(result) {
+		return ErrUsageMeasurementIncomplete
+	}
 	apiKey := input.APIKey
 	user := input.User
 	account := input.Account
@@ -1046,7 +1049,8 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 
 	// 强制缓存计费：将 input_tokens 转为 cache_read_input_tokens
 	// 用于粘性会话切换时的特殊计费处理
-	if input.ForceCacheBilling && result.Usage.InputTokens > 0 {
+	// Gemini 实测模式必须保留上游输入与缓存分类，换号不能伪造缓存命中。
+	if input.ForceCacheBilling && !result.RequireMeasuredUsage && result.Usage.InputTokens > 0 {
 		logger.LegacyPrintf("service.gateway", "force_cache_billing: %d input_tokens → cache_read_input_tokens (account=%d)",
 			result.Usage.InputTokens, account.ID)
 		result.Usage.CacheReadInputTokens += result.Usage.InputTokens
@@ -1667,7 +1671,7 @@ func (s *GatewayService) buildRecordUsageLog(
 		APIKeyID:                 apiKey.ID,
 		AccountID:                account.ID,
 		RequestID:                requestID,
-		UpstreamRequestID:        usageUpstreamRequestIDPtr(account, result.UpstreamHeaders, false),
+		UpstreamRequestID:        usageUpstreamRequestIDForResult(account, result),
 		Model:                    result.Model,
 		RequestedModel:           requestedModel,
 		UpstreamModel:            optionalTrimmedStringPtr(result.UpstreamModel),
@@ -1680,6 +1684,8 @@ func (s *GatewayService) buildRecordUsageLog(
 		UpstreamEndpoint:         optionalTrimmedStringPtr(input.UpstreamEndpoint),
 		InputTokens:              result.Usage.InputTokens,
 		OutputTokens:             recordedOutputTokens(result),
+		InputTokensSource:        result.InputTokensSource.Normalize(),
+		OutputTokensSource:       recordedOutputTokensSource(result),
 		UpstreamOutputTokens:     result.Usage.OutputTokens,
 		CacheCreationTokens:      result.Usage.CacheCreationInputTokens,
 		CacheReadTokens:          result.Usage.CacheReadInputTokens,

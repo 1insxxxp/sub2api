@@ -85,11 +85,12 @@
         </div>
 
         <div class="admin-form-section !space-y-1 !p-4">
-          <div class="text-xs font-bold uppercase tracking-wider text-gray-400">{{ t('admin.ops.errorDetail.status') }}</div>
+          <div class="text-xs font-bold uppercase tracking-wider text-gray-400">{{ t(detail.client_canceled ? 'usage.errors.downstreamStatus' : 'admin.ops.errorDetail.status') }}</div>
           <div class="mt-1">
-            <span :class="['inline-flex items-center rounded-lg px-2 py-1 text-xs font-black ring-1 ring-inset shadow-sm', statusClass]">
-              {{ detail.status_code }}
+            <span data-testid="error-downstream-status" :class="['inline-flex items-center rounded-lg px-2 py-1 text-xs font-black ring-1 ring-inset shadow-sm', statusClass]">
+              {{ errorDisplayStatus(detail) || '—' }}
             </span>
+            <span v-if="detail.client_canceled" data-testid="error-client-canceled" class="ml-2 rounded bg-amber-50 px-2 py-1 text-xs text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">{{ t('usage.errors.categories.client_cancel') }}</span>
           </div>
         </div>
 
@@ -249,6 +250,7 @@ import Icon from '@/components/icons/Icon.vue'
 import { useAppStore } from '@/stores'
 import { opsAPI, type OpsErrorDetail } from '@/api/admin/ops'
 import { formatDateTime } from '@/utils/format'
+import { errorDisplayStatus } from '@/utils/errorBadges'
 import { resolveUpstreamPayload } from '../utils/errorDetailResponse'
 
 interface Props {
@@ -281,6 +283,7 @@ type DiagnosticPayloadKey = 'client' | 'upstream_message' | 'upstream_detail' | 
 const rootCauseMessage = computed(() => {
   const current = detail.value
   if (!current) return ''
+  if (current.client_canceled) return t('usage.errors.clientCanceledHint')
   for (const candidate of [current.upstream_error_message, current.upstream_error_detail, current.message, current.error_body]) {
     const value = meaningfulPayload(candidate)
     if (value) return value
@@ -447,7 +450,7 @@ function statusBadgeClass(code: number): string {
   return 'bg-gray-50 text-gray-700 ring-gray-600/20 dark:bg-gray-900/30 dark:text-gray-400 dark:ring-gray-500/30'
 }
 
-const statusClass = computed(() => statusBadgeClass(detail.value?.status_code ?? 0))
+const statusClass = computed(() => statusBadgeClass(detail.value ? errorDisplayStatus(detail.value) : 0))
 
 const upstreamStatusClass = computed(() => statusBadgeClass(detail.value?.upstream_status_code ?? 0))
 

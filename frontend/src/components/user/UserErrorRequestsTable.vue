@@ -42,10 +42,11 @@
           <span class="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium" :class="statusClass(row.status_code)">
             {{ row.status_code || '-' }}
           </span>
+          <span v-if="row.client_canceled" data-testid="error-client-canceled" :title="t('usage.errors.clientCanceledHint')" class="ml-1 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">{{ t('usage.errors.categories.client_cancel') }}</span>
         </template>
 
         <template #cell-category="{ row }">
-          <span class="text-sm text-gray-900 dark:text-white">{{ t('usage.errors.categories.' + row.category) }}</span>
+          <span class="text-sm text-gray-900 dark:text-white">{{ t('usage.errors.categories.' + (row.client_canceled ? 'client_cancel' : row.category)) }}</span>
         </template>
 
         <template #cell-message="{ row }">

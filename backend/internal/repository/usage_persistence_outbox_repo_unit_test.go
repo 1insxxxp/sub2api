@@ -83,7 +83,7 @@ func TestUsageBillingDurablePersistence_EnqueueSharesChargeTransactionAndSafePay
 				require.Equal(t, 0.25, result.ThresholdExemptCost)
 			}
 			require.NoError(t, mock.ExpectationsWereMet())
-			require.EqualValues(t, 1, payload.payload["version"])
+			require.EqualValues(t, 2, payload.payload["version"])
 			usage := payload.payload["usage"].(map[string]any)
 			require.EqualValues(t, 10000, usage["upstream_output_tokens"])
 			require.EqualValues(t, 0.25, usage["threshold_exempt_cost"], "wallet allocation, not the caller's stale estimate")

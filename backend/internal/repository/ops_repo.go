@@ -477,7 +477,7 @@ func opsErrorLogsOrderBy(filter *service.OpsErrorLogFilter) string {
 		// 与展示列/过滤保持同义:列表展示 COALESCE(upstream_status_code, status_code, 0),
 		// status_code 过滤也用同一表达式,故排序必须一致——否则 recovered upstream 行
 		//（status_code<400 但展示上游 5xx）排序键与显示值/分页切分不符。
-		column = "COALESCE(e.upstream_status_code, e.status_code, 0)"
+		column = opsErrorDisplayedStatusExpr(filter)
 	default:
 		column = "e.created_at"
 	}
@@ -487,6 +487,34 @@ func opsErrorLogsOrderBy(filter *service.OpsErrorLogFilter) string {
 		dir = "ASC"
 	}
 	return fmt.Sprintf("%s %s, e.id %s", column, dir, dir)
+}
+
+// Inspect only the final server-generated inference event: an earlier canceled
+// attempt must not make a subsequent completed request appear canceled. Legacy
+// cancellation rows without a retained event still carry their explicit type.
+const opsFinalClientCanceledExpr = `COALESCE(
+  CASE WHEN NULLIF(e.upstream_errors -> -1, 'null'::jsonb) IS NULL THEN e.error_type = 'client_cancel'
+  ELSE (e.upstream_errors -> -1 -> 'client_canceled') = 'true'::jsonb
+    AND (e.upstream_errors -> -1 ->> 'stage') = 'inference'
+  END, false)`
+
+// Older cancellation summaries normalized even a pre-response 499 to 200 for
+// SLA purposes. Without separately captured evidence the HTTP status is unknown.
+// Guard the cast so malformed historical JSON can never break history queries.
+const opsCanceledDownstreamStatusExpr = `CASE
+  WHEN (e.upstream_errors -> -1 ->> 'downstream_status_code') ~ '^[1-5][0-9]{2}$'
+  THEN (e.upstream_errors -> -1 ->> 'downstream_status_code')::integer
+  ELSE 0 END`
+
+const opsDownstreamStatusExpr = "CASE WHEN " + opsFinalClientCanceledExpr +
+	" THEN " + opsCanceledDownstreamStatusExpr + " ELSE COALESCE(e.status_code, 0) END"
+
+func opsErrorDisplayedStatusExpr(filter *service.OpsErrorLogFilter) string {
+	const providerStatus = "COALESCE(e.upstream_status_code, e.status_code, 0)"
+	if filter == nil || !filter.IncludeCanceledRequests {
+		return providerStatus
+	}
+	return "CASE WHEN " + opsFinalClientCanceledExpr + " THEN " + opsCanceledDownstreamStatusExpr + " ELSE " + providerStatus + " END"
 }
 
 func (r *opsRepository) ListErrorLogs(ctx context.Context, filter *service.OpsErrorLogFilter) (*service.OpsErrorLogList, error) {
@@ -555,7 +583,9 @@ SELECT
   COALESCE(e.user_agent, ''),
   e.request_type,
   COALESCE(ak.name, ''),
-  ak.deleted_at
+  ak.deleted_at,
+  ` + opsDownstreamStatusExpr + `,
+  ` + opsFinalClientCanceledExpr + `
 FROM ops_error_logs e
 LEFT JOIN accounts a ON e.account_id = a.id
 LEFT JOIN groups g ON e.group_id = g.id
@@ -626,6 +656,8 @@ LIMIT $` + itoa(len(args)+1) + ` OFFSET $` + itoa(len(args)+2)
 			&requestType,
 			&apiKeyName,
 			&apiKeyDeletedAt,
+			&item.DownstreamStatusCode,
+			&item.ClientCanceled,
 		); err != nil {
 			return nil, err
 		}
@@ -737,7 +769,9 @@ SELECT
   e.time_to_first_token_ms,
   COALESCE(e.api_key_prefix, ''),
   COALESCE(ak.name, ''),
-  ak.deleted_at
+  ak.deleted_at,
+  ` + opsDownstreamStatusExpr + `,
+  ` + opsFinalClientCanceledExpr + `
 FROM ops_error_logs e
 LEFT JOIN users u ON e.user_id = u.id
 LEFT JOIN accounts a ON e.account_id = a.id
@@ -812,6 +846,8 @@ LIMIT 1`
 		&out.APIKeyPrefix,
 		&detailAPIKeyName,
 		&detailAPIKeyDeletedAt,
+		&out.DownstreamStatusCode,
+		&out.ClientCanceled,
 	)
 	if err != nil {
 		return nil, err
@@ -1203,7 +1239,20 @@ func buildOpsErrorLogsWhere(filter *service.OpsErrorLogFilter) (string, []any) {
 	// but they are always client-visible blocked requests that belong in admin + user error
 	// lists.  Without the exemption the entire streaming-path cyber sink would be invisible.
 	if !opsFilterIncludesRecoveredProviderRows(filter, phaseFilter) {
-		clauses = append(clauses, "(COALESCE(e.status_code, 0) >= 400 OR e.error_type = 'cyber_policy')")
+		guard := "COALESCE(e.status_code, 0) >= 400 OR e.error_type = 'cyber_policy'"
+		if filter.IncludeCanceledRequests {
+			guard += " OR " + opsFinalClientCanceledExpr
+		}
+		clauses = append(clauses, "("+guard+")")
+	}
+	if filter.ExcludeCanceledRequests {
+		clauses = append(clauses, "NOT ("+opsFinalClientCanceledExpr+")")
+	} else if filter.CanceledOnly {
+		clauses = append(clauses, opsFinalClientCanceledExpr)
+	} else if filter.IncludeCanceledRequests && (len(filter.ErrorPhasesAny) > 0 || len(filter.ErrorTypesAny) > 0) {
+		// Request-history categories describe the final request. Earlier failed
+		// attempts remain available through provider health and detail evidence.
+		clauses = append(clauses, "NOT ("+opsFinalClientCanceledExpr+")")
 	}
 
 	if filter.StartTime != nil && !filter.StartTime.IsZero() {
@@ -1266,12 +1315,12 @@ func buildOpsErrorLogsWhere(filter *service.OpsErrorLogFilter) (string, []any) {
 	}
 	if len(filter.StatusCodes) > 0 {
 		args = append(args, pq.Array(filter.StatusCodes))
-		clauses = append(clauses, "COALESCE(e.upstream_status_code, e.status_code, 0) = ANY($"+itoa(len(args))+")")
+		clauses = append(clauses, opsErrorDisplayedStatusExpr(filter)+" = ANY($"+itoa(len(args))+")")
 	} else if filter.StatusCodesOther {
 		// "Other" means: status codes not in the common list.
 		known := []int{400, 401, 403, 404, 409, 422, 429, 500, 502, 503, 504, 529}
 		args = append(args, pq.Array(known))
-		clauses = append(clauses, "NOT (COALESCE(e.upstream_status_code, e.status_code, 0) = ANY($"+itoa(len(args))+"))")
+		clauses = append(clauses, "NOT ("+opsErrorDisplayedStatusExpr(filter)+" = ANY($"+itoa(len(args))+"))")
 	}
 	// Exact correlation keys (preferred for request↔upstream linkage).
 	if rid := strings.TrimSpace(filter.RequestID); rid != "" {

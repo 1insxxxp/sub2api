@@ -34,6 +34,16 @@ const localizedMessages: Record<'en' | 'zh', Record<string, string>> = {
 
 const messages: Record<string, string> = {
   'usage.outputTps': 'Output TPS',
+  'usage.tokensUnreported': 'Not reported',
+  'usage.billingPendingReview': 'Pending review',
+  'usage.billingPendingReviewHint': 'Usage and charges are being checked. This record will be updated when confirmed.',
+  'usage.tokensEstimated': 'Estimated',
+  'usage.inputTokensUnreportedHint': 'Input usage was not reported; no input charge.',
+  'usage.outputTokensEstimatedHint': 'Estimated from delivered content, including reasoning; not the upstream bill.',
+  'usage.tokensSourceUnknownHint': 'The source was not recorded; the stored count is shown.',
+  'usage.tokensSourceUpstream': 'Upstream report',
+  'usage.tokensSourceUnknown': 'Unknown source',
+  'usage.recordedTokensSubtotal': 'Recorded token subtotal',
   'admin.usage.userDeletedBadge': 'Deleted',
   'usage.costDetails': 'Cost Breakdown',
   'admin.usage.inputCost': 'Input Cost',
@@ -982,5 +992,79 @@ describe('admin usage mobile cards', () => {
     expect(wrapper.get('details').text()).toContain('240e:1234')
     wrapper.unmount()
     mediaSpy.mockRestore()
+  })
+})
+
+
+describe('usage token measurement sources', () => {
+  const mountSources = (rows: object[], showAccountBilling = true) => mount(UsageTable, {
+    props: { data: rows as never[], columns: [], showAccountBilling, showUsageDiagnostics: showAccountBilling, compactMobile: true },
+    global: { stubs: { DataTable: DataTableStub, EmptyState: true, Icon: true, Teleport: true } },
+  })
+
+  it.each([true, false])('distinguishes unreported input from measured zero (admin=%s)', (admin) => {
+    const row = { ...baseImageRow, image_count: 0, billing_mode: 'token', input_tokens: 0 }
+    const wrapper = mountSources([
+      { ...row, request_id: 'missing', input_tokens_source: 'unreported' },
+      { ...row, request_id: 'zero', input_tokens_source: 'upstream' },
+      { ...row, request_id: 'cached', input_tokens_source: 'upstream', cache_read_tokens: 21916 },
+    ], admin)
+    const missing = wrapper.get('[data-request-id="missing"] [data-testid="input-token-count"]')
+    expect(missing.text()).toBe(admin ? 'Not reported' : '—')
+    if (admin) expect(missing.attributes('title')).toContain('no input charge')
+    else expect(missing.attributes('title')).toBeUndefined()
+    expect(wrapper.get('[data-request-id="zero"] [data-testid="input-token-count"]').text()).toBe('0')
+    expect(wrapper.get('[data-request-id="cached"] [data-testid="input-token-count"]').text()).toBe('0')
+    expect(wrapper.get('[data-request-id="cached"]').text()).not.toContain('Not reported')
+  })
+
+  it.each([true, false])('shows a pending request in ordinary history without claiming zero cost (admin=%s)', async (admin) => {
+    const row = { ...baseImageRow, id: -42, image_count: 0, billing_mode: 'token', billing_status: 'pending_review', billing_pending_reason: 'upstream_usage_missing', input_tokens: 0, output_tokens: 0, input_tokens_source: 'unreported', output_tokens_source: 'unreported', actual_cost: 0, total_cost: 0, compensation_eligible: true }
+    const wrapper = mountSources([row], admin)
+    expect(wrapper.get('[data-testid="input-token-count"]').text()).toBe('—')
+    expect(wrapper.get('[data-testid="output-token-count"]').text()).toBe('—')
+    expect(wrapper.get('[data-testid="usage-billing-pending"]').text()).toBe('Pending review')
+    expect(wrapper.get('[data-testid="usage-billing-pending"]').attributes('title')).toContain('being checked')
+    expect(wrapper.text()).not.toContain('$0.000000')
+    expect(wrapper.find('[data-testid="usage-billing-pending"]').classes().join(' ')).not.toMatch(/red|rose/)
+    await wrapper.find('.group.relative').trigger('mouseenter')
+    expect(wrapper.get('[data-testid="token-total"]').text()).toBe('—')
+    expect(wrapper.text()).not.toContain('$0.000000')
+    wrapper.unmount()
+  })
+
+  it('marks a delivered output estimate and keeps the numeric count', async () => {
+    const wrapper = mountSources([{ ...baseImageRow, image_count: 0, billing_mode: 'token', input_tokens_source: 'unreported', output_tokens_source: 'estimated', output_tokens: 5071 }])
+    expect(wrapper.get('[data-testid="output-token-count"]').text()).toContain('5,071')
+    expect(wrapper.get('[data-testid="output-token-estimated"]').text()).toBe('Estimated')
+    expect(wrapper.get('[data-testid="output-token-estimated"]').attributes('title')).toContain('including reasoning')
+    await wrapper.find('.group.relative').trigger('mouseenter')
+    expect(wrapper.text()).toContain('Input usage was not reported; no input charge.')
+    expect(wrapper.text()).toContain('Estimated from delivered content, including reasoning; not the upstream bill.')
+    expect(wrapper.text()).toContain('Recorded token subtotal')
+  })
+
+
+  it('keeps historical counts but hides internal provenance from ordinary users, including tooltip and title', async () => {
+    const wrapper = mountSources([{ ...baseImageRow, image_count: 0, billing_mode: 'token', input_tokens: 21916, input_tokens_source: 'upstream', output_tokens_source: 'estimated', output_tokens: 5071 }], false)
+    expect(wrapper.get('[data-testid="output-token-count"]').text()).toContain('5,071')
+    expect(wrapper.find('[data-testid="output-token-estimated"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="input-token-count"]').attributes('title')).toBeUndefined()
+    expect(wrapper.get('[data-testid="output-token-count"]').attributes('title')).toBeUndefined()
+    await wrapper.find('.group.relative').trigger('mouseenter')
+    expect(wrapper.text()).not.toContain('Estimated')
+    expect(wrapper.text()).not.toContain('including reasoning')
+    expect(wrapper.text()).not.toContain('Upstream report')
+    expect(wrapper.text()).not.toContain('Input usage source')
+    expect(wrapper.text()).not.toContain('Output usage source')
+    wrapper.unmount()
+  })
+
+  it('keeps legacy values without claiming upstream measurement', () => {
+    const wrapper = mountSources([{ ...baseImageRow, image_count: 0, billing_mode: 'token', input_tokens: 21916, output_tokens: 4055 }])
+    const input = wrapper.get('[data-testid="input-token-count"]')
+    expect(input.text()).toBe('21,916')
+    expect(input.attributes('title')).toBe('The source was not recorded; the stored count is shown.')
+    expect(wrapper.find('[data-testid="output-token-estimated"]').exists()).toBe(false)
   })
 })

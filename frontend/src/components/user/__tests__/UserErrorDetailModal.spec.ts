@@ -68,3 +68,13 @@ describe('user error detail requests', () => {
     expect(wrapper.find('.animate-spin').exists()).toBe(false)
   })
 })
+
+
+it('labels an interrupted HTTP 200 stream without claiming it completed or was free', async () => {
+  getDetail.mockResolvedValue({ ...detail('gemini-4-argon'), status_code: 200, category: 'client_cancel', client_canceled: true })
+  const wrapper = await open()
+  await flushPromises()
+  expect(wrapper.get('[data-testid="error-client-canceled"]').text()).toBe('usage.errors.categories.client_cancel')
+  expect(wrapper.text()).toContain('200')
+  expect(wrapper.text()).toContain('usage.errors.clientCanceledHint')
+})
