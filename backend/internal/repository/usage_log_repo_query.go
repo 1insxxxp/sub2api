@@ -198,7 +198,8 @@ func (r *usageLogRepository) hydrateUsageLogCompensation(ctx context.Context, lo
 			uro.http_status, uro.upstream_status, uro.has_text, uro.has_tool_call,
 			uro.has_reasoning, uro.has_media, uro.output_bytes, uro.event_count,
 			uro.stream_completed, uro.finish_reason, uro.disconnect_source,
-			uro.upstream_error_kind, uro.collector_version, uro.anti_truncation_rounds
+			uro.upstream_error_kind, uro.collector_version, uro.anti_truncation_rounds,
+			uro.input_tokens_source, uro.output_tokens_source
 		FROM usage_logs ul
 		LEFT JOIN empty_response_claims erc ON erc.usage_log_id = ul.id
 		LEFT JOIN usage_response_outcomes uro ON uro.usage_log_id = ul.id
@@ -215,7 +216,7 @@ func (r *usageLogRepository) hydrateUsageLogCompensation(ctx context.Context, lo
 	for rows.Next() {
 		var usageID int64
 		var claimID, httpStatus, upstreamStatus, outputBytes, eventCount, collectorVersion, antiTruncationRounds sql.NullInt64
-		var claimStatus, reasonCode, finishReason, disconnectSource, upstreamErrorKind sql.NullString
+		var claimStatus, reasonCode, finishReason, disconnectSource, upstreamErrorKind, inputTokensSource, outputTokensSource sql.NullString
 		var hasText, hasToolCall, hasReasoning, hasMedia, streamCompleted sql.NullBool
 		if err := rows.Scan(
 			&usageID, &claimID, &claimStatus, &reasonCode,
@@ -223,6 +224,7 @@ func (r *usageLogRepository) hydrateUsageLogCompensation(ctx context.Context, lo
 			&hasReasoning, &hasMedia, &outputBytes, &eventCount,
 			&streamCompleted, &finishReason, &disconnectSource,
 			&upstreamErrorKind, &collectorVersion, &antiTruncationRounds,
+			&inputTokensSource, &outputTokensSource,
 		); err != nil {
 			return err
 		}
@@ -239,7 +241,9 @@ func (r *usageLogRepository) hydrateUsageLogCompensation(ctx context.Context, lo
 		if antiTruncationRounds.Valid {
 			log.AntiTruncationRounds = int(antiTruncationRounds.Int64)
 		}
-		if collectorVersion.Valid {
+		log.InputTokensSource = service.UsageTokenSource(inputTokensSource.String).Normalize()
+		log.OutputTokensSource = service.UsageTokenSource(outputTokensSource.String).Normalize()
+		if collectorVersion.Valid && collectorVersion.Int64 > 0 {
 			log.Outcome = &service.ResponseOutcome{
 				HTTPStatus: int(httpStatus.Int64), UpstreamStatus: int(upstreamStatus.Int64),
 				HasText: hasText.Bool, HasToolCall: hasToolCall.Bool,

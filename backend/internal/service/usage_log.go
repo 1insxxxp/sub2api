@@ -151,8 +151,11 @@ type UsageLog struct {
 	CustomGroupID  *int64
 	SubscriptionID *int64
 
-	InputTokens          int
-	OutputTokens         int
+	InputTokens  int
+	OutputTokens int
+	// Preserve provenance from version 2 durable snapshots during rollback.
+	InputTokensSource    UsageTokenSource
+	OutputTokensSource   UsageTokenSource
 	UpstreamOutputTokens int `json:"-"`
 	CacheCreationTokens  int
 	CacheReadTokens      int

@@ -183,7 +183,7 @@ WITH scope AS MATERIALIZED (
   JOIN usage_ids ON usage_ids.id = ul.id
   JOIN scope ON scope.group_id = ul.group_id
     AND scope.model = COALESCE(NULLIF(TRIM(ul.requested_model), ''), NULLIF(TRIM(ul.model), ''), 'unknown')
-  LEFT JOIN usage_response_outcomes outcome ON outcome.usage_log_id = ul.id
+  LEFT JOIN usage_response_outcomes outcome ON outcome.usage_log_id = ul.id AND outcome.collector_version > 0
   LEFT JOIN empty_response_claims claim ON claim.usage_log_id = ul.id
 ), error_evidence AS (
   SELECT e.id, e.group_id, scope.platform, scope.model,

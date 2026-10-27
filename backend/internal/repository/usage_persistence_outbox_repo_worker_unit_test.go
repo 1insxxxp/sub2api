@@ -149,7 +149,7 @@ func TestUsagePersistencePayload_RoundTripsEveryInsertFieldWithoutDomainRelation
 	domain := &service.UsageLog{}
 	target := reflect.ValueOf(domain).Elem()
 	dto := reflect.TypeFor[usagePersistenceUsage]()
-	require.Equal(t, len(usageLogInsertArgTypes)+2, dto.NumField(), "only insert columns plus outcome and continuation rounds")
+	require.Equal(t, len(usageLogInsertArgTypes)+4, dto.NumField(), "only insert columns plus outcome, continuation rounds, and token provenance")
 	for i := 0; i < dto.NumField(); i++ {
 		name := dto.Field(i).Name
 		if name == "Outcome" {
@@ -186,6 +186,8 @@ func TestUsagePersistencePayload_RoundTripsEveryInsertFieldWithoutDomainRelation
 			t.Fatalf("unhandled snapshot field %s", name)
 		}
 	}
+	domain.InputTokensSource = service.UsageTokenSourceUnreported
+	domain.OutputTokensSource = service.UsageTokenSourceEstimated
 	domain.RequestType = service.RequestTypeStream
 	domain.Outcome = &service.ResponseOutcome{HTTPStatus: 200, UpstreamStatus: 200, HasText: true, HasToolCall: true, HasReasoning: true, HasMedia: true, OutputBytes: 33, EventCount: 3, StreamCompleted: true, FinishReason: "stop", DisconnectSource: service.DisconnectSourceNone, UpstreamErrorKind: service.UpstreamErrorNone, CollectorVersion: 1}
 	domain.User = &service.User{Email: "do-not-persist@example.invalid"}
@@ -197,6 +199,8 @@ func TestUsagePersistencePayload_RoundTripsEveryInsertFieldWithoutDomainRelation
 	restored, err := decodeUsagePersistencePayload(raw, domain.RequestID, domain.APIKeyID)
 	require.NoError(t, err)
 	require.Equal(t, prepareUsageLogInsert(domain).args, prepareUsageLogInsert(restored).args)
+	require.Equal(t, domain.InputTokensSource, restored.InputTokensSource)
+	require.Equal(t, domain.OutputTokensSource, restored.OutputTokensSource)
 	require.Equal(t, domain.Outcome, restored.Outcome)
 	require.Equal(t, domain.AntiTruncationRounds, restored.AntiTruncationRounds)
 	require.Nil(t, restored.User)
