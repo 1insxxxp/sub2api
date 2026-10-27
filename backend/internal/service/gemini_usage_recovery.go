@@ -153,7 +153,7 @@ func (s *GatewayService) fetchGeminiUsageLedger(ctx context.Context, endpoint, a
 	if resp == nil || resp.Body == nil {
 		return nil, ErrGeminiUsageRecoveryUnavailable
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK || (resp.Request != nil && (resp.Request.URL == nil || resp.Request.URL.String() != endpoint)) {
 		return nil, ErrGeminiUsageRecoveryUnavailable
 	}

@@ -35,7 +35,7 @@ func applyGeminiMeasuredUsageEvidence(result *ForwardResult, fields uint8) {
 	// Keep the existing image/audio billing policy outside this text-only change,
 	// including an image model canceled before its first generated image.
 	result.RequireMeasuredUsage = result.ImageCount == 0 && result.Usage.ImageOutputTokens == 0 &&
-		result.AudioUsage == nil && !(result.Outcome != nil && result.Outcome.HasMedia) &&
+		result.AudioUsage == nil && (result.Outcome == nil || !result.Outcome.HasMedia) &&
 		!isImageGenerationModel(result.Model) && !isImageGenerationModel(result.UpstreamModel) &&
 		!isGeminiImageOutputModel(result.Model) && !isGeminiImageOutputModel(result.UpstreamModel)
 	// Candidates must be explicitly present, even for thought-only generation.

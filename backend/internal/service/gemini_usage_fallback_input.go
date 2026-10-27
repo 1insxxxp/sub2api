@@ -194,7 +194,7 @@ func (s *GatewayService) CountGeminiInputFallback(ctx context.Context, input *Re
 	if resp == nil || resp.Body == nil {
 		return 0, false, ErrGeminiInputCountUnavailable
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK || (resp.Request != nil && (resp.Request.URL == nil || resp.Request.URL.String() != prepared.URL)) {
 		return 0, false, ErrGeminiInputCountUnavailable
 	}

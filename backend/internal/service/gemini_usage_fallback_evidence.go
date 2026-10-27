@@ -60,7 +60,7 @@ func (a *GeminiUpstreamAttempt) reconcileFallbackText(target *strings.Builder, i
 		// Duplicate/cumulative rewind, matching the streaming adapters.
 		return
 	}
-	target.WriteString(a.boundedFallbackText(incoming))
+	_, _ = target.WriteString(a.boundedFallbackText(incoming))
 }
 
 func (a *GeminiUpstreamAttempt) boundedFallbackText(text string) string {
@@ -169,7 +169,7 @@ func (a *GeminiUpstreamAttempt) observeFallbackOutput(raw []byte) {
 					// make prefix-based string reconciliation unsuitable here.
 					a.fallbackOutputBytes -= tool.args.Len()
 					tool.args.Reset()
-					tool.args.WriteString(a.boundedFallbackText(args))
+					_, _ = tool.args.WriteString(a.boundedFallbackText(args))
 				} else {
 					a.reconcileFallbackText(&tool.args, args)
 				}
