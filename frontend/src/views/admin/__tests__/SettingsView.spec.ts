@@ -15,6 +15,15 @@ import SettingsView from "../SettingsView.vue";
 const currentDir = dirname(fileURLToPath(import.meta.url));
 const settingsViewSource = readFileSync(resolve(currentDir, "../SettingsView.vue"), "utf8");
 
+// The scoped-key editor has its own API and permission tests; keep page-shell
+// tests isolated from its on-mount network requests.
+vi.mock("@/components/admin/settings/AdminAccessKeysSettings.vue", () => ({
+  default: {
+    name: "AdminAccessKeysSettings",
+    template: '<section data-test="scoped-admin-keys" />',
+  },
+}));
+
 describe("admin SettingsView recharge promotion", () => {
   it("mounts the promotion editor beneath recharge tiers and submits its config", () => {
     expect(settingsViewSource).toContain("<RechargePromotionEditor");
@@ -361,11 +370,24 @@ describe("admin SettingsView unified shell", () => {
     expect(settingsViewSource).not.toContain("max-w-6xl");
   });
 
-  it("renders shared admin info blocks inside the settings workspace", async () => {
+  it("preserves the shared warning surface for an existing legacy admin key", async () => {
+    getAdminApiKey.mockResolvedValueOnce({ exists: true, masked_key: "admin-legacy...1234" });
     const wrapper = mountView();
     await flushPromises();
 
     expect(wrapper.find('[data-test="settings-admin-api-warning"]').classes()).toContain("admin-form-section");
+    expect(wrapper.find('[data-test="scoped-admin-keys"]').exists()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it("shows scoped admin keys without legacy controls when no legacy key exists", async () => {
+    getAdminApiKey.mockResolvedValueOnce({ exists: false, masked_key: "" });
+    const wrapper = mountView();
+    await flushPromises();
+
+    expect(wrapper.find('[data-test="scoped-admin-keys"]').exists()).toBe(true);
+    expect(wrapper.find('[data-test="settings-admin-api-warning"]').exists()).toBe(false);
+    wrapper.unmount();
   });
 
   it("uses shared brand floating surfaces for hand-written settings dialogs", () => {

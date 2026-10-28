@@ -573,8 +573,8 @@ func TestHandleGeminiUpstreamError_DailyQuotaDoesNotImplySharedQuota(t *testing.
 }
 
 func TestGeminiRetryLimit429IsBounded(t *testing.T) {
-	require.Equal(t, 2, geminiRetryLimit(http.StatusTooManyRequests))
-	require.Equal(t, geminiMaxRetries, geminiRetryLimit(http.StatusServiceUnavailable))
+	require.Equal(t, 2, geminiRetryLimit(http.StatusTooManyRequests, geminiDefaultSameAccountRetries+1))
+	require.Equal(t, geminiDefaultSameAccountRetries+1, geminiRetryLimit(http.StatusServiceUnavailable, geminiDefaultSameAccountRetries+1))
 }
 
 // ---------------------------------------------------------------------------

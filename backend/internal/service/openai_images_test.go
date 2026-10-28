@@ -1394,49 +1394,62 @@ func TestOpenAIGatewayServiceForwardImages_APIKeyGenerationUsesConfiguredV1BaseU
 
 func TestOpenAIGatewayServiceForwardImages_APIKeyGenerationDoesNotInferImageCountFromRequestN(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	body := []byte(`{"model":"gpt-image-2","prompt":"draw a cat","n":1,"response_format":"b64_json"}`)
+	for _, tc := range []struct {
+		name          string
+		forcePerImage bool
+		wantImages    int
+	}{
+		{name: "default keeps actual zero"},
+		{name: "explicit per-image switch enables one-image fallback", forcePerImage: true, wantImages: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := []byte(`{"model":"gpt-image-2","prompt":"draw a cat","n":3,"response_format":"b64_json"}`)
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/images/generations", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	rec := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(rec)
-	c.Request = req
+			req := httptest.NewRequest(http.MethodPost, "/v1/images/generations", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(rec)
+			c.Request = req
+			c.Set("api_key", &APIKey{Group: &Group{AllowImageGeneration: true, ImageCountBilling: tc.forcePerImage}})
 
-	svc := &OpenAIGatewayService{
-		cfg: &config.Config{},
-		httpUpstream: &httpUpstreamRecorder{
-			resp: &http.Response{
-				StatusCode: http.StatusOK,
-				Header: http.Header{
-					"Content-Type": []string{"application/json"},
-					"X-Request-Id": []string{"req_img_empty"},
+			svc := &OpenAIGatewayService{
+				cfg: &config.Config{},
+				httpUpstream: &httpUpstreamRecorder{
+					resp: &http.Response{
+						StatusCode: http.StatusOK,
+						Header: http.Header{
+							"Content-Type": []string{"application/json"},
+							"X-Request-Id": []string{"req_img_empty"},
+						},
+						Body: io.NopCloser(strings.NewReader(`{"created":1710000009,"usage":{"input_tokens":12,"output_tokens":21},"data":[]}`)),
+					},
 				},
-				Body: io.NopCloser(strings.NewReader(`{"created":1710000009,"usage":{"input_tokens":12,"output_tokens":21},"data":[]}`)),
-			},
-		},
-	}
-	parsed, err := svc.ParseOpenAIImagesRequest(c, body)
-	require.NoError(t, err)
+			}
+			parsed, err := svc.ParseOpenAIImagesRequest(c, body)
+			require.NoError(t, err)
 
-	account := &Account{
-		ID:       8,
-		Name:     "openai-apikey",
-		Platform: PlatformOpenAI,
-		Type:     AccountTypeAPIKey,
-		Credentials: map[string]any{
-			"api_key":  "test-api-key",
-			"base_url": "https://image-upstream.example/v1",
-		},
-	}
+			account := &Account{
+				ID:       8,
+				Name:     "openai-apikey",
+				Platform: PlatformOpenAI,
+				Type:     AccountTypeAPIKey,
+				Credentials: map[string]any{
+					"api_key":  "test-api-key",
+					"base_url": "https://image-upstream.example/v1",
+				},
+			}
 
-	result, err := svc.ForwardImages(context.Background(), c, account, body, parsed, "")
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.Equal(t, 0, result.ImageCount)
-	require.Equal(t, 12, result.Usage.InputTokens)
-	require.Equal(t, 21, result.Usage.OutputTokens)
-	require.Equal(t, http.StatusOK, rec.Code)
-	require.Empty(t, gjson.Get(rec.Body.String(), "data").Array())
+			result, err := svc.ForwardImages(context.Background(), c, account, body, parsed, "")
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			require.Equal(t, tc.wantImages, result.ImageCount)
+			require.True(t, result.ImageEndpoint)
+			require.Equal(t, 12, result.Usage.InputTokens)
+			require.Equal(t, 21, result.Usage.OutputTokens)
+			require.Equal(t, http.StatusOK, rec.Code)
+			require.Empty(t, gjson.Get(rec.Body.String(), "data").Array())
+		})
+	}
 }
 
 func TestOpenAIGatewayServiceForwardImages_APIKeyNonStreamWriteFailureSkipsBillableResult(t *testing.T) {

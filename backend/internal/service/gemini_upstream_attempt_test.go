@@ -105,6 +105,21 @@ func TestGeminiUpstreamAttempt_DecoratesExistingFailureWithoutDuplicating(t *tes
 	require.Equal(t, "actual-upstream-id", events[0].UpstreamRequestID)
 	require.EqualValues(t, 500, events[0].InputTokens)
 	require.Equal(t, 1, events[0].Attempt)
+	require.Equal(t, "inference", events[0].Stage)
+}
+
+func TestGeminiUpstreamAttempt_PreservesExistingFailureStage(t *testing.T) {
+	c := newGeminiAttemptTestContext(t)
+	attempt := BeginGeminiUpstreamAttempt(c, &Account{ID: 7, Platform: PlatformGemini}, "gemini-test", true)
+	appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+		AccountID: 7, Stage: "response_headers", Kind: "first_output_timeout",
+		UpstreamStatusCode: http.StatusGatewayTimeout,
+	})
+	attempt.End(&UpstreamFailoverError{StatusCode: http.StatusGatewayTimeout, Reason: "first_output_timeout"})
+	events := geminiAttemptTestEvents(t, c)
+	require.Len(t, events, 1)
+	require.Equal(t, "response_headers", events[0].Stage)
+	require.Equal(t, 1, events[0].Attempt)
 }
 
 func TestGeminiUpstreamAttempt_CancelOnlyAfterRealInference(t *testing.T) {

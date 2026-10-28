@@ -1,4 +1,5 @@
 import { mergeMessages } from '../mergeMessages'
+import adminAccessKeys from './adminAccessKeys'
 import landing from './landing'
 import common from './common'
 import dashboard from './dashboard'
@@ -12,6 +13,7 @@ import manager from './manager'
 import modelStatus from './modelStatus'
 
 export default mergeMessages({
+  adminAccessKeys,
   ...landing,
   ...common,
   ...dashboard,

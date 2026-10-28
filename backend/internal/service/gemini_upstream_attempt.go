@@ -244,6 +244,9 @@ func (a *GeminiUpstreamAttempt) EndClientCanceled() {
 
 func (a *GeminiUpstreamAttempt) copyMetadata(event *OpsUpstreamErrorEvent) {
 	event.Attempt, event.Model, event.Stream, event.DurationMs = a.event.Attempt, a.event.Model, a.event.Stream, a.event.DurationMs
+	if event.Stage == "" {
+		event.Stage = a.event.Stage
+	}
 	event.UsageState, event.UsageFields = a.event.UsageState, a.event.UsageFields
 	event.InputTokens, event.OutputTokens = a.event.InputTokens, a.event.OutputTokens
 	event.CacheReadTokens, event.ThoughtTokens, event.TotalTokens = a.event.CacheReadTokens, a.event.ThoughtTokens, a.event.TotalTokens

@@ -133,6 +133,8 @@ func TestGeminiFirstOutputTraversal_PreservesUnprotectedRetryAndBadRequests(t *t
 				settings := `{"enabled":` + map[bool]string{true: "true", false: "false"}[tc.enabled] + `,"default":{"enabled":true,"target_seconds":60,"switch_seconds":60,"hard_cap_seconds":300}}`
 				upstream := &geminiTraversalUpstream{firstStatus: tc.status}
 				svc := &GeminiMessagesCompatService{httpUpstream: upstream, cfg: &config.Config{}, settingService: &SettingService{settingRepo: &modelFirstOutputSettingRepo{value: settings}}}
+				// Exercise the production default retry budget; zero now explicitly disables same-account retries.
+				svc.cfg.Gateway.MaxSameAccountRetriesGemini = geminiDefaultSameAccountRetries
 				account := geminiPoolModeAPIKeyAccount()
 				delete(account.Credentials, "pool_mode")
 				c, _ := gin.CreateTestContext(httptest.NewRecorder())

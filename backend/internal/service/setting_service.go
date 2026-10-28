@@ -171,6 +171,7 @@ type SettingService struct {
 	claudeCodeVersionSF                singleflight.Group
 	codexRestrictionPolicyCache        atomic.Value // *cachedCodexRestrictionPolicy
 	codexRestrictionPolicySF           singleflight.Group
+	scopedAdminKeyRepo                 ScopedAdminKeyRepository
 
 	cyberSessionBlockRuntimeMu    sync.Mutex
 	cyberSessionBlockRuntimeCache atomic.Value // *cachedCyberSessionBlockRuntime
