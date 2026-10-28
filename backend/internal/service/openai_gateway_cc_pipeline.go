@@ -260,6 +260,15 @@ func (s *OpenAIGatewayService) sendCCUpstreamRequest(
 		capture.response(resp)
 	}
 	if err != nil {
+		// Raw Chat deliberately detaches the upstream request. A later EOF or
+		// reset therefore need not wrap context.Canceled, even though the actual
+		// downstream request has already gone away. Resolve that evidence before
+		// transport failover/cooldown, but never erase an observed HTTP response.
+		if capture != nil && capture.current != nil && account != nil && capture.current.AccountID == account.ID &&
+			capture.delivered != nil && capture.delivered.Snapshot().UpstreamStatus == 0 &&
+			c != nil && c.Request != nil && errors.Is(c.Request.Context().Err(), context.Canceled) {
+			return nil, c.Request.Context().Err()
+		}
 		return nil, s.handleOpenAIUpstreamTransportError(ctx, c, account, err, false)
 	}
 	return resp, nil
