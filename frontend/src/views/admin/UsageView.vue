@@ -600,7 +600,8 @@ const exportToExcel = async () => {
       t('admin.usage.cacheReadCost'), t('admin.usage.cacheCreationCost'),
       t('usage.rate'), t('usage.accountMultiplier'), t('usage.original'), t('usage.userBilled'), t('usage.accountBilled'),
       t('usage.firstToken'), t('usage.duration'),
-      t('admin.usage.requestId'), t('admin.usage.upstreamRequestId'), t('usage.userAgent'), t('admin.usage.ipAddress'), t('usage.billingStatus')
+      t('admin.usage.requestId'), t('admin.usage.upstreamRequestId'), t('usage.userAgent'), t('admin.usage.ipAddress'), t('usage.billingStatus'),
+      t('usage.emptyResponse.refunded'), t('usage.emptyResponse.netCharge'), t('usage.requestStatus')
     ]
     const ws = XLSX.utils.aoa_to_sheet([headers])
     while (true) {
@@ -613,7 +614,7 @@ const exportToExcel = async () => {
         log.created_at, log.user?.email || '', log.api_key?.name || '', log.account?.name || '', log.model,
         log.upstream_model || log.model, log.upstream_response_model || '', log.upstream_model_mismatch == null ? '' : t(log.upstream_model_mismatch ? 'common.yes' : 'common.no'), formatReasoningEffort(log.reasoning_effort), formatReasoningEffort(log.upstream_reasoning_effort || log.reasoning_effort), log.group?.name || '',
         log.inbound_endpoint || '', log.upstream_endpoint || '', getRequestTypeLabel(log),
-        exportUsageTokenCount(log.input_tokens, log.input_tokens_source), exportUsageTokenCount(log.output_tokens, log.output_tokens_source),
+        exportUsageTokenCount(log.input_tokens, log.input_tokens_source, log.input_tokens_known), exportUsageTokenCount(log.output_tokens, log.output_tokens_source, log.output_tokens_known),
         usageTokenSourceLabel(log.input_tokens_source, t), usageTokenSourceLabel(log.output_tokens_source, t),
         log.cache_read_tokens, log.cache_creation_tokens,
         formatUsageBillingCost(log.input_cost, log, t), formatUsageBillingCost(log.output_cost, log, t),
@@ -621,7 +622,10 @@ const exportToExcel = async () => {
         log.rate_multiplier?.toPrecision(4) || '1.00', (log.account_rate_multiplier ?? 1).toPrecision(4),
         formatUsageBillingCost(log.total_cost, log, t), formatUsageBillingCost(log.actual_cost, log, t),
         formatUsageBillingCost((log.account_stats_cost ?? log.total_cost) * (log.account_rate_multiplier ?? 1), log, t), log.first_token_ms ?? '', log.duration_ms,
-        log.request_id || '', log.upstream_request_id || '', log.user_agent || '', log.ip_address || '', usageBillingStatusLabel(log, t)
+        log.request_id || '', log.upstream_request_id || '', log.user_agent || '', log.ip_address || '', usageBillingStatusLabel(log, t),
+        formatUsageBillingCost(log.compensated_cost ?? 0, log, t),
+        formatUsageBillingCost(log.net_actual_cost ?? Math.max(0, (log.actual_cost ?? 0) - (log.compensated_cost ?? 0)), log, t),
+        log.request_status ?? 'unknown'
       ])
       if (rows.length) {
         XLSX.utils.sheet_add_aoa(ws, rows, { origin: -1 })

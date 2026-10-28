@@ -499,6 +499,13 @@ func EvaluateEmptyResponseClaim(now time.Time, usage UsageLog, outcome *Response
 	if isPureEmptyResponse(outcome) {
 		return decision(EmptyResponseClaimApproved, EmptyResponseReasonPureEmpty)
 	}
+	// New provenance-aware rows must not turn an absent measurement into a
+	// low-output claim. Verified empty completion above remains independent
+	// evidence. Unknown historical rows retain the original benefit policy.
+	if usage.OutputTokensSource == UsageTokenSourceUnreported ||
+		(usage.OutputTokensSource == UsageTokenSourceEstimated && usage.OutputTokens == 0) {
+		return decision(EmptyResponseClaimManualReview, EmptyResponseReasonMissingEvidence)
+	}
 	// The user-facing rule is based on the billed output token count. Response
 	// evidence remains available for review, but small responses are eligible
 	// even when the protocol collector observed a few output events.

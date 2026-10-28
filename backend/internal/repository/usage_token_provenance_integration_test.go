@@ -164,9 +164,23 @@ func TestUsageTokenProvenanceDoesNotChangeSuccessfulSyncAnalytics(t *testing.T) 
 		require.Zero(t, failure)
 	})
 	t.Run("claim evidence", func(t *testing.T) {
+		rows, err := tx.QueryContext(ctx, `SELECT id, collector_version FROM usage_response_outcomes WHERE request_id = $1 AND api_key_id = $2`, log.RequestID, key.ID)
+		require.NoError(t, err)
+		require.True(t, rows.Next())
+		var metadataID int64
+		var collectorVersion int
+		require.NoError(t, rows.Scan(&metadataID, &collectorVersion))
+		require.NoError(t, rows.Close())
+		require.Zero(t, collectorVersion, "source-only metadata must not become collected response evidence")
+
 		evaluation, err := newEmptyResponseClaimRepositoryWithSQL(tx).LoadEvaluation(ctx, user.ID, log.ID)
 		require.NoError(t, err)
+		// The metadata row supplies provenance and its reference, while only a
+		// positive collector version may supply actual response evidence.
+		require.NotNil(t, evaluation.OutcomeID)
+		require.Equal(t, metadataID, *evaluation.OutcomeID)
+		require.Equal(t, service.UsageTokenSourceUpstream, evaluation.Usage.InputTokensSource)
+		require.Equal(t, service.UsageTokenSourceUpstream, evaluation.Usage.OutputTokensSource)
 		require.Nil(t, evaluation.Outcome)
-		require.Nil(t, evaluation.OutcomeID)
 	})
 }

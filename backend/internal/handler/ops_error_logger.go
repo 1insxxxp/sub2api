@@ -1110,10 +1110,11 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 		}
 
 		status := c.Writer.Status()
-		// Only a cancellation after a real Gemini inference call gets a neutral
-		// diagnostic summary. Preflight/client-only cancellation keeps its existing
-		// skip behavior, and earlier genuine failures remain provider telemetry.
-		if status == statusClientClosedRequest && hasOpsGeminiInferenceCancellation(c) {
+		// A confirmed downstream write failure can precede context cancellation
+		// and retain HTTP 200. Keep actual inference cancellations neutral even
+		// when a terminal error frame was already observed; preserve earlier
+		// genuine failures as provider telemetry.
+		if (status < 400 || status == statusClientClosedRequest) && hasOpsInferenceCancellation(c) {
 			logOpsRecoveredUpstream(c, ops, http.StatusOK)
 			return
 		}
@@ -1378,6 +1379,15 @@ func logOpsRecoveredUpstream(c *gin.Context, ops *service.OpsService, finalStatu
 		entry.ErrorOwner = "client"
 		entry.Severity = "P3"
 		entry.ErrorMessage = "Client canceled upstream inference; provider usage may be unreported"
+	} else if lastEvent != nil && lastEvent.Attempt > 0 && lastEvent.Stage == "inference" && lastEvent.Scope == "gateway" {
+		// A later successful retry or neutral cancellation does not change a
+		// locally observed gateway failure into a provider failure. Keep all
+		// attempts intact while correcting only the selected summary's owner.
+		entry.ErrorPhase = "internal"
+		entry.ErrorType = "api_error"
+		entry.ErrorSource = "gateway"
+		entry.ErrorOwner = "platform"
+		entry.ErrorMessage = "Recovered gateway inference failure"
 	}
 
 	if c.Request != nil {
@@ -1788,15 +1798,17 @@ func lastOpsAttributionEvent(events []*service.OpsUpstreamErrorEvent) *service.O
 	return neutral
 }
 
-func hasOpsGeminiInferenceCancellation(c *gin.Context) bool {
-	if c == nil || c.Request == nil || c.Request.Context().Err() == nil {
+func hasOpsInferenceCancellation(c *gin.Context) bool {
+	if c == nil || c.Request == nil {
 		return false
 	}
 	value, _ := c.Get(service.OpsUpstreamErrorsKey)
 	events, _ := value.([]*service.OpsUpstreamErrorEvent)
 	for i := len(events) - 1; i >= 0; i-- {
 		if events[i] != nil {
-			return events[i].ClientCanceled && events[i].Attempt > 0
+			event := events[i]
+			return event.Attempt > 0 && (event.IsClientCancelDiagnostic() ||
+				(event.ClientCanceled && c.Request.Context().Err() != nil))
 		}
 	}
 	return false
@@ -2294,6 +2306,8 @@ func classifyOpsErrorLog(c *gin.Context, errType, message, code string, status i
 		phase = "routing"
 	} else if accountAuthFailure && !routingCapacityLimited {
 		phase = "account_auth"
+	} else if hasOpsGatewayInferenceFailure(c) && !routingCapacityLimited {
+		phase = "internal"
 	} else if upstreamError && !routingCapacityLimited {
 		phase = "upstream"
 	}
@@ -2416,6 +2430,22 @@ func hasOpsUpstreamErrorContext(c *gin.Context) bool {
 	if v, ok := c.Get(service.OpsUpstreamErrorsKey); ok {
 		if events, ok := v.([]*service.OpsUpstreamErrorEvent); ok && len(events) > 0 {
 			return true
+		}
+	}
+	return false
+}
+
+// Only the final, explicitly collected gateway failure changes attribution.
+// Earlier provider failures remain in the attempt history unchanged.
+func hasOpsGatewayInferenceFailure(c *gin.Context) bool {
+	if c == nil {
+		return false
+	}
+	value, _ := c.Get(service.OpsUpstreamErrorsKey)
+	events, _ := value.([]*service.OpsUpstreamErrorEvent)
+	for i := len(events) - 1; i >= 0; i-- {
+		if event := events[i]; event != nil {
+			return event.Attempt > 0 && event.Stage == "inference" && event.Scope == "gateway" && !event.ClientCanceled
 		}
 	}
 	return false

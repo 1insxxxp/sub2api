@@ -63,6 +63,45 @@ func ensureResponseOutcomeForUsageLog(outcome *ResponseOutcome, rounds int) *Res
 // usage consumers. It intentionally contains no provider message or endpoint.
 type UsageOutcomeStatus string
 
+// UsageRequestStatus describes one request's completion, independently of the
+// provider-health classification used by monitoring.
+type UsageRequestStatus string
+
+const (
+	UsageRequestCompleted   UsageRequestStatus = "completed"
+	UsageRequestInterrupted UsageRequestStatus = "interrupted"
+	UsageRequestFailed      UsageRequestStatus = "failed"
+	UsageRequestEmpty       UsageRequestStatus = "empty"
+	UsageRequestUnknown     UsageRequestStatus = "unknown"
+)
+
+func ClassifyUsageRequestStatus(outcome *ResponseOutcome) UsageRequestStatus {
+	if outcome == nil || outcome.CollectorVersion <= 0 {
+		return UsageRequestUnknown
+	}
+	// A lost downstream connection does not prove a provider failure, even if
+	// response headers or a provider terminal event were already received.
+	if outcome.DisconnectSource == DisconnectSourceClient {
+		return UsageRequestInterrupted
+	}
+	if outcome.HTTPStatus >= 400 || outcome.UpstreamStatus >= 400 || outcome.UpstreamErrorKind == UpstreamErrorHTTP5xx {
+		return UsageRequestFailed
+	}
+	if outcome.DisconnectSource == DisconnectSourceUpstream || outcome.DisconnectSource == DisconnectSourceServer {
+		return UsageRequestInterrupted
+	}
+	if outcome.UpstreamErrorKind != "" && outcome.UpstreamErrorKind != UpstreamErrorNone {
+		return UsageRequestFailed
+	}
+	if outcome.StreamCompleted && outcome.HTTPStatus >= 200 && outcome.UpstreamStatus >= 200 {
+		if outcome.HasEffectiveOutput() {
+			return UsageRequestCompleted
+		}
+		return UsageRequestEmpty
+	}
+	return UsageRequestUnknown
+}
+
 const (
 	UsageOutcomeSuccess UsageOutcomeStatus = "success"
 	UsageOutcomeFailure UsageOutcomeStatus = "failure"

@@ -36,11 +36,12 @@ func (r *emptyResponseClaimRepository) LoadEvaluation(ctx context.Context, userI
 			uro.id, uro.http_status, uro.upstream_status, uro.has_text, uro.has_tool_call,
 			uro.has_reasoning, uro.has_media, uro.output_bytes, uro.event_count,
 			uro.stream_completed, uro.finish_reason, uro.disconnect_source,
-			uro.upstream_error_kind, uro.collector_version
+			uro.upstream_error_kind, uro.collector_version,
+			COALESCE(uro.input_tokens_source, 'unknown'), COALESCE(uro.output_tokens_source, 'unknown')
 		FROM usage_logs ul
 		LEFT JOIN groups g ON g.id = ul.group_id
 		LEFT JOIN usage_response_outcomes uro
-			ON uro.request_id = ul.request_id AND uro.api_key_id = ul.api_key_id AND uro.collector_version > 0
+			ON uro.request_id = ul.request_id AND uro.api_key_id = ul.api_key_id
 		WHERE ul.user_id = $1 AND ul.id = $2
 	`
 
@@ -52,6 +53,7 @@ func (r *emptyResponseClaimRepository) LoadEvaluation(ctx context.Context, userI
 	var hasText, hasToolCall, hasReasoning, hasMedia, streamCompleted sql.NullBool
 	var outputBytes sql.NullInt64
 	var finishReason, disconnectSource, upstreamErrorKind sql.NullString
+	var inputTokensSource, outputTokensSource string
 	err := scanSingleRow(ctx, r.sql, query, []any{userID, usageLogID},
 		&usage.ID, &usage.UserID, &usage.APIKeyID, &usage.AccountID, &groupID, &subscriptionID,
 		&usage.ActualCost, &usage.CompensatedCost, &usage.BillingType, &usage.CreatedAt, &stream,
@@ -60,6 +62,7 @@ func (r *emptyResponseClaimRepository) LoadEvaluation(ctx context.Context, userI
 		&outcomeID, &httpStatus, &upstreamStatus, &hasText, &hasToolCall,
 		&hasReasoning, &hasMedia, &outputBytes, &eventCount, &streamCompleted,
 		&finishReason, &disconnectSource, &upstreamErrorKind, &collectorVersion,
+		&inputTokensSource, &outputTokensSource,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, service.ErrEmptyResponseClaimNotFound
@@ -75,6 +78,8 @@ func (r *emptyResponseClaimRepository) LoadEvaluation(ctx context.Context, userI
 	usage.Stream = stream
 	usage.CacheCreationTokens = cacheCreationTokens
 	usage.CacheReadTokens = cacheReadTokens
+	usage.InputTokensSource = service.UsageTokenSource(inputTokensSource).Normalize()
+	usage.OutputTokensSource = service.UsageTokenSource(outputTokensSource).Normalize()
 	if subscriptionID.Valid {
 		usage.SubscriptionID = &subscriptionID.Int64
 	}
@@ -87,6 +92,8 @@ func (r *emptyResponseClaimRepository) LoadEvaluation(ctx context.Context, userI
 	}
 	if outcomeID.Valid {
 		evaluation.OutcomeID = &outcomeID.Int64
+	}
+	if outcomeID.Valid && collectorVersion.Int64 > 0 {
 		evaluation.Outcome = &service.ResponseOutcome{
 			HTTPStatus:        int(httpStatus.Int64),
 			UpstreamStatus:    int(upstreamStatus.Int64),
@@ -140,6 +147,9 @@ func (r *emptyResponseClaimRepository) ListRecentEvaluations(ctx context.Context
 	params.PageSize = limit
 	offset := params.Offset()
 
+	// Match EvaluateEmptyResponseClaim's measurement gate before both COUNT and
+	// pagination. Existing claims retain their frozen decision; a real pure-empty
+	// completion remains independent evidence even when token usage is absent.
 	whereSQL := `
 		ul.user_id = $1
 			AND ul.created_at >= $2
@@ -147,6 +157,25 @@ func (r *emptyResponseClaimRepository) ListRecentEvaluations(ctx context.Context
 			AND COALESCE(g.empty_response_compensation_enabled, FALSE) = TRUE
 			AND ul.output_tokens >= 0
 			AND ul.output_tokens <= $4
+			AND (
+				erc.id IS NOT NULL
+				OR (
+					COALESCE(uro.output_tokens_source, 'unknown') <> 'unreported'
+					AND (COALESCE(uro.output_tokens_source, 'unknown') <> 'estimated' OR ul.output_tokens <> 0)
+				)
+				OR (
+					COALESCE(uro.collector_version, 0) > 0
+					AND COALESCE(uro.stream_completed, FALSE) = TRUE
+					AND uro.http_status >= 200 AND uro.http_status < 300
+					AND uro.upstream_status >= 200 AND uro.upstream_status < 300
+					AND NOT COALESCE(uro.has_text, FALSE)
+					AND NOT COALESCE(uro.has_tool_call, FALSE)
+					AND NOT COALESCE(uro.has_reasoning, FALSE)
+					AND NOT COALESCE(uro.has_media, FALSE)
+					AND COALESCE(uro.disconnect_source, '') IN ('', 'none')
+					AND COALESCE(uro.upstream_error_kind, '') IN ('', 'none')
+				)
+			)
 			AND (erc.id IS NOT NULL OR (
                 ul.actual_cost > 0 AND COALESCE(ul.compensated_cost, 0) <= 0
                 AND TRUNC(LEAST(ul.actual_cost, 5), 10) > 0
@@ -166,7 +195,7 @@ func (r *emptyResponseClaimRepository) ListRecentEvaluations(ctx context.Context
 	countQuery := `
 			SELECT COUNT(*)
 			FROM usage_logs ul
-			LEFT JOIN usage_response_outcomes uro ON uro.usage_log_id = ul.id AND uro.collector_version > 0
+			LEFT JOIN usage_response_outcomes uro ON uro.usage_log_id = ul.id
 			LEFT JOIN empty_response_claims erc ON erc.usage_log_id = ul.id
 		LEFT JOIN groups g ON g.id = ul.group_id
 		WHERE ` + whereSQL
@@ -187,12 +216,13 @@ func (r *emptyResponseClaimRepository) ListRecentEvaluations(ctx context.Context
 			uro.has_reasoning, uro.has_media, uro.output_bytes, uro.event_count,
 			uro.stream_completed, uro.finish_reason, uro.disconnect_source,
 			uro.upstream_error_kind, uro.collector_version,
+			COALESCE(uro.input_tokens_source, 'unknown'), COALESCE(uro.output_tokens_source, 'unknown'),
 			erc.id, erc.status, erc.reason_code,
 			COALESCE(erc.balance_refund + erc.subscription_refund, 0)::float8,
             erc.compensation_amount::float8,
 			COALESCE(erc.original_actual_cost, 0)::float8, COALESCE(erc.rule_version, 0)
 		FROM usage_logs ul
-		LEFT JOIN usage_response_outcomes uro ON uro.usage_log_id = ul.id AND uro.collector_version > 0
+		LEFT JOIN usage_response_outcomes uro ON uro.usage_log_id = ul.id
 		LEFT JOIN empty_response_claims erc ON erc.usage_log_id = ul.id
 		LEFT JOIN api_keys ak ON ak.id = ul.api_key_id
 		LEFT JOIN groups g ON g.id = ul.group_id
@@ -216,6 +246,7 @@ func (r *emptyResponseClaimRepository) ListRecentEvaluations(ctx context.Context
 		var httpStatus, upstreamStatus, outputBytes, eventCount, collectorVersion sql.NullInt64
 		var hasText, hasToolCall, hasReasoning, hasMedia, streamCompleted sql.NullBool
 		var finishReason, disconnectSource, upstreamErrorKind, claimStatus, claimReasonCode sql.NullString
+		var inputTokensSource, outputTokensSource string
 		var inboundEndpoint sql.NullString
 		var claimCompensationAmount sql.NullFloat64
 		if err := rows.Scan(
@@ -226,6 +257,7 @@ func (r *emptyResponseClaimRepository) ListRecentEvaluations(ctx context.Context
 			&outcomeID, &httpStatus, &upstreamStatus, &hasText, &hasToolCall,
 			&hasReasoning, &hasMedia, &outputBytes, &eventCount, &streamCompleted,
 			&finishReason, &disconnectSource, &upstreamErrorKind, &collectorVersion,
+			&inputTokensSource, &outputTokensSource,
 			&claimID, &claimStatus, &claimReasonCode, &candidate.RefundedAmount,
 			&claimCompensationAmount,
 			&candidate.ClaimOriginalActualCost, &candidate.ClaimRuleVersion,
@@ -241,6 +273,8 @@ func (r *emptyResponseClaimRepository) ListRecentEvaluations(ctx context.Context
 		usage.Stream = stream
 		usage.CacheCreationTokens = cacheCreationTokens
 		usage.CacheReadTokens = cacheReadTokens
+		usage.InputTokensSource = service.UsageTokenSource(inputTokensSource).Normalize()
+		usage.OutputTokensSource = service.UsageTokenSource(outputTokensSource).Normalize()
 		if subscriptionID.Valid {
 			usage.SubscriptionID = &subscriptionID.Int64
 		}
@@ -252,20 +286,22 @@ func (r *emptyResponseClaimRepository) ListRecentEvaluations(ctx context.Context
 		}
 		candidate.Evaluation.Usage = usage
 		candidate.Evaluation.Group.EmptyResponseCompensationEnabled = groupEnabled
-		candidate.Evaluation.Outcome = &service.ResponseOutcome{
-			HTTPStatus:        int(httpStatus.Int64),
-			UpstreamStatus:    int(upstreamStatus.Int64),
-			HasText:           hasText.Bool,
-			HasToolCall:       hasToolCall.Bool,
-			HasReasoning:      hasReasoning.Bool,
-			HasMedia:          hasMedia.Bool,
-			OutputBytes:       outputBytes.Int64,
-			EventCount:        int(eventCount.Int64),
-			StreamCompleted:   streamCompleted.Bool,
-			FinishReason:      finishReason.String,
-			DisconnectSource:  service.DisconnectSource(disconnectSource.String),
-			UpstreamErrorKind: service.UpstreamErrorKind(upstreamErrorKind.String),
-			CollectorVersion:  int(collectorVersion.Int64),
+		if outcomeID.Valid && collectorVersion.Int64 > 0 {
+			candidate.Evaluation.Outcome = &service.ResponseOutcome{
+				HTTPStatus:        int(httpStatus.Int64),
+				UpstreamStatus:    int(upstreamStatus.Int64),
+				HasText:           hasText.Bool,
+				HasToolCall:       hasToolCall.Bool,
+				HasReasoning:      hasReasoning.Bool,
+				HasMedia:          hasMedia.Bool,
+				OutputBytes:       outputBytes.Int64,
+				EventCount:        int(eventCount.Int64),
+				StreamCompleted:   streamCompleted.Bool,
+				FinishReason:      finishReason.String,
+				DisconnectSource:  service.DisconnectSource(disconnectSource.String),
+				UpstreamErrorKind: service.UpstreamErrorKind(upstreamErrorKind.String),
+				CollectorVersion:  int(collectorVersion.Int64),
+			}
 		}
 		if claimID.Valid {
 			candidate.ClaimID = &claimID.Int64

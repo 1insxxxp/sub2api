@@ -620,7 +620,9 @@ type UsageLog struct {
 	APIKeyID             int64                      `json:"api_key_id"`
 	AccountID            int64                      `json:"account_id"`
 	RequestID            string                     `json:"request_id"`
-	Model                string                     `json:"model"`
+	// RequestStatus describes this request, independently of provider health monitoring.
+	RequestStatus string `json:"request_status"`
+	Model         string `json:"model"`
 	// ServiceTier records the OpenAI service tier used for billing, e.g. "priority" / "flex".
 	ServiceTier *string `json:"service_tier,omitempty"`
 	// ReasoningEffort is the client-requested effort (mapping-hidden, like Model).
@@ -635,13 +637,17 @@ type UsageLog struct {
 	GroupID        *int64 `json:"group_id"`
 	SubscriptionID *int64 `json:"subscription_id"`
 
-	InputTokens          int                      `json:"input_tokens"`
-	OutputTokens         int                      `json:"output_tokens"`
-	InputTokensSource    service.UsageTokenSource `json:"input_tokens_source"`
-	OutputTokensSource   service.UsageTokenSource `json:"output_tokens_source"`
-	AntiTruncationRounds int                      `json:"anti_truncation_rounds,omitempty"`
-	CacheCreationTokens  int                      `json:"cache_creation_tokens"`
-	CacheReadTokens      int                      `json:"cache_read_tokens"`
+	InputTokens        int                      `json:"input_tokens"`
+	OutputTokens       int                      `json:"output_tokens"`
+	InputTokensSource  service.UsageTokenSource `json:"input_tokens_source"`
+	OutputTokensSource service.UsageTokenSource `json:"output_tokens_source"`
+	// Known means a count is available, not that it is a provider measurement.
+	// Omitted for legacy records whose availability was not recorded.
+	InputTokensKnown     *bool `json:"input_tokens_known,omitempty"`
+	OutputTokensKnown    *bool `json:"output_tokens_known,omitempty"`
+	AntiTruncationRounds int   `json:"anti_truncation_rounds,omitempty"`
+	CacheCreationTokens  int   `json:"cache_creation_tokens"`
+	CacheReadTokens      int   `json:"cache_read_tokens"`
 
 	CacheCreation5mTokens int `json:"cache_creation_5m_tokens"`
 	CacheCreation1hTokens int `json:"cache_creation_1h_tokens"`

@@ -11,6 +11,9 @@ import (
 // SettlementDecision describes the handler's decision, not a confirmed debit.
 type OpsDownstreamDelivery struct {
 	AnswerTextDelivered   bool   `json:"answer_text_delivered"`
+	ToolCallDelivered     bool   `json:"tool_call_delivered,omitempty"`
+	ReasoningDelivered    bool   `json:"reasoning_delivered,omitempty"`
+	MediaDelivered        bool   `json:"media_delivered,omitempty"`
 	TerminalDelivered     bool   `json:"terminal_delivered"`
 	EstimatedOutputTokens int    `json:"estimated_output_tokens"`
 	SettlementDecision    string `json:"settlement_decision"`

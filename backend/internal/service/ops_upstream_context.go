@@ -444,23 +444,24 @@ type OpsUpstreamErrorEvent struct {
 	// bounds forced earlier attempts of the same request to be discarded.
 	DroppedEarlierAttempts int `json:"dropped_earlier_attempts,omitempty"`
 
-	// Gemini inference diagnostics are scalar snapshots, never billing inputs.
+	// Inference diagnostics are scalar snapshots, never billing inputs.
 	// UsageState distinguishes explicitly reported zero from absent metadata;
 	// UsageFields bits 1/2/4/8/16 represent prompt/candidates/thoughts/cache/total.
-	Attempt              int                    `json:"attempt,omitempty"`
-	Model                string                 `json:"model,omitempty"`
-	Stream               bool                   `json:"stream,omitempty"`
-	DurationMs           int64                  `json:"duration_ms,omitempty"`
-	UsageState           string                 `json:"usage_state,omitempty"`
-	UsageFields          uint8                  `json:"usage_fields,omitempty"`
-	InputTokens          int64                  `json:"input_tokens,omitempty"`  // raw prompt count, including cached tokens
-	OutputTokens         int64                  `json:"output_tokens,omitempty"` // candidates plus thoughts
-	CacheReadTokens      int64                  `json:"cache_read_tokens,omitempty"`
-	ThoughtTokens        int64                  `json:"thought_tokens,omitempty"`
-	TotalTokens          int64                  `json:"total_tokens,omitempty"`
-	ClientCanceled       bool                   `json:"client_canceled,omitempty"` // local cancellation; not proof the provider stopped
-	DownstreamDelivery   *OpsDownstreamDelivery `json:"downstream_delivery,omitempty"`
-	DownstreamStatusCode int                    `json:"downstream_status_code,omitempty"`
+	Attempt                       int                    `json:"attempt,omitempty"`
+	Model                         string                 `json:"model,omitempty"`
+	Stream                        bool                   `json:"stream,omitempty"`
+	DurationMs                    int64                  `json:"duration_ms,omitempty"`
+	UsageState                    string                 `json:"usage_state,omitempty"`
+	UsageFields                   uint8                  `json:"usage_fields,omitempty"`
+	InputTokens                   int64                  `json:"input_tokens,omitempty"`  // raw prompt count, including cached tokens
+	OutputTokens                  int64                  `json:"output_tokens,omitempty"` // candidates plus thoughts
+	CacheReadTokens               int64                  `json:"cache_read_tokens,omitempty"`
+	ThoughtTokens                 int64                  `json:"thought_tokens,omitempty"`
+	EstimatedReceivedOutputTokens int                    `json:"estimated_received_output_tokens,omitempty"`
+	TotalTokens                   int64                  `json:"total_tokens,omitempty"`
+	ClientCanceled                bool                   `json:"client_canceled,omitempty"` // local cancellation; not proof the provider stopped
+	DownstreamDelivery            *OpsDownstreamDelivery `json:"downstream_delivery,omitempty"`
+	DownstreamStatusCode          int                    `json:"downstream_status_code,omitempty"`
 
 	// Outcome
 	UpstreamStatusCode int    `json:"upstream_status_code,omitempty"`

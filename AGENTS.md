@@ -662,7 +662,7 @@ curl -fsS -X POST "${BASE}/api/v1/keys" \
 
 验收覆盖 `/v1/chat/completions`、`/v1/messages`、`/v1beta/models/<model>:streamGenerateContent?alt=sse`。2026-10-27 用户最后确认的规则：优先使用本次响应 usage，缺失时按实际直接上游请求 ID 查询同账号逐笔账单；仍无法确认时，输入先尝试同账号同模型的原生 `countTokens`，最后使用最终请求语义分词及经留出样本验证的校准，输出使用实际收到的正文、工具和思考内容兜底，不再因缺失 usage 新建“待核对”。已报告的字段及明确零不得被估算覆盖，估算来源保留在内部和管理员诊断，不得冒充实测 usage；普通用户页面不展示估算诊断，普通用户 API 将估算来源投影为 unknown。计数查询不得换号、继续生成、自动跟随重定向或重复扣费；缺少上游接受/生成证据时不凭空加收输入。取消前无 usage、只有思考后取消、部分正文后取消、终帧写入失败、完整显式零、正常完成、SAFETY、累计流帧、工具参数及显式缓存均需覆盖。以响应 `X-Client-Request-ID` 关联，账务 request_id 为 `client:<UUID>`，Ops client_request_id 为原 UUID；客户端自填 ID 不作为账务关联依据。
 
-只读核对 `users.balance`、`api_keys.quota_used`、`usage_logs`、`usage_billing_dedup`、`usage_response_outcomes`、`usage_pending_records`、`ops_error_logs`。新规则下缺失 usage 的验收用例应进入正常使用记录，且不新增待核对行；兼容保留的历史待核对记录不得占用结算去重键。每例账务至多一笔，余额及额度变化必须与该笔 actual_cost 一致。Ops 的 `usage_state: "unreported"` 表示响应未上报 usage，不能当成已报告零 token，也不能据此断言后续账单恢复或估算结算没有发生。历史记录不得仅凭时间相近自动补扣。
+只读核对 `users.balance`、`api_keys.quota_used`、`usage_logs`、`usage_billing_dedup`、`usage_response_outcomes`、`usage_pending_records`、`ops_error_logs`。2026-10-28 补充规则：经过用量恢复后，完整证据确认未受理、无生成或下发内容、无实际消耗的纯失败，只保留请求诊断，不写使用记录、账务、去重键或 outbox，也不扣按次费用。不能仅凭 0/0 token、HTTP 状态或取消就过滤；已受理、有实测消耗、正文、工具、思考、缓存、媒体或前序续写消耗的请求仍按既有恢复与兜底规则结算，成功且显式零的按次请求保留。其余缺失 usage 的验收用例应进入正常使用记录，且不新增待核对行；兼容保留的历史待核对记录不得占用结算去重键。每例账务至多一笔，余额及额度变化必须与该笔 actual_cost 一致。Ops 的 `usage_state: "unreported"` 表示响应未上报 usage，不能当成已报告零 token，也不能据此断言后续账单恢复或估算结算没有发生。历史记录不得仅凭时间相近自动补扣。
 
 清理接口（每步先 GET 对应资源，核对本次随机名称及精确归属）：
 

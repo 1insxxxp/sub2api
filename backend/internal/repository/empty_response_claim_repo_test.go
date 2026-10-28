@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -31,10 +32,10 @@ func TestEmptyResponseClaimRepositoryLoadEvaluationUsesOwnedUsageAndStructuredOu
 			"group_enabled", "outcome_id",
 			"http_status", "upstream_status", "has_text", "has_tool_call", "has_reasoning", "has_media",
 			"output_bytes", "event_count", "stream_completed", "finish_reason", "disconnect_source",
-			"upstream_error_kind", "collector_version",
+			"upstream_error_kind", "collector_version", "input_tokens_source", "output_tokens_source",
 		}).AddRow(
 			100, 7, 8, 9, 10, nil, 1.25, 0, service.BillingTypeSubscription, now, true, 1234, 0, 12, 34, true, 55,
-			200, 200, false, true, false, false, 15, 2, true, "stop", "none", "none", 1,
+			200, 200, false, true, false, false, 15, 2, true, "stop", "none", "none", 1, "upstream", "unreported",
 		))
 
 	evaluation, err := repo.LoadEvaluation(context.Background(), 7, 100)
@@ -44,6 +45,8 @@ func TestEmptyResponseClaimRepositoryLoadEvaluationUsesOwnedUsageAndStructuredOu
 	require.Equal(t, service.BillingTypeSubscription, evaluation.Usage.BillingType)
 	require.Equal(t, 1234, evaluation.Usage.InputTokens)
 	require.Equal(t, 0, evaluation.Usage.OutputTokens)
+	require.Equal(t, service.UsageTokenSourceUpstream, evaluation.Usage.InputTokensSource)
+	require.Equal(t, service.UsageTokenSourceUnreported, evaluation.Usage.OutputTokensSource)
 	require.Equal(t, 12, evaluation.Usage.CacheCreationTokens)
 	require.Equal(t, 34, evaluation.Usage.CacheReadTokens)
 	require.True(t, evaluation.Usage.Stream)
@@ -107,6 +110,30 @@ func TestEmptyResponseClaimRepositoryCreateReturnsExistingClaimOnUniqueUsage(t *
 	require.Equal(t, int64(201), claim.ID)
 	require.Equal(t, service.EmptyResponseClaimCompensated, claim.Status)
 	require.True(t, claim.Evidence.StreamCompleted)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestEmptyResponseClaimRepositoryLoadsProvenanceWithoutInventingOutcome(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	repo := newEmptyResponseClaimRepositoryWithSQL(db)
+	mock.ExpectQuery(`(?s)`+regexp.QuoteMeta("ON uro.request_id = ul.request_id AND uro.api_key_id = ul.api_key_id")+`\s+WHERE`).
+		WithArgs(int64(7), int64(100)).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"usage_log_id", "user_id", "api_key_id", "account_id", "group_id", "subscription_id",
+			"actual_cost", "compensated_cost", "billing_type", "created_at", "stream",
+			"input_tokens", "output_tokens", "cache_creation_tokens", "cache_read_tokens",
+			"group_enabled", "outcome_id", "http_status", "upstream_status", "has_text", "has_tool_call",
+			"has_reasoning", "has_media", "output_bytes", "event_count", "stream_completed", "finish_reason",
+			"disconnect_source", "upstream_error_kind", "collector_version", "input_tokens_source", "output_tokens_source",
+		}).AddRow(100, 7, 8, 9, 10, nil, 1, 0, service.BillingTypeBalance, time.Now(), true,
+			0, 0, 0, 0, true, 55, 0, 0, false, false, false, false, 0, 0, false, "", "none", "none", 0, "unreported", "estimated"))
+	evaluation, err := repo.LoadEvaluation(context.Background(), 7, 100)
+	require.NoError(t, err)
+	require.Equal(t, service.UsageTokenSourceUnreported, evaluation.Usage.InputTokensSource)
+	require.Equal(t, service.UsageTokenSourceEstimated, evaluation.Usage.OutputTokensSource)
+	require.Nil(t, evaluation.Outcome, "a provenance-only row is not a response collector")
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -202,7 +229,7 @@ func TestEmptyResponseClaimRepositoryListsRecentEvaluationsWithExistingClaimStat
 			"input_tokens", "output_tokens", "cache_creation_tokens", "cache_read_tokens",
 			"api_key_name", "group_name", "group_enabled", "outcome_id", "http_status", "upstream_status", "has_text",
 			"has_tool_call", "has_reasoning", "has_media", "output_bytes", "event_count",
-			"stream_completed", "finish_reason", "disconnect_source", "upstream_error_kind", "collector_version",
+			"stream_completed", "finish_reason", "disconnect_source", "upstream_error_kind", "collector_version", "input_tokens_source", "output_tokens_source",
 			"claim_id", "claim_status", "claim_reason_code", "refunded_amount", "compensation_amount", "original_actual_cost", "rule_version",
 		}).AddRow(
 			100, 7, 8, 9, 10, nil,
@@ -210,7 +237,7 @@ func TestEmptyResponseClaimRepositoryListsRecentEvaluationsWithExistingClaimStat
 			1234, 0, 12, 34,
 			"cli", "cc", true, 55, 200, 200, false,
 			false, false, false, 0, 1,
-			true, "stop", "none", "none", 1,
+			true, "stop", "none", "none", 1, "upstream", "estimated",
 			201, service.EmptyResponseClaimCompensated, service.EmptyResponseReasonPureEmpty, 1.25, nil, 1.25, 4,
 		).AddRow(
 			101, 7, 8, 9, 11, nil,
@@ -219,6 +246,7 @@ func TestEmptyResponseClaimRepositoryListsRecentEvaluationsWithExistingClaimStat
 			"cli", "enabled-cc", true, nil, nil, nil, nil,
 			nil, nil, nil, nil, nil,
 			nil, nil, nil, nil, nil,
+			"unknown", "unknown",
 			nil, nil, nil, 0, nil, 0, 0,
 		))
 
@@ -234,6 +262,8 @@ func TestEmptyResponseClaimRepositoryListsRecentEvaluationsWithExistingClaimStat
 	require.Equal(t, "claude-opus-4-6", got.Evaluation.Usage.Model)
 	require.Equal(t, 1234, got.Evaluation.Usage.InputTokens)
 	require.Equal(t, 0, got.Evaluation.Usage.OutputTokens)
+	require.Equal(t, service.UsageTokenSourceUpstream, got.Evaluation.Usage.InputTokensSource)
+	require.Equal(t, service.UsageTokenSourceEstimated, got.Evaluation.Usage.OutputTokensSource)
 	require.True(t, got.Evaluation.Usage.Stream)
 	require.Equal(t, 12, got.Evaluation.Usage.CacheCreationTokens)
 	require.Equal(t, 34, got.Evaluation.Usage.CacheReadTokens)
@@ -467,6 +497,59 @@ func TestEmptyResponseClaimRepositoryCreateTransactionFailures(t *testing.T) {
 			}
 			require.Nil(t, claim)
 			require.False(t, created)
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+// Both count and page queries must apply the measurement gate before pagination.
+// Existing claims preserve their frozen visible decision; independently observed
+// pure-empty completion does not require a reported output token count.
+func TestEmptyResponseClaimRepositoryPaginatesOnlyVisibleUsageEvidence(t *testing.T) {
+	guard := `AND (
+		erc.id IS NOT NULL
+		OR (
+			COALESCE(uro.output_tokens_source, 'unknown') <> 'unreported'
+			AND (COALESCE(uro.output_tokens_source, 'unknown') <> 'estimated' OR ul.output_tokens <> 0)
+		)
+		OR (
+			COALESCE(uro.collector_version, 0) > 0
+			AND COALESCE(uro.stream_completed, FALSE) = TRUE
+			AND uro.http_status >= 200 AND uro.http_status < 300
+			AND uro.upstream_status >= 200 AND uro.upstream_status < 300
+			AND NOT COALESCE(uro.has_text, FALSE)
+			AND NOT COALESCE(uro.has_tool_call, FALSE)
+			AND NOT COALESCE(uro.has_reasoning, FALSE)
+			AND NOT COALESCE(uro.has_media, FALSE)
+			AND COALESCE(uro.disconnect_source, '') IN ('', 'none')
+			AND COALESCE(uro.upstream_error_kind, '') IN ('', 'none')
+		)
+	)`
+	guardPattern := regexp.QuoteMeta(strings.Join(strings.Fields(guard), " "))
+	for _, guardedQuery := range []string{"count", "page"} {
+		t.Run(guardedQuery, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer db.Close()
+			repo := newEmptyResponseClaimRepositoryWithSQL(db)
+			now := time.Now().UTC()
+			start := now.Add(-24 * time.Hour)
+			countPattern := `(?s)SELECT COUNT\(\*\).*FROM usage_logs ul`
+			if guardedQuery == "count" {
+				countPattern += `.*` + guardPattern
+			}
+			mock.ExpectQuery(countPattern).
+				WithArgs(int64(7), start, now, service.EmptyResponseClaimLowOutputTokenLimit).
+				WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+			pagePattern := `(?s)FROM usage_logs ul.*` + guardPattern + `.*LIMIT \$5 OFFSET \$6`
+			mock.ExpectQuery(pagePattern).
+				WithArgs(int64(7), start, now, service.EmptyResponseClaimLowOutputTokenLimit, 10, 0).
+				WillReturnRows(sqlmock.NewRows([]string{"usage_log_id"}))
+
+			candidates, info, err := repo.ListRecentEvaluations(context.Background(), 7, start, now, pagination.PaginationParams{Page: 1, PageSize: 10})
+			require.NoError(t, err, "measurement eligibility must be applied before COUNT and LIMIT/OFFSET")
+			require.Empty(t, candidates)
+			require.Zero(t, info.Total)
 			require.NoError(t, mock.ExpectationsWereMet())
 		})
 	}

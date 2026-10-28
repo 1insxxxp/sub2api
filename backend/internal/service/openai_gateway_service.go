@@ -234,6 +234,9 @@ type OpenAIUsage struct {
 
 // OpenAIForwardResult represents the result of forwarding
 type OpenAIForwardResult struct {
+	ChatUsage                             *OpenAIChatUsageEvidence `json:"-"`
+	InputTokensSource, OutputTokensSource UsageTokenSource
+
 	RequestID  string
 	ResponseID string
 	// UpstreamHeaders contains headers returned by the direct upstream response.

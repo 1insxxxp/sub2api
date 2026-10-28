@@ -959,8 +959,8 @@ func TestForwardAsRawChatCompletions_ClientDisconnectTruncationStillBills(t *tes
 	require.NotNil(t, result)
 }
 
-// 客户端取消会连带取消上游请求，上游读因此报 context.Canceled：同样不判为上游截断。
-func TestForwardAsRawChatCompletions_ClientCancelTruncationStillBills(t *testing.T) {
+// A canceled upstream read alone is not evidence that the downstream client left.
+func TestForwardAsRawChatCompletions_UpstreamCancelWithLiveClientFails(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	body := []byte(`{"model":"deepseek-v4-pro","messages":[{"role":"user","content":"hello"}],"stream":true}`)
@@ -984,8 +984,11 @@ func TestForwardAsRawChatCompletions_ClientCancelTruncationStillBills(t *testing
 	}
 
 	result, err := svc.forwardAsRawChatCompletions(context.Background(), c, rawChatCompletionsTestAccount(), body, "")
-	require.NoError(t, err)
+	require.Error(t, err)
 	require.NotNil(t, result)
+	require.False(t, result.ClientDisconnect)
+	require.Equal(t, DisconnectSourceUpstream, result.Outcome.DisconnectSource)
+	require.False(t, result.Outcome.StreamCompleted)
 }
 
 func TestOpenAIRawStreamTerminalState(t *testing.T) {
@@ -1210,7 +1213,9 @@ func TestBufferRawChatCompletions_RejectsOversizedResponse(t *testing.T) {
 
 	result, err := svc.bufferRawChatCompletions(c, resp, rawChatCompletionsTestAccount(), "gpt-5.4", "gpt-5.4", "gpt-5.4", nil, nil, time.Now())
 	require.ErrorIs(t, err, ErrUpstreamResponseBodyTooLarge)
-	require.Nil(t, result)
+	require.NotNil(t, result)
+	require.Equal(t, DisconnectSourceServer, result.Outcome.DisconnectSource)
+	require.False(t, result.Outcome.StreamCompleted)
 	require.Equal(t, http.StatusBadGateway, rec.Code)
 }
 

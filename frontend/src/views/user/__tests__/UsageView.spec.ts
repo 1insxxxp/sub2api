@@ -516,8 +516,8 @@ describe('user UsageView', () => {
     expect(showSuccess).toHaveBeenCalled()
     expect(csvContent.startsWith('\uFEFF')).toBe(true)
     expect(csvContent.slice(1)).toBe([
-      'Time,API Key Name,Model,Reasoning Effort,Inbound Endpoint,IP Address,Type,Billing Mode,Input Tokens,Output Tokens,Cache Read Tokens,Cache Creation Tokens,Rate Multiplier,Billed Cost,Original Cost,First Token (ms),Duration (ms),Billing Status',
-      '2026-03-08T00:00:00Z,demo-key,gpt-5.4,-,,203.0.113.10,Sync,Token,4057,101,278272,4,1,0.09288300,0.09288300,12,345,Settled',
+      'Time,API Key Name,Model,Reasoning Effort,Inbound Endpoint,IP Address,Type,Billing Mode,Input Tokens,Output Tokens,Cache Read Tokens,Cache Creation Tokens,Rate Multiplier,Billed Cost,Original Cost,First Token (ms),Duration (ms),Billing Status,Compensated Cost,Net Charge,Request Status',
+      '2026-03-08T00:00:00Z,demo-key,gpt-5.4,-,,203.0.113.10,Sync,Token,4057,101,278272,4,1,0.09288300,0.09288300,12,345,Settled,0.00000000,0.09288300,unknown',
     ].join('\n'))
     expect(csvContent).toContain('IP Address')
     expect(csvContent).toContain('203.0.113.10')
@@ -538,7 +538,8 @@ describe('user UsageView', () => {
       { ...usageLog, input_tokens: 0, input_tokens_source: 'unreported', output_tokens: 5071, output_tokens_source: 'estimated' },
       { ...usageLog, id: 2, input_tokens: 0, input_tokens_source: 'upstream', output_tokens_source: 'upstream' },
       { ...usageLog, id: -42, billing_status: 'pending_review', billing_pending_reason: 'upstream_usage_missing', input_tokens: 0, output_tokens: 0, input_tokens_source: 'unreported', output_tokens_source: 'unreported', actual_cost: 0, total_cost: 0 },
-    ], total: 3, pages: 1 })
+      { ...usageLog, id: 4, request_status: 'interrupted', input_tokens: 0, output_tokens: 0, input_tokens_source: 'unknown', output_tokens_source: 'unknown', input_tokens_known: false, output_tokens_known: false, actual_cost: 6, compensated_cost: 2.75, net_actual_cost: 3.25 },
+    ], total: 4, pages: 1 })
     const wrapper = mountUsageView()
     await flushPromises()
     let csvContent = ''
@@ -554,7 +555,7 @@ describe('user UsageView', () => {
     const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
     try {
       await (wrapper.vm as any).exportToCSV()
-      const [headers, missing, measured, pending] = csvContent.slice(1).split('\n').map(line => line.split(','))
+      const [headers, missing, measured, pending, interrupted] = csvContent.slice(1).split('\n').map(line => line.split(','))
       const inputIndex = headers.indexOf('Input Tokens')
       expect(missing[inputIndex]).toBe('')
       expect(measured[inputIndex]).toBe('0')
@@ -568,6 +569,11 @@ describe('user UsageView', () => {
       expect(pending[headers.indexOf('Billing Status')]).toBe('Pending review')
       expect(pending[headers.indexOf('Billed Cost')]).toBe('Pending review')
       expect(pending[headers.indexOf('Original Cost')]).toBe('Pending review')
+      expect(interrupted[inputIndex]).toBe('')
+      expect(interrupted[headers.indexOf('Output Tokens')]).toBe('')
+      expect(interrupted[headers.indexOf('Compensated Cost')]).toBe('2.75000000')
+      expect(interrupted[headers.indexOf('Net Charge')]).toBe('3.25000000')
+      expect(interrupted[headers.indexOf('Request Status')]).toBe('interrupted')
     } finally {
       window.URL.createObjectURL = originalCreateObjectURL
       window.URL.revokeObjectURL = originalRevokeObjectURL

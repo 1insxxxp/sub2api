@@ -251,7 +251,14 @@ func (s *OpenAIGatewayService) sendCCUpstreamRequest(
 	if account.ProxyID != nil && account.Proxy != nil {
 		proxyURL = account.Proxy.URL()
 	}
+	capture := openAIChatCaptureFromContext(ctx)
+	if capture != nil {
+		capture.begin(upstreamReq, account)
+	}
 	resp, err := s.doOpenAIUpstream(upstreamReq, proxyURL, account)
+	if capture != nil {
+		capture.response(resp)
+	}
 	if err != nil {
 		return nil, s.handleOpenAIUpstreamTransportError(ctx, c, account, err, false)
 	}

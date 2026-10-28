@@ -745,6 +745,7 @@ func usageLogFromServiceUser(l *service.UsageLog) UsageLog {
 		APIKeyID:                  l.APIKeyID,
 		AccountID:                 l.AccountID,
 		RequestID:                 l.RequestID,
+		RequestStatus:             string(service.ClassifyUsageRequestStatus(l.Outcome)),
 		Model:                     requestedModel,
 		ServiceTier:               l.ServiceTier,
 		ReasoningEffort:           userFacingReasoningEffort(l),
@@ -753,6 +754,8 @@ func usageLogFromServiceUser(l *service.UsageLog) UsageLog {
 		SubscriptionID:            l.SubscriptionID,
 		InputTokens:               l.InputTokens,
 		OutputTokens:              l.OutputTokens,
+		InputTokensKnown:          usageTokenCountKnown(l.InputTokens, l.InputTokensSource),
+		OutputTokensKnown:         usageTokenCountKnown(l.OutputTokens, l.OutputTokensSource),
 		InputTokensSource:         l.InputTokensSource.Normalize(),
 		OutputTokensSource:        l.OutputTokensSource.Normalize(),
 		AntiTruncationRounds:      l.AntiTruncationRounds,
@@ -805,6 +808,22 @@ func usageLogFromServiceUser(l *service.UsageLog) UsageLog {
 
 		CompensationEstimatedRefund: l.CompensationEstimatedRefund,
 	}
+}
+
+// usageTokenCountKnown keeps missing measurements separate from explicit zero.
+// Legacy unknown sources stay unspecified, preserving their recorded numbers.
+func usageTokenCountKnown(count int, source service.UsageTokenSource) *bool {
+	known := false
+	switch source.Normalize() {
+	case service.UsageTokenSourceUpstream:
+		known = true
+	case service.UsageTokenSourceUnreported:
+	case service.UsageTokenSourceEstimated:
+		known = count > 0
+	default:
+		return nil
+	}
+	return &known
 }
 
 // UsageLogFromService converts a service UsageLog to DTO for regular users.

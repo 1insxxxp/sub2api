@@ -1120,6 +1120,9 @@ const exportToCSV = async () => {
       'First Token (ms)',
       'Duration (ms)',
       'Billing Status',
+      'Compensated Cost',
+      'Net Charge',
+      'Request Status',
     ]
     const rows = allLogs.map((log) => [
       log.created_at,
@@ -1130,8 +1133,8 @@ const exportToCSV = async () => {
       log.ip_address || '',
       getRequestTypeExportText(log),
       getBillingModeLabel(getDisplayBillingMode(log), t),
-      exportUsageTokenCount(log.input_tokens, log.input_tokens_source),
-      exportUsageTokenCount(log.output_tokens, log.output_tokens_source),
+      exportUsageTokenCount(log.input_tokens, log.input_tokens_source, log.input_tokens_known),
+      exportUsageTokenCount(log.output_tokens, log.output_tokens_source, log.output_tokens_known),
       log.cache_read_tokens,
       log.cache_creation_tokens,
       log.rate_multiplier,
@@ -1140,6 +1143,9 @@ const exportToCSV = async () => {
       log.first_token_ms ?? '',
       log.duration_ms ?? '',
       usageBillingStatusLabel(log, t),
+      formatUsageBillingCost(log.compensated_cost ?? 0, log, t, 8),
+      formatUsageBillingCost(log.net_actual_cost ?? Math.max(0, (log.actual_cost ?? 0) - (log.compensated_cost ?? 0)), log, t, 8),
+      log.request_status ?? 'unknown',
     ].map(escapeCSVValue))
     const csvContent = [
       headers.map(escapeCSVValue).join(','),

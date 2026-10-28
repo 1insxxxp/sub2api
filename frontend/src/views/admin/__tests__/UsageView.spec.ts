@@ -911,6 +911,26 @@ describe('admin UsageView model audit export', () => {
     wrapper.unmount()
   })
 
+  it('exports missing counts, refund, net charge and request status separately', async () => {
+    exportList.mockResolvedValue({ items: [{
+      id: 1, model: 'gpt-5.5', request_status: 'interrupted',
+      input_tokens: 0, output_tokens: 0, input_tokens_source: 'unknown', output_tokens_source: 'unknown',
+      input_tokens_known: false, output_tokens_known: false, actual_cost: 6, compensated_cost: 2.75, net_actual_cost: 3.25,
+    }], total: 1, pages: 1 })
+    const wrapper = mountRouteFilteredUsageView()
+    vi.advanceTimersByTime(120)
+    await flushPromises()
+    await (wrapper.vm as any).exportToExcel()
+    const headers = aoaToSheet.mock.calls[0][0][0]
+    const row = sheetAddAoa.mock.calls[0][1][0]
+    expect(row[headers.indexOf('admin.usage.inputTokens')]).toBe('')
+    expect(row[headers.indexOf('admin.usage.outputTokens')]).toBe('')
+    expect(row[headers.indexOf('usage.emptyResponse.refunded')]).toBe('2.750000')
+    expect(row[headers.indexOf('usage.emptyResponse.netCharge')]).toBe('3.250000')
+    expect(row[headers.indexOf('usage.requestStatus')]).toBe('interrupted')
+    wrapper.unmount()
+  })
+
 	it('exports requested, sent, response, and mismatch as separate admin columns', async () => {
 		const wrapper = mountRouteFilteredUsageView()
 		vi.advanceTimersByTime(120)

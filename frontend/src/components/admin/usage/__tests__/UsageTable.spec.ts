@@ -39,7 +39,7 @@ const messages: Record<string, string> = {
   'usage.billingPendingReviewHint': 'Usage and charges are being checked. This record will be updated when confirmed.',
   'usage.tokensEstimated': 'Estimated',
   'usage.inputTokensUnreportedHint': 'Input usage was not reported; no input charge.',
-  'usage.outputTokensEstimatedHint': 'Estimated from delivered content, including reasoning; not the upstream bill.',
+  'usage.outputTokensEstimatedHint': 'Estimated from received response content, including reasoning; not the upstream bill.',
   'usage.tokensSourceUnknownHint': 'The source was not recorded; the stored count is shown.',
   'usage.tokensSourceUpstream': 'Upstream report',
   'usage.tokensSourceUnknown': 'Unknown source',
@@ -98,6 +98,12 @@ const messages: Record<string, string> = {
 	'usage.modelMismatch': 'Different model',
   'usage.emptyResponse.action': 'Claim low-output/empty response',
   'usage.emptyResponse.actionHint': 'Applies to empty replies or responses with 10 output tokens or fewer',
+  'usage.tokensNotReturned': 'Usage not returned',
+  'usage.requestInterrupted': 'Interrupted',
+  'usage.requestFailed': 'Failed',
+  'usage.requestEmpty': 'Empty reply',
+  'usage.emptyResponse.refunded': 'Refunded',
+  'usage.emptyResponse.netCharge': 'Net charge',
 }
 
 vi.mock('vue-i18n', async () => {
@@ -116,6 +122,7 @@ const DataTableStub = {
     <div>
       <div v-for="row in data" :key="row.request_id" :data-request-id="row.request_id">
         <slot name="cell-model" :row="row" :value="row.model" />
+        <slot name="cell-stream" :row="row" />
         <slot name="cell-reasoning_effort" :row="row" :value="row.reasoning_effort" />
         <slot name="cell-billing_mode" :row="row" />
         <slot name="cell-tokens" :row="row" />
@@ -973,15 +980,15 @@ describe('admin UsageTable deleted-user badge', () => {
 })
 
 describe('admin usage mobile cards', () => {
-  it('separates core metrics from expandable details without dropping fields', () => {
+  it.each([true, false])('keeps interrupted status and missing counts in mobile cards (admin=%s)', (admin) => {
     const originalMatchMedia = window.matchMedia
     const mediaSpy = vi.spyOn(window, 'matchMedia').mockImplementation(query => ({
       ...originalMatchMedia(query), matches: false,
     }))
     const wrapper = mount(UsageTable, {
       props: {
-        data: [{ ...baseImageRow, user_id: 7, user: { email: 'long-user@example.com' }, model: 'a-very-long-model-name', ip_address: '240e:1234:5678:1234:5678:1234:5678:1234' } as any],
-        compactMobile: true,
+        data: [{ ...baseImageRow, image_count: 0, billing_mode: 'token', request_status: 'interrupted', input_tokens: 0, output_tokens: 0, input_tokens_known: false, output_tokens_known: false, user_id: 7, user: { email: 'long-user@example.com' }, model: 'a-very-long-model-name', ip_address: '240e:1234:5678:1234:5678:1234:5678:1234' } as any],
+        compactMobile: true, showUsageDiagnostics: admin, showAccountBilling: admin,
         columns: ['user', 'model', 'stream', 'tokens', 'cost', 'latency', 'created_at', 'ip_address'].map(key => ({ key, label: key })),
       },
       global: { stubs: { EmptyState: true, Icon: true, Teleport: true } },
@@ -990,6 +997,9 @@ describe('admin usage mobile cards', () => {
     expect(wrapper.get('[data-test="mobile-record-title"]').text()).toContain('long-user@example.com')
     expect(wrapper.get('[data-test="mobile-record-summary"]').find('[data-field="tokens"]').exists()).toBe(true)
     expect(wrapper.get('details').text()).toContain('240e:1234')
+    expect(wrapper.get('[data-testid="usage-request-status"]').text()).toBe('Interrupted')
+    expect(wrapper.get('[data-testid="input-token-count"]').text()).toBe('—')
+    expect(wrapper.get('[data-testid="output-token-count"]').text()).toBe('—')
     wrapper.unmount()
     mediaSpy.mockRestore()
   })
@@ -1002,6 +1012,39 @@ describe('usage token measurement sources', () => {
     global: { stubs: { DataTable: DataTableStub, EmptyState: true, Icon: true, Teleport: true } },
   })
 
+  it.each([true, false])('does not present missing zero counts as reported usage (admin=%s)', async (admin) => {
+    const row = { ...baseImageRow, image_count: 0, billing_mode: 'token', input_tokens: 0, output_tokens: 0, input_tokens_known: false, output_tokens_known: false, input_tokens_source: admin ? 'estimated' : 'unknown', output_tokens_source: admin ? 'estimated' : 'unknown' }
+    const wrapper = mountSources([row], admin)
+    expect(wrapper.get('[data-testid="input-token-count"]').text()).toBe('—')
+    expect(wrapper.get('[data-testid="output-token-count"]').text()).toBe('—')
+    expect(wrapper.get('[data-testid="input-token-count"]').attributes('title')).toBe('Usage not returned')
+    expect(wrapper.find('[data-testid="output-token-estimated"]').exists()).toBe(false)
+    await wrapper.find('.group.relative').trigger('mouseenter')
+    expect(wrapper.get('[data-testid="token-total"]').text()).toBe('—')
+    if (!admin) expect(wrapper.text()).not.toContain('Estimated')
+    wrapper.unmount()
+  })
+
+  it.each([true, false])('shows safe interruption, failure and empty status without invented success (admin=%s)', (admin) => {
+    const rows = ['interrupted', 'failed', 'empty', 'completed', 'unknown'].map(request_status => ({ ...baseImageRow, request_id: request_status, request_status }))
+    const wrapper = mountSources(rows, admin)
+    for (const [status, text] of [['interrupted', 'Interrupted'], ['failed', 'Failed'], ['empty', 'Empty reply']]) {
+      expect(wrapper.get(`[data-request-id="${status}"] [data-testid="usage-request-status"]`).text()).toBe(text)
+    }
+    for (const status of ['completed', 'unknown']) expect(wrapper.find(`[data-request-id="${status}"] [data-testid="usage-request-status"]`).exists()).toBe(false)
+  })
+
+  it.each([true, false])('makes net charge primary after a refund (admin=%s)', async (admin) => {
+    const wrapper = mountSources([{ ...baseImageRow, actual_cost: 6, compensated_cost: 2.75, net_actual_cost: 3.25 }], admin)
+    expect(wrapper.get('[data-testid="usage-primary-charge"]').text()).toContain('3.250000')
+    expect(wrapper.get('[data-testid="usage-primary-charge"]').text()).not.toContain('6.000000')
+    expect(wrapper.text()).toContain('Refunded $2.750000')
+    expect(wrapper.text()).toContain('Net charge')
+    await wrapper.find('.group.relative').trigger('mouseenter')
+    expect(wrapper.get('[data-testid="usage-tooltip-net-charge"]').text()).toContain('3.25000000')
+    wrapper.unmount()
+  })
+
   it.each([true, false])('distinguishes unreported input from measured zero (admin=%s)', (admin) => {
     const row = { ...baseImageRow, image_count: 0, billing_mode: 'token', input_tokens: 0 }
     const wrapper = mountSources([
@@ -1010,9 +1053,8 @@ describe('usage token measurement sources', () => {
       { ...row, request_id: 'cached', input_tokens_source: 'upstream', cache_read_tokens: 21916 },
     ], admin)
     const missing = wrapper.get('[data-request-id="missing"] [data-testid="input-token-count"]')
-    expect(missing.text()).toBe(admin ? 'Not reported' : '—')
-    if (admin) expect(missing.attributes('title')).toContain('no input charge')
-    else expect(missing.attributes('title')).toBeUndefined()
+    expect(missing.text()).toBe('—')
+    expect(missing.attributes('title')).toBe('Usage not returned')
     expect(wrapper.get('[data-request-id="zero"] [data-testid="input-token-count"]').text()).toBe('0')
     expect(wrapper.get('[data-request-id="cached"] [data-testid="input-token-count"]').text()).toBe('0')
     expect(wrapper.get('[data-request-id="cached"]').text()).not.toContain('Not reported')
@@ -1040,7 +1082,7 @@ describe('usage token measurement sources', () => {
     expect(wrapper.get('[data-testid="output-token-estimated"]').attributes('title')).toContain('including reasoning')
     await wrapper.find('.group.relative').trigger('mouseenter')
     expect(wrapper.text()).toContain('Input usage was not reported; no input charge.')
-    expect(wrapper.text()).toContain('Estimated from delivered content, including reasoning; not the upstream bill.')
+    expect(wrapper.text()).toContain('Estimated from received response content, including reasoning; not the upstream bill.')
     expect(wrapper.text()).toContain('Recorded token subtotal')
   })
 

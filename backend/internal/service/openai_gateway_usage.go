@@ -176,6 +176,17 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	if err != nil {
 		return err
 	}
+	settlementInput := *input
+	settlementInput.Account = billingAccount
+	s.FinalizeOpenAIChatUsage(ctx, &settlementInput)
+	if err := validateOpenAIChatUsageAggregate(result); err != nil {
+		logger.L().Warn("billing.openai_chat_usage_out_of_range", zap.String("request_id", result.RequestID))
+		return err
+	}
+	if shouldSkipPureOpenAIChatUsageFailure(result) {
+		return nil
+	}
+	chatNeverAccepted := openAIChatUsageNeverAccepted(result)
 	if !isGrokVideoUsageResult(result, nil) {
 		ApplyOpenAIImageBillingResolution(result)
 	}
@@ -186,6 +197,9 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	actualInputTokens := result.Usage.InputTokens - result.Usage.CacheReadInputTokens - result.Usage.CacheCreationInputTokens
 	if actualInputTokens < 0 {
 		actualInputTokens = 0
+	}
+	if roundInput, ok := openAIChatUncachedInputTokens(result); ok {
+		actualInputTokens = roundInput
 	}
 
 	// Calculate cost
@@ -325,6 +339,13 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		}
 	}
 
+	// A transport failure without acceptance or measured consumption remains a
+	// zero-cost history row. Accepted zero-token requests still use normal per-call
+	// pricing; token count alone is not a reason to waive that configured price.
+	if chatNeverAccepted {
+		cost = &CostBreakdown{BillingMode: cost.BillingMode}
+	}
+
 	// Determine billing type. A system custom monthly key carries the source
 	// group for pricing, so its subscription identity comes from the resolution.
 	billingType := BillingTypeBalance
@@ -385,7 +406,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		APIKeyID:                 apiKey.ID,
 		AccountID:                account.ID,
 		RequestID:                requestID,
-		UpstreamRequestID:        usageUpstreamRequestIDPtr(account, result.UpstreamHeaders, result.OpenAIWSMode),
+		UpstreamRequestID:        openAIChatUsageUpstreamRequestID(account, result),
 		Model:                    result.Model,
 		RequestedModel:           requestedModel,
 		UpstreamModel:            optionalTrimmedStringPtr(result.UpstreamModel),
@@ -410,6 +431,8 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		ImageSizeSource:          optionalTrimmedStringPtr(result.ImageSizeSource),
 		ImageSizeBreakdown:       imageSizeBreakdown,
 		Outcome:                  usageOutcome,
+		InputTokensSource:        result.InputTokensSource.Normalize(),
+		OutputTokensSource:       result.OutputTokensSource.Normalize(),
 		AntiTruncationRounds:     result.AntiTruncationRounds,
 		NativeCompactionV2:       input.NativeCompactionV2,
 	}
@@ -490,7 +513,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	}
 
 	// 计算账号统计定价费用（使用最终上游模型匹配自定义规则）
-	if apiKey.GroupID != nil {
+	if apiKey.GroupID != nil && !chatNeverAccepted {
 		applyAccountStatsCost(ctx, usageLog, s.channelService, s.billingService,
 			account.ID, *apiKey.GroupID, result.UpstreamModel, result.Model,
 			providerTokens, cost.TotalCost, pricingAt,

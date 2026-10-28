@@ -2067,6 +2067,7 @@ export type ImageSizeSource = 'output' | 'input' | 'default' | 'legacy'
 export type ImageSizeBreakdown = Record<string, number>
 
 export type UsageTokenSource = 'upstream' | 'unreported' | 'estimated' | 'unknown'
+export type UsageRequestStatus = 'completed' | 'interrupted' | 'failed' | 'empty' | 'unknown'
 export type UsageBillingStatus = 'settled' | 'pending_review'
 
 export interface UsageLog {
@@ -2078,6 +2079,7 @@ export interface UsageLog {
   api_key_id: number
   account_id: number | null
   request_id: string
+  request_status?: UsageRequestStatus
   model: string
   service_tier?: string | null
   reasoning_effort?: string | null
@@ -2091,6 +2093,9 @@ export interface UsageLog {
   output_tokens: number
   input_tokens_source?: UsageTokenSource
   output_tokens_source?: UsageTokenSource
+  /** Count availability, not provider measurement provenance; absent on legacy rows. */
+  input_tokens_known?: boolean
+  output_tokens_known?: boolean
   anti_truncation_rounds?: number
   cache_creation_tokens: number
   cache_read_tokens: number

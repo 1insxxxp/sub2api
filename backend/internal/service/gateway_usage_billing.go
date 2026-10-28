@@ -1043,6 +1043,9 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	if err != nil {
 		return err
 	}
+	if shouldSkipPureGeminiUsageFailure(result) {
+		return nil
+	}
 	applyMissingInputTokenEstimate(ctx, result, account)
 	ApplyForwardImageBillingResolution(result)
 	logServiceTierBillingDowngrade("service.gateway", account, result.RequestID, ApplyForwardServiceTierBillingResolution(result))

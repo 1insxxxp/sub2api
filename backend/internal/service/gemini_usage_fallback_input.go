@@ -168,11 +168,15 @@ func (s *GatewayService) CountGeminiInputFallback(ctx context.Context, input *Re
 		}
 		proxyURL = account.Proxy.URL()
 	}
+	budget := usageFollowupBudget(ctx, geminiInputCountTimeout)
+	if budget <= 0 {
+		return 0, false, ErrGeminiInputCountUnavailable
+	}
 	baseContext := context.Background()
 	if ctx != nil {
 		baseContext = context.WithoutCancel(ctx)
 	}
-	requestCtx, cancel := context.WithTimeout(baseContext, geminiInputCountTimeout)
+	requestCtx, cancel := context.WithTimeout(baseContext, budget)
 	defer cancel()
 	req, err := http.NewRequestWithContext(WithHTTPUpstreamRedirectsDisabled(requestCtx), http.MethodPost, prepared.URL, bytes.NewReader(prepared.Body))
 	if err != nil {

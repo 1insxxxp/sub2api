@@ -26,6 +26,18 @@ var (
 	geminiUsageLedgerFetchGroup           singleflight.Group
 )
 
+// usageFollowupBudget keeps lookup/count work inside the original usage-task
+// deadline and leaves time for its durable billing write. A client cancellation
+// without a deadline may still use the existing bounded detached follow-up.
+func usageFollowupBudget(ctx context.Context, maximum time.Duration) time.Duration {
+	if ctx != nil {
+		if deadline, ok := ctx.Deadline(); ok {
+			return min(maximum, time.Until(deadline)-time.Second)
+		}
+	}
+	return maximum
+}
+
 // GeminiUsageLedgerIdentity binds ledger recovery to the origin and exact API
 // key actually used for inference, without retaining the key in usage metadata.
 func GeminiUsageLedgerIdentity(rawURL, apiKey string) string {
@@ -84,11 +96,15 @@ func (s *GatewayService) RecoverGeminiUsage(ctx context.Context, input *RecordUs
 	if model == "" {
 		return false, ErrGeminiUsageRecoveryUnavailable
 	}
+	budget := usageFollowupBudget(ctx, geminiUsageRecoveryTimeout)
+	if budget <= 0 {
+		return false, ErrGeminiUsageRecoveryUnavailable
+	}
 	baseContext := context.Background()
 	if ctx != nil {
 		baseContext = context.WithoutCancel(ctx)
 	}
-	lookupContext, cancel := context.WithTimeout(baseContext, geminiUsageRecoveryTimeout)
+	lookupContext, cancel := context.WithTimeout(baseContext, budget)
 	defer cancel()
 	endpoint := strings.TrimRight(normalizedOrigin, "/") + "/api/log/token"
 	// Coalesce overlapping reads of the same credential's ledger. Scope by the
@@ -125,10 +141,29 @@ func (s *GatewayService) RecoverGeminiUsage(ctx context.Context, input *RecordUs
 		if usage == nil {
 			continue
 		}
-		result.Usage = *usage
-		result.InputTokensSource, result.OutputTokensSource = UsageTokenSourceUpstream, UsageTokenSourceUpstream
-		result.RequireMeasuredUsage, result.MeasuredUsageComplete = true, true
-		result.EstimatedInputTokens, result.InputTokensEstimated = 0, false
+		// Gemini stores exclusive input/cache buckets. Preserve an already
+		// measured gross prompt (including explicit zero), then only fill absent
+		// cache/output fields. A ledger is not permission to replace live usage.
+		cacheReported := result.Usage.CacheReadInputTokens > 0 ||
+			(result.GeminiUsageFallback != nil && result.GeminiUsageFallback.UsageFields&8 != 0)
+		grossPrompt := result.Usage.InputTokens + result.Usage.CacheReadInputTokens
+		if result.InputTokensSource != UsageTokenSourceUpstream {
+			grossPrompt = usage.InputTokens + usage.CacheReadInputTokens
+		}
+		if !cacheReported && usage.CacheReadInputTokens <= grossPrompt {
+			result.Usage.CacheReadInputTokens = usage.CacheReadInputTokens
+		}
+		if grossPrompt >= result.Usage.CacheReadInputTokens {
+			result.Usage.InputTokens = grossPrompt - result.Usage.CacheReadInputTokens
+			result.InputTokensSource = UsageTokenSourceUpstream
+			result.EstimatedInputTokens, result.InputTokensEstimated = 0, false
+		}
+		if result.OutputTokensSource != UsageTokenSourceUpstream {
+			result.Usage.OutputTokens = usage.OutputTokens
+			result.OutputTokensSource = UsageTokenSourceUpstream
+		}
+		result.RequireMeasuredUsage = true
+		result.MeasuredUsageComplete = result.InputTokensSource == UsageTokenSourceUpstream && result.OutputTokensSource == UsageTokenSourceUpstream
 		return true, nil
 	}
 	return false, nil

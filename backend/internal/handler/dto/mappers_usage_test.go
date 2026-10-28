@@ -378,6 +378,73 @@ func f64Ptr(value float64) *float64 {
 	return &value
 }
 
+func TestUsageLogFromService_RequestStatusDoesNotGuessHistoricalSuccess(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		log  *service.UsageLog
+		want string
+	}{
+		{"historical positive output", &service.UsageLog{OutputTokens: 50}, "unknown"},
+		{"metadata only", &service.UsageLog{Outcome: &service.ResponseOutcome{HasText: true}}, "unknown"},
+		{"unfinished", &service.UsageLog{Outcome: &service.ResponseOutcome{CollectorVersion: 1, HasText: true}}, "unknown"},
+		{"client interrupted", &service.UsageLog{Outcome: &service.ResponseOutcome{CollectorVersion: 1, HasText: true, DisconnectSource: service.DisconnectSourceClient}}, "interrupted"},
+		{"upstream interrupted", &service.UsageLog{Outcome: &service.ResponseOutcome{CollectorVersion: 1, HasText: true, DisconnectSource: service.DisconnectSourceUpstream}}, "interrupted"},
+		{"failed", &service.UsageLog{Outcome: &service.ResponseOutcome{CollectorVersion: 1, HTTPStatus: 502, UpstreamStatus: 502}}, "failed"},
+		{"completed", &service.UsageLog{Outcome: &service.ResponseOutcome{CollectorVersion: 1, HTTPStatus: 200, UpstreamStatus: 200, HasText: true, StreamCompleted: true}}, "completed"},
+		{"empty", &service.UsageLog{Outcome: &service.ResponseOutcome{CollectorVersion: 1, HTTPStatus: 200, UpstreamStatus: 200, StreamCompleted: true}}, "empty"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, projection := range []any{UsageLogFromService(tc.log), UsageLogFromServiceAdmin(tc.log)} {
+				raw, err := json.Marshal(projection)
+				require.NoError(t, err)
+				var fields map[string]any
+				require.NoError(t, json.Unmarshal(raw, &fields))
+				require.Equal(t, tc.want, fields["request_status"])
+				require.NotContains(t, fields, "disconnect_source")
+				require.NotContains(t, fields, "upstream_error_kind")
+			}
+		})
+	}
+}
+
+func TestUsageLogFromService_TokenAvailabilityDistinguishesMissingFromReportedZero(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		source service.UsageTokenSource
+		count  int
+		known  any
+	}{
+		{"reported zero", service.UsageTokenSourceUpstream, 0, true},
+		{"unreported", service.UsageTokenSourceUnreported, 0, false},
+		{"estimate without evidence", service.UsageTokenSourceEstimated, 0, false},
+		{"estimate available", service.UsageTokenSourceEstimated, 42, true},
+		{"historical zero", service.UsageTokenSourceUnknown, 0, nil},
+		{"historical positive", service.UsageTokenSourceUnknown, 42, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			log := &service.UsageLog{InputTokens: tc.count, OutputTokens: tc.count, InputTokensSource: tc.source, OutputTokensSource: tc.source}
+			for _, projection := range []any{UsageLogFromService(log), UsageLogFromServiceAdmin(log)} {
+				raw, err := json.Marshal(projection)
+				require.NoError(t, err)
+				var fields map[string]any
+				require.NoError(t, json.Unmarshal(raw, &fields))
+				for _, field := range []string{"input_tokens_known", "output_tokens_known"} {
+					if tc.known == nil {
+						require.NotContains(t, fields, field)
+					} else {
+						require.Equal(t, tc.known, fields[field])
+					}
+				}
+				require.Equal(t, float64(tc.count), fields["input_tokens"])
+				require.Equal(t, float64(tc.count), fields["output_tokens"])
+			}
+			if tc.source == service.UsageTokenSourceEstimated {
+				require.Equal(t, service.UsageTokenSourceUnknown, UsageLogFromService(log).InputTokensSource)
+			}
+		})
+	}
+}
+
 func TestUsageLogFromService_UnknownSourcesAreExplicitForLegacyRecords(t *testing.T) {
 	for _, dto := range []any{UsageLogFromService(&service.UsageLog{}), UsageLogFromServiceAdmin(&service.UsageLog{})} {
 		raw, err := json.Marshal(dto)

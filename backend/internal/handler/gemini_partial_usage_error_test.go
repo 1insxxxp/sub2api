@@ -397,19 +397,20 @@ func TestGeminiHandlers_InterruptedUsageBilling(t *testing.T) {
 					require.NotContains(t, string(raw), "private reasoning")
 					require.NotContains(t, string(raw), "partial answer")
 				}
+				if tc.initialCancel {
+					require.Empty(t, usageRepo.pending)
+					require.Empty(t, wallet.commands, "an unaccepted failure must not reserve a billing dedup key")
+					require.Empty(t, usageRepo.logs, "an unaccepted failure belongs only in the diagnostic history")
+					require.Zero(t, upstream.countCalls, "countTokens cannot prove consumption for an unaccepted request")
+					return
+				}
 				if tc.wantEstimate {
 					require.Empty(t, usageRepo.pending, "final estimation must settle into normal history")
 					require.Len(t, wallet.commands, 1)
 					require.Len(t, usageRepo.logs, 1)
 					log := usageRepo.logs[0]
-					if tc.initialCancel {
-						require.Zero(t, log.InputTokens)
-						require.Zero(t, log.OutputTokens)
-						require.Zero(t, wallet.commands[0].BalanceCost, "no accepted upstream request must not acquire a speculative charge")
-					} else {
-						require.Positive(t, log.InputTokens)
-						require.Positive(t, wallet.commands[0].BalanceCost)
-					}
+					require.Positive(t, log.InputTokens)
+					require.Positive(t, wallet.commands[0].BalanceCost)
 					if strings.Contains(tc.customUsage, "promptTokenCount") {
 						require.Equal(t, 12, log.InputTokens)
 						require.Equal(t, service.UsageTokenSourceUpstream, log.InputTokensSource)
