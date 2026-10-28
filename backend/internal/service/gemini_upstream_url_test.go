@@ -1,10 +1,29 @@
 package service
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
+
+func TestGeminiRoutingModelValidationKeepsUpstreamPathGuardStrict(t *testing.T) {
+	for _, model := range []string{"gemini-4-argon", "按量vet/gemini-4-argon", "优惠/Gemini_4.0", strings.Repeat("模", 200)} {
+		require.True(t, IsValidGeminiRoutingModel(model), model)
+		if strings.ContainsAny(model, "/模") {
+			_, err := buildGeminiAIStudioModelActionURL("https://example.invalid", model, "generateContent", false)
+			require.Error(t, err, "a routing name must never loosen the upstream URL guard")
+		}
+	}
+	for _, model := range []string{
+		"", "/gemini", "gemini/", "a//b", "a/../b", "a/./b", "a/.../b",
+		"a%2fb", "a%252fb", "a?key=b", "a#b", "a:b", `a\b`, "a\x00b",
+		"a\nb", "a\u202eb", "a\ufffdb", " a", "a ", "a\t", "a\n", "a b",
+		strings.Repeat("a/", 8) + "b", strings.Repeat("模", 201),
+	} {
+		require.False(t, IsValidGeminiRoutingModel(model), model)
+	}
+}
 
 func TestBuildGeminiAIStudioModelActionURL(t *testing.T) {
 	const base = "https://generativelanguage.googleapis.com"

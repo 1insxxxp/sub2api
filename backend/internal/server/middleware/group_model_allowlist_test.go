@@ -6,6 +6,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -226,6 +227,27 @@ func TestGroupModelAllowlistGeminiWildcardAndPrefixForms(t *testing.T) {
 	w := doJSON(t, router, http.MethodPost, "/v1beta/models/models/gemini-2.5-flash:generateContent", `{}`)
 	if w.Code != http.StatusOK {
 		t.Fatalf("models/ prefixed model should match wildcard entry, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestGroupModelAllowlistGeminiRoutingAlias(t *testing.T) {
+	const alias = "按量vet/gemini-4-argon"
+	for _, allowed := range []bool{false, true} {
+		entry := "gemini-4-argon"
+		if allowed {
+			entry = alias
+		}
+		for _, modelPath := range []string{alias, url.PathEscape(alias)} {
+			router, calls := newGroupModelAllowlistTestRouter(allowlistAPIKey(true, entry), "/v1beta")
+			w := doJSON(t, router, http.MethodPost, "/v1beta/models/"+modelPath+":generateContent", `{}`)
+			if allowed {
+				if w.Code != http.StatusOK || len(*calls) != 1 {
+					t.Fatalf("listed routing alias was rejected: %d %s", w.Code, w.Body.String())
+				}
+			} else if w.Code != http.StatusNotFound || len(*calls) != 0 {
+				t.Fatalf("unlisted alias bypassed the public allowlist: %d calls=%v", w.Code, *calls)
+			}
+		}
 	}
 }
 

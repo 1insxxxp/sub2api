@@ -1340,6 +1340,12 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 	if account.Type == AccountTypeAPIKey || account.Type == AccountTypeServiceAccount {
 		mappedModel = account.GetMappedModel(originalModel)
 	}
+	// A native routing alias may contain a prefix or Unicode, but must resolve
+	// before leaving this gateway. Also cover Vertex and Code Assist, which do
+	// not use the strict AI Studio URL builder. Keep existing plain-name behavior.
+	if !IsSafeGeminiModelPathSegment(originalModel) && !IsSafeGeminiModelPathSegment(mappedModel) {
+		return nil, s.writeGoogleError(c, http.StatusBadRequest, "Model alias does not resolve to a valid upstream model")
+	}
 	requestContext := ctx
 	firstOutputGuard := (*modelFirstOutputGuard)(nil)
 	firstOutputPolicy := ModelFirstOutputTimeoutPolicy{}

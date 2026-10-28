@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 // geminiAIStudioActions 是允许出现在上游 URL 里的 action 集合，与 ForwardNative
@@ -13,6 +15,10 @@ var geminiAIStudioActions = map[string]struct{}{
 	"streamGenerateContent": {},
 	"countTokens":           {},
 }
+
+// Match the configured group alias target's character limit; the final
+// upstream path segment retains its separate, stricter byte limit.
+const maxGeminiRoutingModelRunes = 200
 
 // buildGeminiAIStudioModelActionURL 组装 AI Studio 的
 // /v1beta/models/{model}:{action} 上游 URL。
@@ -44,8 +50,33 @@ func buildGeminiAIStudioModelActionURL(baseURL, model, action string, stream boo
 	return fullURL, nil
 }
 
-// IsSafeGeminiModelPathSegment 供 handler 层在解析出 URL 里的模型名后立刻校验，
-// 让客户端拿到明确的 400，而不是等到构造上游请求时才报错。
+// IsSafeGeminiModelPathSegment validates a final upstream model path segment.
+// Public routing aliases must be resolved before applying this stricter check.
 func IsSafeGeminiModelPathSegment(model string) bool {
 	return isSafeUpstreamPathSegment(strings.TrimSpace(model))
+}
+
+// IsValidGeminiRoutingModel accepts public routing names, not upstream URL
+// paths. Account/group aliases may contain Unicode or namespace prefixes.
+// Keep a closed character allowlist and reject path/encoding metacharacters;
+// callers must still validate the mapped model before building an upstream URL.
+func IsValidGeminiRoutingModel(model string) bool {
+	if model == "" || utf8.RuneCountInString(model) > maxGeminiRoutingModelRunes {
+		return false
+	}
+	segments := strings.Split(model, "/")
+	if len(segments) > maxUpstreamPathSegments {
+		return false
+	}
+	for _, segment := range segments {
+		if segment == "" || strings.Trim(segment, ".") == "" {
+			return false
+		}
+		for _, r := range segment {
+			if r != '.' && r != '_' && r != '-' && !unicode.IsLetter(r) && !unicode.IsNumber(r) {
+				return false
+			}
+		}
+	}
+	return true
 }
