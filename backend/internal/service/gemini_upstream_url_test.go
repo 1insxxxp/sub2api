@@ -24,7 +24,7 @@ func TestBuildGeminiAIStudioModelActionURLTaggedModels(t *testing.T) {
 				require.NoError(t, err)
 				response, err := http.Post(endpoint, "application/json", strings.NewReader(`{}`))
 				require.NoError(t, err)
-				response.Body.Close()
+				require.NoError(t, response.Body.Close())
 				require.Equal(t, http.StatusNoContent, response.StatusCode)
 				observed := <-requests
 				require.Equal(t, "/proxy/v1beta/models/"+model+":"+action, observed.URL.Path)
