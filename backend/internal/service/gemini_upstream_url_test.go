@@ -1,11 +1,64 @@
 package service
 
 import (
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
+
+func TestBuildGeminiAIStudioModelActionURLTaggedModels(t *testing.T) {
+	for _, model := range []string{"[P]gemini-4-argon", "[量]gemini-4-argon", "[渠道_2.1]gemini-3.8-flash"} {
+		for _, action := range []string{"generateContent", "streamGenerateContent", "countTokens"} {
+			t.Run(model+"/"+action, func(t *testing.T) {
+				requests := make(chan *http.Request, 1)
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					requests <- r
+					w.WriteHeader(http.StatusNoContent)
+				}))
+				defer server.Close()
+				endpoint, err := buildGeminiAIStudioModelActionURL(server.URL+"/proxy", model, action, action == "streamGenerateContent")
+				require.NoError(t, err)
+				response, err := http.Post(endpoint, "application/json", strings.NewReader(`{}`))
+				require.NoError(t, err)
+				response.Body.Close()
+				require.Equal(t, http.StatusNoContent, response.StatusCode)
+				observed := <-requests
+				require.Equal(t, "/proxy/v1beta/models/"+model+":"+action, observed.URL.Path)
+				require.Equal(t, "/proxy/v1beta/models/"+url.PathEscape(model)+":"+action, strings.SplitN(observed.RequestURI, "?", 2)[0])
+				if action == "streamGenerateContent" {
+					require.Equal(t, "alt=sse", observed.URL.RawQuery)
+				} else {
+					require.Empty(t, observed.URL.RawQuery)
+				}
+				require.False(t, IsSafeGeminiModelPathSegment(model), "public model metadata/cache validation stays strict")
+				require.False(t, IsValidGeminiRoutingModel(model), "tagged targets are not native public routing names")
+				require.False(t, isSafeUpstreamPathSegment(model), "the shared path guard must remain strict")
+			})
+		}
+	}
+}
+
+func TestBuildGeminiAIStudioModelActionURLRejectsUnsafeTaggedModels(t *testing.T) {
+	for _, model := range []string{
+		"[]gemini", "[P]", "[量]..", "[量]...", "[P][量]gemini", "[[P]]gemini", "P]gemini", "[Pgemini",
+		"[P]gemini/other", `[P]gemini\other`, "[P]gemini%2fother", "[P]gemini%252fother",
+		"[P]gemini?key=x", "[P]gemini#x", "[P]gemini:countTokens", "[P]gemini@001",
+		"[P/Q]gemini", `[P\Q]gemini`, "[P%51]gemini", "[P?Q]gemini", "[P#Q]gemini", "[P:Q]gemini",
+		"[P Q]gemini", "[P\tQ]gemini", "[P\x00Q]gemini", "[P\u202eQ]gemini", "[P\ufffdQ]gemini",
+		"[P]gemini model", "[P]gemini\x00model", "[量]" + strings.Repeat("a", 124),
+		"[" + strings.Repeat("量", 43) + "]gemini", "[P]models/gemini", "[P]../gemini",
+	} {
+		t.Run(model, func(t *testing.T) {
+			_, err := buildGeminiAIStudioModelActionURL("https://example.invalid", model, "generateContent", false)
+			require.Error(t, err)
+			require.NotContains(t, err.Error(), model, "unsafe input must not be reflected in errors")
+		})
+	}
+}
 
 func TestGeminiRoutingModelValidationKeepsUpstreamPathGuardStrict(t *testing.T) {
 	for _, model := range []string{"gemini-4-argon", "按量vet/gemini-4-argon", "优惠/Gemini_4.0", strings.Repeat("模", 200)} {

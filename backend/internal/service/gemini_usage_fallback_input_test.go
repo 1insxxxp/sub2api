@@ -22,6 +22,34 @@ import (
 const geminiFallbackInputURL = "https://count.example.com/proxy/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse"
 const geminiFallbackInputBody = `{"systemInstruction":{"parts":[{"text":"Be precise."}]},"contents":[{"role":"user","parts":[{"text":"Explain streaming."}]}]}`
 
+func TestGeminiFallbackInput_TaggedModelRetainsIdentityAndEncodedCountPath(t *testing.T) {
+	const model = "[量]gemini-4-argon"
+	endpoint, err := buildGeminiAIStudioModelActionURL("https://count.example.com/proxy", model, "streamGenerateContent", true)
+	require.NoError(t, err)
+	fallback := prepareGeminiInputUsageFallback(newGeminiFallbackInputRequest(t, endpoint, geminiFallbackInputBody), 5957, model)
+	require.NotNil(t, fallback.CountRequest)
+	require.Equal(t, "https://count.example.com/proxy/v1beta/models/%5B%E9%87%8F%5Dgemini-4-argon:countTokens", fallback.CountRequest.URL)
+	var body struct {
+		GenerateContentRequest struct {
+			Model string `json:"model"`
+		} `json:"generateContentRequest"`
+	}
+	require.NoError(t, json.Unmarshal(fallback.CountRequest.Body, &body))
+	require.Equal(t, "models/"+model, body.GenerateContentRequest.Model)
+	svc, input, upstream := newGeminiCountFallbackFixture(t, `{"totalTokens":21916}`)
+	input.Result.GeminiUsageFallback.Input = fallback
+	tokens, ok, err := svc.CountGeminiInputFallback(context.Background(), input)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, 21916, tokens)
+	require.Len(t, upstream.requests, 1)
+	require.Nil(t, input.Result.GeminiUsageFallback.Input.CountRequest, "the body snapshot is cleared after one bounded query")
+	require.Equal(t, "/proxy/v1beta/models/%5B%E9%87%8F%5Dgemini-4-argon:countTokens", upstream.lastReq.URL.EscapedPath())
+	require.Empty(t, upstream.lastReq.URL.RawQuery)
+	require.Equal(t, "same-test-key", upstream.lastReq.Header.Get("x-goog-api-key"))
+	require.True(t, HTTPUpstreamRedirectsDisabled(upstream.lastReq.Context()))
+}
+
 func newGeminiFallbackInputRequest(t *testing.T, endpoint, body string) *http.Request {
 	t.Helper()
 	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader([]byte(body)))

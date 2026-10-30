@@ -5,11 +5,60 @@ package service
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
+
+func TestGeminiForwardNative_RoutingAliasUsesTaggedAIStudioModel(t *testing.T) {
+	const target = "[量]gemini-4-argon"
+	for _, alias := range []string{"gemini-4-argon", "按量vet/gemini-4-argon"} {
+		t.Run(alias, func(t *testing.T) {
+			svc, upstream := newGeminiVertexAPIKeyTestService()
+			account := geminiSignalTestAccount()
+			account.Credentials["model_mapping"] = map[string]any{alias: target}
+			c, recorder := newGeminiNativeTestContext(t)
+			result, err := svc.ForwardNative(context.Background(), c, account, alias, "generateContent", false, geminiSignalTestRequest())
+			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, recorder.Code)
+			require.Equal(t, 1, upstream.calls)
+			require.Equal(t, "/v1beta/models/"+target+":generateContent", upstream.lastReq.URL.Path)
+			require.Equal(t, "/v1beta/models/"+url.PathEscape(target)+":generateContent", upstream.lastReq.URL.EscapedPath())
+			require.Equal(t, alias, result.Model)
+			require.Equal(t, target, result.UpstreamModel)
+		})
+	}
+}
+
+func TestGeminiForwardNative_TaggedAliasDoesNotBroadenOtherProviders(t *testing.T) {
+	const alias = "按量vet/gemini-4-argon"
+	for _, provider := range []string{"vertex_express", "vertex_project", "oauth", "code_assist"} {
+		t.Run(provider, func(t *testing.T) {
+			svc, upstream := newGeminiVertexAPIKeyTestService()
+			account := geminiSignalTestAccount()
+			switch provider {
+			case "vertex_express":
+				account = geminiVertexAPIKeyTestAccount("")
+			case "vertex_project":
+				account = geminiVertexAPIKeyTestAccount("test-project")
+			case "oauth", "code_assist":
+				account.Type = AccountTypeOAuth
+				if provider == "code_assist" {
+					account.Credentials["project_id"] = "test-project"
+				}
+			}
+			account.Credentials["model_mapping"] = map[string]any{alias: "[量]gemini-4-argon"}
+			c, recorder := newGeminiNativeTestContext(t)
+			result, err := svc.ForwardNative(context.Background(), c, account, alias, "generateContent", false, geminiSignalTestRequest())
+			require.Error(t, err)
+			require.Nil(t, result)
+			require.Equal(t, http.StatusBadRequest, recorder.Code)
+			require.Zero(t, upstream.calls)
+		})
+	}
+}
 
 // Routing aliases are local identifiers, never literal model paths for another
 // provider. This must also hold for Vertex and Code Assist, whose builders do

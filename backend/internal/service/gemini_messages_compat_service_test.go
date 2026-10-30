@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -19,6 +20,46 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 )
+
+func TestGeminiCompatForwardsTaggedMappedModel(t *testing.T) {
+	const model = "gemini-4-argon"
+	const target = "[量]gemini-4-argon"
+	for _, protocol := range []string{"chat/completions", "messages"} {
+		t.Run(protocol, func(t *testing.T) {
+			gin.SetMode(gin.TestMode)
+			upstream := &geminiCompatHTTPUpstreamStub{response: &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body:       io.NopCloser(strings.NewReader(`{"candidates":[{"content":{"parts":[{"text":"hello"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":5}}`)),
+			}}
+			svc := &GeminiMessagesCompatService{httpUpstream: upstream, cfg: &config.Config{}}
+			account := &Account{ID: 1, Platform: PlatformGemini, Type: AccountTypeAPIKey, Credentials: map[string]any{
+				"api_key": "same-test-key", "model_mapping": map[string]any{model: target},
+			}}
+			body := []byte(`{"model":"gemini-4-argon","max_tokens":32,"messages":[{"role":"user","content":"hello"}]}`)
+			recorder := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(recorder)
+			c.Request = httptest.NewRequest(http.MethodPost, "/v1/"+protocol, bytes.NewReader(body))
+			var result *ForwardResult
+			var err error
+			if protocol == "messages" {
+				result, err = svc.Forward(context.Background(), c, account, body)
+			} else {
+				result, err = svc.ForwardAsChatCompletions(context.Background(), c, account, body)
+			}
+			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, recorder.Code)
+			require.Equal(t, 1, upstream.calls)
+			require.Equal(t, "/v1beta/models/"+target+":generateContent", upstream.lastReq.URL.Path)
+			require.Equal(t, "/v1beta/models/"+url.PathEscape(target)+":generateContent", upstream.lastReq.URL.EscapedPath())
+			require.Equal(t, "same-test-key", upstream.lastReq.Header.Get("x-goog-api-key"))
+			require.Equal(t, model, result.Model)
+			require.Equal(t, target, result.UpstreamModel)
+			require.Equal(t, 10, result.Usage.InputTokens)
+			require.Equal(t, 5, result.Usage.OutputTokens)
+		})
+	}
+}
 
 func TestGeminiChatCompletions_PreservesToolResultNamesWhenIDsCollideAfterAnthropicMapping(t *testing.T) {
 	// "foo" and "toolu_foo" are distinct OpenAI tool-call IDs, but the old
