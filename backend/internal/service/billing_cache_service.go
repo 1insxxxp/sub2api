@@ -853,7 +853,7 @@ func (s *BillingCacheService) ReserveFixedCharge(ctx context.Context, user *User
 				return nil, err
 			}
 			if balance < amount {
-				return nil, ErrInsufficientBalance
+				return nil, NewInsufficientBalanceError(balance, &amount)
 			}
 		}
 	}
@@ -1085,7 +1085,7 @@ func (s *BillingCacheService) checkBalanceEligibility(ctx context.Context, userI
 		}
 	}
 	if s.balanceBelowEligibilityThreshold(balance) {
-		return ErrInsufficientBalance
+		return NewInsufficientBalanceError(balance, nil)
 	}
 
 	return nil

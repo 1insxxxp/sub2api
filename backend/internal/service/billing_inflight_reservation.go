@@ -341,7 +341,7 @@ func (s *BillingCacheService) reserveInflight(ctx context.Context, user *User, g
 		// Fixed charges still require their known amount, even if the other
 		// reservation disappears before the atomic retry.
 		if s.balanceBelowEligibilityThreshold(balance) || (!capped && balance < estimate) {
-			return nil, ErrInsufficientBalance
+			return nil, NewInsufficientBalanceError(balance, &estimate)
 		}
 		var inflight float64
 		allowed, inflight, err = reserveInflightBalanceOnce(ctx, rc, user.ID, requestID, estimate, balance, ttl)
@@ -351,7 +351,7 @@ func (s *BillingCacheService) reserveInflight(ctx context.Context, user *User, g
 		}
 		if !allowed {
 			logger.LegacyPrintf("service.billing_cache", "inflight reservation rejected: user=%d balance=%.6f inflight=%.6f estimate=%.6f", user.ID, balance, inflight, estimate)
-			return nil, ErrBalanceInFlight
+			return nil, newBalanceInFlightError(balance, inflight, estimate)
 		}
 	}
 

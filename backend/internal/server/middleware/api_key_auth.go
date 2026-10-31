@@ -278,7 +278,7 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 							return
 						}
 						if apiKeyBalanceBelowAuthThreshold(apiKey.User.Balance, cfg) {
-							AbortWithError(c, 403, "INSUFFICIENT_BALANCE", "Insufficient account balance")
+							AbortWithError(c, 403, "INSUFFICIENT_BALANCE", service.NewInsufficientBalanceError(apiKey.User.Balance, nil).Message)
 							return
 						}
 					}

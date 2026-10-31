@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -38,26 +39,28 @@ func TestAPIKeyAuthBalanceRecovery(t *testing.T) {
 		}
 		t.Run(format, func(t *testing.T) {
 			for _, tc := range []struct {
-				name        string
-				cached      float64
-				fresh       float64
-				freshStatus string
-				err         error
-				status      int
-				message     string
-				wantDBReads int
-				keyStatus   string
-				quota       float64
-				quotaUsed   float64
-				expired     bool
-				revokeGroup bool
-				excludedID  int64
+				name          string
+				cached        float64
+				fresh         float64
+				freshStatus   string
+				err           error
+				status        int
+				message       string
+				balanceDenied bool
+				wantDBReads   int
+				keyStatus     string
+				quota         float64
+				quotaUsed     float64
+				expired       bool
+				revokeGroup   bool
+				excludedID    int64
 			}{
 				{name: "recharged_after_cached_zero", fresh: 0.005, status: http.StatusOK, wantDBReads: 1},
 				{name: "recharged_after_cached_debt", cached: -1, fresh: 0.005, status: http.StatusOK, wantDBReads: 1},
 				{name: "recharged_preserves_account_exclusions", fresh: 0.005, status: http.StatusOK, wantDBReads: 1, excludedID: 9001},
-				{name: "zero_confirmed", status: http.StatusForbidden, message: "Insufficient account balance", wantDBReads: 1},
-				{name: "debt_confirmed", fresh: -1, status: http.StatusForbidden, message: "Insufficient account balance", wantDBReads: 1},
+				{name: "zero_confirmed", status: http.StatusForbidden, message: "Insufficient account balance. Current balance: US$0.00; estimated reservation for this request: not calculated.", balanceDenied: true, wantDBReads: 1},
+				{name: "debt_confirmed", cached: -99, fresh: -1, status: http.StatusForbidden, message: "Insufficient account balance. Current balance: US$-1.00; estimated reservation for this request: not calculated.", balanceDenied: true, wantDBReads: 1},
+				{name: "fractional_debt_confirmed", cached: -99, fresh: -1.23456789, status: http.StatusForbidden, message: "Insufficient account balance. Current balance: US$-1.23456789; estimated reservation for this request: not calculated.", balanceDenied: true, wantDBReads: 1},
 				{name: "database_unavailable", err: errors.New("database down"), status: http.StatusServiceUnavailable, message: "Billing service temporarily unavailable", wantDBReads: 1},
 				{name: "fresh_user_disabled", fresh: 1, freshStatus: service.StatusDisabled, status: http.StatusUnauthorized, message: "User account is not active", wantDBReads: 1},
 				{name: "key_disabled", fresh: 1, keyStatus: service.StatusDisabled, status: http.StatusUnauthorized, message: "API key is disabled"},
@@ -118,6 +121,21 @@ func TestAPIKeyAuthBalanceRecovery(t *testing.T) {
 					require.Equal(t, tc.wantDBReads, reads)
 					if tc.message != "" {
 						require.Contains(t, w.Body.String(), tc.message)
+					}
+					if tc.balanceDenied {
+						if google {
+							var resp googleErrorResponse
+							require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+							require.Equal(t, http.StatusForbidden, resp.Error.Code)
+							require.Equal(t, "PERMISSION_DENIED", resp.Error.Status)
+							require.Equal(t, tc.message, resp.Error.Message)
+						} else {
+							var resp ErrorResponse
+							require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+							require.Equal(t, "INSUFFICIENT_BALANCE", resp.Code)
+							require.Equal(t, tc.message, resp.Message)
+						}
+						require.Nil(t, resultKey, "balance rejection must not dispatch the request")
 					}
 					if tc.status == http.StatusOK && tc.wantDBReads > 0 {
 						require.Equal(t, tc.fresh, resultKey.User.Balance)
