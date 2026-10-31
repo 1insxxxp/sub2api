@@ -96,8 +96,8 @@ func TestChatToAnthropicDoesNotTreatConvertedDefaultAsClientCumulativeCap(t *tes
 	require.NoError(t, err)
 	require.Equal(t, 1, result.AntiTruncationRounds)
 	require.Len(t, upstream.bodies, 2)
-	require.Equal(t, int64(8192), gjson.GetBytes(upstream.bodies[0], "max_tokens").Int(), "converter default remains the per-round upstream limit")
-	require.Equal(t, int64(8192), gjson.GetBytes(upstream.bodies[1], "max_tokens").Int(), "converter default must not become a cumulative client cap")
+	require.Equal(t, int64(64000), gjson.GetBytes(upstream.bodies[0], "max_tokens").Int(), "known model capacity is the per-round upstream default")
+	require.Equal(t, int64(64000), gjson.GetBytes(upstream.bodies[1], "max_tokens").Int(), "synthetic default must not become a cumulative client cap")
 }
 
 func TestAnthropicMessagesChatFallbackContinuationHonorsOriginalClientOutputBudget(t *testing.T) {

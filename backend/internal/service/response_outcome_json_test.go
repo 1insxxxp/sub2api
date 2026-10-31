@@ -71,3 +71,93 @@ func TestResponseOutcomeCollectorAnthropicSSERequiresTerminalFrame(t *testing.T)
 	collector.ObserveAnthropicSSEData(`{"type":"message_stop"}`)
 	require.True(t, collector.Snapshot().StreamCompleted)
 }
+
+func TestResponseOutcomeCollectorTerminalFramesPreserveFinishReason(t *testing.T) {
+	tests := []struct {
+		name    string
+		observe func(*ResponseOutcomeCollector, string)
+		data    string
+		stop    string
+		want    string
+	}{
+		{
+			name:    "anthropic token limit",
+			observe: (*ResponseOutcomeCollector).ObserveAnthropicSSEData,
+			data:    `{"type":"message_delta","delta":{"stop_reason":"max_tokens"}}`,
+			stop:    `{"type":"message_stop"}`,
+			want:    "max_tokens",
+		},
+		{
+			name:    "anthropic natural completion",
+			observe: (*ResponseOutcomeCollector).ObserveAnthropicSSEData,
+			data:    `{"type":"message_delta","delta":{"stop_reason":"end_turn"}}`,
+			stop:    `{"type":"message_stop"}`,
+			want:    "end_turn",
+		},
+		{
+			name:    "openai token limit",
+			observe: (*ResponseOutcomeCollector).ObserveOpenAISSEData,
+			data:    `{"choices":[{"delta":{},"finish_reason":"length"}]}`,
+			stop:    "[DONE]",
+			want:    "length",
+		},
+		{
+			name:    "openai content filter",
+			observe: (*ResponseOutcomeCollector).ObserveOpenAISSEData,
+			data:    `{"choices":[{"delta":{},"finish_reason":"content_filter"}]}`,
+			stop:    "[DONE]",
+			want:    "content_filter",
+		},
+		{
+			name:    "gemini token limit",
+			observe: (*ResponseOutcomeCollector).ObserveGeminiSSEData,
+			data:    `{"candidates":[{"finishReason":"MAX_TOKENS"}]}`,
+			stop:    "[DONE]",
+			want:    "max_tokens",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			collector := NewResponseOutcomeCollector(200, 200)
+			tt.observe(collector, tt.data)
+			require.Equal(t, tt.want, collector.Snapshot().FinishReason)
+			tt.observe(collector, tt.stop)
+			outcome := collector.Snapshot()
+			require.Equal(t, tt.want, outcome.FinishReason)
+			require.True(t, outcome.StreamCompleted)
+		})
+	}
+}
+
+func TestResponseOutcomeCollectorTerminalFramesWithoutFinishReasonUseFallback(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		observe func(*ResponseOutcomeCollector, string)
+		stop    string
+		want    string
+	}{
+		{"anthropic", (*ResponseOutcomeCollector).ObserveAnthropicSSEData, `{"type":"message_stop"}`, "message_stop"},
+		{"openai", (*ResponseOutcomeCollector).ObserveOpenAISSEData, "[DONE]", "done"},
+		{"gemini", (*ResponseOutcomeCollector).ObserveGeminiSSEData, "[DONE]", "done"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			collector := NewResponseOutcomeCollector(200, 200)
+			tt.observe(collector, tt.stop)
+			outcome := collector.Snapshot()
+			require.Equal(t, tt.want, outcome.FinishReason)
+			require.True(t, outcome.StreamCompleted)
+		})
+	}
+}
+
+func TestResponseOutcomeCollectorLaterResponseCanUpdateFinishReason(t *testing.T) {
+	collector := NewResponseOutcomeCollector(200, 200)
+	collector.ObserveAnthropicSSEData(`{"type":"message_delta","delta":{"stop_reason":"max_tokens"}}`)
+	collector.ObserveAnthropicSSEData(`{"type":"message_stop"}`)
+	collector.ObserveAnthropicSSEData(`{"type":"message_delta","delta":{"stop_reason":"end_turn"}}`)
+	collector.ObserveAnthropicSSEData(`{"type":"message_stop"}`)
+	require.Equal(t, "end_turn", collector.Snapshot().FinishReason)
+
+	collector.MarkCompleted("length")
+	require.Equal(t, "length", collector.Snapshot().FinishReason)
+}

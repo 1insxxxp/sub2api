@@ -70,7 +70,7 @@ func (s *OpenAIGatewayService) forwardChatCompletionsViaNativeAnthropic(
 		return nil, err
 	}
 	responsesReq.Model = upstreamModel
-	anthropicReq, err := apicompat.ResponsesToAnthropicRequest(responsesReq)
+	anthropicReq, err := apicompat.ResponsesToAnthropicRequestWithDefaultMaxTokens(responsesReq, defaultAnthropicOutputTokens(account, upstreamModel))
 	if err != nil {
 		writeChatCompletionsError(c, http.StatusBadRequest, "invalid_request_error", err.Error())
 		return nil, fmt.Errorf("convert responses to anthropic: %w", err)

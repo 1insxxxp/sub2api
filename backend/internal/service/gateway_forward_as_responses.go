@@ -87,7 +87,7 @@ func (s *GatewayService) ForwardAsResponses(
 	}
 	responsesReq.Model = mappedModel
 	applyOpus55GroupReasoningDefault(&responsesReq, group)
-	anthropicReq, err := apicompat.ResponsesToAnthropicRequest(&responsesReq)
+	anthropicReq, err := apicompat.ResponsesToAnthropicRequestWithDefaultMaxTokens(&responsesReq, defaultAnthropicOutputTokens(account, mappedModel))
 	if err != nil {
 		if isClaude55SignedThinkingModel(mappedModel) {
 			writeResponsesError(c, http.StatusBadRequest, "invalid_request_error", err.Error())

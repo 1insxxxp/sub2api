@@ -284,7 +284,16 @@ func (c *ResponseOutcomeCollector) MarkCompleted(finishReason string) {
 	}
 	c.mu.Lock()
 	c.outcome.StreamCompleted = true
-	c.outcome.FinishReason = sanitizeResponseOutcomeFinishReason(finishReason)
+	reason := sanitizeResponseOutcomeFinishReason(finishReason)
+	// Transport completion markers carry no model stop reason. Keep an
+	// observed token limit, safety decision, or natural completion instead.
+	switch reason {
+	case "", "done", "message_stop", "http_response":
+		if c.outcome.FinishReason != "" {
+			reason = c.outcome.FinishReason
+		}
+	}
+	c.outcome.FinishReason = reason
 	c.outcome.DisconnectSource = DisconnectSourceNone
 	// A collector can span upstream retries. Once a response has produced
 	// effective output and reached a successful terminal event, discard any
