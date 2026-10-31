@@ -10,7 +10,6 @@ func TestProvideHandlersIncludesModelStatusHandler(t *testing.T) {
 	modelStatusHandler := &ModelStatusHandler{}
 	lotteryHandler := &LotteryHandler{}
 	handlers := ProvideHandlers(
-		nil, // auth handler; the next argument is the independent support service
 		nil, nil, nil, userCustomGroupHandler, nil, nil, nil, nil, nil, nil,
 		nil, nil, nil, nil, nil, nil, nil, nil, nil,
 		checkinHandler, imageStudioHandler, nil, modelStatusHandler, nil, nil,

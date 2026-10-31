@@ -1,11 +1,5 @@
 <template>
-  <AppLayout>
-    <div class="admin-workbench-page support-page min-w-0 space-y-6">
-      <header>
-        <h1 class="text-xl font-semibold tracking-tight text-gray-900 dark:text-white">{{ t('userSupport.title') }}</h1>
-        <p class="mt-1.5 text-sm text-gray-500 dark:text-dark-400">{{ t('userSupport.description') }}</p>
-      </header>
-
+  <div class="support-panel min-w-0 space-y-6">
       <form class="support-lookup" :aria-busy="busy || checking" @submit.prevent="submit">
         <div class="min-w-0 flex-1">
           <label for="support-account" class="input-label">{{ t('userSupport.account') }}</label>
@@ -98,20 +92,19 @@
         <Icon name="search" size="xl" class="text-gray-300 dark:text-dark-600" />
         <p class="mt-3 text-sm text-gray-500 dark:text-dark-400">{{ t('userSupport.initial') }}</p>
       </div>
-    </div>
-  </AppLayout>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useUserSupportAccess } from '@/composables/useUserSupportAccess'
 import { lookup, type UserSupportResult } from '@/api/admin/userSupport'
 
 const { t, locale } = useI18n()
+const emit = defineEmits<{ 'access-denied': [] }>()
 const auth = useAuthStore()
 const access = useUserSupportAccess(auth)
 const account = ref('')
@@ -136,6 +129,7 @@ async function checkAccess() {
   checking.value = false
   denied.value = !allowed
   errorKey.value = allowed ? '' : 'userSupport.errors.forbidden'
+  if (!allowed) emit('access-denied')
 }
 watch(account, clearResult)
 watch(() => `${auth.user?.id}:${auth.user?.role}:${auth.token ?? ''}`, () => {
@@ -143,7 +137,10 @@ watch(() => `${auth.user?.id}:${auth.user?.role}:${auth.token ?? ''}`, () => {
   void checkAccess()
 })
 watch(access.canAccess, enabled => {
-  if (!enabled && !checking.value) { clearResult(); denied.value = true; errorKey.value = 'userSupport.errors.forbidden' }
+  if (!enabled && !checking.value && !denied.value) {
+    clearResult(); denied.value = true; errorKey.value = 'userSupport.errors.forbidden'
+    emit('access-denied')
+  }
 })
 
 onMounted(checkAccess)
@@ -164,6 +161,7 @@ async function submit() {
     const info = error as { status?: number; code?: string }
     if (info?.status === 401 || info?.status === 403 || info?.code === 'FORBIDDEN') {
       access.revoke(); denied.value = true; errorKey.value = 'userSupport.errors.forbidden'
+      emit('access-denied')
     } else if (info?.status === 404 || info?.code === 'USER_NOT_FOUND') {
       errorKey.value = 'userSupport.errors.userNotFound'
     } else if (info?.status === 400 || info?.code === 'INVALID_ACCOUNT') {
@@ -195,7 +193,6 @@ function statusClass(value: string) {
 </script>
 
 <style scoped>
-.support-page { max-width: 1440px; margin-inline: auto; }
 .support-lookup { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; max-width: 850px; }
 .support-lookup > div { min-width: min(100%, 260px); }
 .support-notice { flex-basis: 100%; margin-top: -4px; }

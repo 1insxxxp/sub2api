@@ -14,7 +14,6 @@ import { getSetupStatus } from '@/api/setup'
 import { resolveCompletedSetupRedirectPath } from './setupRedirect'
 import { resolveRouteDocumentTitle } from './title'
 import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
-import { useUserSupportAccess } from '@/composables/useUserSupportAccess'
 
 /**
  * Route definitions with lazy loading
@@ -476,10 +475,10 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/admin/user-support',
     name: 'UserSupport',
-    component: () => import('@/views/admin/UserSupportView.vue'),
+    redirect: { path: '/admin/workbench', query: { tab: 'user-support' } },
     meta: {
       requiresAuth: true,
-      requiresUserSupport: true,
+      requiresAdminWorkbench: true,
       title: 'User Support',
       titleKey: 'userSupport.title',
       descriptionKey: 'userSupport.description'
@@ -930,7 +929,6 @@ router.beforeEach(async (to, _from, next) => {
   const requiresAdmin = to.meta.requiresAdmin === true
   const requiresManager = to.meta.requiresManager === true
   const requiresAdminWorkbench = to.meta.requiresAdminWorkbench === true
-  const requiresUserSupport = to.meta.requiresUserSupport === true
 
   if (to.path === '/setup') {
     try {
@@ -948,12 +946,6 @@ router.beforeEach(async (to, _from, next) => {
   if (!requiresAuth) {
     // If already authenticated and trying to access login/register, redirect to appropriate dashboard
     if (authStore.isAuthenticated && (to.path === '/login' || to.path === '/register')) {
-      // Support-only staff keep their original user role and have a narrow landing page.
-      if (appStore.backendModeEnabled && !authStore.canAccessAdminWorkbench) {
-        if (await useUserSupportAccess(authStore).refresh()) next('/admin/user-support')
-        else next()
-        return
-      }
       next(
         authStore.isAdmin
           ? '/admin/dashboard'
@@ -1017,11 +1009,6 @@ router.beforeEach(async (to, _from, next) => {
   }
 
   // Check admin requirement
-  if (requiresUserSupport && !await useUserSupportAccess(authStore).refresh()) {
-    next(authStore.canAccessAdminWorkbench ? '/admin/workbench' : '/dashboard')
-    return
-  }
-
   if (requiresAdmin && !authStore.isAdmin) {
     // A sub-admin only has the scoped workbench, regardless of run mode.
     next(authStore.canAccessAdminWorkbench ? '/admin/workbench' : '/dashboard')
@@ -1038,7 +1025,7 @@ router.beforeEach(async (to, _from, next) => {
     return
   }
 
-  if ((requiresAdmin || requiresAdminWorkbench || requiresManager || requiresUserSupport) && authStore.isAdmin) {
+  if ((requiresAdmin || requiresAdminWorkbench || requiresManager) && authStore.isAdmin) {
     const adminComplianceStore = useAdminComplianceStore()
     if (!adminComplianceStore.initialized) {
       try {
@@ -1138,15 +1125,10 @@ router.beforeEach(async (to, _from, next) => {
       next()
       return
     }
-    if (authStore.isAuthenticated && requiresUserSupport) {
-      next()
-      return
-    }
     if (authStore.isAuthenticated && authStore.canAccessAdminWorkbench) {
       if (
         requiresAdminWorkbench ||
         requiresManager ||
-        requiresUserSupport ||
         to.path.startsWith('/admin/workbench') ||
         to.path.startsWith('/manager')
       ) {
@@ -1154,10 +1136,6 @@ router.beforeEach(async (to, _from, next) => {
         return
       }
       next('/admin/workbench')
-      return
-    }
-    if (authStore.isAuthenticated && await useUserSupportAccess(authStore).refresh()) {
-      next('/admin/user-support')
       return
     }
     const isAllowed = isBackendModePublicRouteAllowed(to.path, authStore.hasPendingAuthSession)

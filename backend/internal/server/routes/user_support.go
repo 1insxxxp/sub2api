@@ -7,8 +7,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// RegisterUserSupportRoutes uses session authentication plus an independent
-// capability. Staff do not need a role that grants any other admin surface.
+// RegisterUserSupportRoutes uses session authentication; the handler requires
+// an administrator role and a fresh, independent support capability.
 func RegisterUserSupportRoutes(v1 *gin.RouterGroup, h *handler.Handlers, jwtAuth middleware.JWTAuthMiddleware,
 	audit middleware.AuditLogMiddleware, settingService *service.SettingService, limiter *middleware.PanelRateLimiter) {
 	if h == nil || h.Admin == nil || h.Admin.UserSupport == nil {

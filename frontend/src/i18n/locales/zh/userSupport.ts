@@ -22,6 +22,6 @@ export default {
   trial: { title: '15 测试额度', granted: '本次已发放 15 额度', alreadyReceived: '已领取，不重复发放', historical: '已识别历史手动发放记录', once: '每个账号仅发放一次' },
   status: { completed: '已完成', interrupted: '已中断', failed: '失败', empty: '无有效回复', unknown: '未知' },
   categories: { auth: '认证失败', quota: '余额或额度不足', rate_limit: '请求过于频繁', invalid_request: '请求参数有误', timeout: '请求超时', service_unavailable: '服务暂时不可用', other: '请求未完成' },
-  errors: { forbidden: '没有用户支持权限，请联系主管理员。', userNotFound: '未找到可用的用户账号，请核对完整邮箱或用户 ID。', invalidAccount: '请输入有效的完整邮箱或用户 ID。', unavailable: '查询暂时不可用，请稍后重试；重试不会重复发放测试额度。' },
-  permission: { title: '用户支持权限', description: '允许查询指定用户余额、最近记录，并发放一次性 15 测试额度。', save: '保存授权', saving: '保存中…', saved: '授权已保存', loadFailed: '无法读取授权，请重试。', saveFailed: '授权保存失败，请重试。', retry: '重新读取' },
+  errors: { forbidden: '没有用户支持权限，请联系主管理员。', accessUnavailable: '无法读取管理员页面权限，请重新读取。', userNotFound: '未找到可用的用户账号，请核对完整邮箱或用户 ID。', invalidAccount: '请输入有效的完整邮箱或用户 ID。', unavailable: '查询暂时不可用，请稍后重试；重试不会重复发放测试额度。' },
+  permission: { title: '管理员页面功能权限', description: '为此二级管理员独立授权页签；未授权的收益管理和邀请排行榜不可见。额度转兑换码保留原有权限。', commission: '收益管理', affiliateLeaderboard: '邀请排行榜', userSupport: '用户支持', save: '保存授权', saving: '保存中…', saved: '授权已保存', loadFailed: '无法读取授权，请重试。', saveFailed: '授权保存失败，请重试。', retry: '重新读取' },
 }

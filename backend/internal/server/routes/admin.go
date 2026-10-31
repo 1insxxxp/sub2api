@@ -26,7 +26,7 @@ func RegisterAdminRoutes(
 	workbench.Use(panelRateLimiter.Global())
 	workbench.Use(gin.HandlerFunc(auditLog))
 	workbench.Use(middleware.AdminComplianceGuard(settingService))
-	if h != nil && (h.Redeem != nil || (h.Admin != nil && (h.Admin.SubAdminCommission != nil || h.Admin.Affiliate != nil))) {
+	if h != nil && (h.Redeem != nil || (h.Admin != nil && (h.Admin.SubAdminCommission != nil || h.Admin.Affiliate != nil || h.Admin.WorkbenchAccess != nil))) {
 		registerAdminWorkbenchRoutes(workbench, h)
 	}
 
@@ -47,6 +47,10 @@ func RegisterAdminRoutes(
 		if adminHandlers.UserSupport != nil {
 			admin.GET("/users/:id/support-access", adminHandlers.UserSupport.GetUserAccess)
 			admin.PUT("/users/:id/support-access", adminHandlers.UserSupport.SetUserAccess)
+		}
+		if adminHandlers.WorkbenchAccess != nil {
+			admin.GET("/users/:id/workbench-access", adminHandlers.WorkbenchAccess.GetUserAccess)
+			admin.PUT("/users/:id/workbench-access", adminHandlers.WorkbenchAccess.SetUserAccess)
 		}
 
 		// Restricted keys retain upstream account resource checks.
@@ -240,6 +244,9 @@ func RegisterAdminRoutes(
 }
 
 func registerAdminWorkbenchRoutes(workbench *gin.RouterGroup, h *handler.Handlers) {
+	if h.Admin != nil && h.Admin.WorkbenchAccess != nil {
+		workbench.GET("/access", h.Admin.WorkbenchAccess.GetMyAccess)
+	}
 	if h.Redeem != nil {
 		redeem := workbench.Group("/redeem")
 		{
@@ -252,6 +259,7 @@ func registerAdminWorkbenchRoutes(workbench *gin.RouterGroup, h *handler.Handler
 
 	if h.Admin != nil && h.Admin.SubAdminCommission != nil {
 		commission := workbench.Group("/commission")
+		commission.Use(h.Admin.WorkbenchAccess.RequireCommission)
 		{
 			commission.GET("/grants", h.Admin.SubAdminCommission.GetWorkbenchGrants)
 			commission.GET("/calendar", h.Admin.SubAdminCommission.GetWorkbenchCalendar)
@@ -262,6 +270,7 @@ func registerAdminWorkbenchRoutes(workbench *gin.RouterGroup, h *handler.Handler
 
 	if h.Admin != nil && h.Admin.Affiliate != nil {
 		affiliates := workbench.Group("/affiliates")
+		affiliates.Use(h.Admin.WorkbenchAccess.RequireAffiliateLeaderboard)
 		affiliates.GET("/leaderboard", h.Admin.Affiliate.ListWorkbenchLeaderboard)
 	}
 }

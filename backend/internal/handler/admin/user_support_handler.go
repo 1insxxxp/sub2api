@@ -53,7 +53,7 @@ func (h *UserSupportHandler) actor(c *gin.Context, mainAdminOnly bool) (int64, b
 		return 0, false
 	}
 	role, _ := middleware.GetUserRoleFromContext(c)
-	if role != service.RoleAdmin && (mainAdminOnly || (role != service.RoleSubAdmin && role != service.RoleUser)) {
+	if role != service.RoleAdmin && (mainAdminOnly || role != service.RoleSubAdmin) {
 		supportError(c, service.ErrUserSupportForbidden)
 		return 0, false
 	}

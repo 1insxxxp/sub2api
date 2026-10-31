@@ -59,6 +59,7 @@ func TestProvideAdminHandlersPreservesLegacyConstructor(t *testing.T) {
 		dashboardHandler,
 		userHandler,
 		&admin.UserSupportHandler{},
+		&admin.AdminWorkbenchAccessHandler{},
 		groupHandler,
 		systemCustomGroupHandler,
 		accountHandler,

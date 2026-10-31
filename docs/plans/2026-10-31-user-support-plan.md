@@ -15,7 +15,7 @@
 Files: create `backend/internal/service/user_support.go`, `backend/internal/repository/user_support_repo.go`, focused unit/integration tests, and `backend/migrations/255_user_support.sql` plus migration tests. Register repository/service providers only after integration.
 
 1. Write failing tests for grant uniqueness, historic admin +15, rollback and wallet invariants; run focused tests and record expected failures.
-2. Add access and permanent trial-grant tables. Implement exact account lookup and fresh active admin or explicitly enabled user/sub_admin permission checks. Lock the target wallet, detect lifetime claim/history, and atomically credit gift balance + write ledger + permanent claim. Do not call ordinary balance adjustment or redeem services that accrue affiliate rebate.
+2. Add access and permanent trial-grant tables. Implement exact account lookup and fresh active admin or explicitly enabled sub_admin permission checks. Lock the target wallet, detect lifetime claim/history, and atomically credit gift balance + write ledger + permanent claim. Do not call ordinary balance adjustment or redeem services that accrue affiliate rebate.
 3. Add safe scalar query DTOs and fixed newest-first LIMIT 10 queries scoped to user_id. Use only known public requested models, no internal fallback. Normalize error phase/type to fixed public categories. No arbitrary internal strings in serialized DTOs.
 4. Add service orchestration/cache invalidation and explicit per-panel failure state after committed grant. Assert unknown failures cannot return error text. Run unit and real isolated PostgreSQL integration tests.
 
@@ -30,11 +30,11 @@ Files: create `backend/internal/handler/admin/user_support_handler.go` and tests
 
 ### Task 3: Support page, access control and UI
 
-Files: create `frontend/src/api/admin/userSupport.ts`, dedicated access store/helper and `frontend/src/views/admin/UserSupportView.vue`; modify router/sidebar and user edit modal; add locale strings and focused tests.
+Files: create `frontend/src/api/admin/userSupport.ts`, dedicated access store/helper and `frontend/src/components/admin/workbench/UserSupportPanel.vue`; modify router/sidebar and user edit modal; add locale strings and focused tests.
 
 1. Write and observe failing Vitest tests for unauthorized route, explicitly submitted grant, ten-row rendering, no arbitrary server text, repeated grant status and independent list failure.
 2. Add safe typed client models matching API, no raw HTML/error string rendering. Render compact account lookup, gift/balance results, usage and fixed-category errors with mobile layout and dark mode.
-3. Add sidebar/route visibility for the main admin and explicitly authorized user/sub_admin, fresh access checks on navigation and revocation handling. Add main-admin grant/revoke control for existing ordinary or secondary-admin users in user editing.
+3. Embed the support tab in AdminWorkbenchView for main admins and explicitly authorized secondary admins; ordinary users remain denied at every layer. Remove standalone navigation and ordinary-user auth exceptions. Add a main-admin editor with three independent capabilities: commission, affiliate leaderboard and support. Guard every report/leaderboard endpoint, default new secondary admins to no sensitive capability, and preserve existing secondary-admin visibility in migration 256 without changing shared commission computation.
 4. Run targeted UI/i18n tests, typecheck, lint changed files, production build; render desktop/mobile/light/dark with isolated fixtures.
 
 ### Task 4: Integration and independent review
@@ -42,3 +42,7 @@ Files: create `frontend/src/api/admin/userSupport.ts`, dedicated access store/he
 1. Spec review against design, then security/quality review focusing on non-leakage and money invariants. Fix all findings and rerun affected tests.
 2. Run appropriate broader backend tests and frontend checks; verify git diff and gofmt.
 3. Report verified local result and material limits. No production financial mutations, push, upstream merge or deployment in this implementation phase.
+
+### Local-preview correction
+
+Only admin/sub_admin may use the workbench. Support lives in its own workbench tab. Ordinary users must be rejected even with stale support permissions. Add migration 256 for explicit commission and leaderboard access, preserve existing secondary-admin permissions, and default newly promoted accounts to false. Verify the corrected local app with an authorized secondary-admin fixture, an ordinary user carrying stale access, and both denied sensitive report endpoints.

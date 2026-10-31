@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { reactive, ref } from 'vue'
 import { useAuthStore } from '@/stores/auth'
-import UserSupportView from '../UserSupportView.vue'
+import UserSupportPanel from '../UserSupportPanel.vue'
 
 const { lookup, refresh, revoke, auth } = vi.hoisted(() => ({
   lookup: vi.fn(), refresh: vi.fn(), revoke: vi.fn(),
@@ -30,11 +30,11 @@ const result = () => ({
     message: 'https://secret.invalid sk-secret SECRET-UPSTREAM',
   })) },
 })
-const createView = () => mount(UserSupportView, { global: { stubs: { AppLayout: { template: '<main><slot /></main>' }, Icon: true } } })
+const createView = () => mount(UserSupportPanel, { global: { stubs: { AppLayout: { template: '<main><slot /></main>' }, Icon: true } } })
 
 beforeEach(() => { vi.clearAllMocks(); auth.token = 'first-session'; refresh.mockResolvedValue(true); lookup.mockResolvedValue(result()) })
 
-describe('user support page', () => {
+describe('user support panel', () => {
   it('only grants after explicit submit, and renders two bounded safe lists', async () => {
     const view = createView()
     await flushPromises()
@@ -96,6 +96,7 @@ describe('user support page', () => {
     await view.get('[data-test="support-account"]').setValue('7147')
     await view.get('form').trigger('submit'); await flushPromises()
     expect(revoke).toHaveBeenCalled()
+    expect(view.emitted('access-denied')).toHaveLength(1)
     expect(view.text()).toContain('userSupport.errors.forbidden')
     expect(view.find('[data-test="support-result"]').exists()).toBe(false)
     view.unmount()

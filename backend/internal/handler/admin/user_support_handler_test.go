@@ -89,6 +89,19 @@ func TestUserSupportHandlerRoleAndRevocation(t *testing.T) {
 	require.Equal(t, 1, s.calls)
 }
 
+func TestUserSupportHandlerOrdinaryUserCannotUseExplicitCapability(t *testing.T) {
+	stub := &supportHandlerStub{allowed: true}
+	router := supportHandlerRouter(stub, service.RoleUser)
+	for _, request := range []struct{ method, path, body string }{
+		{"GET", "/access", ""},
+		{"POST", "/lookup", `{"account":"12"}`},
+	} {
+		recorder := supportHTTP(router, request.method, request.path, request.body)
+		require.Equal(t, http.StatusForbidden, recorder.Code, recorder.Body.String())
+	}
+	require.Zero(t, stub.calls)
+}
+
 func TestUserSupportHandlerRejectsUnspecifiedInputs(t *testing.T) {
 	for _, body := range []string{
 		``, `null`, `{}`, `{"account":""}`, `{"account":3}`,

@@ -171,49 +171,39 @@ describe('feature route guard', () => {
     )
   })
 
-  it('registers support with its own permission without broad admin privileges', () => {
+  it('redirects the old support URL into a role-protected workbench tab', () => {
     const route = routerHarness.routes.find(item => item.path === '/admin/user-support')
-    expect(route?.meta.requiresUserSupport).toBe(true)
-    expect(route?.meta.requiresAdmin).not.toBe(true)
-    expect(route?.meta.requiresAdminWorkbench).not.toBe(true)
+    expect(route?.redirect).toEqual({ path: '/admin/workbench', query: { tab: 'user-support' } })
+    expect(route?.meta.requiresAdminWorkbench).toBe(true)
+    expect(route?.component).toBeUndefined()
   })
 
-  it('requires fresh support permission for ordinary users', async () => {
-    const denied = runGuard({ requiresUserSupport: true }, '/admin/user-support')
-    await denied.navigation
-    expect(denied.next).toHaveBeenCalledWith('/dashboard')
+  it('rejects ordinary users from the support alias even if previously authorized', async () => {
     supportRefresh.mockResolvedValue(true)
-    const allowed = runGuard({ requiresUserSupport: true }, '/admin/user-support')
-    await allowed.navigation
-    expect(allowed.next).toHaveBeenCalledWith()
-    expect(authStore.isAdmin).toBe(false)
-    expect(authStore.canAccessAdminWorkbench).toBe(false)
+    const { navigation, next } = runGuard({ requiresAdminWorkbench: true }, '/admin/user-support')
+    await navigation
+    expect(next).toHaveBeenCalledWith('/dashboard')
+    expect(supportRefresh).not.toHaveBeenCalled()
   })
 
-  it('lets support-only staff enter the support route in backend mode', async () => {
+  it('allows sub-admins into the workbench in backend mode', async () => {
     appStore.backendModeEnabled = true
-    supportRefresh.mockResolvedValue(true)
-    const { navigation, next } = runGuard({ requiresUserSupport: true }, '/admin/user-support')
+    authStore.canAccessAdminWorkbench = true
+    const { navigation, next } = runGuard({ requiresAdminWorkbench: true }, '/admin/workbench')
     await navigation
     expect(next).toHaveBeenCalledWith()
   })
 
-  it('lands support-only staff on their own page after backend-mode login', async () => {
+  it('does not create a support-only backend login exception for ordinary users', async () => {
     appStore.backendModeEnabled = true
     supportRefresh.mockResolvedValue(true)
     const { navigation, next } = runGuard({ requiresAuth: false }, '/login')
     await navigation
-    expect(next).toHaveBeenCalledWith('/admin/user-support')
+    expect(next).not.toHaveBeenCalledWith('/admin/user-support')
+    expect(supportRefresh).not.toHaveBeenCalled()
   })
 
-  it('redirects a revoked sub-admin back to the workbench', async () => {
-    authStore.canAccessAdminWorkbench = true
-    const { navigation, next } = runGuard({ requiresUserSupport: true }, '/admin/user-support')
-    await navigation
-    expect(next).toHaveBeenCalledWith('/admin/workbench')
-  })
-
-  it('does not expand support-only access to full admin routes', async () => {
+  it('does not expand support access to full admin routes', async () => {
     supportRefresh.mockResolvedValue(true)
     const { navigation, next } = runGuard({ requiresAdmin: true }, '/admin/users')
     await navigation

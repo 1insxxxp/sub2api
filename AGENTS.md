@@ -1443,14 +1443,16 @@ curl -fsS "${BASE}/api/v1/admin/workbench/commission/monthly-report?month=2026-1
 
 ### 7. 用户支持与一次测试额度（2026-10-31）
 
-独立后台页面 `/admin/user-support`。可单独授权普通用户或二级管理员，支持权限不提升角色、不开放其他后台功能。主管理员默认可用。支持操作使用 Bearer JWT；授权管理沿用主管理员认证，受限 Admin API Key 不获得此能力。
+“管理员页面”工作台 `/admin/workbench?tab=user-support` 内的“用户支持”页签。仅主管理员和单独授权的二级管理员可用，普通用户即使残留授权记录也拒绝。旧 `/admin/user-support` 仅重定向到工作台，不保留独立菜单。主管理员默认可用。支持操作使用 Bearer JWT；授权管理沿用主管理员认证，受限 Admin API Key 不获得此能力。
 
 | 方法 | 端点 | 参数与响应 |
 |------|------|------------|
+| GET | `/api/v1/admin/workbench/access` | 当前工作台 `{commission,affiliate_leaderboard,user_support,balance_transfer}` 四项布尔能力 |
+| GET/PUT | `/api/v1/admin/users/:id/workbench-access` | 仅主管理员读取或保存指定二级管理员三项权限；PUT精确 `{commission:boolean,affiliate_leaderboard:boolean,user_support:boolean}`，同事务保存 |
 | GET | `/api/v1/admin/user-support/access` | 当前登录人员的 `{enabled:boolean}`，不发生赠额 |
 | POST | `/api/v1/admin/user-support/lookup` | 精确 `{account:"邮箱或用户ID"}`；未领过则自动赠送15，否则不赠；返回用户ID/邮箱/余额、领取结果、各最多10条的安全使用/报错记录 |
 | GET | `/api/v1/admin/users/:id/support-access` | 仅主管理员读取该账号的支持权限 |
-| PUT | `/api/v1/admin/users/:id/support-access` | 仅主管理员提交 `{enabled:true/false}`，普通用户/二级管理员可单独授权；不可修改主管理员默认能力 |
+| PUT | `/api/v1/admin/users/:id/support-access` | 仅主管理员提交 `{enabled:true/false}`，仅二级管理员可单独授权；不可修改普通用户或主管理员默认能力 |
 
 ```bash
 curl -fsS "${BASE}/api/v1/admin/user-support/access" \
@@ -1465,7 +1467,7 @@ curl -fsS -X PUT "${BASE}/api/v1/admin/users/123/support-access" \
 
 POST 明确触发领取检查，禁止把它用作页面初始化、输入提示或普通刷新。服务端固定15且拒绝金额、任意数量/分页等额外字段。历史已使用 `admin_balance` 正15流水视为已领取；普通充值码不算。永久领取标记独立于可删除兑换流水；唯一约束与同事务钱包增量/赠额账本防止重复、并发和重试再次赠额。gift_balance 增加，不增加累计充值、不触发邀请返利。报表查询失败不会撤销已提交赠额，也不会再次发放。
 
-安全数据采用专用白名单：公开模型、用量/客户扣费/耗时/状态，报错为固定分类。不返回原始报错或正文、URL/IP/域名、密钥、上游账号/渠道/映射/请求ID/成本等内部信息；无法确认的模型显示未知，不回退内部模型。查询无记录与暂不可用分别表示。授权撤销由后端实时校验；后台模式下普通支持账号仅增加登录、自身身份读取和独立支持路由能力，其他后台/用户管理接口仍拒绝。
+安全数据采用专用白名单：公开模型、用量/客户扣费/耗时/状态，报错为固定分类。不返回原始报错或正文、URL/IP/域名、密钥、上游账号/渠道/映射/请求ID/成本等内部信息；无法确认的模型显示未知，不回退内部模型。查询无记录与暂不可用分别表示。授权撤销由后端实时校验。收益管理和邀请排行榜的全部工作台接口分别检查独立能力，不能只隐藏页签。256迁移保留既存二级管理员原两项权限，新升角色默认关闭；用户支持授权不连带开放其它能力。普通用户不增加任何后台登录或身份读取例外。共享收益分组、计算及历史授予日保持原口径。
 
 ## 注意事项
 

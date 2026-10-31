@@ -20,7 +20,7 @@ func NewUserSupportRepository(sqlDB *sql.DB) service.UserSupportRepository {
 const supportAccessSQL = `SELECT EXISTS (
 	SELECT 1 FROM users u LEFT JOIN user_support_access a ON a.user_id=u.id
 	WHERE u.id=$1 AND u.deleted_at IS NULL AND u.status='active'
-	AND (u.role='admin' OR (u.role IN ('user','sub_admin') AND COALESCE(a.enabled,FALSE)))
+	AND (u.role='admin' OR (u.role='sub_admin' AND COALESCE(a.enabled,FALSE)))
 )`
 const supportMainAdminSQL = `SELECT EXISTS (SELECT 1 FROM users WHERE id=$1 AND deleted_at IS NULL AND status='active' AND role='admin')`
 
@@ -40,7 +40,7 @@ func (r *userSupportRepository) GetAccess(ctx context.Context, actorID, targetID
 	}
 	var enabled bool
 	err := r.db.QueryRowContext(ctx, `SELECT CASE WHEN u.role='admin' AND u.status='active' THEN TRUE ELSE COALESCE(a.enabled,FALSE) END FROM users u
-	LEFT JOIN user_support_access a ON a.user_id=u.id WHERE u.id=$1 AND u.deleted_at IS NULL AND u.role IN ('user','sub_admin','admin')`, targetID).Scan(&enabled)
+	LEFT JOIN user_support_access a ON a.user_id=u.id WHERE u.id=$1 AND u.deleted_at IS NULL AND u.role IN ('sub_admin','admin')`, targetID).Scan(&enabled)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, service.ErrUserSupportUserNotFound
 	}
@@ -71,7 +71,7 @@ func (r *userSupportRepository) SetAccess(ctx context.Context, actorID, targetID
 	if role == service.RoleAdmin {
 		return service.ErrUserSupportForbidden
 	}
-	if (role != service.RoleUser && role != service.RoleSubAdmin) || (enabled && status != service.StatusActive) {
+	if role != service.RoleSubAdmin || (enabled && status != service.StatusActive) {
 		return service.ErrUserSupportUserNotFound
 	}
 	if err = tx.QueryRowContext(ctx, supportMainAdminSQL, actorID).Scan(&main); err != nil {

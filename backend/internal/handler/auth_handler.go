@@ -29,7 +29,6 @@ type AuthHandler struct {
 	redeemService        *service.RedeemService
 	totpService          *service.TotpService
 	userAttributeService *service.UserAttributeService
-	userSupport          userSupportLoginAccess
 
 	dingTalkClientInstance *DingTalkClient
 	dingTalkClientMu       sync.Mutex
@@ -163,9 +162,6 @@ func (h *AuthHandler) ensureBackendModeAllowsUser(ctx context.Context, user *ser
 		return infraerrors.Unauthorized("INVALID_USER", "user not found")
 	}
 	if h == nil || !h.isBackendModeEnabled(ctx) || user.CanAccessAdminWorkbench() {
-		return nil
-	}
-	if allowed, err := h.CanAccessUserSupport(ctx, user.ID); err == nil && allowed {
 		return nil
 	}
 	return infraerrors.Forbidden("BACKEND_MODE_MANAGER_ONLY", "Backend mode is active. Only manager users can login.")
@@ -779,10 +775,11 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 		return
 	}
 
-	// Recheck the same fresh capability used by login; a support-only user
-	// keeps their original role across token rotation.
-	if err := h.ensureBackendModeAllowsUser(c.Request.Context(), &service.User{ID: result.UserID, Role: result.UserRole}); err != nil {
-		response.ErrorFrom(c, err)
+	// Backend mode: block users without admin workbench access from refreshing.
+	if h.settingSvc.IsBackendModeEnabled(c.Request.Context()) &&
+		result.UserRole != service.RoleAdmin &&
+		result.UserRole != service.RoleSubAdmin {
+		response.Forbidden(c, "Backend mode is active. Only manager users can login.")
 		return
 	}
 

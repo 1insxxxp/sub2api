@@ -28,9 +28,6 @@ declare module 'vue-router' {
      */
     requiresAdminWorkbench?: boolean
 
-    /** Whether this route requires explicitly delegated User Support access. */
-    requiresUserSupport?: boolean
-
     /**
      * Page title for this route
      */

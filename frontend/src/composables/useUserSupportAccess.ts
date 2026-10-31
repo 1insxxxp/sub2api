@@ -18,7 +18,7 @@ let pending: { actor: string; promise: Promise<boolean> } | null = null
 export function useUserSupportAccess(auth: SupportActor) {
   const identity = () => {
     const role = auth.user?.role
-    if (!auth.user?.id || auth.isAuthenticated === false || !['admin', 'sub_admin', 'user'].includes(role ?? '')) return ''
+    if (!auth.user?.id || auth.isAuthenticated === false || !['admin', 'sub_admin'].includes(role ?? '')) return ''
     return `${auth.user.id}:${role}:${auth.token ?? ''}`
   }
   const canAccess = computed(() => {

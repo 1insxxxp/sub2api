@@ -16,13 +16,14 @@ describe('user support access isolation', () => {
     expect(getAccess).not.toHaveBeenCalled()
   })
 
-  it('allows an ordinary user only after explicit support authorization', async () => {
+  it('rejects an ordinary user even if the server would return enabled', async () => {
     const auth = reactive({ user: { id: 104, role: 'user' }, isAdmin: false, isSubAdmin: false })
     const access = useUserSupportAccess(auth)
     getAccess.mockResolvedValue({ enabled: true })
     expect(access.canAccess.value).toBe(false)
-    expect(await access.refresh()).toBe(true)
-    expect(access.canAccess.value).toBe(true)
+    expect(await access.refresh()).toBe(false)
+    expect(access.canAccess.value).toBe(false)
+    expect(getAccess).not.toHaveBeenCalled()
     expect(auth.isAdmin).toBe(false)
     expect(auth.isSubAdmin).toBe(false)
   })

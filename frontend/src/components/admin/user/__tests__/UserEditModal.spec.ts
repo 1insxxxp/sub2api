@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 
 import UserEditModal from '../UserEditModal.vue'
-vi.mock('@/api/admin/userSupport', () => ({ getUserAccess: vi.fn().mockResolvedValue({ enabled: false }) }))
+vi.mock('@/api/admin/userSupport', () => ({ getUserWorkbenchAccess: vi.fn().mockResolvedValue({ commission: false, affiliate_leaderboard: false, user_support: false }) }))
 
 const { update, updateUserAttributeValues, showSuccess, showError } = vi.hoisted(() => ({
   update: vi.fn(),

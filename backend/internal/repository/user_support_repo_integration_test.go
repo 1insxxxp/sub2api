@@ -80,10 +80,10 @@ func TestUserSupportGrantConcurrentAndDurable(t *testing.T) {
 	require.Equal(t, float64(22), got.User.Balance)
 }
 
-func TestUserSupportOrdinaryStaffAndGiftWallet(t *testing.T) {
+func TestUserSupportSubAdminStaffAndGiftWallet(t *testing.T) {
 	ctx := context.Background()
 	admin := supportUser(t, service.RoleAdmin, 0)
-	staff := supportUser(t, service.RoleUser, 0)
+	staff := supportUser(t, service.RoleSubAdmin, 0)
 	r := NewUserSupportRepository(integrationDB)
 	require.NoError(t, r.SetAccess(ctx, admin.ID, staff.ID, true))
 	allowed, err := r.CanAccess(ctx, staff.ID)
@@ -115,6 +115,33 @@ func TestUserSupportOrdinaryStaffAndGiftWallet(t *testing.T) {
 	allowed, err = r.CanAccess(ctx, staff.ID)
 	require.NoError(t, err)
 	require.False(t, allowed)
+}
+
+func TestUserSupportOrdinaryUserDeniedEvenWithExplicitAccess(t *testing.T) {
+	ctx := context.Background()
+	admin := supportUser(t, service.RoleAdmin, 0)
+	ordinary := supportUser(t, service.RoleUser, 0)
+	target := supportUser(t, service.RoleUser, 9)
+	r := NewUserSupportRepository(integrationDB)
+	// A legacy or erroneously inserted access row never promotes a normal user.
+	_, err := integrationDB.Exec("INSERT INTO user_support_access(user_id,enabled,updated_by) VALUES($1,TRUE,$2)", ordinary.ID, admin.ID)
+	require.NoError(t, err)
+	allowed, err := r.CanAccess(ctx, ordinary.ID)
+	require.NoError(t, err)
+	require.False(t, allowed)
+	_, err = r.LookupAndGrant(ctx, ordinary.ID, target.Email)
+	require.ErrorIs(t, err, service.ErrUserSupportForbidden)
+	_, err = r.GetAccess(ctx, admin.ID, ordinary.ID)
+	require.ErrorIs(t, err, service.ErrUserSupportUserNotFound)
+	for _, enabled := range []bool{true, false} {
+		require.ErrorIs(t, r.SetAccess(ctx, admin.ID, ordinary.ID, enabled), service.ErrUserSupportUserNotFound)
+	}
+	var balance float64
+	var count int
+	require.NoError(t, integrationDB.QueryRow("SELECT balance FROM users WHERE id=$1", target.ID).Scan(&balance))
+	require.Equal(t, float64(9), balance)
+	require.NoError(t, integrationDB.QueryRow("SELECT COUNT(*) FROM support_trial_grants WHERE user_id=$1", target.ID).Scan(&count))
+	require.Zero(t, count)
 }
 
 func TestUserSupportLegacyRecognitionAndOrdinaryRecharge(t *testing.T) {

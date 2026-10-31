@@ -67,11 +67,11 @@ beforeEach(() => {
 afterEach(() => { wrapper?.unmount(); wrapper = undefined })
 
 describe('ordinary user balance-transfer navigation', () => {
-  it('shows explicitly authorized user support without adding admin workbench access', async () => {
+  it('never adds a separate support entry for an ordinary user', async () => {
     vi.mocked(getAccess).mockResolvedValue({ enabled: true })
     const view = mountSidebar()
     await flushPromises()
-    expect(view.find('a[href="/admin/user-support"]').exists()).toBe(true)
+    expect(view.find('a[href="/admin/user-support"]').exists()).toBe(false)
     expect(view.find('a[href="/admin/workbench"]').exists()).toBe(false)
     expect(view.find('a[href="/keys"]').exists()).toBe(true)
     useUserSupportAccess(authState).revoke()

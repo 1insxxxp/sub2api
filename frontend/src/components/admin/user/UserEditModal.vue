@@ -84,7 +84,7 @@
           </span>
         </label>
       </div>
-      <UserSupportAccessControl v-if="show && user.role !== 'admin'" :key="user.id" :user-id="user.id" />
+      <UserSupportAccessControl v-if="show && user.role === 'sub_admin'" :key="user.id" :user-id="user.id" />
       <UserAttributeForm v-model="form.customAttributes" :user-id="user?.id" />
     </form>
     <template #footer>

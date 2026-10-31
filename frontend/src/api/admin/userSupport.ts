@@ -1,6 +1,8 @@
 import { apiClient } from '../client'
 
 export interface UserSupportAccess { enabled: boolean }
+export interface WorkbenchPermissions { commission: boolean; affiliate_leaderboard: boolean; user_support: boolean }
+export interface WorkbenchAccess extends WorkbenchPermissions { balance_transfer: boolean }
 export type SupportRequestStatus = 'completed' | 'interrupted' | 'failed' | 'empty' | 'unknown'
 export type SupportErrorCategory = 'auth' | 'quota' | 'rate_limit' | 'invalid_request' | 'timeout' | 'service_unavailable' | 'other'
 
@@ -34,6 +36,21 @@ export interface UserSupportResult {
 
 export async function getAccess(): Promise<UserSupportAccess> {
   const { data } = await apiClient.get<UserSupportAccess>('/admin/user-support/access')
+  return data
+}
+
+export async function getWorkbenchAccess(): Promise<WorkbenchAccess> {
+  const { data } = await apiClient.get<WorkbenchAccess>('/admin/workbench/access')
+  return data
+}
+
+export async function getUserWorkbenchAccess(userID: number): Promise<WorkbenchPermissions> {
+  const { data } = await apiClient.get<WorkbenchPermissions>(`/admin/users/${userID}/workbench-access`)
+  return data
+}
+
+export async function setUserWorkbenchAccess(userID: number, permissions: WorkbenchPermissions): Promise<WorkbenchPermissions> {
+  const { data } = await apiClient.put<WorkbenchPermissions>(`/admin/users/${userID}/workbench-access`, permissions)
   return data
 }
 
