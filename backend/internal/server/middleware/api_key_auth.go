@@ -264,8 +264,23 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 				} else {
 					// 非订阅模式 或 订阅模式但 subscriptionService 未注入：回退到余额检查
 					if apiKeyBalanceBelowAuthThreshold(apiKey.User.Balance, cfg) {
-						AbortWithError(c, 403, "INSUFFICIENT_BALANCE", "Insufficient account balance")
-						return
+						apiKey, err = recheckAPIKeyBalance(c, apiKeyService, apiKey)
+						if err != nil {
+							AbortWithError(c, http.StatusServiceUnavailable, "BILLING_SERVICE_ERROR", "Billing service temporarily unavailable. Please retry later.")
+							return
+						}
+						if !apiKey.User.IsActive() {
+							MarkIngressRejected(c, IngressRejectUserInactive)
+							AbortWithError(c, 401, "USER_INACTIVE", "User account is not active")
+							return
+						}
+						if abortIfAPIKeyGroupNotAllowed(c, apiKey) {
+							return
+						}
+						if apiKeyBalanceBelowAuthThreshold(apiKey.User.Balance, cfg) {
+							AbortWithError(c, 403, "INSUFFICIENT_BALANCE", "Insufficient account balance")
+							return
+						}
 					}
 				}
 			}
@@ -436,6 +451,30 @@ func setGroupContext(c *gin.Context, group *service.Group) {
 // 否则已配置该值的存量部署升级后，0 < balance < reserve 的用户会在所有端点被静默 403。
 func apiKeyBalanceBelowAuthThreshold(balance float64, _ *config.Config) bool {
 	return balance <= 0
+}
+
+// recheckAPIKeyBalance refreshes only wallet and access-control fields on a
+// request-local copy. In particular, key quotas/status are never reset and the
+// verified balance is not retained in a potentially long-lived WebSocket context.
+func recheckAPIKeyBalance(c *gin.Context, svc *service.APIKeyService, apiKey *service.APIKey) (*service.APIKey, error) {
+	fresh, err := svc.RecheckUserBalance(c.Request.Context(), apiKey.User.ID)
+	if err != nil {
+		return nil, err
+	}
+	user := *apiKey.User
+	user.Balance = fresh.Balance
+	user.Status = fresh.Status
+	user.AllowedGroups = fresh.AllowedGroups
+	user.RestrictPublicGroups = fresh.RestrictPublicGroups
+	// GetByID does not hydrate per-account exclusions. Preserve the authenticated
+	// key's policy and its existing context binding rather than clearing it.
+	key := *apiKey
+	key.User = &user
+	if fresh.Balance != apiKey.User.Balance || fresh.Status != apiKey.User.Status {
+		svc.InvalidateAuthCacheByKey(c.Request.Context(), apiKey.Key)
+	}
+	SetOpsFallbackAPIKey(c, &key)
+	return &key, nil
 }
 
 func abortIfAPIKeyGroupUnavailable(c *gin.Context, apiKey *service.APIKey) bool {

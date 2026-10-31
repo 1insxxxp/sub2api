@@ -1190,8 +1190,9 @@ billing:
   # Set to 0 to only require balance > 0.
   # 余额计费请求转发前要求的保守最小余额；设为 0 则仅要求余额 > 0。
   minimum_balance_reserve: 0.000001
-  # Balance request risk gate: recent samples, mean safety factor, P95 floor,
-  # and the maximum one-request overdraft fraction.
+  # Deprecated compatibility settings. Historical request costs no longer impose
+  # an admission floor; these values do not limit output or final overdraft.
+  # 兼容旧配置保留，已不参与准入；不限制模型输出，也不是最终欠费上限。
   balance_preauthorization_sample_count: 100
   balance_preauthorization_mean_safety_factor: 2.0
   balance_preauthorization_p95_quantile: 0.95

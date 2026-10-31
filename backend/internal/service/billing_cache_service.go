@@ -3,16 +3,13 @@ package service
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"math"
 	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
@@ -29,6 +26,7 @@ var errBillingCacheUnavailable = fmt.Errorf("billing cache unavailable")
 var (
 	ErrSubscriptionInvalid       = infraerrors.Forbidden("SUBSCRIPTION_INVALID", "subscription is invalid or expired")
 	ErrBillingServiceUnavailable = infraerrors.ServiceUnavailable("BILLING_SERVICE_ERROR", "Billing service temporarily unavailable. Please retry later.")
+	ErrBalanceInFlight           = infraerrors.TooManyRequests("BALANCE_IN_FLIGHT", "Existing requests are processing or settling. Please retry shortly.")
 	// RPM 超限错误。gateway_handler 负责映射为 HTTP 429。
 	ErrGroupRPMExceeded = infraerrors.TooManyRequests("GROUP_RPM_EXCEEDED", "group requests-per-minute limit exceeded")
 	ErrUserRPMExceeded  = infraerrors.TooManyRequests("USER_RPM_EXCEEDED", "user requests-per-minute limit exceeded")
@@ -124,6 +122,7 @@ type BillingCacheService struct {
 	cacheWriteMu       sync.RWMutex
 	stopped            atomic.Bool
 	balanceLoadSF      singleflight.Group
+	balanceRecheck     walletBalanceRechecker
 	quotaLoadSF        singleflight.Group
 	// 丢弃日志节流计数器（减少高负载下日志噪音）
 	cacheWriteDropFullCount     uint64
@@ -313,15 +312,23 @@ func (s *BillingCacheService) logCacheWriteDrop(task cacheWriteTask, reason stri
 
 // GetUserBalance 获取用户余额（优先从缓存读取）
 func (s *BillingCacheService) GetUserBalance(ctx context.Context, userID int64) (float64, error) {
+	balance, _, err := s.getUserBalance(ctx, userID)
+	return balance, err
+}
+
+// getUserBalance also reports whether this attempt already read the database,
+// avoiding a second identical DB read when a cache miss finds an empty wallet.
+func (s *BillingCacheService) getUserBalance(ctx context.Context, userID int64) (float64, bool, error) {
 	if s.cache == nil {
 		// Redis不可用，直接查询数据库
-		return s.getUserBalanceFromDB(ctx, userID)
+		balance, err := s.getUserBalanceFromDB(ctx, userID)
+		return balance, true, err
 	}
 
 	// 尝试从缓存读取
 	balance, err := s.cache.GetUserBalance(ctx, userID)
 	if err == nil {
-		return balance, nil
+		return balance, false, nil
 	}
 
 	// 缓存未命中：singleflight 合并同一 userID 的并发回源请求。
@@ -343,13 +350,13 @@ func (s *BillingCacheService) GetUserBalance(ctx context.Context, userID int64) 
 		return balance, nil
 	})
 	if err != nil {
-		return 0, err
+		return 0, true, err
 	}
 	balance, ok := value.(float64)
 	if !ok {
-		return 0, fmt.Errorf("unexpected balance type: %T", value)
+		return 0, true, fmt.Errorf("unexpected balance type: %T", value)
 	}
-	return balance, nil
+	return balance, true, nil
 }
 
 // getUserBalanceFromDB 从数据库获取用户余额
@@ -357,6 +364,21 @@ func (s *BillingCacheService) getUserBalanceFromDB(ctx context.Context, userID i
 	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
 		return 0, fmt.Errorf("get user balance: %w", err)
+	}
+	return user.Balance, nil
+}
+
+// RecheckUserBalance bypasses stale wallet caches immediately before a rejection.
+// Never SET the result: billing may commit/deduct concurrently with this read.
+func (s *BillingCacheService) RecheckUserBalance(ctx context.Context, userID int64) (float64, error) {
+	user, err := s.balanceRecheck.load(ctx, s.userRepo, userID)
+	if err != nil {
+		return 0, ErrBillingServiceUnavailable.WithCause(err)
+	}
+	invalidateCtx, cancel := context.WithTimeout(ctx, cacheWriteTimeout)
+	defer cancel()
+	if err := s.InvalidateUserBalance(invalidateCtx, userID); err != nil {
+		logger.LegacyPrintf("service.billing_cache", "Warning: stale wallet cache invalidation failed for user %d: %v", userID, err)
 	}
 	return user.Balance, nil
 }
@@ -826,7 +848,13 @@ func (s *BillingCacheService) ReserveFixedCharge(ctx context.Context, user *User
 			return nil, ErrBillingServiceUnavailable.WithCause(err)
 		}
 		if balance < amount {
-			return nil, ErrInsufficientBalance
+			balance, err = s.RecheckUserBalance(ctx, user.ID)
+			if err != nil {
+				return nil, err
+			}
+			if balance < amount {
+				return nil, ErrInsufficientBalance
+			}
 		}
 	}
 	res, err := s.reserveInflight(ctx, user, group, subscription, amount, false, false)
@@ -1038,7 +1066,7 @@ func (s *BillingCacheService) balanceBelowEligibilityThreshold(balance float64) 
 
 // checkBalanceEligibility 检查余额模式资格
 func (s *BillingCacheService) checkBalanceEligibility(ctx context.Context, userID int64) error {
-	balance, err := s.GetUserBalance(ctx, userID)
+	balance, authoritative, err := s.getUserBalance(ctx, userID)
 	if err != nil {
 		if s.circuitBreaker != nil {
 			s.circuitBreaker.OnFailure(err)
@@ -1050,46 +1078,14 @@ func (s *BillingCacheService) checkBalanceEligibility(ctx context.Context, userI
 		s.circuitBreaker.OnSuccess()
 	}
 
+	if s.balanceBelowEligibilityThreshold(balance) && !authoritative {
+		balance, err = s.RecheckUserBalance(ctx, userID)
+		if err != nil {
+			return err
+		}
+	}
 	if s.balanceBelowEligibilityThreshold(balance) {
 		return ErrInsufficientBalance
-	}
-
-	// The amount of a token-billed request is only known after the upstream
-	// response. Use the user's recent balance-billed costs to apply a
-	// conservative admission floor without changing the request or limiting output.
-	if reader, ok := s.userRepo.(RecentBalanceCostReader); ok {
-		policy := BalancePreauthorizationPolicy{
-			SampleCount:          s.cfg.Billing.BalancePreauthorizationSampleCount,
-			MeanSafetyFactor:     s.cfg.Billing.BalancePreauthorizationMeanSafetyFactor,
-			P95Quantile:          s.cfg.Billing.BalancePreauthorizationP95Quantile,
-			MaxOverdraftFraction: s.cfg.Billing.BalancePreauthorizationMaxOverdraftFraction,
-			MinimumReserve:       s.minimumBalanceReserve(),
-		}
-		policy = normalizeBalancePreauthorizationPolicy(policy)
-		model, _ := ctx.Value(ctxkey.Model).(string)
-		samples, sampleErr := reader.ListRecentBalanceCosts(ctx, userID, strings.TrimSpace(model), policy.SampleCount)
-		if sampleErr == nil && len(samples) == 0 && strings.TrimSpace(model) != "" {
-			// A new model has no model-specific history yet; use the user's recent
-			// balance history rather than reducing the gate to the minimum reserve.
-			samples, sampleErr = reader.ListRecentBalanceCosts(ctx, userID, "", policy.SampleCount)
-		}
-		if sampleErr != nil {
-			logger.LegacyPrintf("service.billing_cache", "recent balance cost lookup failed for user %d: %v", userID, sampleErr)
-		} else {
-			estimate := EstimateBalancePreauthorization(samples, policy)
-			floor := BalancePreauthorizationFloor(estimate.Authorization, policy.MaxOverdraftFraction)
-			slog.Debug("billing.balance_preauthorization_gate",
-				"user_id", userID,
-				"model", strings.TrimSpace(model),
-				"sample_count", estimate.SampleCount,
-				"authorization", estimate.Authorization,
-				"admission_floor", floor,
-				"balance", balance,
-			)
-			if balance < floor {
-				return ErrInsufficientBalance
-			}
-		}
 	}
 
 	return nil

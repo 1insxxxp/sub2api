@@ -15,7 +15,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newInflightTestEnv(t *testing.T, enabled bool, ttlSeconds int) (*miniredis.Miniredis, *billingCache, *service.BillingCacheService) {
+// The wallet recheck reads authoritative storage independently of the Redis cache.
+type inflightTestUserRepo struct {
+	service.UserRepository
+	balance float64
+}
+
+func (r *inflightTestUserRepo) GetByID(_ context.Context, id int64) (*service.User, error) {
+	return &service.User{ID: id, Status: service.StatusActive, Balance: r.balance}, nil
+}
+
+func newInflightTestEnv(t *testing.T, enabled bool, ttlSeconds int, balance float64) (*miniredis.Miniredis, *billingCache, *service.BillingCacheService) {
 	t.Helper()
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
@@ -27,7 +37,7 @@ func newInflightTestEnv(t *testing.T, enabled bool, ttlSeconds int) (*miniredis.
 		TTLSeconds:       ttlSeconds,
 		DefaultMaxTokens: 8192,
 	}
-	svc := service.NewBillingCacheService(cache, nil, nil, nil, nil, nil, cfg, nil)
+	svc := service.NewBillingCacheService(cache, &inflightTestUserRepo{balance: balance}, nil, nil, nil, nil, cfg, nil)
 	t.Cleanup(svc.Stop)
 	return mr, cache, svc
 }
@@ -41,7 +51,7 @@ func inflightCount(t *testing.T, cache *billingCache, userID int64) int64 {
 }
 
 func TestInflightReservation_ConcurrentAdmitsOnlyWhatBalanceCovers(t *testing.T) {
-	_, cache, svc := newInflightTestEnv(t, true, 60)
+	_, cache, svc := newInflightTestEnv(t, true, 60, 1)
 	ctx := context.Background()
 	user := &service.User{ID: 42}
 	require.NoError(t, cache.SetUserBalance(ctx, user.ID, 1.0))
@@ -58,7 +68,7 @@ func TestInflightReservation_ConcurrentAdmitsOnlyWhatBalanceCovers(t *testing.T)
 			<-start
 			release, err := svc.ReserveInflightBalance(ctx, user, nil, nil, 0.3)
 			if err != nil {
-				if !errors.Is(err, service.ErrInsufficientBalance) {
+				if !errors.Is(err, service.ErrBalanceInFlight) {
 					t.Errorf("unexpected error: %v", err)
 				}
 				rejected.Add(1)
@@ -90,7 +100,7 @@ func TestInflightReservation_ConcurrentAdmitsOnlyWhatBalanceCovers(t *testing.T)
 }
 
 func TestInflightReservation_FirstRequestAlwaysAdmitted(t *testing.T) {
-	_, cache, svc := newInflightTestEnv(t, true, 60)
+	_, cache, svc := newInflightTestEnv(t, true, 60, 0.01)
 	ctx := context.Background()
 	user := &service.User{ID: 7}
 	require.NoError(t, cache.SetUserBalance(ctx, user.ID, 0.01))
@@ -98,7 +108,7 @@ func TestInflightReservation_FirstRequestAlwaysAdmitted(t *testing.T) {
 	release, err := svc.ReserveInflightBalance(ctx, user, nil, nil, 5)
 	require.NoError(t, err, "a lone request keeps legacy behavior even if estimate exceeds balance")
 	_, err = svc.ReserveInflightBalance(ctx, user, nil, nil, 0.001)
-	require.ErrorIs(t, err, service.ErrInsufficientBalance)
+	require.ErrorIs(t, err, service.ErrBalanceInFlight)
 	release()
 	release2, err := svc.ReserveInflightBalance(ctx, user, nil, nil, 0.001)
 	require.NoError(t, err)
@@ -106,7 +116,7 @@ func TestInflightReservation_FirstRequestAlwaysAdmitted(t *testing.T) {
 }
 
 func TestInflightReservation_TTLExpiryFreesLeakedReservation(t *testing.T) {
-	_, cache, svc := newInflightTestEnv(t, true, 1)
+	_, cache, svc := newInflightTestEnv(t, true, 1, 1)
 	ctx := context.Background()
 	user := &service.User{ID: 9}
 	require.NoError(t, cache.SetUserBalance(ctx, user.ID, 1.0))
@@ -114,7 +124,7 @@ func TestInflightReservation_TTLExpiryFreesLeakedReservation(t *testing.T) {
 	_, err := svc.ReserveInflightBalance(ctx, user, nil, nil, 0.8) // leaked: never released
 	require.NoError(t, err)
 	_, err = svc.ReserveInflightBalance(ctx, user, nil, nil, 0.8)
-	require.ErrorIs(t, err, service.ErrInsufficientBalance)
+	require.ErrorIs(t, err, service.ErrBalanceInFlight)
 
 	time.Sleep(1100 * time.Millisecond)
 	release, err := svc.ReserveInflightBalance(ctx, user, nil, nil, 0.8)
@@ -124,7 +134,7 @@ func TestInflightReservation_TTLExpiryFreesLeakedReservation(t *testing.T) {
 }
 
 func TestInflightReservation_DisabledKeepsLegacyBehavior(t *testing.T) {
-	_, cache, svc := newInflightTestEnv(t, false, 60)
+	_, cache, svc := newInflightTestEnv(t, false, 60, 0.01)
 	ctx := context.Background()
 	user := &service.User{ID: 11}
 	require.NoError(t, cache.SetUserBalance(ctx, user.ID, 0.01))
@@ -137,7 +147,7 @@ func TestInflightReservation_DisabledKeepsLegacyBehavior(t *testing.T) {
 }
 
 func TestInflightReservation_SubscriptionUnaffected(t *testing.T) {
-	_, cache, svc := newInflightTestEnv(t, true, 60)
+	_, cache, svc := newInflightTestEnv(t, true, 60, 0)
 	ctx := context.Background()
 	user := &service.User{ID: 12}
 	require.NoError(t, cache.SetUserBalance(ctx, user.ID, 0))
@@ -151,7 +161,7 @@ func TestInflightReservation_SubscriptionUnaffected(t *testing.T) {
 }
 
 func TestInflightReservation_ZeroEstimateSkips(t *testing.T) {
-	_, cache, svc := newInflightTestEnv(t, true, 60)
+	_, cache, svc := newInflightTestEnv(t, true, 60, 1)
 	ctx := context.Background()
 	user := &service.User{ID: 13}
 	require.NoError(t, cache.SetUserBalance(ctx, user.ID, 1))
@@ -214,7 +224,7 @@ func TestInflightReservation_ScriptErrorSurfaces(t *testing.T) {
 // 窗口内的顺序请求看到「在途=0 且余额未扣」全部放行（余额 $1、5×$0.9 → -4.40）。
 // 现在预留由计费任务在余额缓存扣减之后才释放。
 func TestInflightReservation_SequentialInBillingWindowAdmitsOnlyWhatBalanceCovers(t *testing.T) {
-	_, cache, svc := newInflightTestEnv(t, true, 60)
+	_, cache, svc := newInflightTestEnv(t, true, 60, 1)
 	ctx := context.Background()
 	user := &service.User{ID: 77}
 	require.NoError(t, cache.SetUserBalance(ctx, user.ID, 1.0))
@@ -225,7 +235,7 @@ func TestInflightReservation_SequentialInBillingWindowAdmitsOnlyWhatBalanceCover
 	for i := 0; i < 5; i++ {
 		res, err := svc.ReserveInflight(ctx, user, nil, nil, cost)
 		if err != nil {
-			require.ErrorIs(t, err, service.ErrInsufficientBalance)
+			require.ErrorIs(t, err, service.ErrBalanceInFlight)
 			continue
 		}
 		admitted++
@@ -238,6 +248,9 @@ func TestInflightReservation_SequentialInBillingWindowAdmitsOnlyWhatBalanceCover
 	}
 	require.Equal(t, 1, admitted, "requests arriving before billing lands must not be admitted")
 
+	// Rejected requests invalidate the stale wallet cache after the database
+	// recheck. Restore the fixture's database balance before its manual debit.
+	require.NoError(t, cache.SetUserBalance(ctx, user.ID, 1.0))
 	for _, bill := range pendingBilling {
 		bill()
 	}
@@ -248,7 +261,7 @@ func TestInflightReservation_SequentialInBillingWindowAdmitsOnlyWhatBalanceCover
 }
 
 func TestInflightReservation_RenewalKeepsStreamingReservationAlive(t *testing.T) {
-	_, cache, svc := newInflightTestEnv(t, true, 1)
+	_, cache, svc := newInflightTestEnv(t, true, 1, 1)
 	ctx := context.Background()
 	user := &service.User{ID: 78}
 	require.NoError(t, cache.SetUserBalance(ctx, user.ID, 1.0))
@@ -257,7 +270,7 @@ func TestInflightReservation_RenewalKeepsStreamingReservationAlive(t *testing.T)
 	require.NoError(t, err)
 	time.Sleep(2500 * time.Millisecond) // streaming well past the 1s TTL
 	_, err = svc.ReserveInflight(ctx, user, nil, nil, 0.8)
-	require.ErrorIs(t, err, service.ErrInsufficientBalance, "renewed reservation must still count")
+	require.ErrorIs(t, err, service.ErrBalanceInFlight, "renewed reservation must still count")
 	require.Equal(t, int64(1), inflightCount(t, cache, user.ID))
 
 	res.HandlerDone()
@@ -269,7 +282,7 @@ func TestInflightReservation_RenewalKeepsStreamingReservationAlive(t *testing.T)
 }
 
 func TestInflightReservation_RenewDoesNotResurrectExpiredMember(t *testing.T) {
-	_, cache, _ := newInflightTestEnv(t, true, 60)
+	_, cache, _ := newInflightTestEnv(t, true, 60, 1)
 	ctx := context.Background()
 	userID := int64(79)
 	zkey, hkey := billingInflightKeys(userID)
@@ -287,7 +300,7 @@ func TestInflightReservation_RenewDoesNotResurrectExpiredMember(t *testing.T) {
 }
 
 func TestInflightScopeReservation_ReturnsOthersAndReleases(t *testing.T) {
-	mr, cache, _ := newInflightTestEnv(t, true, 60)
+	mr, cache, _ := newInflightTestEnv(t, true, 60, 1)
 	ctx := context.Background()
 
 	others, err := cache.ReserveInflightScope(ctx, "apikey:7", "r1", 3, time.Minute)
@@ -313,7 +326,7 @@ func TestInflightScopeReservation_ReturnsOthersAndReleases(t *testing.T) {
 }
 
 func TestReserveFixedCharge_ConcurrentChargesAdmitOnlyWhatAPIKeyQuotaCovers(t *testing.T) {
-	_, cache, svc := newInflightTestEnv(t, true, 60)
+	_, cache, svc := newInflightTestEnv(t, true, 60, 100)
 	ctx := context.Background()
 	user := &service.User{ID: 42}
 	apiKey := &service.APIKey{ID: 9, UserID: user.ID, Quota: 1.0}

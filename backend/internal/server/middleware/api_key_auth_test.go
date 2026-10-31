@@ -1508,7 +1508,7 @@ func TestAPIKeyAuthRejectsExhaustedBalance(t *testing.T) {
 	}
 
 	cfg := &config.Config{RunMode: config.RunModeStandard}
-	apiKeyService := service.NewAPIKeyService(apiKeyRepo, nil, nil, nil, nil, nil, cfg)
+	apiKeyService := service.NewAPIKeyService(apiKeyRepo, authZeroBalanceUserRepo(), nil, nil, nil, nil, cfg)
 	router := newAuthTestRouter(apiKeyService, nil, cfg)
 
 	w := httptest.NewRecorder()
@@ -1550,7 +1550,7 @@ func TestAPIKeyAuthAllowsModelListWithExhaustedBalance(t *testing.T) {
 	}
 
 	cfg := &config.Config{RunMode: config.RunModeStandard}
-	apiKeyService := service.NewAPIKeyService(apiKeyRepo, nil, nil, nil, nil, nil, cfg)
+	apiKeyService := service.NewAPIKeyService(apiKeyRepo, authZeroBalanceUserRepo(), nil, nil, nil, nil, cfg)
 	router := newAuthTestRouter(apiKeyService, nil, cfg)
 
 	for _, path := range []string{

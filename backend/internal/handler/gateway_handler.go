@@ -2742,6 +2742,9 @@ func extractQuotaResetSeconds(err error) int {
 }
 
 func billingErrorDetails(err error) (status int, code, message string, retryAfter int) {
+	if errors.Is(err, service.ErrBalanceInFlight) {
+		return http.StatusTooManyRequests, "balance_in_flight", pkgerrors.Message(err), 2
+	}
 	if errors.Is(err, service.ErrBillingServiceUnavailable) {
 		msg := pkgerrors.Message(err)
 		if msg == "" {

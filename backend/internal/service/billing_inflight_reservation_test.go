@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -170,13 +171,15 @@ func TestInflightEstimate_MediaKinds(t *testing.T) {
 
 type memInflightCache struct {
 	BillingCache
-	mu        sync.Mutex
-	balance   float64
-	res       map[string]float64
-	exp       map[string]time.Time
-	renews    atomic.Int32
-	deducts   atomic.Int32
-	releaseCt atomic.Int32
+	mu              sync.Mutex
+	balance         float64
+	res             map[string]float64
+	exp             map[string]time.Time
+	renews          atomic.Int32
+	deducts         atomic.Int32
+	releaseCt       atomic.Int32
+	reserveIDs      []string
+	reserveBalances []float64
 }
 
 func newMemInflightCache(balance float64) *memInflightCache {
@@ -188,6 +191,8 @@ func (m *memInflightCache) GetUserBalance(context.Context, int64) (float64, erro
 	defer m.mu.Unlock()
 	return m.balance, nil
 }
+
+func (m *memInflightCache) InvalidateUserBalance(context.Context, int64) error { return nil }
 
 func (m *memInflightCache) DeductUserBalance(_ context.Context, _ int64, amount float64) error {
 	m.mu.Lock()
@@ -210,6 +215,8 @@ func (m *memInflightCache) gc() {
 func (m *memInflightCache) ReserveInflightBalance(_ context.Context, _ int64, id string, amount, balance float64, ttl time.Duration) (bool, float64, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.reserveIDs = append(m.reserveIDs, id)
+	m.reserveBalances = append(m.reserveBalances, balance)
 	m.gc()
 	sum := 0.0
 	for _, v := range m.res {
@@ -221,6 +228,91 @@ func (m *memInflightCache) ReserveInflightBalance(_ context.Context, _ int64, id
 	m.res[id] = amount
 	m.exp[id] = time.Now().Add(ttl)
 	return true, sum, nil
+}
+
+type inflightRecheckUserRepo struct {
+	UserRepository
+	user  *User
+	err   error
+	calls atomic.Int32
+}
+
+func (r *inflightRecheckUserRepo) GetByID(context.Context, int64) (*User, error) {
+	r.calls.Add(1)
+	return r.user, r.err
+}
+
+func TestInflightReservation_StaleLowBalanceRechecksBeforeRejecting(t *testing.T) {
+	cache := newMemInflightCache(0.5)
+	cache.res["previous-request"] = 0.4
+	repo := &inflightRecheckUserRepo{user: &User{ID: 1, Status: StatusActive, Balance: 2}}
+	svc := newInflightSvc(t, cache, 60)
+	svc.userRepo = repo
+
+	res, err := svc.ReserveInflight(context.Background(), &User{ID: 1}, nil, nil, 0.7)
+	require.NoError(t, err, "a stale cache must not reject a funded wallet")
+	require.NotNil(t, res)
+	defer res.HandlerDone()
+	require.Equal(t, int32(1), repo.calls.Load())
+	require.Equal(t, 2, cache.count(), "the previous reservation must remain intact")
+	require.Len(t, cache.reserveIDs, 2, "at most one atomic reserve retry")
+	require.Equal(t, cache.reserveIDs[0], cache.reserveIDs[1], "retry retains the same reservation ID")
+	require.Equal(t, []float64{0.5, 2}, cache.reserveBalances)
+}
+
+func TestInflightReservation_RecheckFailureDoesNotReportWalletEmpty(t *testing.T) {
+	cache := newMemInflightCache(0.5)
+	cache.res["previous-request"] = 0.4
+	repo := &inflightRecheckUserRepo{err: errors.New("database unavailable")}
+	svc := newInflightSvc(t, cache, 60)
+	svc.userRepo = repo
+
+	res, err := svc.ReserveInflight(context.Background(), &User{ID: 1}, nil, nil, 0.7)
+	require.Nil(t, res)
+	require.ErrorIs(t, err, ErrBillingServiceUnavailable)
+	require.NotErrorIs(t, err, ErrInsufficientBalance)
+	require.Equal(t, 1, cache.count())
+	require.Len(t, cache.reserveIDs, 1, "no atomic retry without an authoritative balance")
+}
+
+func TestInflightReservation_RecheckDistinguishesEmptyWalletFromInFlight(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		balance      float64
+		want         error
+		reserveCalls int
+	}{
+		{"empty wallet", 0, ErrInsufficientBalance, 1},
+		{"negative wallet", -1, ErrInsufficientBalance, 1},
+		{"below configured minimum", 0.005, ErrInsufficientBalance, 1},
+		{"funds occupied by in flight", 0.5, ErrBalanceInFlight, 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cache := newMemInflightCache(0.5)
+			cache.res["previous-request"] = 0.4
+			svc := newInflightSvc(t, cache, 60)
+			svc.cfg.Billing.MinimumBalanceReserve = 0.01
+			svc.userRepo = &inflightRecheckUserRepo{user: &User{ID: 1, Status: StatusActive, Balance: tc.balance}}
+			res, err := svc.ReserveInflight(context.Background(), &User{ID: 1}, nil, nil, 0.7)
+			require.Nil(t, res)
+			require.ErrorIs(t, err, tc.want)
+			require.Len(t, cache.reserveIDs, tc.reserveCalls)
+			require.Equal(t, 1, cache.count(), "existing reservation must not be cleared")
+		})
+	}
+}
+
+func TestInflightReservation_FixedChargeRecheckStillRequiresKnownAmount(t *testing.T) {
+	cache := newMemInflightCache(2)
+	cache.res["previous-request"] = 1.5
+	svc := newInflightSvc(t, cache, 60)
+	svc.userRepo = &inflightRecheckUserRepo{user: &User{ID: 1, Status: StatusActive, Balance: 0.5}}
+
+	res, err := svc.ReserveFixedCharge(context.Background(), &User{ID: 1}, nil, nil, nil, 0.7)
+	require.Nil(t, res)
+	require.ErrorIs(t, err, ErrInsufficientBalance, "known charges cannot overdraw a wallet")
+	require.Len(t, cache.reserveIDs, 1, "no atomic retry below the fixed charge")
+	require.Equal(t, 1, cache.count())
 }
 
 func (m *memInflightCache) ReleaseInflightBalance(_ context.Context, _ int64, id string) error {
@@ -254,7 +346,8 @@ func newInflightSvc(t *testing.T, cache BillingCache, ttlSeconds int) *BillingCa
 	t.Helper()
 	cfg := &config.Config{}
 	cfg.Billing.InflightReservation = config.InflightReservationConfig{Enabled: true, TTLSeconds: ttlSeconds}
-	svc := NewBillingCacheService(cache, nil, nil, nil, nil, nil, cfg, nil)
+	repo := &inflightRecheckUserRepo{user: &User{ID: 1, Status: StatusActive, Balance: 1}}
+	svc := NewBillingCacheService(cache, repo, nil, nil, nil, nil, cfg, nil)
 	t.Cleanup(svc.Stop)
 	return svc
 }
@@ -272,7 +365,7 @@ func TestInflightReservation_HeldUntilBillingTaskDone(t *testing.T) {
 	require.Equal(t, 1, cache.count(), "reservation must survive handler return while billing is pending")
 
 	_, err = svc.ReserveInflight(context.Background(), user, nil, nil, 0.9)
-	require.ErrorIs(t, err, ErrInsufficientBalance)
+	require.ErrorIs(t, err, ErrBalanceInFlight)
 
 	taskDone()
 	taskDone() // idempotent
@@ -306,7 +399,7 @@ func TestInflightReservation_RenewedWhileHandlerActive(t *testing.T) {
 	require.Equal(t, 1, cache.count(), "renewal keeps the reservation alive past its TTL")
 	require.Greater(t, cache.renews.Load(), int32(3))
 	_, err = svc.ReserveInflight(context.Background(), user, nil, nil, 0.9)
-	require.ErrorIs(t, err, ErrInsufficientBalance)
+	require.ErrorIs(t, err, ErrBalanceInFlight)
 
 	done := res.Acquire()
 	res.HandlerDone()

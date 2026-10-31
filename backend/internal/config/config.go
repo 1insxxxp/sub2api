@@ -928,15 +928,14 @@ type BillingConfig struct {
 	// Requests in balance mode are rejected when the cached balance is below this
 	// amount, even if it is still positive. Set to 0 to keep the legacy balance > 0 gate.
 	MinimumBalanceReserve float64 `mapstructure:"minimum_balance_reserve"`
-	// BalancePreauthorizationSampleCount controls how many recent balance-billed
-	// requests are used to estimate the next request's authorization.
+	// Deprecated: historical-cost admission settings are accepted for configuration
+	// compatibility only. Historical costs no longer block balance-billed requests.
 	BalancePreauthorizationSampleCount int `mapstructure:"balance_preauthorization_sample_count"`
-	// BalancePreauthorizationMeanSafetyFactor multiplies the recent mean cost.
+	// Deprecated: no longer used for request admission.
 	BalancePreauthorizationMeanSafetyFactor float64 `mapstructure:"balance_preauthorization_mean_safety_factor"`
-	// BalancePreauthorizationP95Quantile is the nearest-rank percentile floor.
+	// Deprecated: no longer used for request admission.
 	BalancePreauthorizationP95Quantile float64 `mapstructure:"balance_preauthorization_p95_quantile"`
-	// BalancePreauthorizationMaxOverdraftFraction allows a single request to
-	// consume this fraction of its authorization beyond the current balance.
+	// Deprecated: no longer used for request admission; never a settlement debt cap.
 	BalancePreauthorizationMaxOverdraftFraction float64 `mapstructure:"balance_preauthorization_max_overdraft_fraction"`
 	// UserPlatformQuotaCacheTTLSeconds 用户 × 平台 quota 缓存 TTL（秒），默认 86400=1天，覆盖典型 daily 窗口。
 	// 消费点：

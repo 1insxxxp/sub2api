@@ -206,8 +206,26 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 				c.Set(string(ContextKeySubscription), subscription)
 			} else {
 				if apiKeyBalanceBelowAuthThreshold(apiKey.User.Balance, cfg) {
-					abortWithGoogleError(c, 403, "Insufficient account balance")
-					return
+					apiKey, err = recheckAPIKeyBalance(c, apiKeyService, apiKey)
+					if err != nil {
+						abortWithGoogleError(c, 503, "Billing service temporarily unavailable. Please retry later.")
+						return
+					}
+					if !apiKey.User.IsActive() {
+						MarkIngressRejected(c, IngressRejectUserInactive)
+						abortWithGoogleError(c, 401, "User account is not active")
+						return
+					}
+					if !validateAPIKeyGroupAllowed(apiKey) {
+						service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonAPIKeyGroupUnavailable)
+						MarkIngressRejected(c, IngressRejectGroupNotAllowed)
+						abortWithGoogleError(c, 403, "API Key 所属专属分组不再允许当前用户使用")
+						return
+					}
+					if apiKeyBalanceBelowAuthThreshold(apiKey.User.Balance, cfg) {
+						abortWithGoogleError(c, 403, "Insufficient account balance")
+						return
+					}
 				}
 			}
 		}

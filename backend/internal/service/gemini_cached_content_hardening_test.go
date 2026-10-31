@@ -435,7 +435,7 @@ func TestReserveFixedCharge(t *testing.T) {
 	ctx := context.Background()
 	user := &User{ID: 1}
 	newSvc := func(cache *fixedChargeCacheStub) *BillingCacheService {
-		svc := NewBillingCacheService(cache, nil, nil, nil, nil, nil, &config.Config{}, nil)
+		svc := NewBillingCacheService(cache, &balanceLoadUserRepoStub{balance: cache.balance}, nil, nil, nil, nil, &config.Config{}, nil)
 		t.Cleanup(svc.Stop)
 		return svc
 	}

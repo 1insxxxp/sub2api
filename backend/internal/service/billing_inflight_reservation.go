@@ -252,7 +252,8 @@ func (s *BillingCacheService) ReserveInflightBalance(ctx context.Context, user *
 //
 // 以下情况直接放行且不登记预留（fail-open，保持旧行为）：
 // 开关关闭 / 简易模式 / 订阅模式 / estimate <= 0 / 缓存不支持 / 余额读取失败 / Redis 执行失败。
-// 仅当 Redis 明确判定 缓存余额 - 在途合计 < estimate（且已有在途请求）时返回 ErrInsufficientBalance。
+// 缓存余额不足以覆盖其他在途请求时，先复核真实余额并原子重试一次。
+// 真实余额耗尽返回 ErrInsufficientBalance；仍被其他在途请求占用返回 ErrBalanceInFlight。
 func (s *BillingCacheService) ReserveInflight(ctx context.Context, user *User, group *Group, subscription *UserSubscription, estimate float64) (*InflightReservation, error) {
 	return s.reserveInflight(ctx, user, group, subscription, estimate, true, true)
 }
@@ -327,16 +328,31 @@ func (s *BillingCacheService) reserveInflight(ctx context.Context, user *User, g
 		ttl = time.Duration(cfg.TTLSeconds) * time.Second
 	}
 	requestID := uuid.NewString()
-	reserveCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), inflightReservationReserveTimeout)
-	allowed, inflight, err := rc.ReserveInflightBalance(reserveCtx, user.ID, requestID, estimate, balance, ttl)
-	cancel()
+	allowed, _, err := reserveInflightBalanceOnce(ctx, rc, user.ID, requestID, estimate, balance, ttl)
 	if err != nil {
 		logger.LegacyPrintf("service.billing_cache", "Warning: inflight reservation failed for user %d (fail-open): %v", user.ID, err)
 		return nil, nil
 	}
 	if !allowed {
-		logger.LegacyPrintf("service.billing_cache", "inflight reservation rejected: user=%d balance=%.6f inflight=%.6f estimate=%.6f", user.ID, balance, inflight, estimate)
-		return nil, ErrInsufficientBalance
+		balance, err = s.RecheckUserBalance(ctx, user.ID)
+		if err != nil {
+			return nil, err
+		}
+		// Fixed charges still require their known amount, even if the other
+		// reservation disappears before the atomic retry.
+		if s.balanceBelowEligibilityThreshold(balance) || (!capped && balance < estimate) {
+			return nil, ErrInsufficientBalance
+		}
+		var inflight float64
+		allowed, inflight, err = reserveInflightBalanceOnce(ctx, rc, user.ID, requestID, estimate, balance, ttl)
+		if err != nil {
+			logger.LegacyPrintf("service.billing_cache", "Warning: inflight reservation retry failed for user %d (fail-open): %v", user.ID, err)
+			return nil, nil
+		}
+		if !allowed {
+			logger.LegacyPrintf("service.billing_cache", "inflight reservation rejected: user=%d balance=%.6f inflight=%.6f estimate=%.6f", user.ID, balance, inflight, estimate)
+			return nil, ErrBalanceInFlight
+		}
 	}
 
 	r := &InflightReservation{cache: rc, userID: user.ID, requestID: requestID, amount: estimate, ttl: ttl}
@@ -345,6 +361,12 @@ func (s *BillingCacheService) reserveInflight(ctx context.Context, user *User, g
 		r.startRenewal(renewer)
 	}
 	return r, nil
+}
+
+func reserveInflightBalanceOnce(ctx context.Context, cache InflightBalanceReservationCache, userID int64, requestID string, estimate, balance float64, ttl time.Duration) (bool, float64, error) {
+	reserveCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), inflightReservationReserveTimeout)
+	defer cancel()
+	return cache.ReserveInflightBalance(reserveCtx, userID, requestID, estimate, balance, ttl)
 }
 
 // ============================================

@@ -276,11 +276,11 @@ type googleErrorResponse struct {
 func newTestAPIKeyService(repo service.APIKeyRepository) *service.APIKeyService {
 	return service.NewAPIKeyService(
 		repo,
-		nil, // userRepo (unused in GetByKey)
-		nil, // groupRepo
-		nil, // userSubRepo
-		nil, // userGroupRateRepo
-		nil, // cache
+		authZeroBalanceUserRepo(), // authoritative wallet for zero-balance fixtures
+		nil,                       // groupRepo
+		nil,                       // userSubRepo
+		nil,                       // userGroupRateRepo
+		nil,                       // cache
 		&config.Config{},
 	)
 }

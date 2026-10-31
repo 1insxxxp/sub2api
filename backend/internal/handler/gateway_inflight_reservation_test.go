@@ -78,7 +78,7 @@ func TestReserveInflightBalance_UnpricedFailOpenByDefaultFailClosedOptIn(t *test
 
 	cfg.Billing.InflightReservation.FailClosedOnUnpriced = true
 	_, err = reserveInflightBalance(newInflightTestGinContext(), billing, est, apiKey, nil, tokenInflightEstimate("unknown", nil))
-	require.ErrorIs(t, err, service.ErrInsufficientBalance)
+	require.ErrorIs(t, err, service.ErrBillingServiceUnavailable, "missing pricing is not a customer wallet shortage")
 }
 
 // handlerInflightCache 内存版余额缓存 + 在途预留（语义同 Redis Lua）。
@@ -92,6 +92,8 @@ type handlerInflightCache struct {
 func newHandlerInflightCache(balance float64) *handlerInflightCache {
 	return &handlerInflightCache{balance: balance, res: map[string]float64{}}
 }
+
+func (m *handlerInflightCache) InvalidateUserBalance(context.Context, int64) error { return nil }
 
 func (m *handlerInflightCache) GetUserBalance(context.Context, int64) (float64, error) {
 	m.mu.Lock()
@@ -164,11 +166,19 @@ func TestWrapUsageRecordTaskContext_HandsReservationToBillingTask(t *testing.T) 
 }
 
 // 新接入的端点（独立 web_search）：在途预留超过余额时拒绝，且不残留预留。
+type handlerInflightUserRepo struct {
+	service.UserRepository
+}
+
+func (r *handlerInflightUserRepo) GetByID(_ context.Context, id int64) (*service.User, error) {
+	return &service.User{ID: id, Status: service.StatusActive, Balance: 1.5}, nil
+}
+
 func TestWebSearch_RejectsWhenInflightExceedsBalance(t *testing.T) {
 	cache := newHandlerInflightCache(1.5)
 	cfg := &config.Config{}
 	cfg.Billing.InflightReservation = config.InflightReservationConfig{Enabled: true, TTLSeconds: 60}
-	billingCache := service.NewBillingCacheService(cache, nil, nil, nil, nil, nil, cfg, nil)
+	billingCache := service.NewBillingCacheService(cache, &handlerInflightUserRepo{}, nil, nil, nil, nil, cfg, nil)
 	t.Cleanup(billingCache.Stop)
 	billing := service.NewBillingService(cfg, nil)
 	gw := service.NewGatewayService(
@@ -198,7 +208,8 @@ func TestWebSearch_RejectsWhenInflightExceedsBalance(t *testing.T) {
 
 	h.WebSearch(c)
 
-	require.NotEqual(t, http.StatusOK, w.Code)
-	require.Contains(t, w.Body.String(), "balance")
+	require.Equal(t, http.StatusTooManyRequests, w.Code)
+	require.Contains(t, w.Body.String(), "balance_in_flight")
+	require.Equal(t, "2", w.Header().Get("Retry-After"))
 	require.Equal(t, 1, cache.count(), "rejected request must not leave a reservation behind")
 }
