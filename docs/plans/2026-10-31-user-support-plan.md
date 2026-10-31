@@ -15,7 +15,7 @@
 Files: create `backend/internal/service/user_support.go`, `backend/internal/repository/user_support_repo.go`, focused unit/integration tests, and `backend/migrations/255_user_support.sql` plus migration tests. Register repository/service providers only after integration.
 
 1. Write failing tests for grant uniqueness, historic admin +15, rollback and wallet invariants; run focused tests and record expected failures.
-2. Add access and permanent trial-grant tables. Implement exact account lookup and fresh active admin/sub_admin permission checks. Lock the target wallet, detect lifetime claim/history, and atomically credit gift balance + write ledger + permanent claim. Do not call ordinary balance adjustment or redeem services that accrue affiliate rebate.
+2. Add access and permanent trial-grant tables. Implement exact account lookup and fresh active admin or explicitly enabled user/sub_admin permission checks. Lock the target wallet, detect lifetime claim/history, and atomically credit gift balance + write ledger + permanent claim. Do not call ordinary balance adjustment or redeem services that accrue affiliate rebate.
 3. Add safe scalar query DTOs and fixed newest-first LIMIT 10 queries scoped to user_id. Use only known public requested models, no internal fallback. Normalize error phase/type to fixed public categories. No arbitrary internal strings in serialized DTOs.
 4. Add service orchestration/cache invalidation and explicit per-panel failure state after committed grant. Assert unknown failures cannot return error text. Run unit and real isolated PostgreSQL integration tests.
 
@@ -34,7 +34,7 @@ Files: create `frontend/src/api/admin/userSupport.ts`, dedicated access store/he
 
 1. Write and observe failing Vitest tests for unauthorized route, explicitly submitted grant, ten-row rendering, no arbitrary server text, repeated grant status and independent list failure.
 2. Add safe typed client models matching API, no raw HTML/error string rendering. Render compact account lookup, gift/balance results, usage and fixed-category errors with mobile layout and dark mode.
-3. Add sidebar/route visibility for enabled admin/sub_admin, fresh access check on navigation and revocation handling. Add main-admin grant/revoke control for existing secondary admins in user editing.
+3. Add sidebar/route visibility for the main admin and explicitly authorized user/sub_admin, fresh access checks on navigation and revocation handling. Add main-admin grant/revoke control for existing ordinary or secondary-admin users in user editing.
 4. Run targeted UI/i18n tests, typecheck, lint changed files, production build; render desktop/mobile/light/dark with isolated fixtures.
 
 ### Task 4: Integration and independent review

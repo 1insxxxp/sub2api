@@ -168,7 +168,7 @@
       </template>
 
       <!-- Regular User View -->
-      <template v-else-if="!appStore.backendModeEnabled || authStore.canAccessAdminWorkbench">
+      <template v-else-if="!appStore.backendModeEnabled || authStore.canAccessAdminWorkbench || canUseUserSupport">
         <div class="sidebar-section">
           <template v-for="item in visibleSidebarMenuItems" :key="item.path">
             <a
@@ -287,6 +287,7 @@ import { orderSidebarItems } from '@/utils/sidebar-order'
 import { FeatureFlags, makeSidebarFlag } from '@/utils/featureFlags'
 import { resolveSiteBillingMode } from '@/utils/siteBillingMode'
 import { useBatchImageAccess } from '@/composables/useBatchImageAccess'
+import { useUserSupportAccess } from '@/composables/useUserSupportAccess'
 import type { CustomMenuItem } from '@/types'
 
 interface NavItem {
@@ -335,6 +336,7 @@ const authStore = useAuthStore()
 const onboardingStore = useOnboardingStore()
 const adminSettingsStore = useAdminSettingsStore()
 const { canUseBatchImage, refreshBatchImageAccess } = useBatchImageAccess()
+const { canAccess: canUseUserSupport, refresh: refreshUserSupportAccess } = useUserSupportAccess(authStore)
 
 const sidebarCollapsed = computed(() => appStore.sidebarCollapsed)
 const mobileOpen = computed(() => appStore.mobileOpen)
@@ -887,15 +889,20 @@ function customMenuIcon(item: Pick<CustomMenuItem, 'label' | 'icon_svg'>): unkno
 // 可用渠道紧挨渠道状态之上，让用户"先看自己能用什么、再看对应状态"。
 function buildSelfNavItems(withDashboard: boolean): NavItem[] {
   const items: NavItem[] = []
+  if (appStore.backendModeEnabled && !authStore.isSubAdmin && !authStore.isAdmin) {
+    return canUseUserSupport.value ? [{ path: '/admin/user-support', label: t('userSupport.title'), icon: UsersIcon }] : []
+  }
   if (appStore.backendModeEnabled && authStore.isSubAdmin) {
     return [
       { path: '/admin/workbench', label: t('nav.adminWorkbench'), icon: ShieldIcon },
+      ...(canUseUserSupport.value ? [{ path: '/admin/user-support', label: t('userSupport.title'), icon: UsersIcon }] : []),
       { path: '/model-status', label: t('nav.modelStatus'), icon: SignalIcon },
     ]
   }
   if (authStore.isSubAdmin) {
     items.push({ path: '/admin/workbench', label: t('nav.adminWorkbench'), icon: ShieldIcon })
   }
+  if (canUseUserSupport.value) items.push({ path: '/admin/user-support', label: t('userSupport.title'), icon: UsersIcon })
   if (withDashboard) {
     items.push({ path: '/dashboard', label: t('nav.dashboard'), icon: DashboardIcon })
   }
@@ -1008,6 +1015,7 @@ const adminNavItems = computed((): NavItem[] => {
   const baseItems: NavItem[] = [
     { path: '/admin/dashboard', label: t('nav.dashboard'), icon: DashboardIcon },
     { path: '/admin/workbench', label: t('nav.adminWorkbench'), icon: ShieldIcon },
+    { path: '/admin/user-support', label: t('userSupport.title'), icon: UsersIcon },
     { path: '/admin/ops', label: t('nav.ops'), icon: ChartIcon, featureFlag: flagOpsMonitoring },
     { path: '/admin/users', label: t('nav.users'), icon: UsersIcon, hideInSimpleMode: true },
     { path: '/admin/groups', label: t('nav.groups'), icon: FolderIcon },
@@ -1233,8 +1241,14 @@ watch(
   { immediate: true }
 )
 
+watch(
+  () => `${authStore.user?.id}:${authStore.user?.role}:${authStore.token ?? ''}`,
+  () => { if (authStore.user?.id) void refreshUserSupportAccess() },
+)
+
 onMounted(() => {
   void refreshBatchImageAccess()
+  if (authStore.user?.id) void refreshUserSupportAccess()
   if (isAdmin.value) {
     adminSettingsStore.fetch()
   }

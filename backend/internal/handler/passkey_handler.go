@@ -21,6 +21,7 @@ type PasskeyHandler struct {
 	passkeys    *service.PasskeyService
 	authService *service.AuthService
 	settingSvc  *service.SettingService
+	userSupport userSupportLoginAccess
 }
 
 func NewPasskeyHandler(
@@ -234,6 +235,11 @@ func (h *PasskeyHandler) ensureBackendModeAllowsUser(ctx context.Context, user *
 	}
 	if h.settingSvc == nil || !h.settingSvc.IsBackendModeEnabled(ctx) || user.CanAccessAdminWorkbench() {
 		return nil
+	}
+	if h.userSupport != nil {
+		if allowed, err := h.userSupport.CanAccess(ctx, user.ID); err == nil && allowed {
+			return nil
+		}
 	}
 	return infraerrors.Forbidden("BACKEND_MODE_ADMIN_ONLY", "Backend mode is active. Only admin login is allowed.")
 }

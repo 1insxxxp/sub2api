@@ -11,9 +11,11 @@ import restored from './restored'
 import lottery from './lottery'
 import manager from './manager'
 import modelStatus from './modelStatus'
+import userSupport from './userSupport'
 
 export default mergeMessages({
   adminAccessKeys,
+  userSupport,
   ...landing,
   ...common,
   ...dashboard,

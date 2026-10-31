@@ -13,6 +13,7 @@ import (
 func ProvideAdminHandlers(
 	dashboardHandler *admin.DashboardHandler,
 	userHandler *admin.UserHandler,
+	userSupportHandler *admin.UserSupportHandler,
 	groupHandler *admin.GroupHandler,
 	systemCustomGroupHandler *admin.SystemCustomGroupHandler,
 	accountHandler *admin.AccountHandler,
@@ -65,6 +66,7 @@ func ProvideAdminHandlers(
 	return &AdminHandlers{
 		Dashboard:              dashboardHandler,
 		User:                   userHandler,
+		UserSupport:            userSupportHandler,
 		Group:                  groupHandler,
 		SystemCustomGroup:      systemCustomGroupHandler,
 		Account:                accountHandler,
@@ -234,6 +236,7 @@ func ProvideAdminSettingHandler(settingService *service.SettingService, emailSer
 // ProvideHandlers creates the Handlers struct
 func ProvideHandlers(
 	authHandler *AuthHandler,
+	userSupportService *service.UserSupportService,
 	userHandler *UserHandler,
 	apiKeyHandler *APIKeyHandler,
 	userCustomGroupHandler *UserCustomGroupHandler,
@@ -266,6 +269,12 @@ func ProvideHandlers(
 	_ *service.IdempotencyCleanupService,
 	_ *service.OpenAIQuotaAutoResetService,
 ) *Handlers {
+	if authHandler != nil && userSupportService != nil {
+		authHandler.userSupport = userSupportService
+	}
+	if passkeyHandler != nil && userSupportService != nil {
+		passkeyHandler.userSupport = userSupportService
+	}
 	handlers := &Handlers{
 		Auth:               authHandler,
 		User:               userHandler,
@@ -338,6 +347,7 @@ var ProviderSet = wire.NewSet(
 	// Admin handlers
 	admin.NewDashboardHandler,
 	admin.NewUserHandler,
+	admin.NewUserSupportHandler,
 	admin.NewGroupHandlerWithAccountExclusions,
 	admin.NewSystemCustomGroupHandler,
 	admin.ProvideAccountHandler,

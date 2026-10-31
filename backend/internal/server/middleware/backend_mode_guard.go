@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
@@ -11,7 +12,11 @@ import (
 
 // BackendModeUserGuard blocks regular users from accessing user routes when backend mode is enabled.
 // Must be placed AFTER JWT auth middleware so that the user role is available in context.
-func BackendModeUserGuard(settingService *service.SettingService) gin.HandlerFunc {
+type UserSupportAccessChecker interface {
+	CanAccessUserSupport(context.Context, int64) (bool, error)
+}
+
+func BackendModeUserGuard(settingService *service.SettingService, support ...UserSupportAccessChecker) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if settingService == nil || !settingService.IsBackendModeEnabled(c.Request.Context()) {
 			c.Next()
@@ -25,6 +30,14 @@ func BackendModeUserGuard(settingService *service.SettingService) gin.HandlerFun
 		if role == service.RoleSubAdmin && backendModeSubAdminAllowedUserPath(c.Request.URL.Path) {
 			c.Next()
 			return
+		}
+		if role == service.RoleUser && c.Request.URL.Path == "/api/v1/auth/me" && len(support) > 0 && support[0] != nil {
+			if subject, exists := GetAuthSubjectFromContext(c); exists {
+				if allowed, err := support[0].CanAccessUserSupport(c.Request.Context(), subject.UserID); err == nil && allowed {
+					c.Next()
+					return
+				}
+			}
 		}
 		response.Forbidden(c, "Backend mode is active. User self-service is disabled.")
 		c.Abort()

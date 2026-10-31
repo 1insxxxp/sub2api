@@ -44,6 +44,10 @@ func RegisterAdminRoutes(
 	admin.Use(middleware.AdminComplianceGuard(settingService))
 	if h != nil && h.Admin != nil {
 		adminHandlers := h.Admin
+		if adminHandlers.UserSupport != nil {
+			admin.GET("/users/:id/support-access", adminHandlers.UserSupport.GetUserAccess)
+			admin.PUT("/users/:id/support-access", adminHandlers.UserSupport.SetUserAccess)
+		}
 
 		// Restricted keys retain upstream account resource checks.
 		if adminHandlers.Account != nil {

@@ -18,6 +18,8 @@ const routerHarness = vi.hoisted(() => ({
   guard: null as NavigationGuard | null,
   routes: [] as Array<Record<string, any>>,
 }))
+const { supportRefresh } = vi.hoisted(() => ({ supportRefresh: vi.fn() }))
+vi.mock('@/composables/useUserSupportAccess', () => ({ useUserSupportAccess: () => ({ refresh: supportRefresh }) }))
 
 const authStore = vi.hoisted(() => ({
   checkAuth: vi.fn(),
@@ -129,6 +131,7 @@ describe('feature route guard', () => {
   })
 
   beforeEach(() => {
+    supportRefresh.mockReset().mockResolvedValue(false)
     authStore.isAuthenticated = true
     authStore.isAdmin = false
     authStore.canAccessAdminWorkbench = false
@@ -166,6 +169,55 @@ describe('feature route guard', () => {
     expect(routerSource).toMatch(
       /path: '\/admin\/workbench',[\s\S]*?requiresAdminWorkbench: true[\s\S]*?titleKey: 'adminWorkbench\.title'/,
     )
+  })
+
+  it('registers support with its own permission without broad admin privileges', () => {
+    const route = routerHarness.routes.find(item => item.path === '/admin/user-support')
+    expect(route?.meta.requiresUserSupport).toBe(true)
+    expect(route?.meta.requiresAdmin).not.toBe(true)
+    expect(route?.meta.requiresAdminWorkbench).not.toBe(true)
+  })
+
+  it('requires fresh support permission for ordinary users', async () => {
+    const denied = runGuard({ requiresUserSupport: true }, '/admin/user-support')
+    await denied.navigation
+    expect(denied.next).toHaveBeenCalledWith('/dashboard')
+    supportRefresh.mockResolvedValue(true)
+    const allowed = runGuard({ requiresUserSupport: true }, '/admin/user-support')
+    await allowed.navigation
+    expect(allowed.next).toHaveBeenCalledWith()
+    expect(authStore.isAdmin).toBe(false)
+    expect(authStore.canAccessAdminWorkbench).toBe(false)
+  })
+
+  it('lets support-only staff enter the support route in backend mode', async () => {
+    appStore.backendModeEnabled = true
+    supportRefresh.mockResolvedValue(true)
+    const { navigation, next } = runGuard({ requiresUserSupport: true }, '/admin/user-support')
+    await navigation
+    expect(next).toHaveBeenCalledWith()
+  })
+
+  it('lands support-only staff on their own page after backend-mode login', async () => {
+    appStore.backendModeEnabled = true
+    supportRefresh.mockResolvedValue(true)
+    const { navigation, next } = runGuard({ requiresAuth: false }, '/login')
+    await navigation
+    expect(next).toHaveBeenCalledWith('/admin/user-support')
+  })
+
+  it('redirects a revoked sub-admin back to the workbench', async () => {
+    authStore.canAccessAdminWorkbench = true
+    const { navigation, next } = runGuard({ requiresUserSupport: true }, '/admin/user-support')
+    await navigation
+    expect(next).toHaveBeenCalledWith('/admin/workbench')
+  })
+
+  it('does not expand support-only access to full admin routes', async () => {
+    supportRefresh.mockResolvedValue(true)
+    const { navigation, next } = runGuard({ requiresAdmin: true }, '/admin/users')
+    await navigation
+    expect(next).toHaveBeenCalledWith('/dashboard')
   })
 
   it('registers balance transfer as an authenticated user page without workbench privileges', () => {

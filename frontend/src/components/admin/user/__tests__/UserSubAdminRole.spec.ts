@@ -4,6 +4,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import type { AdminUser } from '@/types'
 import UserCreateModal from '../UserCreateModal.vue'
 import UserEditModal from '../UserEditModal.vue'
+vi.mock('@/api/admin/userSupport', () => ({ getUserAccess: vi.fn().mockResolvedValue({ enabled: false }) }))
 
 const { createUser, updateUser, updateUserAttributeValues, showSuccess } = vi.hoisted(() => ({
   createUser: vi.fn(),
