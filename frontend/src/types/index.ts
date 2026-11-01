@@ -731,6 +731,7 @@ export interface Group {
 }
 
 export interface AdminGroup extends Group {
+  gemini_input_counting_enabled?: boolean
   force_openai_fast: boolean
   free_openai_fast: boolean
   model_pricing: import('@/api/admin/channels').ChannelModelPricing[]
@@ -1082,6 +1083,7 @@ export interface CreateGroupRequest {
   platform?: GroupPlatform
   rate_multiplier?: number
   empty_response_compensation_enabled?: boolean
+  gemini_input_counting_enabled?: boolean
   is_exclusive?: boolean
   subscription_type?: SubscriptionType
   daily_limit_usd?: number | null
@@ -1156,6 +1158,7 @@ export interface UpdateGroupRequest {
   platform?: GroupPlatform
   rate_multiplier?: number
   empty_response_compensation_enabled?: boolean
+  gemini_input_counting_enabled?: boolean
   is_exclusive?: boolean
   status?: 'active' | 'inactive'
   subscription_type?: SubscriptionType

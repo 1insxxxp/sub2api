@@ -100,6 +100,11 @@ func EmptyResponseCompensationEnabled(v bool) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldEmptyResponseCompensationEnabled, v))
 }
 
+// GeminiInputCountingEnabled applies equality check predicate on the "gemini_input_counting_enabled" field. It's identical to GeminiInputCountingEnabledEQ.
+func GeminiInputCountingEnabled(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldGeminiInputCountingEnabled, v))
+}
+
 // PeakRateEnabled applies equality check predicate on the "peak_rate_enabled" field. It's identical to PeakRateEnabledEQ.
 func PeakRateEnabled(v bool) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldPeakRateEnabled, v))
@@ -843,6 +848,16 @@ func EmptyResponseCompensationEnabledEQ(v bool) predicate.Group {
 // EmptyResponseCompensationEnabledNEQ applies the NEQ predicate on the "empty_response_compensation_enabled" field.
 func EmptyResponseCompensationEnabledNEQ(v bool) predicate.Group {
 	return predicate.Group(sql.FieldNEQ(FieldEmptyResponseCompensationEnabled, v))
+}
+
+// GeminiInputCountingEnabledEQ applies the EQ predicate on the "gemini_input_counting_enabled" field.
+func GeminiInputCountingEnabledEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldGeminiInputCountingEnabled, v))
+}
+
+// GeminiInputCountingEnabledNEQ applies the NEQ predicate on the "gemini_input_counting_enabled" field.
+func GeminiInputCountingEnabledNEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldGeminiInputCountingEnabled, v))
 }
 
 // PeakRateEnabledEQ applies the EQ predicate on the "peak_rate_enabled" field.

@@ -259,6 +259,7 @@ type CreateGroupRequest struct {
 	Platform                         string                        `json:"platform" binding:"omitempty,group_platform"`
 	RateMultiplier                   float64                       `json:"rate_multiplier"`
 	EmptyResponseCompensationEnabled bool                          `json:"empty_response_compensation_enabled"`
+	GeminiInputCountingEnabled       bool                          `json:"gemini_input_counting_enabled"`
 	IsExclusive                      bool                          `json:"is_exclusive"`
 	SubscriptionType                 string                        `json:"subscription_type" binding:"omitempty,oneof=standard subscription"`
 	DailyLimitUSD                    optionalLimitField            `json:"daily_limit_usd"`
@@ -341,6 +342,7 @@ type UpdateGroupRequest struct {
 	Platform                         string                         `json:"platform" binding:"omitempty,group_platform"`
 	RateMultiplier                   *float64                       `json:"rate_multiplier"`
 	EmptyResponseCompensationEnabled *bool                          `json:"empty_response_compensation_enabled"`
+	GeminiInputCountingEnabled       *bool                          `json:"gemini_input_counting_enabled"`
 	IsExclusive                      *bool                          `json:"is_exclusive"`
 	Status                           string                         `json:"status" binding:"omitempty,oneof=active inactive"`
 	SubscriptionType                 string                         `json:"subscription_type" binding:"omitempty,oneof=standard subscription"`
@@ -757,6 +759,7 @@ func (h *GroupHandler) Create(c *gin.Context) {
 		Platform:                         req.Platform,
 		RateMultiplier:                   req.RateMultiplier,
 		EmptyResponseCompensationEnabled: req.EmptyResponseCompensationEnabled,
+		GeminiInputCountingEnabled:       req.GeminiInputCountingEnabled,
 		IsExclusive:                      req.IsExclusive,
 		SubscriptionType:                 req.SubscriptionType,
 		DailyLimitUSD:                    req.DailyLimitUSD.ToServiceInput(),
@@ -910,6 +913,7 @@ func (h *GroupHandler) Update(c *gin.Context) {
 		Platform:                         req.Platform,
 		RateMultiplier:                   req.RateMultiplier,
 		EmptyResponseCompensationEnabled: req.EmptyResponseCompensationEnabled,
+		GeminiInputCountingEnabled:       req.GeminiInputCountingEnabled,
 		IsExclusive:                      req.IsExclusive,
 		Status:                           req.Status,
 		SubscriptionType:                 req.SubscriptionType,

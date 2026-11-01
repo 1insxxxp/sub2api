@@ -7,7 +7,9 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/geminitokens"
+	"github.com/gin-gonic/gin"
 )
 
 const (
@@ -61,7 +63,7 @@ func GeminiInputCountingConfigProjection(value any) map[string]any {
 }
 
 func accountGeminiInputCountingEnabled(account *Account, model string) bool {
-	if account == nil || account.ID <= 0 || account.Platform != PlatformGemini || account.Type != AccountTypeAPIKey {
+	if !geminiInputCountingAccountEligible(account, model) {
 		return false
 	}
 	policy := GeminiInputCountingConfigProjection(account.Extra[GeminiInputCountingExtraKey])
@@ -80,8 +82,44 @@ func accountGeminiInputCountingEnabled(account *Account, model string) bool {
 	return false
 }
 
-func prepareGeminiInputCountingPolicy(req *http.Request, account *Account, model string) *GeminiInputCountingEvidence {
-	if !accountGeminiInputCountingEnabled(account, model) || req == nil || req.Method != http.MethodPost || req.URL == nil || req.GetBody == nil {
+func geminiInputCountingAccountEligible(account *Account, model string) bool {
+	return account != nil && account.ID > 0 && account.Platform == PlatformGemini && account.Type == AccountTypeAPIKey &&
+		utf8.ValidString(model) && strings.TrimSpace(model) == model && isSafeGeminiAIStudioModelPathSegment(model)
+}
+
+// The frozen billing group owns the customer discount. Never read the current
+// scheduler group here: fallback/composite routing can replace it mid-request.
+func requestGeminiInputCountingEnabled(c *gin.Context, account *Account, model string) bool {
+	if !geminiInputCountingAccountEligible(account, model) {
+		return false
+	}
+	groupEnabled := func(group *Group) bool {
+		return IsGroupContextValid(group) && group.Status == StatusActive && group.GeminiInputCountingEnabled &&
+			(group.Platform == PlatformGemini || group.Platform == PlatformComposite)
+	}
+	if c != nil {
+		if c.Request != nil {
+			// System-custom middleware replaces the group with a source before
+			// pricing is frozen. These subscription containers have no opt-in
+			// control yet and must not inherit a source group's discount.
+			if c.Request.Context().Value(ctxkey.SystemCustomGroupResolution) != nil {
+				return false
+			}
+			if group := gatewayTokenRequestBillingGroupFromContext(c.Request.Context()); group != nil {
+				return groupEnabled(group)
+			}
+		}
+		if key := getAPIKeyFromContext(c); key != nil && (key.GroupID != nil || key.Group != nil) {
+			// Missing/stale bound-group data fails closed, including legacy
+			// account opt-ins. A disabled group's account cannot bypass it.
+			return key.GroupID != nil && key.Group != nil && key.Group.ID == *key.GroupID && groupEnabled(key.Group)
+		}
+	}
+	return accountGeminiInputCountingEnabled(account, model)
+}
+
+func prepareGeminiInputCountingPolicyForRequest(req *http.Request, account *Account, model string, enabled bool) *GeminiInputCountingEvidence {
+	if !enabled || !geminiInputCountingAccountEligible(account, model) || req == nil || req.Method != http.MethodPost || req.URL == nil || req.GetBody == nil {
 		return nil
 	}
 	if !strings.HasSuffix(req.URL.Path, "/models/"+model+":generateContent") && !strings.HasSuffix(req.URL.Path, "/models/"+model+":streamGenerateContent") {

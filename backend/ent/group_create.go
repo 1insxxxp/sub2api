@@ -157,6 +157,20 @@ func (_c *GroupCreate) SetNillableEmptyResponseCompensationEnabled(v *bool) *Gro
 	return _c
 }
 
+// SetGeminiInputCountingEnabled sets the "gemini_input_counting_enabled" field.
+func (_c *GroupCreate) SetGeminiInputCountingEnabled(v bool) *GroupCreate {
+	_c.mutation.SetGeminiInputCountingEnabled(v)
+	return _c
+}
+
+// SetNillableGeminiInputCountingEnabled sets the "gemini_input_counting_enabled" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableGeminiInputCountingEnabled(v *bool) *GroupCreate {
+	if v != nil {
+		_c.SetGeminiInputCountingEnabled(*v)
+	}
+	return _c
+}
+
 // SetPeakRateEnabled sets the "peak_rate_enabled" field.
 func (_c *GroupCreate) SetPeakRateEnabled(v bool) *GroupCreate {
 	_c.mutation.SetPeakRateEnabled(v)
@@ -1283,6 +1297,10 @@ func (_c *GroupCreate) defaults() error {
 		v := group.DefaultEmptyResponseCompensationEnabled
 		_c.mutation.SetEmptyResponseCompensationEnabled(v)
 	}
+	if _, ok := _c.mutation.GeminiInputCountingEnabled(); !ok {
+		v := group.DefaultGeminiInputCountingEnabled
+		_c.mutation.SetGeminiInputCountingEnabled(v)
+	}
 	if _, ok := _c.mutation.PeakRateEnabled(); !ok {
 		v := group.DefaultPeakRateEnabled
 		_c.mutation.SetPeakRateEnabled(v)
@@ -1507,6 +1525,9 @@ func (_c *GroupCreate) check() error {
 	}
 	if _, ok := _c.mutation.EmptyResponseCompensationEnabled(); !ok {
 		return &ValidationError{Name: "empty_response_compensation_enabled", err: errors.New(`ent: missing required field "Group.empty_response_compensation_enabled"`)}
+	}
+	if _, ok := _c.mutation.GeminiInputCountingEnabled(); !ok {
+		return &ValidationError{Name: "gemini_input_counting_enabled", err: errors.New(`ent: missing required field "Group.gemini_input_counting_enabled"`)}
 	}
 	if _, ok := _c.mutation.PeakRateEnabled(); !ok {
 		return &ValidationError{Name: "peak_rate_enabled", err: errors.New(`ent: missing required field "Group.peak_rate_enabled"`)}
@@ -1787,6 +1808,10 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.EmptyResponseCompensationEnabled(); ok {
 		_spec.SetField(group.FieldEmptyResponseCompensationEnabled, field.TypeBool, value)
 		_node.EmptyResponseCompensationEnabled = value
+	}
+	if value, ok := _c.mutation.GeminiInputCountingEnabled(); ok {
+		_spec.SetField(group.FieldGeminiInputCountingEnabled, field.TypeBool, value)
+		_node.GeminiInputCountingEnabled = value
 	}
 	if value, ok := _c.mutation.PeakRateEnabled(); ok {
 		_spec.SetField(group.FieldPeakRateEnabled, field.TypeBool, value)
@@ -2421,6 +2446,18 @@ func (u *GroupUpsert) SetEmptyResponseCompensationEnabled(v bool) *GroupUpsert {
 // UpdateEmptyResponseCompensationEnabled sets the "empty_response_compensation_enabled" field to the value that was provided on create.
 func (u *GroupUpsert) UpdateEmptyResponseCompensationEnabled() *GroupUpsert {
 	u.SetExcluded(group.FieldEmptyResponseCompensationEnabled)
+	return u
+}
+
+// SetGeminiInputCountingEnabled sets the "gemini_input_counting_enabled" field.
+func (u *GroupUpsert) SetGeminiInputCountingEnabled(v bool) *GroupUpsert {
+	u.Set(group.FieldGeminiInputCountingEnabled, v)
+	return u
+}
+
+// UpdateGeminiInputCountingEnabled sets the "gemini_input_counting_enabled" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateGeminiInputCountingEnabled() *GroupUpsert {
+	u.SetExcluded(group.FieldGeminiInputCountingEnabled)
 	return u
 }
 
@@ -3691,6 +3728,20 @@ func (u *GroupUpsertOne) SetEmptyResponseCompensationEnabled(v bool) *GroupUpser
 func (u *GroupUpsertOne) UpdateEmptyResponseCompensationEnabled() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateEmptyResponseCompensationEnabled()
+	})
+}
+
+// SetGeminiInputCountingEnabled sets the "gemini_input_counting_enabled" field.
+func (u *GroupUpsertOne) SetGeminiInputCountingEnabled(v bool) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetGeminiInputCountingEnabled(v)
+	})
+}
+
+// UpdateGeminiInputCountingEnabled sets the "gemini_input_counting_enabled" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateGeminiInputCountingEnabled() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateGeminiInputCountingEnabled()
 	})
 }
 
@@ -5305,6 +5356,20 @@ func (u *GroupUpsertBulk) SetEmptyResponseCompensationEnabled(v bool) *GroupUpse
 func (u *GroupUpsertBulk) UpdateEmptyResponseCompensationEnabled() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateEmptyResponseCompensationEnabled()
+	})
+}
+
+// SetGeminiInputCountingEnabled sets the "gemini_input_counting_enabled" field.
+func (u *GroupUpsertBulk) SetGeminiInputCountingEnabled(v bool) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetGeminiInputCountingEnabled(v)
+	})
+}
+
+// UpdateGeminiInputCountingEnabled sets the "gemini_input_counting_enabled" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateGeminiInputCountingEnabled() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateGeminiInputCountingEnabled()
 	})
 }
 

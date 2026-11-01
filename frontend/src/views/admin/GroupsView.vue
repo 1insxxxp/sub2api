@@ -752,6 +752,29 @@
           />
           <p class="input-hint">{{ t("admin.groups.form.rpmLimitHint") }}</p>
         </div>
+        <section
+          v-if="supportsGeminiInputCountingPlatform(createForm.platform)"
+          class="border-t border-gray-200 pt-4 dark:border-dark-500"
+        >
+          <label class="flex min-h-11 cursor-pointer items-start gap-3">
+            <input
+              v-model="createForm.gemini_input_counting_enabled"
+              type="checkbox"
+              class="mt-1 h-4 w-4 shrink-0 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              :aria-label="t('admin.groups.geminiInputCounting.enable')"
+              aria-describedby="create-gemini-input-counting-hint"
+              data-testid="create-gemini-input-counting"
+            />
+            <span class="min-w-0">
+              <span class="block text-sm font-medium text-gray-800 dark:text-gray-100">
+                {{ t("admin.groups.geminiInputCounting.enable") }}
+              </span>
+              <span id="create-gemini-input-counting-hint" class="mt-1 block text-xs leading-5 text-gray-500 dark:text-gray-400">
+                {{ t("admin.groups.geminiInputCounting.hint") }}
+              </span>
+            </span>
+          </label>
+        </section>
         <div class="rounded-xl border border-sky-200 bg-sky-50/70 p-4 dark:border-sky-900/70 dark:bg-sky-950/20">
           <label class="flex cursor-pointer items-start gap-3">
             <input
@@ -2535,6 +2558,29 @@
           />
           <p class="input-hint">{{ t("admin.groups.form.rpmLimitHint") }}</p>
         </div>
+        <section
+          v-if="supportsGeminiInputCountingPlatform(editForm.platform)"
+          class="border-t border-gray-200 pt-4 dark:border-dark-500"
+        >
+          <label class="flex min-h-11 cursor-pointer items-start gap-3">
+            <input
+              v-model="editForm.gemini_input_counting_enabled"
+              type="checkbox"
+              class="mt-1 h-4 w-4 shrink-0 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              :aria-label="t('admin.groups.geminiInputCounting.enable')"
+              aria-describedby="edit-gemini-input-counting-hint"
+              data-testid="edit-gemini-input-counting"
+            />
+            <span class="min-w-0">
+              <span class="block text-sm font-medium text-gray-800 dark:text-gray-100">
+                {{ t("admin.groups.geminiInputCounting.enable") }}
+              </span>
+              <span id="edit-gemini-input-counting-hint" class="mt-1 block text-xs leading-5 text-gray-500 dark:text-gray-400">
+                {{ t("admin.groups.geminiInputCounting.hint") }}
+              </span>
+            </span>
+          </label>
+        </section>
         <div class="rounded-xl border border-sky-200 bg-sky-50/70 p-4 dark:border-sky-900/70 dark:bg-sky-950/20">
           <label class="flex cursor-pointer items-start gap-3">
             <input
@@ -4791,6 +4837,9 @@ import {
 const supportsLivePlatform = (platform: string): boolean =>
   platform === "openai" || platform === "composite";
 
+const supportsGeminiInputCountingPlatform = (platform: string): boolean =>
+  platform === "gemini" || platform === "composite";
+
 const emptyGroupPricing = (): PricingFormEntry => ({
   models: [],
   billing_mode: "token",
@@ -5410,6 +5459,7 @@ const createForm = reactive({
   platform: "anthropic" as GroupPlatform,
   rate_multiplier: 1.0,
   empty_response_compensation_enabled: false,
+  gemini_input_counting_enabled: false,
   is_exclusive: false,
   subscription_type: "standard" as SubscriptionType,
   daily_limit_usd: null as number | null,
@@ -5825,6 +5875,7 @@ const editForm = reactive({
   platform: "anthropic" as GroupPlatform,
   rate_multiplier: 1.0,
   empty_response_compensation_enabled: false,
+  gemini_input_counting_enabled: false,
   is_exclusive: false,
   status: "active" as "active" | "inactive",
   subscription_type: "standard" as SubscriptionType,
@@ -6512,6 +6563,7 @@ const closeCreateModal = () => {
   createForm.platform = "anthropic";
   createForm.rate_multiplier = 1.0;
   createForm.empty_response_compensation_enabled = false;
+  createForm.gemini_input_counting_enabled = false;
   createForm.is_exclusive = false;
   createForm.subscription_type = "standard";
   createForm.daily_limit_usd = null;
@@ -6677,6 +6729,9 @@ const handleCreateGroup = async () => {
     // 构建请求数据，包含模型路由配置
     const requestData = {
       ...createGroupForm,
+      gemini_input_counting_enabled:
+        supportsGeminiInputCountingPlatform(createForm.platform) &&
+        createForm.gemini_input_counting_enabled,
       model_aliases: modelAliasesToAPI(createForm.model_aliases),
       force_openai_fast: normalizeGroupOpenAIFast(
         createForm.platform,
@@ -6826,6 +6881,9 @@ const handleEdit = async (group: AdminGroup) => {
   editForm.rate_multiplier = group.rate_multiplier;
   editForm.empty_response_compensation_enabled =
     group.empty_response_compensation_enabled ?? false;
+  editForm.gemini_input_counting_enabled =
+    supportsGeminiInputCountingPlatform(group.platform) &&
+    (group.gemini_input_counting_enabled ?? false);
   editForm.is_exclusive = group.is_exclusive;
   editForm.status = group.status;
   editForm.subscription_type = group.subscription_type || "standard";
@@ -6970,6 +7028,7 @@ const closeEditModal = () => {
   editForm.copy_accounts_from_group_ids = [];
   editForm.peak_rate_enabled = false;
   editForm.empty_response_compensation_enabled = false;
+  editForm.gemini_input_counting_enabled = false;
   editForm.peak_start = "";
   editForm.peak_end = "";
   editForm.peak_rate_multiplier = 1.0;
@@ -7059,6 +7118,9 @@ const handleUpdateGroup = async () => {
     // 转换 fallback_group_id: null -> 0 (后端使用 0 表示清除)
     const payload = {
       ...editForm,
+      gemini_input_counting_enabled:
+        supportsGeminiInputCountingPlatform(editForm.platform) &&
+        editForm.gemini_input_counting_enabled,
       model_aliases: modelAliasesToAPI(editForm.model_aliases),
       // 显式保留标签，确保高级模式完整表单提交时不会遗漏该字段。
       tag: editForm.tag,
@@ -7518,6 +7580,9 @@ watch(
 watch(
   () => createForm.platform,
   (newVal) => {
+    if (!supportsGeminiInputCountingPlatform(newVal)) {
+      createForm.gemini_input_counting_enabled = false;
+    }
     if (!["anthropic", "antigravity"].includes(newVal)) {
       createForm.fallback_group_id_on_invalid_request = null;
     }
@@ -7586,6 +7651,9 @@ watch(
 watch(
   () => editForm.platform,
   (newVal) => {
+    if (!supportsGeminiInputCountingPlatform(newVal)) {
+      editForm.gemini_input_counting_enabled = false;
+    }
     if (!["anthropic", "antigravity"].includes(newVal)) {
       editForm.fallback_group_id_on_invalid_request = null;
     }

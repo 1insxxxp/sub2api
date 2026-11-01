@@ -82,6 +82,7 @@ type APIKeyAuthGroupSnapshot struct {
 	SubscriptionType                string                        `json:"subscription_type"`
 	SystemCustomRoutingEnabled      bool                          `json:"system_custom_routing_enabled"`
 	RateMultiplier                  float64                       `json:"rate_multiplier"`
+	GeminiInputCountingEnabled      bool                          `json:"gemini_input_counting_enabled"`
 	DailyLimitUSD                   *float64                      `json:"daily_limit_usd,omitempty"`
 	WeeklyLimitUSD                  *float64                      `json:"weekly_limit_usd,omitempty"`
 	MonthlyLimitUSD                 *float64                      `json:"monthly_limit_usd,omitempty"`

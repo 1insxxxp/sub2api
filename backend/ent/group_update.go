@@ -175,6 +175,20 @@ func (_u *GroupUpdate) SetNillableEmptyResponseCompensationEnabled(v *bool) *Gro
 	return _u
 }
 
+// SetGeminiInputCountingEnabled sets the "gemini_input_counting_enabled" field.
+func (_u *GroupUpdate) SetGeminiInputCountingEnabled(v bool) *GroupUpdate {
+	_u.mutation.SetGeminiInputCountingEnabled(v)
+	return _u
+}
+
+// SetNillableGeminiInputCountingEnabled sets the "gemini_input_counting_enabled" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableGeminiInputCountingEnabled(v *bool) *GroupUpdate {
+	if v != nil {
+		_u.SetGeminiInputCountingEnabled(*v)
+	}
+	return _u
+}
+
 // SetPeakRateEnabled sets the "peak_rate_enabled" field.
 func (_u *GroupUpdate) SetPeakRateEnabled(v bool) *GroupUpdate {
 	_u.mutation.SetPeakRateEnabled(v)
@@ -1961,6 +1975,9 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.EmptyResponseCompensationEnabled(); ok {
 		_spec.SetField(group.FieldEmptyResponseCompensationEnabled, field.TypeBool, value)
 	}
+	if value, ok := _u.mutation.GeminiInputCountingEnabled(); ok {
+		_spec.SetField(group.FieldGeminiInputCountingEnabled, field.TypeBool, value)
+	}
 	if value, ok := _u.mutation.PeakRateEnabled(); ok {
 		_spec.SetField(group.FieldPeakRateEnabled, field.TypeBool, value)
 	}
@@ -2990,6 +3007,20 @@ func (_u *GroupUpdateOne) SetEmptyResponseCompensationEnabled(v bool) *GroupUpda
 func (_u *GroupUpdateOne) SetNillableEmptyResponseCompensationEnabled(v *bool) *GroupUpdateOne {
 	if v != nil {
 		_u.SetEmptyResponseCompensationEnabled(*v)
+	}
+	return _u
+}
+
+// SetGeminiInputCountingEnabled sets the "gemini_input_counting_enabled" field.
+func (_u *GroupUpdateOne) SetGeminiInputCountingEnabled(v bool) *GroupUpdateOne {
+	_u.mutation.SetGeminiInputCountingEnabled(v)
+	return _u
+}
+
+// SetNillableGeminiInputCountingEnabled sets the "gemini_input_counting_enabled" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableGeminiInputCountingEnabled(v *bool) *GroupUpdateOne {
+	if v != nil {
+		_u.SetGeminiInputCountingEnabled(*v)
 	}
 	return _u
 }
@@ -4809,6 +4840,9 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if value, ok := _u.mutation.EmptyResponseCompensationEnabled(); ok {
 		_spec.SetField(group.FieldEmptyResponseCompensationEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.GeminiInputCountingEnabled(); ok {
+		_spec.SetField(group.FieldGeminiInputCountingEnabled, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.PeakRateEnabled(); ok {
 		_spec.SetField(group.FieldPeakRateEnabled, field.TypeBool, value)

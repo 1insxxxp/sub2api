@@ -105,6 +105,7 @@ func cloneGroupForDuplicate(source *Group, operationID string) *Group {
 		Platform:                         source.Platform,
 		RateMultiplier:                   source.RateMultiplier,
 		EmptyResponseCompensationEnabled: source.EmptyResponseCompensationEnabled,
+		GeminiInputCountingEnabled:       source.GeminiInputCountingEnabled,
 		PeakRateEnabled:                  source.PeakRateEnabled,
 		PeakStart:                        source.PeakStart,
 		PeakEnd:                          source.PeakEnd,

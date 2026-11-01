@@ -25477,6 +25477,7 @@ type GroupMutation struct {
 	rate_multiplier                         *float64
 	addrate_multiplier                      *float64
 	empty_response_compensation_enabled     *bool
+	gemini_input_counting_enabled           *bool
 	peak_rate_enabled                       *bool
 	peak_start                              *string
 	peak_end                                *string
@@ -26128,6 +26129,42 @@ func (m *GroupMutation) OldEmptyResponseCompensationEnabled(ctx context.Context)
 // ResetEmptyResponseCompensationEnabled resets all changes to the "empty_response_compensation_enabled" field.
 func (m *GroupMutation) ResetEmptyResponseCompensationEnabled() {
 	m.empty_response_compensation_enabled = nil
+}
+
+// SetGeminiInputCountingEnabled sets the "gemini_input_counting_enabled" field.
+func (m *GroupMutation) SetGeminiInputCountingEnabled(b bool) {
+	m.gemini_input_counting_enabled = &b
+}
+
+// GeminiInputCountingEnabled returns the value of the "gemini_input_counting_enabled" field in the mutation.
+func (m *GroupMutation) GeminiInputCountingEnabled() (r bool, exists bool) {
+	v := m.gemini_input_counting_enabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGeminiInputCountingEnabled returns the old "gemini_input_counting_enabled" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldGeminiInputCountingEnabled(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGeminiInputCountingEnabled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGeminiInputCountingEnabled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGeminiInputCountingEnabled: %w", err)
+	}
+	return oldValue.GeminiInputCountingEnabled, nil
+}
+
+// ResetGeminiInputCountingEnabled resets all changes to the "gemini_input_counting_enabled" field.
+func (m *GroupMutation) ResetGeminiInputCountingEnabled() {
+	m.gemini_input_counting_enabled = nil
 }
 
 // SetPeakRateEnabled sets the "peak_rate_enabled" field.
@@ -30041,7 +30078,7 @@ func (m *GroupMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GroupMutation) Fields() []string {
-	fields := make([]string, 0, 77)
+	fields := make([]string, 0, 78)
 	if m.created_at != nil {
 		fields = append(fields, group.FieldCreatedAt)
 	}
@@ -30071,6 +30108,9 @@ func (m *GroupMutation) Fields() []string {
 	}
 	if m.empty_response_compensation_enabled != nil {
 		fields = append(fields, group.FieldEmptyResponseCompensationEnabled)
+	}
+	if m.gemini_input_counting_enabled != nil {
+		fields = append(fields, group.FieldGeminiInputCountingEnabled)
 	}
 	if m.peak_rate_enabled != nil {
 		fields = append(fields, group.FieldPeakRateEnabled)
@@ -30301,6 +30341,8 @@ func (m *GroupMutation) Field(name string) (ent.Value, bool) {
 		return m.RateMultiplier()
 	case group.FieldEmptyResponseCompensationEnabled:
 		return m.EmptyResponseCompensationEnabled()
+	case group.FieldGeminiInputCountingEnabled:
+		return m.GeminiInputCountingEnabled()
 	case group.FieldPeakRateEnabled:
 		return m.PeakRateEnabled()
 	case group.FieldPeakStart:
@@ -30464,6 +30506,8 @@ func (m *GroupMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldRateMultiplier(ctx)
 	case group.FieldEmptyResponseCompensationEnabled:
 		return m.OldEmptyResponseCompensationEnabled(ctx)
+	case group.FieldGeminiInputCountingEnabled:
+		return m.OldGeminiInputCountingEnabled(ctx)
 	case group.FieldPeakRateEnabled:
 		return m.OldPeakRateEnabled(ctx)
 	case group.FieldPeakStart:
@@ -30676,6 +30720,13 @@ func (m *GroupMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetEmptyResponseCompensationEnabled(v)
+		return nil
+	case group.FieldGeminiInputCountingEnabled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGeminiInputCountingEnabled(v)
 		return nil
 	case group.FieldPeakRateEnabled:
 		v, ok := value.(bool)
@@ -31698,6 +31749,9 @@ func (m *GroupMutation) ResetField(name string) error {
 		return nil
 	case group.FieldEmptyResponseCompensationEnabled:
 		m.ResetEmptyResponseCompensationEnabled()
+		return nil
+	case group.FieldGeminiInputCountingEnabled:
+		m.ResetGeminiInputCountingEnabled()
 		return nil
 	case group.FieldPeakRateEnabled:
 		m.ResetPeakRateEnabled()

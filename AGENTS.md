@@ -636,14 +636,27 @@ x-api-key: admin-xxx
 
 ### Ent 输入计数可选策略（2026-11-01，本地实现）
 
-- 默认关闭。仅指定 Gemini API-key 账号的 `extra.gemini_input_counting` 可启用，模型名单精确匹配**最终发往上游的模型名**，不按账号名称、分组名或全站开关猜测。
-- 示例配置：`{"gemini_input_counting":{"mode":"vertex_like_discount_v1","models":["[量]gemini-4-argon"]}}`。移除此配置即恢复原口径。本次未修改现网配置、历史记录或应用版本。
+- 默认关闭。在管理员“分组管理”的新建/编辑表单，通过“Gemini 输入 Token 优惠”控制指定 Gemini/普通 composite 分组，持久化字段为 `gemini_input_counting_enabled`。按认证时冻结的实际计费分组生效，不随组合来源分组、故障切换或共享账号串组；该分组关闭时，账号级旧配置不能绕过。仅实际 Gemini API-key 账号及安全的最终上游模型路径适用，不按账号名称或分组名猜测。
+- 旧账号配置 `{"gemini_input_counting":{"mode":"vertex_like_discount_v1","models":["[量]gemini-4-argon"]}}` 仅保留为无绑定分组调用的兼容入口，模型仍精确匹配最终上游模型名；有绑定分组但资料缺失/不可信时不套用优惠。本次不自动开启任何现有分组，不修改现网配置、历史记录或应用版本。
 - 只对已收到准确上游输入且缓存明确为零的受支持纯文本请求下调。候选值来自固定 SHA 的本地 SentencePiece 词表及版本化封装开销；用户输入为 `min(上游原始输入, 本地候选)`，输出保留上游用量。它是接近 vertex 的估计口径，不是官方 Argon 用量。
 - 工具、图片、音视频、外部缓存、签名、未知请求字段等不适用；缓存字段缺失、非零缓存、输入明确为零或输入本身为估计时不套用。独立留出样本误差最高约 5.53%，不能承诺所有请求都在此范围内。
 - 用户扣费、密钥配额、使用记录和三种协议的客户 usage 使用同一投影。上游原始输入及候选/策略版本作为内部标量保存在 `usage_response_outcomes`，普通用户 DTO 不暴露；原始账号成本、账号配额继续用上游输入计算。
 - 用户费用按新输入重算，但以原输入下的费用为上限；如果合法的量大优惠阶梯导致少 token 反而更贵，则沿用原费用明细封顶，输入显示仍为投影值。
-- 已启用账号/模型不再用原始 ent 输入训练旧缺失用量校准，也不请求已验证不可用的 `countTokens`；缺失 usage 时保留原有恢复流程，不把该策略伪装为实测。
+- 分组优惠开关不改变缺失 usage 时的原生 `countTokens`、逐笔账单或校准恢复流程。旧账号/模型精确配置仍保留其“计数接口已验证不可用、原始 ent 输入不训练旧校准”的渠道约束；不把优惠估算伪装为实测。
 - 迁移 `257_gemini_input_counting_audit.sql` 为增量字段；仅含新审计证据的 outbox 使用 v3，无审计请求维持 v2。发布时所有活跃 outbox 消费者须支持 v3；旧消费者会拒绝并保留 v3 任务以待重试，不能让旧容器长期消费新任务。
+
+### 指定分组 Gemini 输入优惠配置（2026-11-01，本地实现）
+
+- `POST /api/v1/admin/groups`、`PUT /api/v1/admin/groups/:id` 接受 `gemini_input_counting_enabled: boolean`；管理员 GET/list 返回该字段，普通用户分组 DTO 不暴露。
+- 默认 `false`；更新省略时保留原值，显式 `false` 关闭。仅 `gemini` 和普通 `composite` 平台提供入口；切换到其他平台须同时传 `false`。新建/编辑 UI 自动清除不支持平台的值。系统自定义订阅容器本次不提供开关，其请求不继承来源分组的优惠。
+- 认证快照包含该字段，版本升为 29；修改分组沿用已有分组认证缓存失效流程。迁移 `258_group_gemini_input_counting.sql` 只新增默认关闭字段。
+- 示例（`${BASE}`、`${KEY}` 继续按认证章节在内存加载，以下示例不会自动执行）：
+
+```bash
+curl -fsS -X PUT "${BASE}/api/v1/admin/groups/${GROUP_ID}" \
+  -H "x-api-key: ${KEY}" -H 'Content-Type: application/json' \
+  --data '{"gemini_input_counting_enabled":true}'
+```
 
 ### Gemini 流式计费隔离验收（2026-10-23）
 

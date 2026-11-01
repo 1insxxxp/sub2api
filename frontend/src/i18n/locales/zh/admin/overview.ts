@@ -1093,6 +1093,10 @@ export default {
       failedToCreate: '创建分组失败',
       failedToUpdate: '更新分组失败',
       nameRequired: '请输入分组名称',
+      geminiInputCounting: {
+        enable: '对此分组启用 Gemini 输入 Token 优惠',
+        hint: '仅对本分组中符合条件的 Gemini API Key 纯文本请求生效，按接近 Vertex 的口径下调用户输入 Token 及费用。输出用量和上游成本保持不变；工具、多媒体、缓存等请求沿用原计费。'
+      },
       emptyResponseCompensation: {
         enable: '允许用户自助申请空响应退款',
         hint: '这是用户退款政策，不代表上游一定退款。符合条件的空响应或中断响应会自动退款，存在歧义的情况需要人工审核。'

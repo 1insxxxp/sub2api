@@ -36,6 +36,8 @@ const (
 	FieldRateMultiplier = "rate_multiplier"
 	// FieldEmptyResponseCompensationEnabled holds the string denoting the empty_response_compensation_enabled field in the database.
 	FieldEmptyResponseCompensationEnabled = "empty_response_compensation_enabled"
+	// FieldGeminiInputCountingEnabled holds the string denoting the gemini_input_counting_enabled field in the database.
+	FieldGeminiInputCountingEnabled = "gemini_input_counting_enabled"
 	// FieldPeakRateEnabled holds the string denoting the peak_rate_enabled field in the database.
 	FieldPeakRateEnabled = "peak_rate_enabled"
 	// FieldPeakStart holds the string denoting the peak_start field in the database.
@@ -300,6 +302,7 @@ var Columns = []string{
 	FieldTagColor,
 	FieldRateMultiplier,
 	FieldEmptyResponseCompensationEnabled,
+	FieldGeminiInputCountingEnabled,
 	FieldPeakRateEnabled,
 	FieldPeakStart,
 	FieldPeakEnd,
@@ -418,6 +421,8 @@ var (
 	DefaultRateMultiplier float64
 	// DefaultEmptyResponseCompensationEnabled holds the default value on creation for the "empty_response_compensation_enabled" field.
 	DefaultEmptyResponseCompensationEnabled bool
+	// DefaultGeminiInputCountingEnabled holds the default value on creation for the "gemini_input_counting_enabled" field.
+	DefaultGeminiInputCountingEnabled bool
 	// DefaultPeakRateEnabled holds the default value on creation for the "peak_rate_enabled" field.
 	DefaultPeakRateEnabled bool
 	// DefaultPeakStart holds the default value on creation for the "peak_start" field.
@@ -593,6 +598,11 @@ func ByRateMultiplier(opts ...sql.OrderTermOption) OrderOption {
 // ByEmptyResponseCompensationEnabled orders the results by the empty_response_compensation_enabled field.
 func ByEmptyResponseCompensationEnabled(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldEmptyResponseCompensationEnabled, opts...).ToFunc()
+}
+
+// ByGeminiInputCountingEnabled orders the results by the gemini_input_counting_enabled field.
+func ByGeminiInputCountingEnabled(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldGeminiInputCountingEnabled, opts...).ToFunc()
 }
 
 // ByPeakRateEnabled orders the results by the peak_rate_enabled field.

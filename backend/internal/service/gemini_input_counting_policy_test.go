@@ -17,6 +17,12 @@ import (
 const inputCountingTestModel = "[量]gemini-4-argon"
 const inputCountingTestBody = `{"contents":[{"role":"user","parts":[{"text":"请仅回复OK，不要解释。"}]}],"generationConfig":{"temperature":0,"maxOutputTokens":256}}`
 
+// Legacy policy fixtures retain exact account/model opt-in semantics. Production
+// callers pass the separately frozen request/group eligibility instead.
+func prepareGeminiInputCountingPolicy(req *http.Request, account *Account, model string) *GeminiInputCountingEvidence {
+	return prepareGeminiInputCountingPolicyForRequest(req, account, model, accountGeminiInputCountingEnabled(account, model))
+}
+
 func inputCountingTestAccount() *Account {
 	return &Account{ID: 6021, Platform: PlatformGemini, Type: AccountTypeAPIKey, Extra: map[string]any{
 		"gemini_input_counting": map[string]any{"mode": "vertex_like_discount_v1", "models": []any{inputCountingTestModel}},

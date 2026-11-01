@@ -37,6 +37,7 @@ type GeminiUpstreamAttempt struct {
 	account                 *Account // released immediately after final-request preparation
 	requestObserved         bool
 	inputCounting           *GeminiInputCountingEvidence
+	inputCountingEnabled    bool // frozen per request, never written into a shared account
 	inputCountingRequestID  string
 	nativeInputCountEmitted bool
 	inputFallback           *GeminiInputUsageFallback
@@ -54,7 +55,7 @@ func (a *GeminiUpstreamAttempt) ObserveRequest(request *http.Request) {
 	a.requestObserved = true
 	a.ledgerIdentityHash = geminiUsageLedgerRequestIdentity(request)
 	a.inputFallback = prepareGeminiInputUsageFallback(request, a.event.AccountID, a.model)
-	a.inputCounting = prepareGeminiInputCountingPolicy(request, a.account, a.model)
+	a.inputCounting = prepareGeminiInputCountingPolicyForRequest(request, a.account, a.model, a.inputCountingEnabled)
 	if a.inputCounting != nil {
 		a.inputCountingRequestID = geminiInputCountingRequestIdentity(request)
 	}
@@ -101,9 +102,10 @@ func BeginGeminiUpstreamAttempt(c *gin.Context, account *Account, model string, 
 	proxyID, proxyName := opsUpstreamProxyAttribution(account)
 	attempt := &GeminiUpstreamAttempt{
 		c: c, started: time.Now(), firstEvent: len(geminiUpstreamAttemptEvents(c)),
-		model:           model,
-		account:         account,
-		requestIDHeader: UpstreamRequestIDHeaderName(account),
+		model:                model,
+		account:              account,
+		inputCountingEnabled: requestGeminiInputCountingEnabled(c, account, model),
+		requestIDHeader:      UpstreamRequestIDHeaderName(account),
 		event: OpsUpstreamErrorEvent{Attempt: sequence, Model: truncateString(strings.TrimSpace(model), 128),
 			Stream: stream, Stage: "inference", UsageState: "unreported", ProxyID: proxyID, ProxyName: proxyName},
 	}

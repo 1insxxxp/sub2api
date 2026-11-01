@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
@@ -27,7 +28,7 @@ func geminiInputCountingForwardAccount(enabled bool) *Account {
 	return account
 }
 
-func callGeminiInputCountingForward(t *testing.T, path string, stream, enabled bool, metadata string) (*ForwardResult, *httptest.ResponseRecorder) {
+func callGeminiInputCountingForward(t *testing.T, path string, stream, enabled bool, metadata string, groups ...*Group) (*ForwardResult, *httptest.ResponseRecorder) {
 	t.Helper()
 	payload := `{"candidates":[{"content":{"parts":[{"text":"A complete answer."}],"role":"model"},"finishReason":"STOP"}],"usageMetadata":` + metadata + `}`
 	if stream {
@@ -41,6 +42,12 @@ func callGeminiInputCountingForward(t *testing.T, path string, stream, enabled b
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
 	c.Request = httptest.NewRequest(http.MethodPost, "/v1/"+path, nil)
+	if len(groups) > 0 {
+		group := groups[0]
+		c.Set("api_key", &APIKey{GroupID: &group.ID, Group: group})
+		ctx, _ := WithGatewayTokenRequestPricing(context.WithValue(c.Request.Context(), ctxkey.Group, group))
+		c.Request = c.Request.WithContext(ctx)
+	}
 	account := geminiInputCountingForwardAccount(enabled)
 	var result *ForwardResult
 	var err error

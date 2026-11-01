@@ -91,6 +91,7 @@ func mustCreateGroup(t *testing.T, client *dbent.Client, g *service.Group) *serv
 		SetSubscriptionType(g.SubscriptionType).
 		SetSystemCustomRoutingEnabled(g.SystemCustomRoutingEnabled).
 		SetRateMultiplier(g.RateMultiplier).
+		SetGeminiInputCountingEnabled(g.GeminiInputCountingEnabled).
 		SetIsExclusive(g.IsExclusive).
 		SetForceOpenaiFast(g.ForceOpenAIFast).
 		SetFreeOpenaiFast(g.FreeOpenAIFast).

@@ -1053,6 +1053,10 @@ export default {
       groupUpdatedSuccess: 'Group updated successfully',
       groupDeletedSuccess: 'Group deleted successfully',
       rateMultiplierHint: 'Cost multiplier for this group (e.g., 1.5 = 150% of base cost)',
+      geminiInputCounting: {
+        enable: 'Enable Gemini input token discounts for this group',
+        hint: 'Applies only to eligible plain-text Gemini API key requests billed to this group. Uses a Vertex-like estimate to lower user input tokens and charges. Output usage and upstream costs stay unchanged; tools, media, and cached requests retain their existing billing.'
+      },
       emptyResponseCompensation: {
         enable: 'Allow self-service empty-response refunds',
         hint: 'This is a user refund policy, not an upstream refund guarantee. Eligible empty or interrupted responses are refunded automatically; ambiguous cases require review.'
