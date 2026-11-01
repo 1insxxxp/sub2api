@@ -193,8 +193,12 @@ func TestGatewayModelNotFoundFailoverAfterRectification(t *testing.T) {
 			require.Equal(t, http.StatusNotFound, failoverErr.StatusCode)
 			require.False(t, failoverErr.RetryableOnSameAccount)
 			require.Equal(t, len(tc.failures)+1, upstream.callCount)
+			require.Len(t, upstream.requestBodies, len(tc.failures)+1)
 			for _, sent := range upstream.requestBodies {
 				require.Equal(t, int64(4096), gjson.GetBytes(sent, "max_tokens").Int())
+			}
+			if tc.name == "budget" {
+				require.Equal(t, int64(4095), gjson.GetBytes(upstream.requestBodies[1], "thinking.budget_tokens").Int())
 			}
 			require.False(t, c.Writer.Written())
 			require.Empty(t, recorder.Body.String())
