@@ -147,15 +147,8 @@ func geminiThinkingLevelFor(model string, intent claudeThinkingIntent) string {
 // 模型动态预算。Pro 不能关闭思考（最小 128，最大 32768），Flash 为 0–24576，
 // Flash-Lite 的正预算最小 512。
 func geminiThinkingBudgetFor(model string, intent claudeThinkingIntent) (budget int, ok bool) {
-	name := strings.ToLower(model)
-	isPro := strings.Contains(name, "pro")
-	maxBudget, minPositive := gemini25FlashMaxThinkingBudget, 1
-	switch {
-	case isPro:
-		maxBudget, minPositive = gemini25ProMaxThinkingBudget, gemini25ProMinThinkingBudget
-	case strings.Contains(name, "flash-lite"):
-		minPositive = gemini25FlashLiteMinThinkingBudget
-	}
+	isPro := strings.Contains(strings.ToLower(model), "pro")
+	minPositive, maxBudget := geminiThinkingBudgetBounds(model)
 	switch intent.tier {
 	case "minimal":
 		if isPro {
@@ -178,6 +171,19 @@ func geminiThinkingBudgetFor(model string, intent claudeThinkingIntent) (budget 
 	return budget, true
 }
 
+// geminiThinkingBudgetBounds is shared by effort mapping and output-limit fitting.
+func geminiThinkingBudgetBounds(model string) (minimum, maximum int) {
+	name := strings.ToLower(model)
+	switch {
+	case strings.Contains(name, "pro"):
+		return gemini25ProMinThinkingBudget, gemini25ProMaxThinkingBudget
+	case strings.Contains(name, "flash-lite"):
+		return gemini25FlashLiteMinThinkingBudget, gemini25FlashMaxThinkingBudget
+	default:
+		return 1, gemini25FlashMaxThinkingBudget
+	}
+}
+
 // applyGeminiCompatThinkingConfig 把兼容入口（Anthropic 形态请求体）的思考意图写进转换后的
 // Gemini 请求 generationConfig.thinkingConfig。includeThoughts 为 true 时要求上游返回
 // 思考摘要（thought=true 的 part）；思考被关闭（预算为 0）时不要求。
@@ -197,6 +203,19 @@ func applyGeminiCompatThinkingConfig(geminiReq, claudeBody []byte, upstreamModel
 			}
 		case geminiThinkingParamBudget:
 			if budget, ok := geminiThinkingBudgetFor(upstreamModel, intent); ok {
+				if limit := gjson.GetBytes(out, "generationConfig.maxOutputTokens"); limit.Exists() {
+					if limit.Type != gjson.Number || limit.Int() <= 0 {
+						return out
+					}
+					if budget > 0 && int64(budget) >= limit.Int() {
+						minimum, _ := geminiThinkingBudgetBounds(upstreamModel)
+						if limit.Int() <= int64(minimum) {
+							return out
+						}
+						// Fit the final mapped budget without changing the client's cap.
+						budget = int(limit.Int() - 1)
+					}
+				}
 				out = setGeminiThinkingField(out, "thinkingBudget", budget)
 				thinkingOff = budget == 0
 			}
