@@ -35,7 +35,7 @@ func newMessagesClampTestContext(t *testing.T) *gin.Context {
 	return c
 }
 
-// messagesClampOllamaAccount 构造挂在实际 ollama.com 上游的 APIKey 账号。
+// messagesClampOllamaAccount 构造显式 cap=65535 的 ollama.com APIKey 账号。
 // builder A / B 的 Messages base 取 GetBaseURL()（凭证 base_url），builder C 的
 // Anthropic 协议 base 取 GetAnthropicProtocolBaseURL()（anthropic 协议时同为
 // 凭证 base_url）。
@@ -49,7 +49,7 @@ func messagesClampOllamaAccount(id int64, platform string) *Account {
 			"api_key":  "sk-test",
 			"base_url": "https://ollama.com",
 		},
-		Extra: map[string]any{},
+		Extra: map[string]any{OllamaCloudMaxTokensCapExtraKey: 65535},
 	}
 }
 
@@ -218,7 +218,7 @@ func TestBuildNativeAnthropicUpstreamRequest_ClampsOllamaCloudDeepSeekMaxTokens(
 				"api_key":      "sk-test",
 				"api_protocol": APIProtocolAnthropic,
 			},
-			Extra: map[string]any{},
+			Extra: map[string]any{OllamaCloudMaxTokensCapExtraKey: 65535},
 		}
 		targetURL, err := svc.nativeAnthropicTargetURL(account)
 		require.NoError(t, err)
@@ -244,7 +244,7 @@ func TestBuildNativeAnthropicUpstreamRequest_ClampsOllamaCloudDeepSeekMaxTokens(
 	})
 }
 
-// messagesClampProductionAccount 复刻生产账号 162：platform=deepseek、type=apikey、
+// messagesClampProductionAccount 验证显式 cap=65535 的旧生产路由：platform=deepseek、type=apikey、
 // api_protocol=adaptive、base_url 与 api_base_urls 均指向 ollama.com（anthropic 地址
 // 带 trailing '/'，CC/Responses 地址带 /v1 后缀）。
 func messagesClampProductionAccount(id int64) *Account {
@@ -263,7 +263,7 @@ func messagesClampProductionAccount(id int64) *Account {
 				APIProtocolChatCompletions: "https://ollama.com/v1",
 			},
 		},
-		Extra: map[string]any{},
+		Extra: map[string]any{OllamaCloudMaxTokensCapExtraKey: 65535},
 	}
 }
 

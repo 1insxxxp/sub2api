@@ -1591,6 +1591,12 @@ func NormalizeClaudeOutputEffort(raw string) *string {
 // caller should invoke this only on Anthropic-format forwarding paths after
 // model mapping and request normalization.
 func ApplyGroupDefaultReasoningEffort(body []byte, group *Group) ([]byte, bool) {
+	return applyGroupDefaultReasoningEffort(body, group, nil)
+}
+
+// The selected account supplies capabilities for private final upstream model IDs.
+// The public wrapper remains useful for requests with known model capabilities.
+func applyGroupDefaultReasoningEffort(body []byte, group *Group, account *Account) ([]byte, bool) {
 	if group == nil {
 		return body, false
 	}
@@ -1610,7 +1616,22 @@ func ApplyGroupDefaultReasoningEffort(body []byte, group *Group) ([]byte, bool) 
 	if strings.TrimSpace(gjson.GetBytes(body, "output_config.effort").String()) != "" {
 		return body, false
 	}
-	isOpus55 := claude.IsOpus55(gjson.GetBytes(body, "model").String())
+	model := gjson.GetBytes(body, "model").String()
+	isOpus55 := claude.IsOpus55(model)
+	maxTokens := gjson.GetBytes(body, "max_tokens")
+	// A group default must never override an explicit allowance (including zero
+	// for cache-only calls), or turn an invalid client field into another value.
+	if maxTokens.Exists() && (maxTokens.Type != gjson.Number || maxTokens.Int() <= 0) {
+		return body, false
+	}
+	if !isOpus55 && maxTokens.Exists() && maxTokens.Int() <= int64(budget) {
+		if maxTokens.Int() <= 1024 {
+			// Manual thinking requires at least 1024 tokens plus room for the answer.
+			// The caller's small output allowance wins over an automatic group default.
+			return body, false
+		}
+		budget = int(maxTokens.Int() - 1)
+	}
 
 	modified := body
 	changed := false
@@ -1622,6 +1643,19 @@ func ApplyGroupDefaultReasoningEffort(body []byte, group *Group) ([]byte, bool) 
 		modified = next
 		changed = true
 	}
+	// Use known final-model capabilities for a required Anthropic default;
+	// never use the thinking budget as the total output allowance.
+	if !maxTokens.Exists() {
+		if defaultMax := defaultAnthropicOutputTokens(account, model); defaultMax > 0 {
+			set("max_tokens", defaultMax)
+			if !isOpus55 && defaultMax <= budget {
+				if defaultMax <= 1024 {
+					return modified, changed
+				}
+				budget = defaultMax - 1
+			}
+		}
+	}
 	set("output_config.effort", effort)
 	if isOpus55 {
 		// Opus 5.5 only accepts adaptive thinking and derives its budget from
@@ -1630,11 +1664,6 @@ func ApplyGroupDefaultReasoningEffort(body []byte, group *Group) ([]byte, bool) 
 	} else {
 		set("thinking.type", "enabled")
 		set("thinking.budget_tokens", budget)
-		minMaxTokens := int64(budget + 1)
-		currentMaxTokens := gjson.GetBytes(modified, "max_tokens").Int()
-		if currentMaxTokens < minMaxTokens {
-			set("max_tokens", minMaxTokens)
-		}
 	}
 	if !changed {
 		return body, false
@@ -1820,14 +1849,9 @@ func NormalizeGLM53AnthropicThinking(body []byte, mappedModel string) ([]byte, b
 // Thinking Budget Rectifier
 // =========================
 
-const (
-	// BudgetRectifyBudgetTokens is the budget_tokens value to set when rectifying.
-	BudgetRectifyBudgetTokens = 32000
-	// BudgetRectifyMaxTokens is the max_tokens value to set when rectifying.
-	BudgetRectifyMaxTokens = 64000
-	// BudgetRectifyMinMaxTokens is the minimum max_tokens that must exceed budget_tokens.
-	BudgetRectifyMinMaxTokens = 32001
-)
+// BudgetRectifyBudgetTokens is the preferred budget, bounded by the client's
+// existing output allowance when one was supplied.
+const BudgetRectifyBudgetTokens = 32000
 
 // isThinkingBudgetConstraintError detects whether an upstream error message indicates
 // a budget_tokens constraint violation (e.g. "budget_tokens >= 1024").
@@ -1880,14 +1904,23 @@ func isFinalAnswerReserveError(errMsg string) bool {
 }
 
 // RectifyThinkingBudget modifies the request body to fix budget_tokens constraint errors.
-// It sets thinking.budget_tokens = 32000, thinking.type = "enabled" (unless adaptive),
-// and ensures max_tokens >= 32001.
+// It uses a valid thinking budget within the existing output allowance, without
+// changing max_tokens. Adaptive thinking and too-small explicit allowances cannot
+// be repaired this way and remain unchanged.
 // Returns (modified body, true) if changes were applied, or (original body, false) if not.
 func RectifyThinkingBudget(body []byte) ([]byte, bool) {
 	// If thinking type is "adaptive", skip rectification entirely
 	thinkingType := gjson.GetBytes(body, "thinking.type").String()
 	if thinkingType == "adaptive" {
 		return body, false
+	}
+
+	budget := int64(BudgetRectifyBudgetTokens)
+	if maxTokens := gjson.GetBytes(body, "max_tokens"); maxTokens.Exists() {
+		if maxTokens.Type != gjson.Number || maxTokens.Int() <= 1024 {
+			return body, false
+		}
+		budget = min(budget, maxTokens.Int()-1)
 	}
 
 	modified := body
@@ -1901,19 +1934,10 @@ func RectifyThinkingBudget(body []byte) ([]byte, bool) {
 		}
 	}
 
-	// Set thinking.budget_tokens = 32000
+	// Set a valid budget without rewriting the client's output limit.
 	currentBudget := gjson.GetBytes(modified, "thinking.budget_tokens").Int()
-	if currentBudget != BudgetRectifyBudgetTokens {
-		if result, err := sjson.SetBytes(modified, "thinking.budget_tokens", BudgetRectifyBudgetTokens); err == nil {
-			modified = result
-			changed = true
-		}
-	}
-
-	// Ensure max_tokens >= BudgetRectifyMinMaxTokens
-	maxTokens := gjson.GetBytes(modified, "max_tokens").Int()
-	if maxTokens < int64(BudgetRectifyMinMaxTokens) {
-		if result, err := sjson.SetBytes(modified, "max_tokens", BudgetRectifyMaxTokens); err == nil {
+	if currentBudget != budget {
+		if result, err := sjson.SetBytes(modified, "thinking.budget_tokens", budget); err == nil {
 			modified = result
 			changed = true
 		}

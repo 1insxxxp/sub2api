@@ -2,6 +2,7 @@ package service
 
 import (
 	"encoding/json"
+	"math"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/tidwall/gjson"
@@ -11,12 +12,8 @@ import (
 
 // OllamaCloudMaxTokensCapExtraKey 是账号 extra 中的可选配置键，表示该 Ollama Cloud
 // 账号输出 token 的 provider 级硬上限。用户可通过 admin 账号更新 API 的 extra 字段
-// 设置，覆盖默认值 ollamaCloudDefaultMaxTokensCap；0 或负数表示显式禁用 clamp。
+// 设置；未配置、无效值、0 或负数均不启用 clamp。
 const OllamaCloudMaxTokensCapExtraKey = "ollama_max_tokens_cap"
-
-// ollamaCloudDefaultMaxTokensCap 是 Ollama Cloud 对输出 token 数的 provider 级硬上限
-// （约 65535），max_tokens 超过该值会被上游直接 400 拒绝；该上限与模型无关，不做模型过滤。
-const ollamaCloudDefaultMaxTokensCap = 65535
 
 // clampOllamaCloudUpstreamMaxTokens 是 raw CC 出站（forwardAsRawChatCompletions 与
 // /v1/responses 降级 forwardResponsesViaRawChatCompletions 共用）的独立 token 钩子，
@@ -73,19 +70,22 @@ func ollamaCloudResponsesMaxOutputTokensClamp(account *Account, upstreamModel st
 	return cap, true
 }
 
-// ollamaCloudMaxTokensCap 返回账号配置的 max_tokens 上限。账号为 nil 或 extra 中
-// 无该键时返回默认值；键值为数值类型（float64/int64/int/json.Number）时返回其整数
-// 值（0 或负数表示显式禁用 clamp）；其它类型回退默认值。
+// ollamaCloudMaxTokensCap returns only an explicitly configured integer cap.
+// Provider validation may reject an unsupported client limit; absence of a
+// policy must not silently narrow the client's generation request.
 func ollamaCloudMaxTokensCap(account *Account) int64 {
 	if account == nil || account.Extra == nil {
-		return ollamaCloudDefaultMaxTokensCap
+		return 0
 	}
 	value, ok := account.Extra[OllamaCloudMaxTokensCapExtraKey]
 	if !ok {
-		return ollamaCloudDefaultMaxTokensCap
+		return 0
 	}
 	switch number := value.(type) {
 	case float64:
+		if math.IsNaN(number) || math.IsInf(number, 0) || math.Trunc(number) != number || number >= math.MaxInt64 || number < math.MinInt64 {
+			return 0
+		}
 		return int64(number)
 	case int64:
 		return number
@@ -94,11 +94,11 @@ func ollamaCloudMaxTokensCap(account *Account) int64 {
 	case json.Number:
 		parsed, err := number.Int64()
 		if err != nil {
-			return ollamaCloudDefaultMaxTokensCap
+			return 0
 		}
 		return parsed
 	default:
-		return ollamaCloudDefaultMaxTokensCap
+		return 0
 	}
 }
 

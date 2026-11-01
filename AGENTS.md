@@ -570,7 +570,7 @@ docker stats sub2api
 | 秒级冷却时间 | 支持 429 响应的秒级精确冷却时间 |
 | 身份注入优化 | 模型身份信息注入 + 静默边界防止身份泄露 |
 | thoughtSignature 修复 | Gemini 3 函数调用 400 错误修复 |
-| max_tokens 自动修正 | 自动修正 max_tokens <= budget_tokens 导致的 400 错误 |
+| 思考预算兼容修正 | 在客户端输出上限内调整 thinking 预算，不放大或补造输出上限 |
 
 ### 调度算法优化
 

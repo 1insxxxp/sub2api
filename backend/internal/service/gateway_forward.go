@@ -346,7 +346,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 	// rules (notably Opus 5.5 adaptive thinking) use the final upstream ID.
 	if parsed.GroupID != nil {
 		if group := s.groupForReasoningEffort(ctx, parsed.GroupID); group != nil {
-			if rewritten, applied := ApplyGroupDefaultReasoningEffort(body, group); applied {
+			if rewritten, applied := applyGroupDefaultReasoningEffort(body, group, account); applied {
 				if err := replaceBody(rewritten); err != nil {
 					return nil, err
 				}
@@ -634,7 +634,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 
 					rectifiedBody, applied := RectifyThinkingBudget(body)
 					if applied && time.Since(retryStart) < maxRetryElapsed {
-						logger.LegacyPrintf("service.gateway", "Account %d: detected budget_tokens constraint error, retrying with rectified budget (budget_tokens=%d, max_tokens=%d)", account.ID, BudgetRectifyBudgetTokens, BudgetRectifyMaxTokens)
+						logger.LegacyPrintf("service.gateway", "Account %d: detected budget_tokens constraint error, retrying with rectified budget (budget_tokens=%d, preserving output limit)", account.ID, gjson.GetBytes(rectifiedBody, "thinking.budget_tokens").Int())
 						budgetRetryCtx, releaseBudgetRetryCtx := detachStreamUpstreamContext(requestContext, reqStream)
 						budgetRetryReq, budgetWireBody, buildErr := s.buildUpstreamRequest(budgetRetryCtx, c, account, rectifiedBody, token, tokenType, reqModel, reqStream, shouldMimicClaudeCode)
 						releaseBudgetRetryCtx()

@@ -111,7 +111,7 @@ func (s *GatewayService) ForwardAsResponses(
 	if err != nil {
 		return nil, fmt.Errorf("marshal anthropic request: %w", err)
 	}
-	if rewritten, applied := ApplyGroupDefaultReasoningEffort(anthropicBody, group); applied {
+	if rewritten, applied := applyGroupDefaultReasoningEffort(anthropicBody, group, account); applied {
 		anthropicBody = rewritten
 		logger.LegacyPrintf("service.gateway", "Applied group default reasoning effort for responses: group=%d effort=%s", group.ID, group.DefaultReasoningEffort)
 	}

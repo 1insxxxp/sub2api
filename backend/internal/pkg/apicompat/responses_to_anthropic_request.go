@@ -14,13 +14,15 @@ import (
 // enables Anthropic platform groups to accept OpenAI Responses API requests
 // by converting them to the native /v1/messages format before forwarding upstream.
 func ResponsesToAnthropicRequest(req *ResponsesRequest) (*AnthropicRequest, error) {
-	return ResponsesToAnthropicRequestWithDefaultMaxTokens(req, 8192)
+	limit, _ := claude.ModelMaxOutputTokens(req.Model)
+	return ResponsesToAnthropicRequestWithDefaultMaxTokens(req, limit)
 }
 
 // ResponsesToAnthropicRequestWithDefaultMaxTokens lets the final upstream
 // protocol choose its required default. Use zero when Anthropic is only an
 // intermediate representation, so optional Gemini limits stay omitted.
-// A positive client limit always takes precedence over the supplied default.
+// Any explicit client limit takes precedence over the supplied default; the
+// final protocol validates whether that limit is supported.
 func ResponsesToAnthropicRequestWithDefaultMaxTokens(req *ResponsesRequest, defaultMaxTokens int) (*AnthropicRequest, error) {
 	isOpus55 := claude.IsOpus55(req.Model)
 	isSonnet55 := claude.IsSonnet55(req.Model)
@@ -43,10 +45,10 @@ func ResponsesToAnthropicRequestWithDefaultMaxTokens(req *ResponsesRequest, defa
 	}
 
 	// max_output_tokens → max_tokens
-	if req.MaxOutputTokens != nil && *req.MaxOutputTokens > 0 {
+	if req.MaxOutputTokens != nil {
 		out.MaxTokens = *req.MaxOutputTokens
-	}
-	if out.MaxTokens == 0 && defaultMaxTokens > 0 {
+		out.MaxTokensPresent = true
+	} else if defaultMaxTokens > 0 {
 		out.MaxTokens = defaultMaxTokens
 	}
 
@@ -143,9 +145,16 @@ func ResponsesToAnthropicRequestWithDefaultMaxTokens(req *ResponsesRequest, defa
 		out.OutputConfig = &AnthropicOutputConfig{Effort: effort}
 		// Enable thinking for non-low efforts
 		if effort != "low" {
+			budget := defaultThinkingBudget(effort)
+			if out.MaxTokensPresent || out.MaxTokens != 0 {
+				if out.MaxTokens <= 1024 {
+					return out, nil
+				}
+				budget = min(budget, out.MaxTokens-1)
+			}
 			out.Thinking = &AnthropicThinking{
 				Type:         "enabled",
-				BudgetTokens: defaultThinkingBudget(effort),
+				BudgetTokens: budget,
 			}
 		}
 	}

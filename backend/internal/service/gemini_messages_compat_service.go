@@ -4896,7 +4896,7 @@ func schemaNumberFloat64(value any) (float64, bool) {
 
 func convertClaudeGenerationConfig(req map[string]any) map[string]any {
 	out := make(map[string]any)
-	if mt, ok := asInt(req["max_tokens"]); ok && mt > 0 {
+	if mt, ok := asInt(req["max_tokens"]); ok {
 		out["maxOutputTokens"] = mt
 	}
 	if temp, ok := req["temperature"].(float64); ok {

@@ -58,26 +58,12 @@ func DefaultTransformOptions() TransformOptions {
 // webSearchFallbackModel web_search 请求使用的降级模型
 const webSearchFallbackModel = "gemini-2.5-flash"
 
-// MaxTokensBudgetPadding max_tokens 自动调整时在 budget_tokens 基础上增加的额度
-// Claude API 要求 max_tokens > thinking.budget_tokens，否则返回 400 错误
-const MaxTokensBudgetPadding = 1000
-
 // Gemini 2.5 Flash thinking budget 上限
 const Gemini25FlashThinkingBudgetLimit = 24576
 
 // 对于 Antigravity 的 Claude（budget-only）模型，该语义最终等价为 thinkingBudget=24576。
 // 这里复用相同数值以保持行为一致。
 const ClaudeAdaptiveHighThinkingBudgetTokens = Gemini25FlashThinkingBudgetLimit
-
-// ensureMaxTokensGreaterThanBudget 确保 max_tokens > budget_tokens
-// Claude API 要求启用 thinking 时，max_tokens 必须大于 thinking.budget_tokens
-// 返回调整后的 maxTokens 和是否进行了调整
-func ensureMaxTokensGreaterThanBudget(maxTokens, budgetTokens int) (int, bool) {
-	if budgetTokens > 0 && maxTokens <= budgetTokens {
-		return budgetTokens + MaxTokensBudgetPadding, true
-	}
-	return maxTokens, false
-}
 
 // TransformClaudeToGemini 将 Claude 请求转换为 v1internal Gemini 格式
 func TransformClaudeToGemini(claudeReq *ClaudeRequest, projectID, mappedModel string) ([]byte, error) {
@@ -664,20 +650,6 @@ func extractToolResultInlineParts(content json.RawMessage) []GeminiPart {
 	return inlineParts
 }
 
-// buildGenerationConfig 构建 generationConfig
-const (
-	defaultMaxOutputTokens    = 64000
-	maxOutputTokensUpperBound = 65000
-	maxOutputTokensClaude     = 64000
-)
-
-func maxOutputTokensLimit(model string) int {
-	if strings.HasPrefix(model, "claude-") {
-		return maxOutputTokensClaude
-	}
-	return maxOutputTokensUpperBound
-}
-
 // isAntigravityOpusHighTierModel 判断是否为高阶 Opus 模型（4.6+），
 // 用于 adaptive thinking 时覆写为高预算。
 func isAntigravityOpusHighTierModel(model string) bool {
@@ -688,10 +660,7 @@ func isAntigravityOpusHighTierModel(model string) bool {
 }
 
 func buildGenerationConfig(req *ClaudeRequest) *GeminiGenerationConfig {
-	maxLimit := maxOutputTokensLimit(req.Model)
-	config := &GeminiGenerationConfig{
-		MaxOutputTokens: defaultMaxOutputTokens, // 默认最大输出
-	}
+	config := &GeminiGenerationConfig{}
 
 	isReasoning := IsGeminiReasoningModel(req.Model)
 	if !isReasoning {
@@ -699,12 +668,14 @@ func buildGenerationConfig(req *ClaudeRequest) *GeminiGenerationConfig {
 	}
 
 	// 如果请求中指定了 MaxTokens，使用请求值
-	if req.MaxTokens > 0 {
+	if req.MaxTokensPresent || req.MaxTokens != 0 {
 		config.MaxOutputTokens = req.MaxTokens
+		config.MaxOutputTokensPresent = true
 	}
 
 	// Thinking 配置
-	if req.Thinking != nil && (req.Thinking.Type == "enabled" || req.Thinking.Type == "adaptive") {
+	if req.Thinking != nil && (req.Thinking.Type == "enabled" || req.Thinking.Type == "adaptive") &&
+		(!config.MaxOutputTokensPresent || config.MaxOutputTokens > 0) {
 		config.ThinkingConfig = &GeminiThinkingConfig{
 			IncludeThoughts: true,
 		}
@@ -726,18 +697,24 @@ func buildGenerationConfig(req *ClaudeRequest) *GeminiGenerationConfig {
 				budget = Gemini25FlashThinkingBudgetLimit
 			}
 
-			// 自动修正：max_tokens 必须大于 budget_tokens（Claude 上游要求）
-			if adjusted, ok := ensureMaxTokensGreaterThanBudget(config.MaxOutputTokens, budget); ok {
-				log.Printf("[Antigravity] Auto-adjusted max_tokens from %d to %d (must be > budget_tokens=%d)",
-					config.MaxOutputTokens, adjusted, budget)
-				config.MaxOutputTokens = adjusted
+			// The client's output cap is authoritative. Fit optional thinking
+			// inside it rather than enlarging the cap or inventing one when absent.
+			if config.MaxOutputTokens > 0 && budget >= config.MaxOutputTokens {
+				budget = config.MaxOutputTokens - 1
+				minimumBudget := 1
+				if strings.HasPrefix(req.Model, "claude-") {
+					minimumBudget = 1024
+				} else if strings.Contains(req.Model, "gemini-2.5-pro") {
+					minimumBudget = 128
+				}
+				if budget < minimumBudget {
+					config.ThinkingConfig = nil
+				}
 			}
 		}
-		config.ThinkingConfig.ThinkingBudget = budget
-	}
-
-	if config.MaxOutputTokens > maxLimit {
-		config.MaxOutputTokens = maxLimit
+		if config.ThinkingConfig != nil {
+			config.ThinkingConfig.ThinkingBudget = budget
+		}
 	}
 
 	// 其他参数

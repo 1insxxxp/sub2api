@@ -9,17 +9,48 @@ import (
 
 // ClaudeRequest Claude Messages API 请求
 type ClaudeRequest struct {
-	Model       string          `json:"model"`
-	Messages    []ClaudeMessage `json:"messages"`
-	MaxTokens   int             `json:"max_tokens,omitempty"`
-	System      json.RawMessage `json:"system,omitempty"` // string 或 []SystemBlock
-	Stream      bool            `json:"stream,omitempty"`
-	Temperature *float64        `json:"temperature,omitempty"`
-	TopP        *float64        `json:"top_p,omitempty"`
-	TopK        *int            `json:"top_k,omitempty"`
-	Tools       []ClaudeTool    `json:"tools,omitempty"`
-	Thinking    *ThinkingConfig `json:"thinking,omitempty"`
-	Metadata    *ClaudeMetadata `json:"metadata,omitempty"`
+	Model            string          `json:"model"`
+	Messages         []ClaudeMessage `json:"messages"`
+	MaxTokens        int             `json:"max_tokens,omitempty"`
+	MaxTokensPresent bool            `json:"-"`
+	System           json.RawMessage `json:"system,omitempty"` // string 或 []SystemBlock
+	Stream           bool            `json:"stream,omitempty"`
+	Temperature      *float64        `json:"temperature,omitempty"`
+	TopP             *float64        `json:"top_p,omitempty"`
+	TopK             *int            `json:"top_k,omitempty"`
+	Tools            []ClaudeTool    `json:"tools,omitempty"`
+	Thinking         *ThinkingConfig `json:"thinking,omitempty"`
+	Metadata         *ClaudeMetadata `json:"metadata,omitempty"`
+}
+
+func (r ClaudeRequest) MarshalJSON() ([]byte, error) {
+	type request ClaudeRequest
+	var limit *int
+	if r.MaxTokensPresent || r.MaxTokens != 0 {
+		limit = &r.MaxTokens
+	}
+	return json.Marshal(struct {
+		MaxTokens *int `json:"max_tokens,omitempty"`
+		*request
+	}{MaxTokens: limit, request: (*request)(&r)})
+}
+
+// UnmarshalJSON retains zero as a supplied output limit, rather than treating
+// a cache-only or invalid request as permission for uncapped generation.
+func (r *ClaudeRequest) UnmarshalJSON(data []byte) error {
+	type request ClaudeRequest
+	wire := struct {
+		MaxTokens *int `json:"max_tokens"`
+		*request
+	}{request: (*request)(r)}
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	r.MaxTokens, r.MaxTokensPresent = 0, wire.MaxTokens != nil
+	if wire.MaxTokens != nil {
+		r.MaxTokens = *wire.MaxTokens
+	}
+	return nil
 }
 
 // ClaudeMessage Claude 消息

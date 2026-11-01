@@ -304,20 +304,24 @@ func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context,
 					Detail:             s.getUpstreamErrorDetail(respBody),
 				})
 
-				// 修正 claudeReq 的 thinking 参数（adaptive 模式不修正）
-				if claudeReq.Thinking == nil || claudeReq.Thinking.Type != "adaptive" {
+				// Fit a manual budget within the client's allowance. If that is
+				// impossible, return the original validation error without a retry.
+				hasOutputLimit := claudeReq.MaxTokensPresent || claudeReq.MaxTokens != 0
+				if (claudeReq.Thinking == nil || claudeReq.Thinking.Type != "adaptive") &&
+					(!hasOutputLimit || claudeReq.MaxTokens > 1024) {
 					retryClaudeReq := claudeReq
 					retryClaudeReq.Messages = append([]antigravity.ClaudeMessage(nil), claudeReq.Messages...)
+					budget := BudgetRectifyBudgetTokens
+					if hasOutputLimit {
+						budget = min(budget, claudeReq.MaxTokens-1)
+					}
 					// 创建新的 ThinkingConfig 避免修改原始 claudeReq.Thinking 指针
 					retryClaudeReq.Thinking = &antigravity.ThinkingConfig{
 						Type:         "enabled",
-						BudgetTokens: BudgetRectifyBudgetTokens,
-					}
-					if retryClaudeReq.MaxTokens < BudgetRectifyMinMaxTokens {
-						retryClaudeReq.MaxTokens = BudgetRectifyMaxTokens
+						BudgetTokens: budget,
 					}
 
-					logger.LegacyPrintf("service.antigravity_gateway", "Antigravity account %d: detected budget_tokens constraint error, retrying with rectified budget (budget_tokens=%d, max_tokens=%d)", account.ID, BudgetRectifyBudgetTokens, BudgetRectifyMaxTokens)
+					logger.LegacyPrintf("service.antigravity_gateway", "Antigravity account %d: detected budget_tokens constraint error, retrying with rectified budget (budget_tokens=%d, preserving output limit)", account.ID, budget)
 
 					retryGeminiBody, txErr := antigravity.TransformClaudeToGeminiWithOptions(&retryClaudeReq, projectID, mappedModel, transformOpts)
 					if txErr == nil {

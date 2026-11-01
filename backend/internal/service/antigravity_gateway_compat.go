@@ -29,8 +29,6 @@ const (
 	AntigravityCredentialRejectedReason GatewayFailureReason = "antigravity_oauth_credential_rejected"
 )
 
-const antigravityCompatMaxTokens = 64000
-
 type antigravityCompatRequest struct {
 	protocol        antigravityCompatProtocol
 	originalBody    []byte
@@ -71,7 +69,7 @@ func (s *AntigravityGatewayService) ForwardAsChatCompletions(
 		return nil, s.writeAntigravityCompatError(c, http.StatusBadRequest, "invalid_request_error", "model is required")
 	}
 
-	responsesRequest, err := chatCompletionsToResponses(settingServiceConfig(s.settingService), &request)
+	responsesRequest, err := apicompat.ChatCompletionsToResponsesWithMinOutputTokens(&request, 0)
 	if err != nil {
 		return nil, s.writeAntigravityCompatError(c, http.StatusBadRequest, "invalid_request_error", err.Error())
 	}
@@ -159,8 +157,9 @@ func preserveChatCompletionTokenLimit(request *apicompat.ChatCompletionsRequest,
 	if request.MaxCompletionTokens != nil {
 		limit = request.MaxCompletionTokens
 	}
-	if limit != nil && *limit > 0 {
-		claudeRequest.MaxTokens = min(*limit, antigravityCompatMaxTokens)
+	if limit != nil {
+		claudeRequest.MaxTokens = *limit
+		claudeRequest.MaxTokensPresent = true
 	}
 }
 
