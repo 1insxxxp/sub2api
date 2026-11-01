@@ -68,7 +68,11 @@ func accountGeminiInputCountingEnabled(account *Account, model string) bool {
 	if policy == nil {
 		return false
 	}
-	for _, configured := range policy["models"].([]string) {
+	models, ok := policy["models"].([]string)
+	if !ok {
+		return false
+	}
+	for _, configured := range models {
 		if configured == model {
 			return true
 		}
@@ -87,7 +91,11 @@ func prepareGeminiInputCountingPolicy(req *http.Request, account *Account, model
 	if err != nil || body == nil {
 		return nil
 	}
-	defer body.Close()
+	defer func() {
+		// This read-only replay body has no writes to flush; closing it cannot
+		// change the request evidence already read below.
+		_ = body.Close()
+	}()
 	raw, err := io.ReadAll(io.LimitReader(body, geminitokens.MaxTextBytes+1))
 	if err != nil || len(raw) > geminitokens.MaxTextBytes || !utf8.Valid(raw) {
 		return nil
