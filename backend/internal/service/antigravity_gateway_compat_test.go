@@ -428,21 +428,27 @@ func TestAntigravityCompatPreservesChatTokenLimit(t *testing.T) {
 	}
 }
 
-func TestPreserveChatCompletionTokenLimitIgnoresAbsentAndNonPositiveValues(t *testing.T) {
+func TestPreserveChatCompletionTokenLimitRetainsPresenceAndValues(t *testing.T) {
 	tests := []struct {
-		name    string
-		request apicompat.ChatCompletionsRequest
+		name        string
+		request     apicompat.ChatCompletionsRequest
+		want        int
+		wantPresent bool
 	}{
-		{name: "absent"},
-		{name: "zero max_tokens", request: apicompat.ChatCompletionsRequest{MaxTokens: antigravityCompatIntPtr(0)}},
-		{name: "negative max_completion_tokens takes precedence", request: apicompat.ChatCompletionsRequest{MaxTokens: antigravityCompatIntPtr(12), MaxCompletionTokens: antigravityCompatIntPtr(-1)}},
+		{name: "absent", want: 99},
+		{name: "zero max_tokens", request: apicompat.ChatCompletionsRequest{MaxTokens: antigravityCompatIntPtr(0)}, want: 0, wantPresent: true},
+		{name: "negative max_tokens", request: apicompat.ChatCompletionsRequest{MaxTokens: antigravityCompatIntPtr(-1)}, want: -1, wantPresent: true},
+		{name: "small positive max_tokens", request: apicompat.ChatCompletionsRequest{MaxTokens: antigravityCompatIntPtr(1)}, want: 1, wantPresent: true},
+		{name: "zero max_completion_tokens takes precedence", request: apicompat.ChatCompletionsRequest{MaxTokens: antigravityCompatIntPtr(12), MaxCompletionTokens: antigravityCompatIntPtr(0)}, want: 0, wantPresent: true},
+		{name: "negative max_completion_tokens takes precedence", request: apicompat.ChatCompletionsRequest{MaxTokens: antigravityCompatIntPtr(12), MaxCompletionTokens: antigravityCompatIntPtr(-1)}, want: -1, wantPresent: true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			claudeRequest := &apicompat.AnthropicRequest{MaxTokens: 99}
 			preserveChatCompletionTokenLimit(&tt.request, claudeRequest)
-			require.Equal(t, 99, claudeRequest.MaxTokens)
+			require.Equal(t, tt.want, claudeRequest.MaxTokens)
+			require.Equal(t, tt.wantPresent, claudeRequest.MaxTokensPresent)
 		})
 	}
 }
