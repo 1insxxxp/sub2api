@@ -75,7 +75,7 @@ func (s *AntigravityGatewayService) ForwardAsChatCompletions(
 	if err != nil {
 		return nil, s.writeAntigravityCompatError(c, http.StatusBadRequest, "invalid_request_error", err.Error())
 	}
-	claudeRequest, err := apicompat.ResponsesToAnthropicRequest(responsesRequest)
+	claudeRequest, err := apicompat.ResponsesToAnthropicRequestWithDefaultMaxTokens(responsesRequest, 0)
 	if err != nil {
 		return nil, s.writeAntigravityCompatError(c, http.StatusBadRequest, "invalid_request_error", err.Error())
 	}
@@ -118,7 +118,7 @@ func (s *AntigravityGatewayService) ForwardAsResponses(
 		return nil, s.writeAntigravityCompatError(c, http.StatusBadRequest, "invalid_request_error", "model is required")
 	}
 
-	claudeRequest, err := apicompat.ResponsesToAnthropicRequest(&request)
+	claudeRequest, err := apicompat.ResponsesToAnthropicRequestWithDefaultMaxTokens(&request, 0)
 	if err != nil {
 		return nil, s.writeAntigravityCompatError(c, http.StatusBadRequest, "invalid_request_error", err.Error())
 	}

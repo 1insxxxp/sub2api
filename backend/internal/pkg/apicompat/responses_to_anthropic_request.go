@@ -14,6 +14,14 @@ import (
 // enables Anthropic platform groups to accept OpenAI Responses API requests
 // by converting them to the native /v1/messages format before forwarding upstream.
 func ResponsesToAnthropicRequest(req *ResponsesRequest) (*AnthropicRequest, error) {
+	return ResponsesToAnthropicRequestWithDefaultMaxTokens(req, 8192)
+}
+
+// ResponsesToAnthropicRequestWithDefaultMaxTokens lets the final upstream
+// protocol choose its required default. Use zero when Anthropic is only an
+// intermediate representation, so optional Gemini limits stay omitted.
+// A positive client limit always takes precedence over the supplied default.
+func ResponsesToAnthropicRequestWithDefaultMaxTokens(req *ResponsesRequest, defaultMaxTokens int) (*AnthropicRequest, error) {
 	isOpus55 := claude.IsOpus55(req.Model)
 	isSonnet55 := claude.IsSonnet55(req.Model)
 	isHaiku55 := claude.IsHaiku55(req.Model)
@@ -38,9 +46,8 @@ func ResponsesToAnthropicRequest(req *ResponsesRequest) (*AnthropicRequest, erro
 	if req.MaxOutputTokens != nil && *req.MaxOutputTokens > 0 {
 		out.MaxTokens = *req.MaxOutputTokens
 	}
-	if out.MaxTokens == 0 {
-		// Anthropic requires max_tokens; default to a sensible value.
-		out.MaxTokens = 8192
+	if out.MaxTokens == 0 && defaultMaxTokens > 0 {
+		out.MaxTokens = defaultMaxTokens
 	}
 
 	// Convert tools

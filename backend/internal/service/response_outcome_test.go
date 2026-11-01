@@ -92,6 +92,24 @@ func TestResponseOutcomeCollectorClearsTransientErrorAfterSuccessfulRetry(t *tes
 	require.Equal(t, UsageOutcomeSuccess, ClassifyUsageOutcome(&outcome))
 }
 
+func TestResponseOutcomeCollectorGenericCompletionPreservesFinishReason(t *testing.T) {
+	for _, fallback := range []string{"", "done", "message_stop", "http_response"} {
+		t.Run(fallback, func(t *testing.T) {
+			collector := NewResponseOutcomeCollector(200, 200)
+			collector.ObserveFinishReason("length")
+			collector.ObserveText("partial response")
+			collector.MarkStreamError(errors.New("unexpected EOF"), false)
+			collector.MarkCompleted(fallback)
+
+			outcome := collector.Snapshot()
+			require.Equal(t, "length", outcome.FinishReason)
+			require.True(t, outcome.StreamCompleted)
+			require.Equal(t, DisconnectSourceNone, outcome.DisconnectSource)
+			require.Equal(t, UpstreamErrorNone, outcome.UpstreamErrorKind)
+		})
+	}
+}
+
 func TestResponseOutcomeSnapshotDoesNotRetainObservedContent(t *testing.T) {
 	collector := NewResponseOutcomeCollector(200, 200)
 	collector.ObserveText("private-response-marker")
