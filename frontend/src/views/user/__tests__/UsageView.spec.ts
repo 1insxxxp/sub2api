@@ -41,6 +41,9 @@ const routeState = vi.hoisted(() => ({
 const messages: Record<string, string> = {
   'usage.tokensUnreported': 'Not reported',
   'usage.tokensEstimated': 'Estimated',
+  'usage.billedTokens': 'Billed Tokens',
+  'usage.billedInputTokens': 'Billed Input Tokens',
+  'usage.billedOutputTokens': 'Billed Output Tokens',
   'usage.tokensSourceUnknown': 'Unknown source',
   'usage.billingPendingReview': 'Pending review',
   'usage.billingSettled': 'Settled',
@@ -181,7 +184,7 @@ function mountUsageView() {
         DateRangePicker: true,
         Icon: true,
         UsageStatsCards: chartStub,
-        UsageTable: { ...chartStub, props: ['columns', 'showUsageDiagnostics'] },
+        UsageTable: { ...chartStub, props: ['columns', 'showUsageDiagnostics', 'showBilledTokens'] },
         UserErrorRequestsTable: chartStub,
         ModelDistributionChart: chartStub,
         GroupDistributionChart: chartStub,
@@ -279,6 +282,8 @@ describe('user UsageView', () => {
 
 	expect(wrapper.get('[data-testid="usage-stats-grid"]')).toBeTruthy()
 	expect(wrapper.findComponent(UsageTable).props('showUsageDiagnostics')).toBe(false)
+	expect(wrapper.findComponent(UsageTable).props('showBilledTokens')).toBe(true)
+	expect(wrapper.findComponent(UsageTable).props('columns')).toContainEqual(expect.objectContaining({ key: 'tokens', label: 'Billed Tokens' }))
 	expect(wrapper.findComponent(UsageTable).props('columns').map((column: { key: string }) => column.key)).toContain('latency')
     expect(query).toHaveBeenCalled()
     expect(getStats).toHaveBeenCalled()
@@ -516,7 +521,7 @@ describe('user UsageView', () => {
     expect(showSuccess).toHaveBeenCalled()
     expect(csvContent.startsWith('\uFEFF')).toBe(true)
     expect(csvContent.slice(1)).toBe([
-      'Time,API Key Name,Model,Reasoning Effort,Inbound Endpoint,IP Address,Type,Billing Mode,Input Tokens,Output Tokens,Cache Read Tokens,Cache Creation Tokens,Rate Multiplier,Billed Cost,Original Cost,First Token (ms),Duration (ms),Billing Status,Compensated Cost,Net Charge,Request Status',
+      'Time,API Key Name,Model,Reasoning Effort,Inbound Endpoint,IP Address,Type,Billing Mode,Billed Input Tokens,Billed Output Tokens,Cache Read Tokens,Cache Creation Tokens,Rate Multiplier,Billed Cost,Original Cost,First Token (ms),Duration (ms),Billing Status,Compensated Cost,Net Charge,Request Status',
       '2026-03-08T00:00:00Z,demo-key,gpt-5.4,-,,203.0.113.10,Sync,Token,4057,101,278272,4,1,0.09288300,0.09288300,12,345,Settled,0.00000000,0.09288300,unknown',
     ].join('\n'))
     expect(csvContent).toContain('IP Address')
@@ -533,13 +538,14 @@ describe('user UsageView', () => {
     clickSpy.mockRestore()
   })
 
-  it('exports missing input as blank and true zero accurately without exposing internal provenance', async () => {
+  it('exports settled billed quantities independently of measurement provenance and keeps pending quantities blank', async () => {
     query.mockResolvedValue({ items: [
       { ...usageLog, input_tokens: 0, input_tokens_source: 'unreported', output_tokens: 5071, output_tokens_source: 'estimated' },
       { ...usageLog, id: 2, input_tokens: 0, input_tokens_source: 'upstream', output_tokens_source: 'upstream' },
       { ...usageLog, id: -42, billing_status: 'pending_review', billing_pending_reason: 'upstream_usage_missing', input_tokens: 0, output_tokens: 0, input_tokens_source: 'unreported', output_tokens_source: 'unreported', actual_cost: 0, total_cost: 0 },
       { ...usageLog, id: 4, request_status: 'interrupted', input_tokens: 0, output_tokens: 0, input_tokens_source: 'unknown', output_tokens_source: 'unknown', input_tokens_known: false, output_tokens_known: false, actual_cost: 6, compensated_cost: 2.75, net_actual_cost: 3.25 },
-    ], total: 4, pages: 1 })
+      { ...usageLog, id: 5, input_tokens: 136, output_tokens: 71, input_tokens_source: 'unreported', output_tokens_source: 'unknown', input_tokens_known: false, output_tokens_known: false },
+    ], total: 5, pages: 1 })
     const wrapper = mountUsageView()
     await flushPromises()
     let csvContent = ''
@@ -555,22 +561,27 @@ describe('user UsageView', () => {
     const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
     try {
       await (wrapper.vm as any).exportToCSV()
-      const [headers, missing, measured, pending, interrupted] = csvContent.slice(1).split('\n').map(line => line.split(','))
-      const inputIndex = headers.indexOf('Input Tokens')
-      expect(missing[inputIndex]).toBe('')
+      const [headers, missing, measured, pending, interrupted, partial] = csvContent.slice(1).split('\n').map(line => line.split(','))
+      const inputIndex = headers.indexOf('Billed Input Tokens')
+      const outputIndex = headers.indexOf('Billed Output Tokens')
+      expect(inputIndex).toBeGreaterThan(-1)
+      expect(outputIndex).toBeGreaterThan(-1)
+      expect(missing[inputIndex]).toBe('0')
       expect(measured[inputIndex]).toBe('0')
-      expect(missing[headers.indexOf('Output Tokens')]).toBe('5071')
+      expect(missing[outputIndex]).toBe('5071')
       expect(headers).not.toContain('Input Usage Source')
       expect(headers).not.toContain('Output Usage Source')
       expect(csvContent).not.toContain('Estimated')
       expect(csvContent).not.toContain('Upstream report')
-      expect(pending[headers.indexOf('Input Tokens')]).toBe('')
-      expect(pending[headers.indexOf('Output Tokens')]).toBe('')
+      expect(pending[inputIndex]).toBe('')
+      expect(pending[outputIndex]).toBe('')
       expect(pending[headers.indexOf('Billing Status')]).toBe('Pending review')
       expect(pending[headers.indexOf('Billed Cost')]).toBe('Pending review')
       expect(pending[headers.indexOf('Original Cost')]).toBe('Pending review')
-      expect(interrupted[inputIndex]).toBe('')
-      expect(interrupted[headers.indexOf('Output Tokens')]).toBe('')
+      expect(interrupted[inputIndex]).toBe('0')
+      expect(interrupted[outputIndex]).toBe('0')
+      expect(partial[inputIndex]).toBe('136')
+      expect(partial[outputIndex]).toBe('71')
       expect(interrupted[headers.indexOf('Compensated Cost')]).toBe('2.75000000')
       expect(interrupted[headers.indexOf('Net Charge')]).toBe('3.25000000')
       expect(interrupted[headers.indexOf('Request Status')]).toBe('interrupted')

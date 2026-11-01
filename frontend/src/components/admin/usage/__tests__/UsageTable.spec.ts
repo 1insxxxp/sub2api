@@ -38,6 +38,10 @@ const messages: Record<string, string> = {
   'usage.billingPendingReview': 'Pending review',
   'usage.billingPendingReviewHint': 'Usage and charges are being checked. This record will be updated when confirmed.',
   'usage.tokensEstimated': 'Estimated',
+  'usage.billedTokens': 'Billed Tokens',
+  'usage.billedInputTokens': 'Billed Input Tokens',
+  'usage.billedOutputTokens': 'Billed Output Tokens',
+  'usage.billedTokensUnavailable': 'Billing quantity unavailable',
   'usage.inputTokensUnreportedHint': 'Input usage was not reported; no input charge.',
   'usage.outputTokensEstimatedHint': 'Estimated from received response content, including reasoning; not the upstream bill.',
   'usage.tokensSourceUnknownHint': 'The source was not recorded; the stored count is shown.',
@@ -1005,6 +1009,65 @@ describe('admin usage mobile cards', () => {
   })
 })
 
+
+describe('ordinary user billed token presentation', () => {
+  const mountBilled = (row: object) => mount(UsageTable, {
+    props: { data: [{ ...baseImageRow, image_count: 0, billing_mode: 'token', ...row }] as never[], columns: [], showAccountBilling: false, showUsageDiagnostics: false, showBilledTokens: true, compactMobile: true },
+    global: { stubs: { DataTable: DataTableStub, EmptyState: true, Icon: true, Teleport: true } },
+  })
+
+  it('shows persisted charged counts even when measurement availability hides them', async () => {
+    const wrapper = mountBilled({ input_tokens: 136, output_tokens: 71, input_tokens_known: false, output_tokens_known: false, input_tokens_source: 'unreported', output_tokens_source: 'unknown', input_cost: 0.001, output_cost: 0.002, actual_cost: 0.003 })
+    expect(wrapper.get('[data-testid="input-token-count"]').text()).toBe('136')
+    expect(wrapper.get('[data-testid="output-token-count"]').text()).toBe('71')
+    expect(wrapper.get('[data-testid="input-token-count"]').attributes('title')).toBeUndefined()
+    await wrapper.find('.group.relative').trigger('mouseenter')
+    expect(wrapper.get('[data-testid="token-total"]').text()).toBe('207')
+    expect(wrapper.text()).toContain('Billed Input Tokens')
+    expect(wrapper.text()).toContain('Billed Output Tokens')
+    expect(wrapper.text()).not.toContain('Estimated')
+    expect(wrapper.text()).not.toContain('Usage not returned')
+    expect(wrapper.get('[data-testid="usage-primary-charge"]').text()).toContain('0.003000')
+    wrapper.unmount()
+  })
+
+  it('shows settled zero counts without hiding a separate cached charge', async () => {
+    const wrapper = mountBilled({ input_tokens: 0, output_tokens: 0, input_tokens_known: false, output_tokens_known: false, input_tokens_source: 'unknown', output_tokens_source: 'unknown', cache_read_tokens: 500, cache_read_cost: 0.001, actual_cost: 0.001 })
+    expect(wrapper.get('[data-testid="input-token-count"]').text()).toBe('0')
+    expect(wrapper.get('[data-testid="output-token-count"]').text()).toBe('0')
+    expect(wrapper.get('[data-testid="usage-primary-charge"]').text()).toContain('0.001000')
+    await wrapper.find('.group.relative').trigger('mouseenter')
+    expect(wrapper.get('[data-testid="token-total"]').text()).toBe('500')
+    wrapper.unmount()
+  })
+
+  it('keeps per-request charges visible when settled token quantities are zero', () => {
+    const wrapper = mountBilled({ billing_mode: 'per_request', input_tokens_known: false, output_tokens_known: false, actual_cost: 0.02 })
+    expect(wrapper.get('[data-testid="input-token-count"]').text()).toBe('0')
+    expect(wrapper.get('[data-testid="output-token-count"]').text()).toBe('0')
+    expect(wrapper.get('[data-testid="usage-primary-charge"]').text()).toContain('0.020000')
+    expect(wrapper.text()).toContain('Per request')
+    wrapper.unmount()
+  })
+
+  it('keeps historical unsettled quantities pending instead of presenting a settled zero', async () => {
+    const wrapper = mountBilled({ id: -42, billing_status: 'pending_review', input_tokens_known: false, output_tokens_known: false })
+    expect(wrapper.get('[data-testid="input-token-count"]').text()).toBe('Pending review')
+    expect(wrapper.get('[data-testid="output-token-count"]').text()).toBe('Pending review')
+    await wrapper.find('.group.relative').trigger('mouseenter')
+    expect(wrapper.get('[data-testid="token-total"]').text()).toBe('Pending review')
+    wrapper.unmount()
+  })
+
+  it('does not fabricate zero for an invalid persisted quantity', async () => {
+    const wrapper = mountBilled({ input_tokens: undefined, output_tokens: Number.NaN })
+    expect(wrapper.get('[data-testid="input-token-count"]').text()).toBe('Billing quantity unavailable')
+    expect(wrapper.get('[data-testid="output-token-count"]').text()).toBe('Billing quantity unavailable')
+    await wrapper.find('.group.relative').trigger('mouseenter')
+    expect(wrapper.get('[data-testid="token-total"]').text()).toBe('Billing quantity unavailable')
+    wrapper.unmount()
+  })
+})
 
 describe('usage token measurement sources', () => {
   const mountSources = (rows: object[], showAccountBilling = true) => mount(UsageTable, {

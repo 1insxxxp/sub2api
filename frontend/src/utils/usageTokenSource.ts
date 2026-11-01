@@ -1,4 +1,5 @@
-import type { UsageTokenSource } from '@/types'
+import type { UsageLog, UsageTokenSource } from '@/types'
+import { isUsageBillingPending } from '@/utils/usageBillingState'
 
 type Translate = (key: string) => string
 
@@ -41,6 +42,18 @@ export function formatUsageTokenCount(value: number | undefined, source: UsageTo
 // Legacy values stay intact and carry a separate unknown-source column.
 export function exportUsageTokenCount(value: number, source: UsageTokenSource | undefined, known?: boolean): number | '' {
   return isUsageTokenCountKnown(value, source, known) ? value : ''
+}
+
+// Settlement quantities are independent of whether every upstream measurement
+// was available. Preserve the persisted count, including a charged partial count.
+export function exportBilledUsageTokenCount(value: number | undefined, log: Pick<UsageLog, 'billing_status'>): number | '' {
+  return !isUsageBillingPending(log) && typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : ''
+}
+
+export function formatBilledUsageTokenCount(value: number | undefined, log: Pick<UsageLog, 'billing_status'>, t: Translate): string {
+  if (isUsageBillingPending(log)) return t('usage.billingPendingReview')
+  const count = exportBilledUsageTokenCount(value, log)
+  return count === '' ? t('usage.billedTokensUnavailable') : count.toLocaleString()
 }
 
 export function hasUnreportedUsage(log: UsageSources | null): boolean {

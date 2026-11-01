@@ -245,6 +245,7 @@
             :server-side-sort="true"
             :show-account-billing="false"
             :show-usage-diagnostics="false"
+            :show-billed-tokens="true"
             :show-upstream-endpoint="false"
             :show-compensation-action="false"
             default-sort-key="created_at"
@@ -524,7 +525,7 @@
 </template>
 
 <script setup lang="ts">
-import { exportUsageTokenCount } from '@/utils/usageTokenSource'
+import { exportBilledUsageTokenCount } from '@/utils/usageTokenSource'
 import { formatUsageBillingCost, usageBillingStatusLabel } from '@/utils/usageBillingState'
 import '@/styles/user-workspace.css'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
@@ -1110,8 +1111,8 @@ const exportToCSV = async () => {
       'IP Address',
       'Type',
       'Billing Mode',
-      'Input Tokens',
-      'Output Tokens',
+      t('usage.billedInputTokens'),
+      t('usage.billedOutputTokens'),
       'Cache Read Tokens',
       'Cache Creation Tokens',
       'Rate Multiplier',
@@ -1133,8 +1134,8 @@ const exportToCSV = async () => {
       log.ip_address || '',
       getRequestTypeExportText(log),
       getBillingModeLabel(getDisplayBillingMode(log), t),
-      exportUsageTokenCount(log.input_tokens, log.input_tokens_source, log.input_tokens_known),
-      exportUsageTokenCount(log.output_tokens, log.output_tokens_source, log.output_tokens_known),
+      exportBilledUsageTokenCount(log.input_tokens, log),
+      exportBilledUsageTokenCount(log.output_tokens, log),
       log.cache_read_tokens,
       log.cache_creation_tokens,
       log.rate_multiplier,
@@ -1180,7 +1181,7 @@ const allColumns = computed<Column[]>(() => [
   { key: 'group', label: t('admin.usage.group'), sortable: false },
   { key: 'stream', label: t('usage.type'), sortable: false },
   { key: 'billing_mode', label: t('admin.usage.billingMode'), sortable: false },
-  { key: 'tokens', label: t('usage.tokens'), sortable: false },
+  { key: 'tokens', label: t('usage.billedTokens'), sortable: false },
   { key: 'cost', label: t('usage.cost'), sortable: false },
   { key: 'latency', label: t('usage.latency'), sortable: false },
   { key: 'created_at', label: t('usage.time'), sortable: true },

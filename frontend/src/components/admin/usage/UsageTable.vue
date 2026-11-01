@@ -359,11 +359,11 @@
           <div>
             <div class="text-xs font-semibold text-gray-300 mb-1">{{ t('usage.tokenDetails') }}</div>
             <div v-if="tokenTooltipData && !hasImageInputTokens(tokenTooltipData)" class="flex items-center justify-between gap-4">
-              <span class="text-gray-400">{{ t('admin.usage.inputTokens') }}</span>
+              <span class="text-gray-400">{{ t(showBilledTokens ? 'usage.billedInputTokens' : 'admin.usage.inputTokens') }}</span>
               <span class="font-medium text-white">{{ displayUsageTokens(tokenTooltipData, 'input') }}</span>
             </div>
             <div v-if="tokenTooltipData && hasImageInputTokens(tokenTooltipData) && textInputTokens(tokenTooltipData) > 0" class="flex items-center justify-between gap-4">
-              <span class="text-gray-400">{{ t('admin.usage.inputTokens') }}</span>
+              <span class="text-gray-400">{{ t(showBilledTokens ? 'usage.billedInputTokens' : 'admin.usage.inputTokens') }}</span>
               <span class="font-medium text-white">{{ textInputTokens(tokenTooltipData).toLocaleString() }}</span>
             </div>
             <div v-if="tokenTooltipData && hasImageInputTokens(tokenTooltipData)" class="flex items-center justify-between gap-4">
@@ -371,11 +371,11 @@
               <span class="font-medium text-fuchsia-300">{{ tokenTooltipData.image_input_tokens.toLocaleString() }}</span>
             </div>
             <div v-if="tokenTooltipData && !hasImageOutputTokens(tokenTooltipData)" class="flex items-center justify-between gap-4">
-              <span class="text-gray-400">{{ t('admin.usage.outputTokens') }}</span>
+              <span class="text-gray-400">{{ t(showBilledTokens ? 'usage.billedOutputTokens' : 'admin.usage.outputTokens') }}</span>
               <span class="font-medium text-white">{{ displayUsageTokens(tokenTooltipData, 'output') }}</span>
             </div>
             <div v-if="tokenTooltipData && hasImageOutputTokens(tokenTooltipData) && textOutputTokens(tokenTooltipData) > 0" class="flex items-center justify-between gap-4">
-              <span class="text-gray-400">{{ t('admin.usage.outputTokens') }}</span>
+              <span class="text-gray-400">{{ t(showBilledTokens ? 'usage.billedOutputTokens' : 'admin.usage.outputTokens') }}</span>
               <span class="font-medium text-white">{{ textOutputTokens(tokenTooltipData).toLocaleString() }}</span>
             </div>
             <div v-if="tokenTooltipData && hasImageOutputTokens(tokenTooltipData)" class="flex items-center justify-between gap-4">
@@ -423,8 +423,8 @@
             <p>{{ t('usage.outputTokensSource') }}: {{ usageTokenSourceHint(tokenTooltipData.output_tokens_source, 'output', t) }}</p>
           </div>
           <div class="flex items-center justify-between gap-6 border-t border-gray-700 pt-1.5">
-            <span class="text-gray-400">{{ t(hasUnreportedUsage(tokenTooltipData) ? 'usage.recordedTokensSubtotal' : 'usage.totalTokens') }}</span>
-            <span data-testid="token-total" class="font-semibold text-blue-400">{{ hasUnreportedUsage(tokenTooltipData) ? '—' : ((tokenTooltipData?.input_tokens || 0) + (tokenTooltipData?.output_tokens || 0) + (tokenTooltipData?.cache_creation_tokens || 0) + (tokenTooltipData?.cache_read_tokens || 0)).toLocaleString() }}</span>
+            <span class="text-gray-400">{{ t(showBilledTokens ? 'usage.billedTokens' : (hasUnreportedUsage(tokenTooltipData) ? 'usage.recordedTokensSubtotal' : 'usage.totalTokens')) }}</span>
+            <span data-testid="token-total" class="font-semibold text-blue-400">{{ displayUsageTokenTotal(tokenTooltipData) }}</span>
           </div>
         </div>
         <div class="absolute right-full top-1/2 h-0 w-0 -translate-y-1/2 border-b-[6px] border-r-[6px] border-t-[6px] border-b-transparent border-r-gray-900 border-t-transparent dark:border-r-gray-800"></div>
@@ -589,7 +589,7 @@ import { formatCacheTokens, formatMultiplier } from '@/utils/formatters'
 import { formatTokenPricePerMillion } from '@/utils/usagePricing'
 import { getUsageServiceTierLabel } from '@/utils/usageServiceTier'
 import { resolveUsageRequestType } from '@/utils/usageRequestType'
-import { formatUsageTokenCount, hasUnreportedUsage, isUsageTokenCountKnown, usageTokenSourceHint } from '@/utils/usageTokenSource'
+import { exportBilledUsageTokenCount, formatBilledUsageTokenCount, formatUsageTokenCount, hasUnreportedUsage, isUsageTokenCountKnown, usageTokenSourceHint } from '@/utils/usageTokenSource'
 import { isUsageBillingPending } from '@/utils/usageBillingState'
 import {
   LATENCY_BAR_CLASSES,
@@ -647,6 +647,8 @@ interface Props {
   defaultSortOrder?: 'asc' | 'desc'
   showAccountBilling?: boolean
   showUsageDiagnostics?: boolean
+  /** Display persisted settlement quantities rather than measurement availability. */
+  showBilledTokens?: boolean
   showUpstreamEndpoint?: boolean
   showCompensationAction?: boolean
   /** 嵌入统一卡片内使用：去掉自身卡片外观 */
@@ -661,6 +663,7 @@ const props = withDefaults(defineProps<Props>(), {
   defaultSortOrder: 'asc',
   showAccountBilling: true,
   showUsageDiagnostics: true,
+  showBilledTokens: false,
   showUpstreamEndpoint: true,
   showCompensationAction: false,
   compactMobile: false,
@@ -676,10 +679,27 @@ const { t } = useI18n()
 const appStore = useAppStore()
 const copiedRequestId = ref<string | null>(null)
 const displayUsageTokens = (row: AdminUsageLog, field: 'input' | 'output'): string =>
-  formatUsageTokenCount(row[`${field}_tokens`], row[`${field}_tokens_source`], t, row[`${field}_tokens_known`])
+  props.showBilledTokens
+    ? formatBilledUsageTokenCount(row[`${field}_tokens`], row, t)
+    : formatUsageTokenCount(row[`${field}_tokens`], row[`${field}_tokens_source`], t, row[`${field}_tokens_known`])
+const displayUsageTokenTotal = (row: AdminUsageLog | null): string => {
+  if (props.showBilledTokens) {
+    if (!row) return t('usage.billedTokensUnavailable')
+    if (isUsageBillingPending(row)) return t('usage.billingPendingReview')
+    let total = 0
+    for (const value of [row.input_tokens, row.output_tokens, row.cache_creation_tokens, row.cache_read_tokens]) {
+      const count = exportBilledUsageTokenCount(value, row)
+      if (count === '') return t('usage.billedTokensUnavailable')
+      total += count
+    }
+    return total.toLocaleString()
+  }
+  return hasUnreportedUsage(row) ? '—' : ((row?.input_tokens || 0) + (row?.output_tokens || 0) + (row?.cache_creation_tokens || 0) + (row?.cache_read_tokens || 0)).toLocaleString()
+}
 const tokenCountKnown = (row: AdminUsageLog, field: 'input' | 'output'): boolean =>
   isUsageTokenCountKnown(row[`${field}_tokens`], row[`${field}_tokens_source`], row[`${field}_tokens_known`])
 const usageTokenTitle = (row: AdminUsageLog, field: 'input' | 'output'): string | undefined => {
+  if (props.showBilledTokens) return undefined
   if (!tokenCountKnown(row, field)) return t('usage.tokensNotReturned')
   return props.showUsageDiagnostics ? usageTokenSourceHint(row[`${field}_tokens_source`], field, t) : undefined
 }
