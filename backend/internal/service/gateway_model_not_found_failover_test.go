@@ -181,13 +181,21 @@ func TestGatewayModelNotFoundFailoverAfterRectification(t *testing.T) {
 			account.Credentials["model_mapping"] = map[string]any{"public-opus": "claude-opus-4-6"}
 			c, recorder := gatewayModelNotFoundContext("/v1/messages")
 
-			_, err = forwardGatewayModelNotFoundTest(svc, c, account, "/v1/messages")
+			// Budget rectification needs room for at least 1024 thinking tokens
+			// without increasing the client's explicit output allowance.
+			body := []byte(`{"model":"public-opus","max_tokens":4096,"stream":true,"messages":[{"role":"user","content":"hello"}]}`)
+			parsed, err := ParseGatewayRequest(NewRequestBodyRef(body), PlatformAnthropic)
+			require.NoError(t, err)
+			_, err = svc.Forward(context.Background(), c, account, parsed)
 
 			var failoverErr *UpstreamFailoverError
 			require.ErrorAs(t, err, &failoverErr)
 			require.Equal(t, http.StatusNotFound, failoverErr.StatusCode)
 			require.False(t, failoverErr.RetryableOnSameAccount)
 			require.Equal(t, len(tc.failures)+1, upstream.callCount)
+			for _, sent := range upstream.requestBodies {
+				require.Equal(t, int64(4096), gjson.GetBytes(sent, "max_tokens").Int())
+			}
 			require.False(t, c.Writer.Written())
 			require.Empty(t, recorder.Body.String())
 			events := c.MustGet(OpsUpstreamErrorsKey).([]*OpsUpstreamErrorEvent)
