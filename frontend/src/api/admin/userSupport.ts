@@ -5,6 +5,7 @@ export interface WorkbenchPermissions { commission: boolean; affiliate_leaderboa
 export interface WorkbenchAccess extends WorkbenchPermissions { balance_transfer: boolean }
 export type SupportRequestStatus = 'completed' | 'interrupted' | 'failed' | 'empty' | 'unknown'
 export type SupportErrorCategory = 'auth' | 'quota' | 'rate_limit' | 'invalid_request' | 'timeout' | 'service_unavailable' | 'other'
+export type SupportErrorKind = 'request' | 'auth' | 'account_auth' | 'routing' | 'upstream' | 'network' | 'internal' | 'unknown'
 
 export interface SupportUsageRecord {
   id: number
@@ -25,6 +26,9 @@ export interface SupportErrorRecord {
   id: number
   created_at: string
   model: string
+  group_name: string
+  status_code: number | null
+  error_kind: SupportErrorKind
   category: SupportErrorCategory
 }
 

@@ -221,7 +221,7 @@ func TestUserSupportRecordsAreBoundedOwnedAndSafe(t *testing.T) {
 		}
 		_, err := integrationDB.Exec(`INSERT INTO usage_logs(user_id,api_key_id,account_id,request_id,model,requested_model,input_tokens,output_tokens,actual_cost,created_at,group_id) VALUES($1,$2,$3,$4,'mapped-secret.example','按量vet/gemini-4-argon',11,12,0.3,$5,$6)`, u.ID, key.ID, account.ID, uuid.NewString(), stamp, groupID)
 		require.NoError(t, err)
-		_, err = integrationDB.Exec(`INSERT INTO ops_error_logs(user_id,created_at,error_phase,error_type,status_code,model,requested_model,error_message,is_count_tokens) VALUES($1,$2,'upstream','api_error',502,'mapped-secret.example','gemini-4-argon','http://secret.example sk-secret',false)`, u.ID, stamp)
+		_, err = integrationDB.Exec(`INSERT INTO ops_error_logs(user_id,created_at,error_phase,error_type,status_code,upstream_status_code,group_id,model,requested_model,error_message,is_count_tokens) VALUES($1,$2,'upstream','api_error',502,429,$3,'mapped-secret.example','gemini-4-argon','http://secret.example sk-secret',false)`, u.ID, stamp, groupID)
 		require.NoError(t, err)
 	}
 	otherKey := mustCreateApiKey(t, testEntClient(t), &service.APIKey{UserID: other.ID, Key: "sk-" + uuid.NewString(), Name: "other"})
@@ -243,6 +243,15 @@ func TestUserSupportRecordsAreBoundedOwnedAndSafe(t *testing.T) {
 	errors, err := r.ListErrors(ctx, u.ID)
 	require.NoError(t, err)
 	require.Len(t, errors, 10)
+	errorJSON, err := json.Marshal(errors)
+	require.NoError(t, err)
+	var publicErrors []map[string]any
+	require.NoError(t, json.Unmarshal(errorJSON, &publicErrors))
+	require.Equal(t, deletedGroup.Name, publicErrors[0]["group_name"])
+	require.Equal(t, "", publicErrors[1]["group_name"])
+	require.Equal(t, group.Name, publicErrors[2]["group_name"])
+	require.Equal(t, float64(502), publicErrors[0]["status_code"], "retain the recorded status instead of the provider status")
+	require.Equal(t, "upstream", publicErrors[0]["error_kind"])
 	for i := 1; i < 10; i++ {
 		require.Greater(t, usage[i-1].ID, usage[i].ID)
 		require.Greater(t, errors[i-1].ID, errors[i].ID)
@@ -253,7 +262,8 @@ func TestUserSupportRecordsAreBoundedOwnedAndSafe(t *testing.T) {
 	}{usage, errors})
 	require.NoError(t, err)
 	require.NotContains(t, string(encoded), "secret")
-	require.NotContains(t, string(encoded), "upstream")
+	require.NotContains(t, string(encoded), "upstream_model")
+	require.NotContains(t, string(encoded), "upstream_status_code")
 	require.NotContains(t, string(encoded), "account")
 	require.Equal(t, "gemini-4-argon", usage[0].Model)
 	require.Equal(t, "service_unavailable", errors[0].Category)

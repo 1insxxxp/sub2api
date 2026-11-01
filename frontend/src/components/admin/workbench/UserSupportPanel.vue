@@ -77,12 +77,15 @@
           <p v-else-if="errors.length === 0" class="support-empty">{{ t('userSupport.noErrors') }}</p>
           <div v-else class="support-table-wrap">
             <table class="support-table support-error-table">
-              <thead><tr><th>{{ t('userSupport.columns.time') }}</th><th>{{ t('userSupport.columns.model') }}</th><th>{{ t('userSupport.columns.error') }}</th></tr></thead>
+              <thead><tr><th>{{ t('userSupport.columns.time') }}</th><th>{{ t('userSupport.columns.model') }}</th><th>{{ t('userSupport.columns.group') }}</th><th :title="t('userSupport.httpStatusHint')">{{ t('userSupport.columns.httpStatus') }}</th><th>{{ t('userSupport.columns.errorKind') }}</th><th>{{ t('userSupport.columns.error') }}</th></tr></thead>
               <tbody>
                 <tr v-for="item in errors" :key="item.id" data-test="support-error-row">
-                  <td :data-label="t('userSupport.columns.time')" class="support-time">{{ formatTime(item.created_at) }}</td>
-                  <td :data-label="t('userSupport.columns.model')" class="font-medium break-words">{{ displayModel(item.model) }}</td>
-                  <td :data-label="t('userSupport.columns.error')" class="text-amber-700 dark:text-amber-400">{{ t(`userSupport.categories.${safeCategory(item.category)}`) }}</td>
+                  <td :data-label="t('userSupport.columns.time')" class="support-time support-error-time">{{ formatTime(item.created_at) }}</td>
+                  <td :data-label="t('userSupport.columns.model')" class="support-error-model font-medium [overflow-wrap:anywhere]">{{ displayModel(item.model) }}</td>
+                  <td :data-label="t('userSupport.columns.group')" class="support-error-group [overflow-wrap:anywhere]">{{ item.group_name || '—' }}</td>
+                  <td :data-label="t('userSupport.columns.httpStatus')" :title="t('userSupport.httpStatusHint')" class="support-error-http tabular-nums"><span class="support-status bg-gray-500/10 text-gray-600 dark:text-dark-300">{{ formatHTTPStatus(item.status_code) }}</span></td>
+                  <td :data-label="t('userSupport.columns.errorKind')" class="support-error-kind [overflow-wrap:anywhere]">{{ t(`userSupport.errorKinds.${safeErrorKind(item.error_kind)}`) }}</td>
+                  <td :data-label="t('userSupport.columns.error')" class="support-error-message text-amber-700 dark:text-amber-400">{{ t(`userSupport.categories.${safeCategory(item.category)}`) }}</td>
                 </tr>
               </tbody>
             </table>
@@ -182,10 +185,13 @@ function formatCount(value: number | null) { return typeof value === 'number' &&
 function formatAmount(value: number) { return typeof value === 'number' && Number.isFinite(value) ? value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 }) : '—' }
 function formatDuration(value: number | null) { return typeof value === 'number' && Number.isFinite(value) ? `${(value / 1000).toFixed(2)}s` : '—' }
 function displayModel(model: string) { return model && model !== 'unknown' ? model : t('userSupport.unknownModel') }
+function formatHTTPStatus(value: unknown) { return typeof value === 'number' && Number.isInteger(value) && value >= 100 && value <= 599 ? value : '—' }
 const statuses = new Set(['completed', 'interrupted', 'failed', 'empty', 'unknown'])
 const categories = new Set(['auth', 'quota', 'rate_limit', 'invalid_request', 'timeout', 'service_unavailable', 'other'])
+const errorKinds = new Set(['request', 'auth', 'account_auth', 'routing', 'upstream', 'network', 'internal', 'unknown'])
 function safeStatus(value: string) { return statuses.has(value) ? value : 'unknown' }
 function safeCategory(value: string) { return categories.has(value) ? value : 'other' }
+function safeErrorKind(value: unknown) { return typeof value === 'string' && errorKinds.has(value) ? value : 'unknown' }
 function statusClass(value: string) {
   if (value === 'completed') return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
   if (value === 'failed') return 'bg-red-500/10 text-red-700 dark:text-red-400'
@@ -210,8 +216,6 @@ function statusClass(value: string) {
 .support-status { display: inline-flex; padding: 3px 7px; border-radius: 4px; font-size: 11px; white-space: nowrap; }
 .support-empty { padding: 28px 0; border-top: 1px solid var(--workspace-rule); font-size: 13px; color: var(--workspace-muted); }
 .support-initial { display: flex; min-height: 230px; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
-.support-error-table th:first-child { width: 25%; }
-.support-error-table th:nth-child(2) { width: 35%; }
 @media (max-width: 767px) {
   .support-panel .support-lookup > div { flex-basis: 100%; min-width: 0; }
   .support-panel .support-lookup .input { min-height: 44px; font-size: 16px; }
@@ -233,6 +237,12 @@ function statusClass(value: string) {
   .support-usage-charge { grid-area: charge; }
   .support-usage-duration { grid-area: duration; }
   .support-usage-status { grid-area: status; text-align: right; }
-  .support-error-table td:last-child { grid-column: 1 / -1; }
+  .support-error-table tr { grid-template-areas: 'time http' 'model model' 'group group' 'kind kind' 'message message'; }
+  .support-error-time { grid-area: time; }
+  .support-error-model { grid-area: model; }
+  .support-error-group { grid-area: group; }
+  .support-error-http { grid-area: http; text-align: right; }
+  .support-error-kind { grid-area: kind; }
+  .support-error-message { grid-area: message; }
 }
 </style>

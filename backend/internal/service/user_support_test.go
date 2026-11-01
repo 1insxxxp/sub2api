@@ -45,6 +45,8 @@ func TestUserSupportOnlyReturnsSafeRecordValuesAndTenRows(t *testing.T) {
 		r.usageRows = append(r.usageRows, UserSupportUsageRecord{ID: int64(i + 1), Model: "https://secret.example/sk-secret", GroupName: "客户分组", Status: "account-secret.example"})
 		r.errorRows = append(r.errorRows, UserSupportErrorRecord{ID: int64(i + 1), Model: "private-secret.example", Category: "http://secret.example"})
 	}
+	require.NoError(t, json.Unmarshal([]byte(`{"group_name":"客户分组","status_code":700,"error_kind":"https://secret.example/sk-secret"}`), &r.errorRows[0]))
+	require.NoError(t, json.Unmarshal([]byte(`{"group_name":"","status_code":200,"error_kind":"request"}`), &r.errorRows[1]))
 	got, err := NewUserSupportService(r, nil, nil).Lookup(context.Background(), 1, "2")
 	require.NoError(t, err)
 	require.Len(t, got.Usage.Items, 10)
@@ -68,10 +70,19 @@ func TestUserSupportOnlyReturnsSafeRecordValuesAndTenRows(t *testing.T) {
 			if panelName == "usage" {
 				assertSupportSchema(t, item, "id", "created_at", "model", "group_name", "input_tokens", "output_tokens", "cache_read_tokens", "charged_amount", "duration_ms", "first_token_ms", "status", "stream")
 			} else {
-				assertSupportSchema(t, item, "id", "created_at", "model", "category")
+				assertSupportSchema(t, item, "id", "created_at", "model", "category", "group_name", "status_code", "error_kind")
 			}
 		}
 	}
+	var publicErrors []map[string]any
+	encodedErrors, err := json.Marshal(got.Errors.Items)
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(encodedErrors, &publicErrors))
+	require.Equal(t, "客户分组", publicErrors[0]["group_name"])
+	require.Nil(t, publicErrors[0]["status_code"])
+	require.Equal(t, "unknown", publicErrors[0]["error_kind"])
+	require.Equal(t, float64(200), publicErrors[1]["status_code"])
+	require.Equal(t, "request", publicErrors[1]["error_kind"])
 }
 
 func assertSupportSchema(t *testing.T, encoded json.RawMessage, keys ...string) map[string]json.RawMessage {

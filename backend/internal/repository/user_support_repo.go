@@ -264,7 +264,9 @@ func (r *userSupportRepository) ListErrors(ctx context.Context, userID int64) ([
 	// Reuse only the user-visible request filter, never the broad Ops DTO or
 	// its provider-preferred status/message/model projection.
 	where, args := buildOpsErrorLogsWhere(&service.OpsErrorLogFilter{UserID: &userID, View: "all", ExcludeCountTokens: true, ExcludeCanceledRequests: true})
-	rows, err := r.db.QueryContext(ctx, `SELECT e.id,e.created_at,COALESCE(e.requested_model,''),e.error_phase,e.error_type FROM ops_error_logs e `+where+` ORDER BY e.created_at DESC,e.id DESC LIMIT 10`, args...)
+	rows, err := r.db.QueryContext(ctx, `SELECT e.id,e.created_at,COALESCE(e.requested_model,''),COALESCE(g.name,''),
+	CASE WHEN e.status_code BETWEEN 100 AND 599 THEN e.status_code ELSE NULL END,e.error_phase,e.error_type
+	FROM ops_error_logs e LEFT JOIN groups g ON g.id=e.group_id `+where+` ORDER BY e.created_at DESC,e.id DESC LIMIT 10`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -272,11 +274,14 @@ func (r *userSupportRepository) ListErrors(ctx context.Context, userID int64) ([
 	result := make([]service.UserSupportErrorRecord, 0, 10)
 	for rows.Next() {
 		var item service.UserSupportErrorRecord
+		var status sql.NullInt64
 		var phase, kind string
-		if err = rows.Scan(&item.ID, &item.CreatedAt, &item.Model, &phase, &kind); err != nil {
+		if err = rows.Scan(&item.ID, &item.CreatedAt, &item.Model, &item.GroupName, &status, &phase, &kind); err != nil {
 			return nil, err
 		}
 		item.Model = service.PublicUserSupportModel(item.Model)
+		item.StatusCode = supportInt64Pointer(status)
+		item.ErrorKind = service.PublicUserSupportErrorKind(phase)
 		item.Category = service.UserSupportErrorCategory(phase, kind)
 		result = append(result, item)
 	}

@@ -50,10 +50,13 @@ type UserSupportUsageRecord struct {
 	Stream          bool      `json:"stream"`
 }
 type UserSupportErrorRecord struct {
-	ID        int64     `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	Model     string    `json:"model"`
-	Category  string    `json:"category"`
+	ID         int64     `json:"id"`
+	CreatedAt  time.Time `json:"created_at"`
+	Model      string    `json:"model"`
+	GroupName  string    `json:"group_name"`
+	StatusCode *int64    `json:"status_code"`
+	ErrorKind  string    `json:"error_kind"`
+	Category   string    `json:"category"`
 }
 type UserSupportUsagePanel struct {
 	Status string                   `json:"status"`
@@ -170,6 +173,10 @@ func (s *UserSupportService) Lookup(ctx context.Context, actorID int64, account 
 		for i := 0; i < len(rows) && i < 10; i++ {
 			row := rows[i]
 			row.Model = PublicUserSupportModel(row.Model)
+			row.ErrorKind = PublicUserSupportErrorKind(row.ErrorKind)
+			if row.StatusCode != nil && (*row.StatusCode < 100 || *row.StatusCode > 599) {
+				row.StatusCode = nil
+			}
 			switch row.Category {
 			case "auth", "quota", "rate_limit", "invalid_request", "timeout", "service_unavailable":
 			default:
@@ -241,5 +248,16 @@ func UserSupportErrorCategory(phase, kind string) string {
 		return "service_unavailable"
 	default:
 		return "other"
+	}
+}
+
+// PublicUserSupportErrorKind exposes only the reviewed error-stage labels used
+// by the support page. Historical phase/type strings are never reflected.
+func PublicUserSupportErrorKind(value string) string {
+	switch value {
+	case "request", "auth", "account_auth", "routing", "upstream", "network", "internal":
+		return value
+	default:
+		return "unknown"
 	}
 }

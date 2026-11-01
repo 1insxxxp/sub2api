@@ -28,6 +28,7 @@ const result = () => ({
   })) },
   errors: { status: 'ok', items: Array.from({ length: 10 }, (_, i) => ({
     id: 200 + i, created_at: '2026-10-31T04:00:00Z', model: 'gemini-4-argon', category: 'service_unavailable',
+    group_name: i === 1 ? '' : 'Gemini <VIP>', status_code: i === 1 ? null : 502, error_kind: 'upstream',
     message: 'https://secret.invalid sk-secret SECRET-UPSTREAM',
   })) },
 })
@@ -36,6 +37,42 @@ const createView = () => mount(UserSupportPanel, { global: { stubs: { AppLayout:
 beforeEach(() => { vi.clearAllMocks(); auth.token = 'first-session'; refresh.mockResolvedValue(true); lookup.mockResolvedValue(result()) })
 
 describe('user support panel', () => {
+  it('renders error group, recorded HTTP status and a fixed error-kind label', async () => {
+    const view = createView()
+    try {
+      await flushPromises()
+      await view.get('[data-test="support-account"]').setValue('7147')
+      await view.get('form').trigger('submit'); await flushPromises()
+      const rows = view.findAll('[data-test="support-error-row"]')
+      expect(rows[0].get('td[data-label="userSupport.columns.group"]').text()).toBe('Gemini <VIP>')
+      expect(rows[0].find('vip').exists()).toBe(false)
+      expect(rows[0].get('td[data-label="userSupport.columns.httpStatus"]').text()).toBe('502')
+      expect(rows[0].get('td[data-label="userSupport.columns.errorKind"]').text()).toBe('userSupport.errorKinds.upstream')
+      expect(rows[0].get('td[data-label="userSupport.columns.error"]').text()).toBe('userSupport.categories.service_unavailable')
+      expect(rows[1].get('td[data-label="userSupport.columns.group"]').text()).toBe('—')
+      expect(rows[1].get('td[data-label="userSupport.columns.httpStatus"]').text()).toBe('—')
+    } finally { view.unmount() }
+  })
+
+  it('does not render arbitrary error kinds or invalid HTTP status values', async () => {
+    const data = result()
+    data.errors.items = [0, 99, 600, 429.5, null].map((status, i) => ({
+      ...data.errors.items[i], status_code: status, error_kind: 'https://secret.invalid sk-secret',
+    }))
+    lookup.mockResolvedValue(data)
+    const view = createView()
+    try {
+      await flushPromises()
+      await view.get('[data-test="support-account"]').setValue('7147')
+      await view.get('form').trigger('submit'); await flushPromises()
+      for (const row of view.findAll('[data-test="support-error-row"]')) {
+        expect(row.get('td[data-label="userSupport.columns.httpStatus"]').text()).toBe('—')
+        expect(row.get('td[data-label="userSupport.columns.errorKind"]').text()).toBe('userSupport.errorKinds.unknown')
+      }
+      expect(view.html()).not.toMatch(/secret\.invalid|sk-secret|SECRET-UPSTREAM/)
+    } finally { view.unmount() }
+  })
+
   it('only grants after explicit submit, and renders two bounded safe lists', async () => {
     const view = createView()
     await flushPromises()
