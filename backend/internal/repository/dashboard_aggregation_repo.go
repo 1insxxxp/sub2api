@@ -19,7 +19,9 @@ type dashboardAggregationRepository struct {
 	clock func() time.Time
 }
 
-const usageLogsCleanupBatchSize = 10000
+// Each deleted row runs the rollup invalidation trigger while holding the
+// shared watermark. Keep that fenced phase bounded independently of retention.
+const usageLogsCleanupBatchSize = 1000
 const usageBillingDedupCleanupBatchSize = 10000
 
 // NewDashboardAggregationRepository 创建仪表盘预聚合仓储。
@@ -287,6 +289,85 @@ func (r *dashboardAggregationRepository) cleanupUsageLogsBatches(ctx context.Con
 }
 
 func cleanupUsageLogsBatchWithRollupInvalidation(ctx context.Context, db *sql.DB, cutoff time.Time) (int64, error) {
+	candidates, err := selectUsageLogsCleanupCandidates(ctx, db, cutoff)
+	if err != nil || len(candidates) == 0 {
+		return 0, err
+	}
+	return cleanupUsageLogsCandidatesWithRollupInvalidation(ctx, db, cutoff, candidates)
+}
+
+type usageLogsCleanupCandidate struct {
+	tableOID  int64
+	ctid      string
+	xmin      string
+	id        int64
+	createdAt time.Time
+}
+
+func selectUsageLogsCleanupCandidates(ctx context.Context, db *sql.DB, cutoff time.Time) ([]usageLogsCleanupCandidate, error) {
+	// Selection can wait on old partitions or scan many expired rows. Complete
+	// this autocommit statement before taking the global watermark lock. Keeping
+	// even its relation locks in that transaction would invert the existing
+	// watermark -> DROP PARTITION lock order.
+	rows, err := db.QueryContext(ctx, `
+		SELECT tableoid, ctid::text, xmin::text, id, created_at
+		FROM usage_logs
+		WHERE created_at < $1
+		ORDER BY created_at ASC, id ASC
+		LIMIT $2
+	`, cutoff.UTC(), usageLogsCleanupBatchSize)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	candidates := make([]usageLogsCleanupCandidate, 0, usageLogsCleanupBatchSize)
+	for rows.Next() {
+		var candidate usageLogsCleanupCandidate
+		if err := rows.Scan(&candidate.tableOID, &candidate.ctid, &candidate.xmin, &candidate.id, &candidate.createdAt); err != nil {
+			return nil, err
+		}
+		candidates = append(candidates, candidate)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	return candidates, nil
+}
+
+// The semi-join keeps the DELETE as finite tuple lookups as well. A direct
+// DELETE USING join can hash/scan the complete usage table under the state lock.
+const usageLogsCleanupDeleteQuery = `
+		WITH locked_victims AS MATERIALIZED (
+			SELECT victim.tableoid, victim.ctid
+			FROM unnest($2::oid[], $3::tid[], $4::text[], $5::bigint[], $6::timestamptz[])
+				AS candidate(tableoid, ctid, xmin, id, created_at)
+			CROSS JOIN LATERAL (
+				SELECT ul.tableoid, ul.ctid
+				FROM usage_logs ul
+				WHERE ul.tableoid = candidate.tableoid AND ul.ctid = candidate.ctid
+					AND ul.xmin::text = candidate.xmin AND ul.id = candidate.id
+					AND ul.created_at = candidate.created_at AND ul.created_at < $1
+				FOR UPDATE OF ul SKIP LOCKED
+			) victim
+		)
+		DELETE FROM usage_logs ul
+		WHERE (ul.tableoid, ul.ctid) IN (SELECT tableoid, ctid FROM locked_victims)
+		RETURNING ul.created_at
+	`
+
+func cleanupUsageLogsCandidatesWithRollupInvalidation(ctx context.Context, db *sql.DB, cutoff time.Time, candidates []usageLogsCleanupCandidate) (int64, error) {
+	tableOIDs := make([]int64, len(candidates))
+	ctids := make([]string, len(candidates))
+	xmins := make([]string, len(candidates))
+	ids := make([]int64, len(candidates))
+	createdAts := make([]time.Time, len(candidates))
+	for i, candidate := range candidates {
+		tableOIDs[i], ctids[i], xmins[i], ids[i], createdAts[i] = candidate.tableOID, candidate.ctid, candidate.xmin, candidate.id, candidate.createdAt
+	}
+
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, err
@@ -299,18 +380,11 @@ func cleanupUsageLogsBatchWithRollupInvalidation(ctx context.Context, db *sql.DB
 	if err := lockGroupUsageRollupState(ctx, tx); err != nil {
 		return rollback(err)
 	}
-	rows, err := tx.QueryContext(ctx, `
-		WITH victims AS (
-			SELECT tableoid, ctid
-			FROM usage_logs
-			WHERE created_at < $1
-			ORDER BY created_at ASC, id ASC
-			LIMIT $2
-		)
-		DELETE FROM usage_logs
-		WHERE (tableoid, ctid) IN (SELECT tableoid, ctid FROM victims)
-		RETURNING created_at
-	`, cutoff.UTC(), usageLogsCleanupBatchSize)
+	// Selection did not lock rows: recheck the complete tuple version and cutoff
+	// so a moved/updated/reused ctid cannot delete a different record. Skip rows
+	// held by writers, whose AFTER trigger may itself be waiting for this state
+	// lock. Only the finite, unlocked candidates enter the fenced DELETE phase.
+	rows, err := tx.QueryContext(ctx, usageLogsCleanupDeleteQuery, cutoff.UTC(), pq.Array(tableOIDs), pq.Array(ctids), pq.Array(xmins), pq.Array(ids), pq.Array(createdAts))
 	if err != nil {
 		return rollback(err)
 	}

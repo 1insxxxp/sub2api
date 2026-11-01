@@ -190,11 +190,16 @@ func TestDashboardAggregationRepositoryCleanupUsageLogsNonPartitionedInvalidates
 
 	mock.ExpectQuery(`SELECT EXISTS`).
 		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+	mock.ExpectQuery(`SELECT tableoid, ctid::text, xmin::text, id, created_at`).
+		WithArgs(cutoff, usageLogsCleanupBatchSize).
+		WillReturnRows(sqlmock.NewRows([]string{"tableoid", "ctid", "xmin", "id", "created_at"}).
+			AddRow(100, "(0,1)", "10", 1, earliestDeletedAt).
+			AddRow(100, "(0,2)", "10", 2, earliestDeletedAt.Add(time.Hour)))
 	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT id FROM usage_group_rollup_state.*FOR UPDATE`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
-	mock.ExpectQuery(`(?s)DELETE FROM usage_logs.*RETURNING created_at`).
-		WithArgs(cutoff, usageLogsCleanupBatchSize).
+	mock.ExpectQuery(`(?s)DELETE FROM usage_logs.*RETURNING ul.created_at`).
+		WithArgs(cutoff, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
 		WillReturnRows(sqlmock.NewRows([]string{"created_at"}).
 			AddRow(earliestDeletedAt.Add(time.Hour)).
 			AddRow(earliestDeletedAt))
@@ -251,11 +256,15 @@ func TestDashboardAggregationRepositoryCleanupUsageLogsPartitionedSortsAndInvali
 	}
 	// The boundary partition is pruned by exact timestamp. tableoid is required
 	// because ctid alone can also identify a retained row in another partition.
+	mock.ExpectQuery(`SELECT tableoid, ctid::text, xmin::text, id, created_at`).
+		WithArgs(cutoff, usageLogsCleanupBatchSize).
+		WillReturnRows(sqlmock.NewRows([]string{"tableoid", "ctid", "xmin", "id", "created_at"}).
+			AddRow(100, "(0,1)", "10", 1, cutoff.Add(-time.Hour)))
 	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT id FROM usage_group_rollup_state.*FOR UPDATE`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
-	mock.ExpectQuery(`(?s)SELECT tableoid, ctid.*WHERE created_at < \$1.*WHERE \(tableoid, ctid\) IN.*RETURNING created_at`).
-		WithArgs(cutoff, usageLogsCleanupBatchSize).
+	mock.ExpectQuery(`(?s)WITH locked_victims.*FOR UPDATE OF ul SKIP LOCKED.*DELETE FROM usage_logs.*RETURNING ul.created_at`).
+		WithArgs(cutoff, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
 		WillReturnRows(sqlmock.NewRows([]string{"created_at"}).AddRow(cutoff.Add(-time.Hour)))
 	mock.ExpectExec(`UPDATE usage_group_rollup_state`).
 		WithArgs(cutoff.Add(-time.Hour), "Asia/Shanghai").
@@ -280,11 +289,15 @@ func TestDashboardAggregationRepositoryCleanupUsageLogsNonPartitionedFailureRoll
 
 	mock.ExpectQuery(`SELECT EXISTS`).
 		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+	mock.ExpectQuery(`SELECT tableoid, ctid::text, xmin::text, id, created_at`).
+		WithArgs(cutoff, usageLogsCleanupBatchSize).
+		WillReturnRows(sqlmock.NewRows([]string{"tableoid", "ctid", "xmin", "id", "created_at"}).
+			AddRow(100, "(0,1)", "10", 1, deletedAt))
 	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT id FROM usage_group_rollup_state.*FOR UPDATE`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
-	mock.ExpectQuery(`(?s)SELECT tableoid, ctid.*ORDER BY created_at ASC, id ASC.*DELETE FROM usage_logs.*RETURNING created_at`).
-		WithArgs(cutoff, usageLogsCleanupBatchSize).
+	mock.ExpectQuery(`(?s)DELETE FROM usage_logs.*RETURNING ul.created_at`).
+		WithArgs(cutoff, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
 		WillReturnRows(sqlmock.NewRows([]string{"created_at"}).AddRow(deletedAt))
 	mock.ExpectExec(`UPDATE usage_group_rollup_state`).
 		WithArgs(deletedAt, "Asia/Shanghai").
