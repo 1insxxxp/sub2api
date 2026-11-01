@@ -1258,11 +1258,12 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 			upstreamResponseModelObserverFromContext(c).ObserveGemini(collectedBytes)
 			observeGeminiImageOutputs(c, collectedBytes)
 			claudeResp, usageObj2 := convertGeminiToClaudeMessage(collected, originalModel, collectedBytes, false)
-			c.JSON(http.StatusOK, claudeResp)
 			usage = usageObj2
 			if usageObj != nil && (usageObj.InputTokens > 0 || usageObj.OutputTokens > 0) {
 				usage = usageObj
 			}
+			projectGeminiInputCountingMessagesUsage(c, claudeResp, usage)
+			c.JSON(http.StatusOK, claudeResp)
 		} else {
 			usage, err = s.handleNonStreamingResponse(c, resp, originalModel)
 			if err != nil {
@@ -1867,7 +1868,7 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 			}
 			upstreamResponseModelObserverFromContext(c).ObserveGemini(b)
 			observeGeminiImageOutputs(c, b)
-			c.Data(http.StatusOK, "application/json", b)
+			c.Data(http.StatusOK, "application/json", projectGeminiInputCountingNativeUsage(c, b))
 			usage = usageObj
 		} else {
 			usageResp, err := s.handleNativeNonStreamingResponse(c, resp, isOAuth, account, requestID)
@@ -2499,6 +2500,7 @@ func (s *GeminiMessagesCompatService) handleNonStreamingResponse(c *gin.Context,
 	_ = outcomeCollector.ObserveJSONPayload(ResponseOutcomeProtocolGemini, unwrappedBody)
 
 	claudeResp, usage := convertGeminiToClaudeMessage(geminiResp, originalModel, unwrappedBody, false)
+	projectGeminiInputCountingMessagesUsage(c, claudeResp, usage)
 	c.JSON(http.StatusOK, claudeResp)
 
 	return usage, nil
@@ -2903,11 +2905,12 @@ func (s *GeminiMessagesCompatService) handleStreamingResponseWithContext(ctx con
 		stopReason = "tool_use"
 	}
 
+	customerUsage := geminiInputCountingClientUsage(c, &usage)
 	usageObj := map[string]any{
-		"output_tokens": usage.OutputTokens,
+		"output_tokens": customerUsage.OutputTokens,
 	}
-	if usage.InputTokens > 0 {
-		usageObj["input_tokens"] = usage.InputTokens
+	if customerUsage.InputTokens > 0 {
+		usageObj["input_tokens"] = customerUsage.InputTokens
 	}
 	emitSSE("message_delta", map[string]any{
 		"type": "message_delta",
@@ -3304,7 +3307,7 @@ func (s *GeminiMessagesCompatService) handleNativeNonStreamingResponse(c *gin.Co
 	if contentType == "" {
 		contentType = "application/json"
 	}
-	c.Data(resp.StatusCode, contentType, respBody)
+	c.Data(resp.StatusCode, contentType, projectGeminiInputCountingNativeUsage(c, respBody))
 
 	if u := extractGeminiUsage(respBody); u != nil {
 		return u, nil
@@ -3381,6 +3384,9 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponseWithContext(c
 	finished := false
 	semanticCommitted := firstOutputGuard == nil || !modelFirstOutputTimeoutEnabled(ctx, firstOutputPolicy)
 	stagedLines := make([]string, 0, 8)
+	var inputCountingJSON bytes.Buffer
+	bufferInputCountingJSON := false
+	allowInputCountingJSON := geminiInputCountingAttempt(c) != nil
 	writeNative := func(line string, semantic bool) {
 		if !semanticCommitted {
 			stagedLines = append(stagedLines, line)
@@ -3399,6 +3405,13 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponseWithContext(c
 		_, _ = io.WriteString(c.Writer, line)
 		flusher.Flush()
 	}
+	defer func() {
+		// Failed/truncated JSON keeps its original bytes and never gains a
+		// measurement. The buffer is bounded like the existing fallback parser.
+		if inputCountingJSON.Len() > 0 {
+			writeNative(inputCountingJSON.String(), false)
+		}
+	}()
 
 	for {
 		line, err := reader.ReadString('\n')
@@ -3412,6 +3425,11 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponseWithContext(c
 		if len(line) > 0 && (err == nil || errors.Is(err, io.EOF)) {
 			trimmed := strings.TrimRight(line, "\r\n")
 			if strings.HasPrefix(trimmed, "data:") {
+				if inputCountingJSON.Len() > 0 {
+					writeNative(inputCountingJSON.String(), false)
+					inputCountingJSON.Reset()
+				}
+				allowInputCountingJSON, bufferInputCountingJSON = false, false
 				payload := strings.TrimSpace(strings.TrimPrefix(trimmed, "data:"))
 				// Keepalive / done markers
 				if payload == "" || payload == "[DONE]" {
@@ -3454,8 +3472,12 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponseWithContext(c
 					}
 
 					outputLine := line
-					if isOAuth {
+					projected := projectGeminiInputCountingNativeUsage(c, rawBytes)
+					if isOAuth || !bytes.Equal(projected, rawBytes) {
 						// SSE format requires double newline (\n\n) to separate events
+						if len(rawBytes) > 0 {
+							rawToWrite = string(projected)
+						}
 						outputLine = fmt.Sprintf("data: %s\n\n", rawToWrite)
 					}
 					writeNative(outputLine, semantic)
@@ -3464,7 +3486,21 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponseWithContext(c
 				if !sawDataEvent {
 					fallback.AddLine(trimmed)
 				}
-				writeNative(line, false)
+				if allowInputCountingJSON && !sawDataEvent && (strings.HasPrefix(strings.TrimSpace(line), "{") || strings.HasPrefix(strings.TrimSpace(line), "[")) {
+					bufferInputCountingJSON = true
+				}
+				if bufferInputCountingJSON && inputCountingJSON.Len()+len(line) <= geminiSSEFallbackBodyLimit {
+					_, _ = inputCountingJSON.WriteString(line)
+				} else {
+					if inputCountingJSON.Len() > 0 {
+						writeNative(inputCountingJSON.String(), false)
+						inputCountingJSON.Reset()
+					}
+					if bufferInputCountingJSON {
+						allowInputCountingJSON, bufferInputCountingJSON = false, false
+					}
+					writeNative(line, false)
+				}
 			}
 		}
 
@@ -3512,6 +3548,20 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponseWithContext(c
 			if gjson.GetBytes(raw, "candidates.0.finishReason").String() != "" {
 				finished = true
 			}
+		}
+	}
+	if inputCountingJSON.Len() > 0 {
+		projected := projectGeminiInputCountingNativeUsage(c, inputCountingJSON.Bytes())
+		writeNative(string(projected), geminiNativePayloadHasSemanticContent(projected))
+		inputCountingJSON.Reset()
+		// JSON arrays have no object-level semantic part. The bounded complete
+		// fallback is still the actual provider response and must be delivered.
+		if len(stagedLines) > 0 {
+			for _, staged := range stagedLines {
+				_, _ = io.WriteString(c.Writer, staged)
+			}
+			stagedLines = stagedLines[:0]
+			flusher.Flush()
 		}
 	}
 	s.finalizeGeminiSSESignal(c, account, true, upstreamRequestID, best, sawDataEvent, fallback)

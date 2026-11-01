@@ -80,7 +80,10 @@ type usageResponseOutcomeWriter interface {
 
 // postUsageBillingParams 统一扣费所需的参数
 type postUsageBillingParams struct {
-	Cost                  *CostBreakdown
+	Cost *CostBreakdown
+	// AccountQuotaTotalCost retains the pre-policy upstream cost when customer
+	// input receives an explicit counting discount. Nil preserves other paths.
+	AccountQuotaTotalCost *float64
 	User                  *User
 	APIKey                *APIKey
 	Account               *Account
@@ -174,7 +177,14 @@ func (p *postUsageBillingParams) shouldUpdateRateLimits() bool {
 }
 
 func (p *postUsageBillingParams) shouldUpdateAccountQuota() bool {
-	return p.Cost.TotalCost > 0 && p.Account.SupportsAccountQuota() && p.Account.HasAnyQuotaLimit()
+	return p.accountQuotaTotalCost() > 0 && p.Account.SupportsAccountQuota() && p.Account.HasAnyQuotaLimit()
+}
+
+func (p *postUsageBillingParams) accountQuotaTotalCost() float64 {
+	if p.AccountQuotaTotalCost != nil {
+		return *p.AccountQuotaTotalCost
+	}
+	return p.Cost.TotalCost
 }
 
 // postUsageBilling is the legacy fallback billing path used when the unified
@@ -459,7 +469,7 @@ func buildUsageBillingCommand(requestID string, usageLog *UsageLog, p *postUsage
 		cmd.APIKeyRateLimitCost = p.Cost.ActualCost
 	}
 	if p.shouldUpdateAccountQuota() {
-		cmd.AccountQuotaCost = p.Cost.TotalCost * p.AccountRateMultiplier
+		cmd.AccountQuotaCost = p.accountQuotaTotalCost() * p.AccountRateMultiplier
 		cmd.AccountQuotaHasDailyLimit = p.Account.GetQuotaDailyLimit() > 0
 		cmd.AccountQuotaHasWeeklyLimit = p.Account.GetQuotaWeeklyLimit() > 0
 	}
@@ -717,9 +727,9 @@ func notifyAccountQuota(p *postUsageBillingParams, deps *billingDeps, result *Us
 			slog.Error("panic in notifyAccountQuota", "recover", r)
 		}
 	}()
-	if p.Cost.TotalCost <= 0 || p.Account == nil || !p.Account.SupportsAccountQuota() || !p.Account.HasAnyQuotaLimit() || deps.balanceNotifyService == nil {
+	if p.accountQuotaTotalCost() <= 0 || p.Account == nil || !p.Account.SupportsAccountQuota() || !p.Account.HasAnyQuotaLimit() || deps.balanceNotifyService == nil {
 		slog.Debug("notifyAccountQuota: skipped",
-			"total_cost", p.Cost.TotalCost,
+			"total_cost", p.accountQuotaTotalCost(),
 			"account_nil", p.Account == nil,
 			"supports_account_quota", p.Account != nil && p.Account.SupportsAccountQuota(),
 			"has_quota_limit", p.Account != nil && p.Account.HasAnyQuotaLimit(),
@@ -727,7 +737,7 @@ func notifyAccountQuota(p *postUsageBillingParams, deps *billingDeps, result *Us
 		)
 		return
 	}
-	accountCost := p.Cost.TotalCost * p.AccountRateMultiplier
+	accountCost := p.accountQuotaTotalCost() * p.AccountRateMultiplier
 	var quotaState *AccountQuotaState
 	if result != nil {
 		quotaState = result.QuotaState
@@ -1125,34 +1135,37 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 
 	// 计算费用。调度阶段已做前置价格准入；这里再次校验，防止异步计费或
 	// 非标准调用路径把意外的价格缺失静默记录为 $0。
-	billingResult := customerBillingForwardResult(result)
-	cost, err := s.calculateRecordUsageCostChecked(ctx, billingResult, apiKey, billingModel, multiplier, imageMultiplier, pricingAt, opts)
+	billingResult := customerBillingForwardResultForAccount(result, account)
+	cost, err := s.calculateRecordUsageCostWithResponseModel(ctx, input, billingResult, billingModel, multiplier, imageMultiplier, pricingAt, opts, true)
 	if err != nil {
 		return err
 	}
-	// response_model：按上游成功响应自报的模型计费（渠道显式开启才生效）。
-	// 采纳条件见 responseModelBillingDeclaration + hasIdentifiedResponseModelPricing
-	// + responseModelBillingAdoptable。任一条件不满足都静默回落基线，即开启本模式前的
-	// 既有行为。响应模型与基线同名时直接跳过：重算必然同价，白跑一次定价解析。
-	if responseModel := responseModelBillingDeclaration(
-		input.BillingModelSource,
-		result.UpstreamResponseModel,
-		result.UpstreamResponseModelConflict,
-		result.ImageCount > 0 || result.AudioUsage != nil || result.SearchCount > 0 || result.CacheStorageTokenHours > 0,
-	); responseModel != "" && !strings.EqualFold(responseModel, strings.TrimSpace(billingModel)) {
-		if identified, responseChannelPriced := s.hasIdentifiedResponseModelPricing(ctx, responseModel, apiKey); identified {
-			responseCost := s.calculateRecordUsageCost(ctx, billingResult, apiKey, responseModel, multiplier, imageMultiplier, pricingAt, opts)
-			baselineChannelPriced := s.resolveChannelPricing(ctx, billingModel, apiKey) != nil
-			if responseModelBillingAdoptable(cost, responseCost, baselineChannelPriced, responseChannelPriced) {
-				// billingModel 到此为止只是定价查表的入参，后续流程只消费 cost，
-				// 因此这里不改写它，改由日志记录实际生效的计费基准。
-				logResponseModelBillingApplied("service.gateway", account, result.RequestID, billingModel, responseModel, cost, responseCost)
-				cost = responseCost
-			}
-		}
-	}
 	if err := ValidateUsageBillingActualCost(cost.ActualCost); err != nil {
 		return err
+	}
+	// A customer counting discount must not discount account costs or account
+	// quota. Re-run the same pricing selection with original upstream usage.
+	accountTotalCost := cost.TotalCost
+	var accountQuotaTotalCost *float64
+	if billingResult.Usage.InputTokens != result.Usage.InputTokens {
+		rawCost, rawErr := s.calculateRecordUsageCostWithResponseModel(ctx, input, result, billingModel, multiplier, imageMultiplier, pricingAt, opts, false)
+		if rawErr != nil {
+			return rawErr
+		}
+		if err := ValidateUsageBillingActualCost(rawCost.TotalCost); err != nil {
+			return err
+		}
+		accountTotalCost = rawCost.TotalCost
+		accountQuotaTotalCost = &accountTotalCost
+		// A lower token count can enter a more expensive volume-discount tier.
+		// Keep the customer token projection, but cap the complete price breakdown
+		// at the unchanged-usage baseline so the policy can never add a charge.
+		if cost.TotalCost > rawCost.TotalCost || cost.ActualCost > rawCost.ActualCost {
+			if err := ValidateUsageBillingActualCost(rawCost.ActualCost); err != nil {
+				return err
+			}
+			cost = rawCost
+		}
 	}
 
 	// 判断计费方式：订阅模式 vs 余额模式。系统自定义月卡的 API key
@@ -1185,10 +1198,15 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 				CacheReadTokens:     result.Usage.CacheReadInputTokens,
 				ImageOutputTokens:   result.Usage.ImageOutputTokens,
 			},
-			cost.TotalCost-cacheStorageCost, pricingAt,
+			accountTotalCost-cacheStorageCost, pricingAt,
 			accountStatsLongContextPricingEnabled(nil),
 		)
 		addCacheStorageToAccountStatsCost(usageLog, cacheStorageCost)
+	}
+	if accountQuotaTotalCost != nil && usageLog.AccountStatsCost == nil {
+		// Nil normally falls back to customer total_cost in account reports. A
+		// discount needs an explicit raw baseline even without channel pricing.
+		usageLog.AccountStatsCost = &accountTotalCost
 	}
 
 	simpleModeKeyRateLimitOnly := simpleModeKeyRateLimitBillingEnabled(s.cfg, apiKey)
@@ -1212,6 +1230,7 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	requestID := usageLog.RequestID
 	_, billingErr := applyUsageBilling(ctx, requestID, usageLog, &postUsageBillingParams{
 		Cost:                       cost,
+		AccountQuotaTotalCost:      accountQuotaTotalCost,
 		User:                       user,
 		APIKey:                     apiKey,
 		Account:                    account,
@@ -1349,6 +1368,36 @@ func addCacheStorageToAccountStatsCost(usageLog *UsageLog, storageCost float64) 
 	}
 	cost := *usageLog.AccountStatsCost + storageCost
 	usageLog.AccountStatsCost = &cost
+}
+
+// calculateRecordUsageCostWithResponseModel uses one model-selection rule for
+// both customer pricing and the original-usage account baseline. Only the
+// customer calculation emits the applied-pricing diagnostic.
+func (s *GatewayService) calculateRecordUsageCostWithResponseModel(
+	ctx context.Context, input *recordUsageCoreInput, result *ForwardResult, billingModel string,
+	multiplier, imageMultiplier float64, pricingAt time.Time, opts *recordUsageOpts, logApplied bool,
+) (*CostBreakdown, error) {
+	apiKey := input.APIKey
+	cost, err := s.calculateRecordUsageCostChecked(ctx, result, apiKey, billingModel, multiplier, imageMultiplier, pricingAt, opts)
+	if err != nil {
+		return nil, err
+	}
+	if responseModel := responseModelBillingDeclaration(
+		input.BillingModelSource, result.UpstreamResponseModel, result.UpstreamResponseModelConflict,
+		result.ImageCount > 0 || result.AudioUsage != nil || result.SearchCount > 0 || result.CacheStorageTokenHours > 0,
+	); responseModel != "" && !strings.EqualFold(responseModel, strings.TrimSpace(billingModel)) {
+		if identified, responseChannelPriced := s.hasIdentifiedResponseModelPricing(ctx, responseModel, apiKey); identified {
+			responseCost := s.calculateRecordUsageCost(ctx, result, apiKey, responseModel, multiplier, imageMultiplier, pricingAt, opts)
+			baselineChannelPriced := s.resolveChannelPricing(ctx, billingModel, apiKey) != nil
+			if responseModelBillingAdoptable(cost, responseCost, baselineChannelPriced, responseChannelPriced) {
+				if logApplied {
+					logResponseModelBillingApplied("service.gateway", input.Account, result.RequestID, billingModel, responseModel, cost, responseCost)
+				}
+				cost = responseCost
+			}
+		}
+	}
+	return cost, nil
 }
 
 // calculateRecordUsageCost 根据请求类型计算费用。
@@ -1703,6 +1752,21 @@ func (s *GatewayService) buildRecordUsageLog(
 		)
 	}
 	usageOutcome := ensureResponseOutcomeForUsageLog(result.Outcome, result.AntiTruncationRounds)
+	customerResult := customerBillingForwardResultForAccount(result, account)
+	if customerResult.Usage.InputTokens != result.Usage.InputTokens {
+		// Keep the captured provider outcome immutable. A missing collector stays
+		// at version zero so scalar audit does not invent a completion status.
+		var audit ResponseOutcome
+		if usageOutcome != nil {
+			audit = *usageOutcome
+		}
+		rawInput := result.Usage.InputTokens
+		candidate := result.GeminiInputCounting.CandidateInputTokens
+		audit.UpstreamInputTokens = &rawInput
+		audit.InputTokenPolicy = result.GeminiInputCounting.Policy
+		audit.InputTokenPolicyCount = &candidate
+		usageOutcome = &audit
+	}
 	usageLog := &UsageLog{
 		UserID:                   user.ID,
 		APIKeyID:                 apiKey.ID,
@@ -1719,9 +1783,9 @@ func (s *GatewayService) buildRecordUsageLog(
 		RequestedReasoningEffort: coalesceRequestedReasoningEffort(result.RequestedReasoningEffort, result.ReasoningEffort),
 		InboundEndpoint:          optionalTrimmedStringPtr(input.InboundEndpoint),
 		UpstreamEndpoint:         optionalTrimmedStringPtr(input.UpstreamEndpoint),
-		InputTokens:              result.Usage.InputTokens,
+		InputTokens:              customerResult.Usage.InputTokens,
 		OutputTokens:             recordedOutputTokens(result),
-		InputTokensSource:        result.InputTokensSource.Normalize(),
+		InputTokensSource:        customerResult.InputTokensSource.Normalize(),
 		OutputTokensSource:       recordedOutputTokensSource(result),
 		UpstreamOutputTokens:     result.Usage.OutputTokens,
 		CacheCreationTokens:      result.Usage.CacheCreationInputTokens,

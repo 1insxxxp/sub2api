@@ -33,7 +33,9 @@ func (r *usageLogRepository) upsertResponseOutcome(ctx context.Context, log *ser
 	if outcome.UpstreamErrorKind == "" {
 		outcome.UpstreamErrorKind = service.UpstreamErrorNone
 	}
-	if log.Outcome != nil && outcome.CollectorVersion <= 0 {
+	// Preserve the legacy default for collector snapshots, but scalar-only
+	// counting audit does not prove that any response evidence was collected.
+	if log.Outcome != nil && outcome.CollectorVersion <= 0 && !responseOutcomeHasInputCountingAudit(&outcome) {
 		outcome.CollectorVersion = service.ResponseOutcomeCollectorVersion
 	}
 
@@ -43,13 +45,14 @@ func (r *usageLogRepository) upsertResponseOutcome(ctx context.Context, log *ser
 			http_status, upstream_status, has_text, has_tool_call, has_reasoning,
 			has_media, output_bytes, event_count, stream_completed, finish_reason,
 			disconnect_source, upstream_error_kind, collector_version, anti_truncation_rounds,
-			input_tokens_source, output_tokens_source
+			input_tokens_source, output_tokens_source,
+			upstream_input_tokens, input_token_policy, input_token_policy_count
 		)
 		SELECT
 			ul.id, $1::varchar(64), $2, $3, $4, $5,
 			$6, $7, $8, $9, $10,
 			$11, $12, $13, $14, $15,
-			$16, $17, $18, $19, $20, $21
+			$16, $17, $18, $19, $20, $21, $22, $23, $24
 		FROM usage_logs ul
 		WHERE ul.request_id = $1::varchar(64) AND ul.api_key_id = $2
 		ON CONFLICT (request_id, api_key_id) DO UPDATE SET
@@ -72,7 +75,10 @@ func (r *usageLogRepository) upsertResponseOutcome(ctx context.Context, log *ser
 			collector_version = CASE WHEN EXCLUDED.collector_version > 0 THEN EXCLUDED.collector_version ELSE usage_response_outcomes.collector_version END,
 			anti_truncation_rounds = GREATEST(usage_response_outcomes.anti_truncation_rounds, EXCLUDED.anti_truncation_rounds),
 			input_tokens_source = CASE WHEN EXCLUDED.input_tokens_source <> 'unknown' THEN EXCLUDED.input_tokens_source ELSE usage_response_outcomes.input_tokens_source END,
-			output_tokens_source = CASE WHEN EXCLUDED.output_tokens_source <> 'unknown' THEN EXCLUDED.output_tokens_source ELSE usage_response_outcomes.output_tokens_source END
+			output_tokens_source = CASE WHEN EXCLUDED.output_tokens_source <> 'unknown' THEN EXCLUDED.output_tokens_source ELSE usage_response_outcomes.output_tokens_source END,
+			upstream_input_tokens = COALESCE(EXCLUDED.upstream_input_tokens, usage_response_outcomes.upstream_input_tokens),
+			input_token_policy = CASE WHEN EXCLUDED.input_token_policy <> '' THEN EXCLUDED.input_token_policy ELSE usage_response_outcomes.input_token_policy END,
+			input_token_policy_count = COALESCE(EXCLUDED.input_token_policy_count, usage_response_outcomes.input_token_policy_count)
 	`
 	result, err := r.sql.ExecContext(ctx, query,
 		requestID,
@@ -96,6 +102,9 @@ func (r *usageLogRepository) upsertResponseOutcome(ctx context.Context, log *ser
 		log.AntiTruncationRounds,
 		string(log.InputTokensSource.Normalize()),
 		string(log.OutputTokensSource.Normalize()),
+		outcome.UpstreamInputTokens,
+		outcome.InputTokenPolicy,
+		outcome.InputTokenPolicyCount,
 	)
 	if err != nil {
 		return fmt.Errorf("upsert response outcome: %w", err)
@@ -108,4 +117,8 @@ func (r *usageLogRepository) upsertResponseOutcome(ctx context.Context, log *ser
 		return fmt.Errorf("usage log not found for response outcome request_id=%q api_key_id=%d", requestID, log.APIKeyID)
 	}
 	return nil
+}
+
+func responseOutcomeHasInputCountingAudit(outcome *service.ResponseOutcome) bool {
+	return outcome != nil && (outcome.UpstreamInputTokens != nil || outcome.InputTokenPolicy != "" || outcome.InputTokenPolicyCount != nil)
 }

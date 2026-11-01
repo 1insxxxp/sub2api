@@ -337,6 +337,7 @@ func (s *GeminiMessagesCompatService) forwardClaudeBodyAsChatCompletions(
 		if !chatCompletionsResponseHasVisibleOutput(chatResp) {
 			return nil, s.handleEmptyGeminiChatResponse(c, finishReason)
 		}
+		projectGeminiInputCountingChatUsage(c, chatResp, usageObj2)
 		c.JSON(http.StatusOK, chatResp)
 		usage = usageObj2
 	} else {
@@ -561,6 +562,7 @@ func (s *GeminiMessagesCompatService) handleChatCompletionsNonStreamingResponseF
 	}
 
 	responseheaders.WriteFilteredHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
+	projectGeminiInputCountingChatUsage(c, chatResp, usage)
 	c.JSON(http.StatusOK, chatResp)
 	return usage, nil
 }
@@ -1085,8 +1087,9 @@ func (s *GeminiMessagesCompatService) handleChatCompletionsStreamingResponseFrom
 	if sawToolUse {
 		stopReason = "tool_use"
 	}
-	anthState.InputTokens = usage.InputTokens
-	anthState.CacheReadInputTokens = usage.CacheReadInputTokens
+	customerUsage := geminiInputCountingClientUsage(c, &usage)
+	anthState.InputTokens = customerUsage.InputTokens
+	anthState.CacheReadInputTokens = customerUsage.CacheReadInputTokens
 	if emitAnthropicEvent(&apicompat.AnthropicStreamEvent{
 		Type: "message_delta",
 		Delta: &apicompat.AnthropicDelta{
@@ -1094,9 +1097,9 @@ func (s *GeminiMessagesCompatService) handleChatCompletionsStreamingResponseFrom
 			StopReason: stopReason,
 		},
 		Usage: &apicompat.AnthropicUsage{
-			InputTokens:          usage.InputTokens,
-			OutputTokens:         usage.OutputTokens,
-			CacheReadInputTokens: usage.CacheReadInputTokens,
+			InputTokens:          customerUsage.InputTokens,
+			OutputTokens:         customerUsage.OutputTokens,
+			CacheReadInputTokens: customerUsage.CacheReadInputTokens,
 		},
 	}) {
 		return &geminiStreamResult{usage: &usage, firstTokenMs: firstTokenMs}, nil

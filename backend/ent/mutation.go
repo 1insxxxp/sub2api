@@ -62995,45 +62995,50 @@ func (m *UsageLogMutation) ResetEdge(name string) error {
 // UsageResponseOutcomeMutation represents an operation that mutates the UsageResponseOutcome nodes in the graph.
 type UsageResponseOutcomeMutation struct {
 	config
-	op                   Op
-	typ                  string
-	id                   *int64
-	usage_log_id         *int64
-	addusage_log_id      *int64
-	request_id           *string
-	api_key_id           *int64
-	addapi_key_id        *int64
-	user_id              *int64
-	adduser_id           *int64
-	account_id           *int64
-	addaccount_id        *int64
-	group_id             *int64
-	addgroup_id          *int64
-	http_status          *int
-	addhttp_status       *int
-	upstream_status      *int
-	addupstream_status   *int
-	has_text             *bool
-	has_tool_call        *bool
-	has_reasoning        *bool
-	has_media            *bool
-	output_bytes         *int64
-	addoutput_bytes      *int64
-	event_count          *int
-	addevent_count       *int
-	stream_completed     *bool
-	finish_reason        *string
-	disconnect_source    *string
-	upstream_error_kind  *string
-	collector_version    *int16
-	addcollector_version *int16
-	input_tokens_source  *string
-	output_tokens_source *string
-	created_at           *time.Time
-	clearedFields        map[string]struct{}
-	done                 bool
-	oldValue             func(context.Context) (*UsageResponseOutcome, error)
-	predicates           []predicate.UsageResponseOutcome
+	op                          Op
+	typ                         string
+	id                          *int64
+	usage_log_id                *int64
+	addusage_log_id             *int64
+	request_id                  *string
+	api_key_id                  *int64
+	addapi_key_id               *int64
+	user_id                     *int64
+	adduser_id                  *int64
+	account_id                  *int64
+	addaccount_id               *int64
+	group_id                    *int64
+	addgroup_id                 *int64
+	http_status                 *int
+	addhttp_status              *int
+	upstream_status             *int
+	addupstream_status          *int
+	has_text                    *bool
+	has_tool_call               *bool
+	has_reasoning               *bool
+	has_media                   *bool
+	output_bytes                *int64
+	addoutput_bytes             *int64
+	event_count                 *int
+	addevent_count              *int
+	stream_completed            *bool
+	finish_reason               *string
+	disconnect_source           *string
+	upstream_error_kind         *string
+	collector_version           *int16
+	addcollector_version        *int16
+	input_tokens_source         *string
+	output_tokens_source        *string
+	upstream_input_tokens       *int
+	addupstream_input_tokens    *int
+	input_token_policy          *string
+	input_token_policy_count    *int
+	addinput_token_policy_count *int
+	created_at                  *time.Time
+	clearedFields               map[string]struct{}
+	done                        bool
+	oldValue                    func(context.Context) (*UsageResponseOutcome, error)
+	predicates                  []predicate.UsageResponseOutcome
 }
 
 var _ ent.Mutation = (*UsageResponseOutcomeMutation)(nil)
@@ -64118,6 +64123,182 @@ func (m *UsageResponseOutcomeMutation) ResetOutputTokensSource() {
 	m.output_tokens_source = nil
 }
 
+// SetUpstreamInputTokens sets the "upstream_input_tokens" field.
+func (m *UsageResponseOutcomeMutation) SetUpstreamInputTokens(i int) {
+	m.upstream_input_tokens = &i
+	m.addupstream_input_tokens = nil
+}
+
+// UpstreamInputTokens returns the value of the "upstream_input_tokens" field in the mutation.
+func (m *UsageResponseOutcomeMutation) UpstreamInputTokens() (r int, exists bool) {
+	v := m.upstream_input_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpstreamInputTokens returns the old "upstream_input_tokens" field's value of the UsageResponseOutcome entity.
+// If the UsageResponseOutcome object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageResponseOutcomeMutation) OldUpstreamInputTokens(ctx context.Context) (v *int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpstreamInputTokens is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpstreamInputTokens requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpstreamInputTokens: %w", err)
+	}
+	return oldValue.UpstreamInputTokens, nil
+}
+
+// AddUpstreamInputTokens adds i to the "upstream_input_tokens" field.
+func (m *UsageResponseOutcomeMutation) AddUpstreamInputTokens(i int) {
+	if m.addupstream_input_tokens != nil {
+		*m.addupstream_input_tokens += i
+	} else {
+		m.addupstream_input_tokens = &i
+	}
+}
+
+// AddedUpstreamInputTokens returns the value that was added to the "upstream_input_tokens" field in this mutation.
+func (m *UsageResponseOutcomeMutation) AddedUpstreamInputTokens() (r int, exists bool) {
+	v := m.addupstream_input_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearUpstreamInputTokens clears the value of the "upstream_input_tokens" field.
+func (m *UsageResponseOutcomeMutation) ClearUpstreamInputTokens() {
+	m.upstream_input_tokens = nil
+	m.addupstream_input_tokens = nil
+	m.clearedFields[usageresponseoutcome.FieldUpstreamInputTokens] = struct{}{}
+}
+
+// UpstreamInputTokensCleared returns if the "upstream_input_tokens" field was cleared in this mutation.
+func (m *UsageResponseOutcomeMutation) UpstreamInputTokensCleared() bool {
+	_, ok := m.clearedFields[usageresponseoutcome.FieldUpstreamInputTokens]
+	return ok
+}
+
+// ResetUpstreamInputTokens resets all changes to the "upstream_input_tokens" field.
+func (m *UsageResponseOutcomeMutation) ResetUpstreamInputTokens() {
+	m.upstream_input_tokens = nil
+	m.addupstream_input_tokens = nil
+	delete(m.clearedFields, usageresponseoutcome.FieldUpstreamInputTokens)
+}
+
+// SetInputTokenPolicy sets the "input_token_policy" field.
+func (m *UsageResponseOutcomeMutation) SetInputTokenPolicy(s string) {
+	m.input_token_policy = &s
+}
+
+// InputTokenPolicy returns the value of the "input_token_policy" field in the mutation.
+func (m *UsageResponseOutcomeMutation) InputTokenPolicy() (r string, exists bool) {
+	v := m.input_token_policy
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInputTokenPolicy returns the old "input_token_policy" field's value of the UsageResponseOutcome entity.
+// If the UsageResponseOutcome object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageResponseOutcomeMutation) OldInputTokenPolicy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInputTokenPolicy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInputTokenPolicy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInputTokenPolicy: %w", err)
+	}
+	return oldValue.InputTokenPolicy, nil
+}
+
+// ResetInputTokenPolicy resets all changes to the "input_token_policy" field.
+func (m *UsageResponseOutcomeMutation) ResetInputTokenPolicy() {
+	m.input_token_policy = nil
+}
+
+// SetInputTokenPolicyCount sets the "input_token_policy_count" field.
+func (m *UsageResponseOutcomeMutation) SetInputTokenPolicyCount(i int) {
+	m.input_token_policy_count = &i
+	m.addinput_token_policy_count = nil
+}
+
+// InputTokenPolicyCount returns the value of the "input_token_policy_count" field in the mutation.
+func (m *UsageResponseOutcomeMutation) InputTokenPolicyCount() (r int, exists bool) {
+	v := m.input_token_policy_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInputTokenPolicyCount returns the old "input_token_policy_count" field's value of the UsageResponseOutcome entity.
+// If the UsageResponseOutcome object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageResponseOutcomeMutation) OldInputTokenPolicyCount(ctx context.Context) (v *int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInputTokenPolicyCount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInputTokenPolicyCount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInputTokenPolicyCount: %w", err)
+	}
+	return oldValue.InputTokenPolicyCount, nil
+}
+
+// AddInputTokenPolicyCount adds i to the "input_token_policy_count" field.
+func (m *UsageResponseOutcomeMutation) AddInputTokenPolicyCount(i int) {
+	if m.addinput_token_policy_count != nil {
+		*m.addinput_token_policy_count += i
+	} else {
+		m.addinput_token_policy_count = &i
+	}
+}
+
+// AddedInputTokenPolicyCount returns the value that was added to the "input_token_policy_count" field in this mutation.
+func (m *UsageResponseOutcomeMutation) AddedInputTokenPolicyCount() (r int, exists bool) {
+	v := m.addinput_token_policy_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearInputTokenPolicyCount clears the value of the "input_token_policy_count" field.
+func (m *UsageResponseOutcomeMutation) ClearInputTokenPolicyCount() {
+	m.input_token_policy_count = nil
+	m.addinput_token_policy_count = nil
+	m.clearedFields[usageresponseoutcome.FieldInputTokenPolicyCount] = struct{}{}
+}
+
+// InputTokenPolicyCountCleared returns if the "input_token_policy_count" field was cleared in this mutation.
+func (m *UsageResponseOutcomeMutation) InputTokenPolicyCountCleared() bool {
+	_, ok := m.clearedFields[usageresponseoutcome.FieldInputTokenPolicyCount]
+	return ok
+}
+
+// ResetInputTokenPolicyCount resets all changes to the "input_token_policy_count" field.
+func (m *UsageResponseOutcomeMutation) ResetInputTokenPolicyCount() {
+	m.input_token_policy_count = nil
+	m.addinput_token_policy_count = nil
+	delete(m.clearedFields, usageresponseoutcome.FieldInputTokenPolicyCount)
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *UsageResponseOutcomeMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -64188,7 +64369,7 @@ func (m *UsageResponseOutcomeMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UsageResponseOutcomeMutation) Fields() []string {
-	fields := make([]string, 0, 22)
+	fields := make([]string, 0, 25)
 	if m.usage_log_id != nil {
 		fields = append(fields, usageresponseoutcome.FieldUsageLogID)
 	}
@@ -64252,6 +64433,15 @@ func (m *UsageResponseOutcomeMutation) Fields() []string {
 	if m.output_tokens_source != nil {
 		fields = append(fields, usageresponseoutcome.FieldOutputTokensSource)
 	}
+	if m.upstream_input_tokens != nil {
+		fields = append(fields, usageresponseoutcome.FieldUpstreamInputTokens)
+	}
+	if m.input_token_policy != nil {
+		fields = append(fields, usageresponseoutcome.FieldInputTokenPolicy)
+	}
+	if m.input_token_policy_count != nil {
+		fields = append(fields, usageresponseoutcome.FieldInputTokenPolicyCount)
+	}
 	if m.created_at != nil {
 		fields = append(fields, usageresponseoutcome.FieldCreatedAt)
 	}
@@ -64305,6 +64495,12 @@ func (m *UsageResponseOutcomeMutation) Field(name string) (ent.Value, bool) {
 		return m.InputTokensSource()
 	case usageresponseoutcome.FieldOutputTokensSource:
 		return m.OutputTokensSource()
+	case usageresponseoutcome.FieldUpstreamInputTokens:
+		return m.UpstreamInputTokens()
+	case usageresponseoutcome.FieldInputTokenPolicy:
+		return m.InputTokenPolicy()
+	case usageresponseoutcome.FieldInputTokenPolicyCount:
+		return m.InputTokenPolicyCount()
 	case usageresponseoutcome.FieldCreatedAt:
 		return m.CreatedAt()
 	}
@@ -64358,6 +64554,12 @@ func (m *UsageResponseOutcomeMutation) OldField(ctx context.Context, name string
 		return m.OldInputTokensSource(ctx)
 	case usageresponseoutcome.FieldOutputTokensSource:
 		return m.OldOutputTokensSource(ctx)
+	case usageresponseoutcome.FieldUpstreamInputTokens:
+		return m.OldUpstreamInputTokens(ctx)
+	case usageresponseoutcome.FieldInputTokenPolicy:
+		return m.OldInputTokenPolicy(ctx)
+	case usageresponseoutcome.FieldInputTokenPolicyCount:
+		return m.OldInputTokenPolicyCount(ctx)
 	case usageresponseoutcome.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	}
@@ -64516,6 +64718,27 @@ func (m *UsageResponseOutcomeMutation) SetField(name string, value ent.Value) er
 		}
 		m.SetOutputTokensSource(v)
 		return nil
+	case usageresponseoutcome.FieldUpstreamInputTokens:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpstreamInputTokens(v)
+		return nil
+	case usageresponseoutcome.FieldInputTokenPolicy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInputTokenPolicy(v)
+		return nil
+	case usageresponseoutcome.FieldInputTokenPolicyCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInputTokenPolicyCount(v)
+		return nil
 	case usageresponseoutcome.FieldCreatedAt:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -64561,6 +64784,12 @@ func (m *UsageResponseOutcomeMutation) AddedFields() []string {
 	if m.addcollector_version != nil {
 		fields = append(fields, usageresponseoutcome.FieldCollectorVersion)
 	}
+	if m.addupstream_input_tokens != nil {
+		fields = append(fields, usageresponseoutcome.FieldUpstreamInputTokens)
+	}
+	if m.addinput_token_policy_count != nil {
+		fields = append(fields, usageresponseoutcome.FieldInputTokenPolicyCount)
+	}
 	return fields
 }
 
@@ -64589,6 +64818,10 @@ func (m *UsageResponseOutcomeMutation) AddedField(name string) (ent.Value, bool)
 		return m.AddedEventCount()
 	case usageresponseoutcome.FieldCollectorVersion:
 		return m.AddedCollectorVersion()
+	case usageresponseoutcome.FieldUpstreamInputTokens:
+		return m.AddedUpstreamInputTokens()
+	case usageresponseoutcome.FieldInputTokenPolicyCount:
+		return m.AddedInputTokenPolicyCount()
 	}
 	return nil, false
 }
@@ -64668,6 +64901,20 @@ func (m *UsageResponseOutcomeMutation) AddField(name string, value ent.Value) er
 		}
 		m.AddCollectorVersion(v)
 		return nil
+	case usageresponseoutcome.FieldUpstreamInputTokens:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddUpstreamInputTokens(v)
+		return nil
+	case usageresponseoutcome.FieldInputTokenPolicyCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddInputTokenPolicyCount(v)
+		return nil
 	}
 	return fmt.Errorf("unknown UsageResponseOutcome numeric field %s", name)
 }
@@ -64681,6 +64928,12 @@ func (m *UsageResponseOutcomeMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(usageresponseoutcome.FieldGroupID) {
 		fields = append(fields, usageresponseoutcome.FieldGroupID)
+	}
+	if m.FieldCleared(usageresponseoutcome.FieldUpstreamInputTokens) {
+		fields = append(fields, usageresponseoutcome.FieldUpstreamInputTokens)
+	}
+	if m.FieldCleared(usageresponseoutcome.FieldInputTokenPolicyCount) {
+		fields = append(fields, usageresponseoutcome.FieldInputTokenPolicyCount)
 	}
 	return fields
 }
@@ -64701,6 +64954,12 @@ func (m *UsageResponseOutcomeMutation) ClearField(name string) error {
 		return nil
 	case usageresponseoutcome.FieldGroupID:
 		m.ClearGroupID()
+		return nil
+	case usageresponseoutcome.FieldUpstreamInputTokens:
+		m.ClearUpstreamInputTokens()
+		return nil
+	case usageresponseoutcome.FieldInputTokenPolicyCount:
+		m.ClearInputTokenPolicyCount()
 		return nil
 	}
 	return fmt.Errorf("unknown UsageResponseOutcome nullable field %s", name)
@@ -64772,6 +65031,15 @@ func (m *UsageResponseOutcomeMutation) ResetField(name string) error {
 		return nil
 	case usageresponseoutcome.FieldOutputTokensSource:
 		m.ResetOutputTokensSource()
+		return nil
+	case usageresponseoutcome.FieldUpstreamInputTokens:
+		m.ResetUpstreamInputTokens()
+		return nil
+	case usageresponseoutcome.FieldInputTokenPolicy:
+		m.ResetInputTokenPolicy()
+		return nil
+	case usageresponseoutcome.FieldInputTokenPolicyCount:
+		m.ResetInputTokenPolicyCount()
 		return nil
 	case usageresponseoutcome.FieldCreatedAt:
 		m.ResetCreatedAt()

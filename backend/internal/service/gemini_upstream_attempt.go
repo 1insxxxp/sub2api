@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"net/http"
 	"strings"
@@ -32,6 +34,11 @@ type GeminiUpstreamAttempt struct {
 	candidates              int64
 	ended                   bool
 	model                   string
+	account                 *Account // released immediately after final-request preparation
+	requestObserved         bool
+	inputCounting           *GeminiInputCountingEvidence
+	inputCountingRequestID  string
+	nativeInputCountEmitted bool
 	inputFallback           *GeminiInputUsageFallback
 	fallbackCandidates      map[int64]*geminiFallbackCandidate
 	upstreamAccepted        bool
@@ -41,11 +48,33 @@ type GeminiUpstreamAttempt struct {
 }
 
 func (a *GeminiUpstreamAttempt) ObserveRequest(request *http.Request) {
-	if a == nil || a.ended {
+	if a == nil || a.ended || a.requestObserved {
 		return
 	}
+	a.requestObserved = true
 	a.ledgerIdentityHash = geminiUsageLedgerRequestIdentity(request)
 	a.inputFallback = prepareGeminiInputUsageFallback(request, a.event.AccountID, a.model)
+	a.inputCounting = prepareGeminiInputCountingPolicy(request, a.account, a.model)
+	if a.inputCounting != nil {
+		a.inputCountingRequestID = geminiInputCountingRequestIdentity(request)
+	}
+	if accountGeminiInputCountingEnabled(a.account, a.model) && a.inputFallback != nil {
+		// These channels do not provide a usable count endpoint, and their raw
+		// cl100k input must not train the unrelated missing-usage calibration.
+		a.inputFallback.CountRequest = nil
+		a.inputFallback.CalibrationKey = ""
+	}
+	a.account = nil
+}
+
+func geminiInputCountingRequestIdentity(request *http.Request) string {
+	if request == nil || request.URL == nil {
+		return ""
+	}
+	// Unlike ledger lookup (origin+credential), this policy is bound to the
+	// exact inference endpoint and method. Keep only a credential-free digest.
+	digest := sha256.Sum256([]byte(request.Method + "\x00" + request.URL.String()))
+	return hex.EncodeToString(digest[:])
 }
 
 func geminiUsageLedgerRequestIdentity(request *http.Request) string {
@@ -73,6 +102,7 @@ func BeginGeminiUpstreamAttempt(c *gin.Context, account *Account, model string, 
 	attempt := &GeminiUpstreamAttempt{
 		c: c, started: time.Now(), firstEvent: len(geminiUpstreamAttemptEvents(c)),
 		model:           model,
+		account:         account,
 		requestIDHeader: UpstreamRequestIDHeaderName(account),
 		event: OpsUpstreamErrorEvent{Attempt: sequence, Model: truncateString(strings.TrimSpace(model), 128),
 			Stream: stream, Stage: "inference", UsageState: "unreported", ProxyID: proxyID, ProxyName: proxyName},
@@ -95,12 +125,16 @@ func (a *GeminiUpstreamAttempt) ObserveResponse(response *http.Response) {
 		a.upstreamAccepted = true
 	}
 	a.ledgerRequestID = ""
+	if response.Request != nil && a.inputCountingRequestID != "" && geminiInputCountingRequestIdentity(response.Request) != a.inputCountingRequestID {
+		a.inputCounting = nil
+	}
 	ledgerIdentityMatches := true
 	// net/http returns the final request after redirects. Never attach a new
 	// origin's ledger ID to the original origin/key authorization boundary.
 	if response.Request != nil && geminiUsageLedgerRequestIdentity(response.Request) != a.ledgerIdentityHash {
 		a.ledgerIdentityHash = ""
 		ledgerIdentityMatches = false
+		a.inputCounting = nil
 		if a.inputFallback != nil {
 			a.inputFallback.CountRequest = nil
 			a.inputFallback.CalibrationKey = ""
@@ -141,6 +175,9 @@ func ObserveGeminiUpstreamAttemptUsage(c *gin.Context, raw []byte) {
 func (a *GeminiUpstreamAttempt) ObserveUsage(raw []byte) {
 	if a == nil || a.ended || !gjson.ValidBytes(raw) {
 		return
+	}
+	if a.inputCounting != nil && geminiInputCountingResponseHasMedia(raw) {
+		a.inputCounting = nil
 	}
 	if a.event.UsageFields&2 == 0 {
 		a.observeFallbackOutput(raw)
@@ -193,6 +230,7 @@ func (a *GeminiUpstreamAttempt) End(err error) {
 		return
 	}
 	a.ended = true
+	a.account = nil
 	if err == nil {
 		return
 	}

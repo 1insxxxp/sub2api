@@ -39,6 +39,7 @@ func finishGeminiUpstreamAttempt(attempt *GeminiUpstreamAttempt, result *Forward
 		result.UsageLedgerRequestID = attempt.ledgerRequestID
 		result.UsageLedgerIdentityHash = attempt.ledgerIdentityHash
 		result.GeminiUsageFallback = attempt.snapshotUsageFallback()
+		result.GeminiInputCounting = attempt.inputCounting
 		applyGeminiMeasuredUsageEvidence(result, attempt.event.UsageFields)
 	}
 	if err == nil && result != nil && result.ClientDisconnect {

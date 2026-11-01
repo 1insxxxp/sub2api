@@ -159,6 +159,21 @@ func OutputTokensSource(v string) predicate.UsageResponseOutcome {
 	return predicate.UsageResponseOutcome(sql.FieldEQ(FieldOutputTokensSource, v))
 }
 
+// UpstreamInputTokens applies equality check predicate on the "upstream_input_tokens" field. It's identical to UpstreamInputTokensEQ.
+func UpstreamInputTokens(v int) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldEQ(FieldUpstreamInputTokens, v))
+}
+
+// InputTokenPolicy applies equality check predicate on the "input_token_policy" field. It's identical to InputTokenPolicyEQ.
+func InputTokenPolicy(v string) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldEQ(FieldInputTokenPolicy, v))
+}
+
+// InputTokenPolicyCount applies equality check predicate on the "input_token_policy_count" field. It's identical to InputTokenPolicyCountEQ.
+func InputTokenPolicyCount(v int) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldEQ(FieldInputTokenPolicyCount, v))
+}
+
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.UsageResponseOutcome {
 	return predicate.UsageResponseOutcome(sql.FieldEQ(FieldCreatedAt, v))
@@ -1022,6 +1037,171 @@ func OutputTokensSourceEqualFold(v string) predicate.UsageResponseOutcome {
 // OutputTokensSourceContainsFold applies the ContainsFold predicate on the "output_tokens_source" field.
 func OutputTokensSourceContainsFold(v string) predicate.UsageResponseOutcome {
 	return predicate.UsageResponseOutcome(sql.FieldContainsFold(FieldOutputTokensSource, v))
+}
+
+// UpstreamInputTokensEQ applies the EQ predicate on the "upstream_input_tokens" field.
+func UpstreamInputTokensEQ(v int) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldEQ(FieldUpstreamInputTokens, v))
+}
+
+// UpstreamInputTokensNEQ applies the NEQ predicate on the "upstream_input_tokens" field.
+func UpstreamInputTokensNEQ(v int) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldNEQ(FieldUpstreamInputTokens, v))
+}
+
+// UpstreamInputTokensIn applies the In predicate on the "upstream_input_tokens" field.
+func UpstreamInputTokensIn(vs ...int) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldIn(FieldUpstreamInputTokens, vs...))
+}
+
+// UpstreamInputTokensNotIn applies the NotIn predicate on the "upstream_input_tokens" field.
+func UpstreamInputTokensNotIn(vs ...int) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldNotIn(FieldUpstreamInputTokens, vs...))
+}
+
+// UpstreamInputTokensGT applies the GT predicate on the "upstream_input_tokens" field.
+func UpstreamInputTokensGT(v int) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldGT(FieldUpstreamInputTokens, v))
+}
+
+// UpstreamInputTokensGTE applies the GTE predicate on the "upstream_input_tokens" field.
+func UpstreamInputTokensGTE(v int) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldGTE(FieldUpstreamInputTokens, v))
+}
+
+// UpstreamInputTokensLT applies the LT predicate on the "upstream_input_tokens" field.
+func UpstreamInputTokensLT(v int) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldLT(FieldUpstreamInputTokens, v))
+}
+
+// UpstreamInputTokensLTE applies the LTE predicate on the "upstream_input_tokens" field.
+func UpstreamInputTokensLTE(v int) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldLTE(FieldUpstreamInputTokens, v))
+}
+
+// UpstreamInputTokensIsNil applies the IsNil predicate on the "upstream_input_tokens" field.
+func UpstreamInputTokensIsNil() predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldIsNull(FieldUpstreamInputTokens))
+}
+
+// UpstreamInputTokensNotNil applies the NotNil predicate on the "upstream_input_tokens" field.
+func UpstreamInputTokensNotNil() predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldNotNull(FieldUpstreamInputTokens))
+}
+
+// InputTokenPolicyEQ applies the EQ predicate on the "input_token_policy" field.
+func InputTokenPolicyEQ(v string) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldEQ(FieldInputTokenPolicy, v))
+}
+
+// InputTokenPolicyNEQ applies the NEQ predicate on the "input_token_policy" field.
+func InputTokenPolicyNEQ(v string) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldNEQ(FieldInputTokenPolicy, v))
+}
+
+// InputTokenPolicyIn applies the In predicate on the "input_token_policy" field.
+func InputTokenPolicyIn(vs ...string) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldIn(FieldInputTokenPolicy, vs...))
+}
+
+// InputTokenPolicyNotIn applies the NotIn predicate on the "input_token_policy" field.
+func InputTokenPolicyNotIn(vs ...string) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldNotIn(FieldInputTokenPolicy, vs...))
+}
+
+// InputTokenPolicyGT applies the GT predicate on the "input_token_policy" field.
+func InputTokenPolicyGT(v string) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldGT(FieldInputTokenPolicy, v))
+}
+
+// InputTokenPolicyGTE applies the GTE predicate on the "input_token_policy" field.
+func InputTokenPolicyGTE(v string) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldGTE(FieldInputTokenPolicy, v))
+}
+
+// InputTokenPolicyLT applies the LT predicate on the "input_token_policy" field.
+func InputTokenPolicyLT(v string) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldLT(FieldInputTokenPolicy, v))
+}
+
+// InputTokenPolicyLTE applies the LTE predicate on the "input_token_policy" field.
+func InputTokenPolicyLTE(v string) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldLTE(FieldInputTokenPolicy, v))
+}
+
+// InputTokenPolicyContains applies the Contains predicate on the "input_token_policy" field.
+func InputTokenPolicyContains(v string) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldContains(FieldInputTokenPolicy, v))
+}
+
+// InputTokenPolicyHasPrefix applies the HasPrefix predicate on the "input_token_policy" field.
+func InputTokenPolicyHasPrefix(v string) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldHasPrefix(FieldInputTokenPolicy, v))
+}
+
+// InputTokenPolicyHasSuffix applies the HasSuffix predicate on the "input_token_policy" field.
+func InputTokenPolicyHasSuffix(v string) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldHasSuffix(FieldInputTokenPolicy, v))
+}
+
+// InputTokenPolicyEqualFold applies the EqualFold predicate on the "input_token_policy" field.
+func InputTokenPolicyEqualFold(v string) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldEqualFold(FieldInputTokenPolicy, v))
+}
+
+// InputTokenPolicyContainsFold applies the ContainsFold predicate on the "input_token_policy" field.
+func InputTokenPolicyContainsFold(v string) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldContainsFold(FieldInputTokenPolicy, v))
+}
+
+// InputTokenPolicyCountEQ applies the EQ predicate on the "input_token_policy_count" field.
+func InputTokenPolicyCountEQ(v int) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldEQ(FieldInputTokenPolicyCount, v))
+}
+
+// InputTokenPolicyCountNEQ applies the NEQ predicate on the "input_token_policy_count" field.
+func InputTokenPolicyCountNEQ(v int) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldNEQ(FieldInputTokenPolicyCount, v))
+}
+
+// InputTokenPolicyCountIn applies the In predicate on the "input_token_policy_count" field.
+func InputTokenPolicyCountIn(vs ...int) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldIn(FieldInputTokenPolicyCount, vs...))
+}
+
+// InputTokenPolicyCountNotIn applies the NotIn predicate on the "input_token_policy_count" field.
+func InputTokenPolicyCountNotIn(vs ...int) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldNotIn(FieldInputTokenPolicyCount, vs...))
+}
+
+// InputTokenPolicyCountGT applies the GT predicate on the "input_token_policy_count" field.
+func InputTokenPolicyCountGT(v int) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldGT(FieldInputTokenPolicyCount, v))
+}
+
+// InputTokenPolicyCountGTE applies the GTE predicate on the "input_token_policy_count" field.
+func InputTokenPolicyCountGTE(v int) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldGTE(FieldInputTokenPolicyCount, v))
+}
+
+// InputTokenPolicyCountLT applies the LT predicate on the "input_token_policy_count" field.
+func InputTokenPolicyCountLT(v int) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldLT(FieldInputTokenPolicyCount, v))
+}
+
+// InputTokenPolicyCountLTE applies the LTE predicate on the "input_token_policy_count" field.
+func InputTokenPolicyCountLTE(v int) predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldLTE(FieldInputTokenPolicyCount, v))
+}
+
+// InputTokenPolicyCountIsNil applies the IsNil predicate on the "input_token_policy_count" field.
+func InputTokenPolicyCountIsNil() predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldIsNull(FieldInputTokenPolicyCount))
+}
+
+// InputTokenPolicyCountNotNil applies the NotNil predicate on the "input_token_policy_count" field.
+func InputTokenPolicyCountNotNil() predicate.UsageResponseOutcome {
+	return predicate.UsageResponseOutcome(sql.FieldNotNull(FieldInputTokenPolicyCount))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

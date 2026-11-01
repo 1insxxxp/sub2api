@@ -59,6 +59,12 @@ type UsageResponseOutcome struct {
 	InputTokensSource string `json:"input_tokens_source,omitempty"`
 	// OutputTokensSource holds the value of the "output_tokens_source" field.
 	OutputTokensSource string `json:"output_tokens_source,omitempty"`
+	// UpstreamInputTokens holds the value of the "upstream_input_tokens" field.
+	UpstreamInputTokens *int `json:"upstream_input_tokens,omitempty"`
+	// InputTokenPolicy holds the value of the "input_token_policy" field.
+	InputTokenPolicy string `json:"input_token_policy,omitempty"`
+	// InputTokenPolicyCount holds the value of the "input_token_policy_count" field.
+	InputTokenPolicyCount *int `json:"input_token_policy_count,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt    time.Time `json:"created_at,omitempty"`
 	selectValues sql.SelectValues
@@ -71,9 +77,9 @@ func (*UsageResponseOutcome) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case usageresponseoutcome.FieldHasText, usageresponseoutcome.FieldHasToolCall, usageresponseoutcome.FieldHasReasoning, usageresponseoutcome.FieldHasMedia, usageresponseoutcome.FieldStreamCompleted:
 			values[i] = new(sql.NullBool)
-		case usageresponseoutcome.FieldID, usageresponseoutcome.FieldUsageLogID, usageresponseoutcome.FieldAPIKeyID, usageresponseoutcome.FieldUserID, usageresponseoutcome.FieldAccountID, usageresponseoutcome.FieldGroupID, usageresponseoutcome.FieldHTTPStatus, usageresponseoutcome.FieldUpstreamStatus, usageresponseoutcome.FieldOutputBytes, usageresponseoutcome.FieldEventCount, usageresponseoutcome.FieldCollectorVersion:
+		case usageresponseoutcome.FieldID, usageresponseoutcome.FieldUsageLogID, usageresponseoutcome.FieldAPIKeyID, usageresponseoutcome.FieldUserID, usageresponseoutcome.FieldAccountID, usageresponseoutcome.FieldGroupID, usageresponseoutcome.FieldHTTPStatus, usageresponseoutcome.FieldUpstreamStatus, usageresponseoutcome.FieldOutputBytes, usageresponseoutcome.FieldEventCount, usageresponseoutcome.FieldCollectorVersion, usageresponseoutcome.FieldUpstreamInputTokens, usageresponseoutcome.FieldInputTokenPolicyCount:
 			values[i] = new(sql.NullInt64)
-		case usageresponseoutcome.FieldRequestID, usageresponseoutcome.FieldFinishReason, usageresponseoutcome.FieldDisconnectSource, usageresponseoutcome.FieldUpstreamErrorKind, usageresponseoutcome.FieldInputTokensSource, usageresponseoutcome.FieldOutputTokensSource:
+		case usageresponseoutcome.FieldRequestID, usageresponseoutcome.FieldFinishReason, usageresponseoutcome.FieldDisconnectSource, usageresponseoutcome.FieldUpstreamErrorKind, usageresponseoutcome.FieldInputTokensSource, usageresponseoutcome.FieldOutputTokensSource, usageresponseoutcome.FieldInputTokenPolicy:
 			values[i] = new(sql.NullString)
 		case usageresponseoutcome.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -226,6 +232,26 @@ func (_m *UsageResponseOutcome) assignValues(columns []string, values []any) err
 			} else if value.Valid {
 				_m.OutputTokensSource = value.String
 			}
+		case usageresponseoutcome.FieldUpstreamInputTokens:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field upstream_input_tokens", values[i])
+			} else if value.Valid {
+				_m.UpstreamInputTokens = new(int)
+				*_m.UpstreamInputTokens = int(value.Int64)
+			}
+		case usageresponseoutcome.FieldInputTokenPolicy:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field input_token_policy", values[i])
+			} else if value.Valid {
+				_m.InputTokenPolicy = value.String
+			}
+		case usageresponseoutcome.FieldInputTokenPolicyCount:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field input_token_policy_count", values[i])
+			} else if value.Valid {
+				_m.InputTokenPolicyCount = new(int)
+				*_m.InputTokenPolicyCount = int(value.Int64)
+			}
 		case usageresponseoutcome.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
@@ -334,6 +360,19 @@ func (_m *UsageResponseOutcome) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("output_tokens_source=")
 	builder.WriteString(_m.OutputTokensSource)
+	builder.WriteString(", ")
+	if v := _m.UpstreamInputTokens; v != nil {
+		builder.WriteString("upstream_input_tokens=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	builder.WriteString("input_token_policy=")
+	builder.WriteString(_m.InputTokenPolicy)
+	builder.WriteString(", ")
+	if v := _m.InputTokenPolicyCount; v != nil {
+		builder.WriteString("input_token_policy_count=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))

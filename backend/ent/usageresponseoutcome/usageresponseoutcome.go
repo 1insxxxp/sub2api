@@ -55,6 +55,12 @@ const (
 	FieldInputTokensSource = "input_tokens_source"
 	// FieldOutputTokensSource holds the string denoting the output_tokens_source field in the database.
 	FieldOutputTokensSource = "output_tokens_source"
+	// FieldUpstreamInputTokens holds the string denoting the upstream_input_tokens field in the database.
+	FieldUpstreamInputTokens = "upstream_input_tokens"
+	// FieldInputTokenPolicy holds the string denoting the input_token_policy field in the database.
+	FieldInputTokenPolicy = "input_token_policy"
+	// FieldInputTokenPolicyCount holds the string denoting the input_token_policy_count field in the database.
+	FieldInputTokenPolicyCount = "input_token_policy_count"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// Table holds the table name of the usageresponseoutcome in the database.
@@ -85,6 +91,9 @@ var Columns = []string{
 	FieldCollectorVersion,
 	FieldInputTokensSource,
 	FieldOutputTokensSource,
+	FieldUpstreamInputTokens,
+	FieldInputTokenPolicy,
+	FieldInputTokenPolicyCount,
 	FieldCreatedAt,
 }
 
@@ -141,6 +150,10 @@ var (
 	DefaultOutputTokensSource string
 	// OutputTokensSourceValidator is a validator for the "output_tokens_source" field. It is called by the builders before save.
 	OutputTokensSourceValidator func(string) error
+	// DefaultInputTokenPolicy holds the default value on creation for the "input_token_policy" field.
+	DefaultInputTokenPolicy string
+	// InputTokenPolicyValidator is a validator for the "input_token_policy" field. It is called by the builders before save.
+	InputTokenPolicyValidator func(string) error
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 )
@@ -256,6 +269,21 @@ func ByInputTokensSource(opts ...sql.OrderTermOption) OrderOption {
 // ByOutputTokensSource orders the results by the output_tokens_source field.
 func ByOutputTokensSource(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldOutputTokensSource, opts...).ToFunc()
+}
+
+// ByUpstreamInputTokens orders the results by the upstream_input_tokens field.
+func ByUpstreamInputTokens(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUpstreamInputTokens, opts...).ToFunc()
+}
+
+// ByInputTokenPolicy orders the results by the input_token_policy field.
+func ByInputTokenPolicy(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldInputTokenPolicy, opts...).ToFunc()
+}
+
+// ByInputTokenPolicyCount orders the results by the input_token_policy_count field.
+func ByInputTokenPolicyCount(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldInputTokenPolicyCount, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.
