@@ -946,6 +946,12 @@ router.beforeEach(async (to, _from, next) => {
   if (!requiresAuth) {
     // If already authenticated and trying to access login/register, redirect to appropriate dashboard
     if (authStore.isAuthenticated && (to.path === '/login' || to.path === '/register')) {
+      // Ordinary sessions cannot enter a backend-only dashboard. Keep the auth
+      // page reachable instead of redirecting back and forth with /dashboard.
+      if (appStore.backendModeEnabled && !authStore.canAccessAdminWorkbench) {
+        next()
+        return
+      }
       next(
         authStore.isAdmin
           ? '/admin/dashboard'

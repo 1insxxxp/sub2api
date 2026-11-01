@@ -203,6 +203,21 @@ describe('feature route guard', () => {
     expect(supportRefresh).not.toHaveBeenCalled()
   })
 
+  it.each(['/login', '/register'])('keeps %s reachable for a signed-in ordinary user in backend mode', async (path) => {
+    appStore.backendModeEnabled = true
+    supportRefresh.mockResolvedValue(true)
+
+    const dashboard = runGuard({}, '/dashboard')
+    await dashboard.navigation
+    expect(dashboard.next).toHaveBeenCalledWith('/login')
+
+    const authPage = runGuard({ requiresAuth: false }, path)
+    await authPage.navigation
+    expect(authPage.next).toHaveBeenCalledOnce()
+    expect(authPage.next).toHaveBeenCalledWith()
+    expect(supportRefresh).not.toHaveBeenCalled()
+  })
+
   it('does not expand support access to full admin routes', async () => {
     supportRefresh.mockResolvedValue(true)
     const { navigation, next } = runGuard({ requiresAdmin: true }, '/admin/users')
