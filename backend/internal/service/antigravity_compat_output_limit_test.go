@@ -71,6 +71,7 @@ func TestAntigravityOutputLimitPreservesClientIntentOnWire(t *testing.T) {
 						require.Len(t, upstream.requestBodies, 1, "changing an output limit must not cause an extra generation")
 						wireLimit := gjson.GetBytes(captured, "request.generationConfig.maxOutputTokens")
 						if tc.present {
+							require.True(t, wireLimit.Exists(), "an explicit output limit must remain present, including zero")
 							require.Equal(t, int64(limit), wireLimit.Int())
 						} else {
 							require.False(t, wireLimit.Exists(), "the optional upstream output limit must remain omitted")
