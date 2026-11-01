@@ -632,7 +632,8 @@ type ForwardResult struct {
 	// Fallback finalization permits the explicitly authorized last-resort estimate
 	// without mislabeling missing provider measurements as complete.
 	GeminiUsageFinalized bool
-	GeminiUsageFallback  *GeminiUsageFallback `json:"-"`
+	GeminiUsageFallback  *GeminiUsageFallback         `json:"-"`
+	GeminiInputCounting  *GeminiInputCountingEvidence `json:"-"`
 	Model                string
 	// EstimatedInputTokens is a local estimate of the final upstream request.
 	// It is only applied when upstream input/cache usage is missing and there is

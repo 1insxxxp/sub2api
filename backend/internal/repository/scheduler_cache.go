@@ -1339,12 +1339,20 @@ func filterSchedulerExtra(extra map[string]any) map[string]any {
 		service.OpenAIAutoResetCreditStateExtraKey,
 		"model_rate_limits",
 		service.UpstreamBillingProbeExtraKey,
+		service.GeminiInputCountingExtraKey,
 		service.GrokMediaEligibleExtraKey,
 		"grok_billing_snapshot",
 	}
 	filtered := make(map[string]any)
 	for _, key := range keys {
 		if value, ok := extra[key]; ok && value != nil {
+			if key == service.GeminiInputCountingExtraKey {
+				policy := service.GeminiInputCountingConfigProjection(value)
+				if policy == nil {
+					continue
+				}
+				value = policy
+			}
 			if key == service.UpstreamBillingProbeExtraKey {
 				filteredProbe := filterSchedulerUpstreamBillingProbe(value)
 				if filteredProbe == nil {

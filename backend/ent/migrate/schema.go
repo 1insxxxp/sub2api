@@ -2387,6 +2387,9 @@ var (
 		{Name: "collector_version", Type: field.TypeInt16, Default: 1},
 		{Name: "input_tokens_source", Type: field.TypeString, Size: 20, Default: "unknown"},
 		{Name: "output_tokens_source", Type: field.TypeString, Size: 20, Default: "unknown"},
+		{Name: "upstream_input_tokens", Type: field.TypeInt, Nullable: true},
+		{Name: "input_token_policy", Type: field.TypeString, Size: 64, Default: ""},
+		{Name: "input_token_policy_count", Type: field.TypeInt, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
 	}
 	// UsageResponseOutcomesTable holds the schema information for the "usage_response_outcomes" table.
@@ -2408,17 +2411,17 @@ var (
 			{
 				Name:    "usageresponseoutcome_user_id_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{UsageResponseOutcomesColumns[4], UsageResponseOutcomesColumns[22]},
+				Columns: []*schema.Column{UsageResponseOutcomesColumns[4], UsageResponseOutcomesColumns[25]},
 			},
 			{
 				Name:    "usageresponseoutcome_group_id_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{UsageResponseOutcomesColumns[6], UsageResponseOutcomesColumns[22]},
+				Columns: []*schema.Column{UsageResponseOutcomesColumns[6], UsageResponseOutcomesColumns[25]},
 			},
 			{
 				Name:    "usageresponseoutcome_account_id_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{UsageResponseOutcomesColumns[5], UsageResponseOutcomesColumns[22]},
+				Columns: []*schema.Column{UsageResponseOutcomesColumns[5], UsageResponseOutcomesColumns[25]},
 			},
 		},
 	}

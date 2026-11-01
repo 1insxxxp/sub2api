@@ -558,11 +558,28 @@ func customerBillingForwardResult(result *ForwardResult) *ForwardResult {
 		return nil
 	}
 	outputTokens := recordedOutputTokens(result)
-	if outputTokens == result.Usage.OutputTokens {
+	inputTokens, inputDiscounted := geminiCustomerInputTokens(result)
+	if outputTokens == result.Usage.OutputTokens && !inputDiscounted {
 		return result
 	}
 	clone := *result
 	clone.Usage = result.Usage
 	clone.Usage.OutputTokens = outputTokens
+	if inputDiscounted {
+		clone.Usage.InputTokens = inputTokens
+		clone.InputTokensSource = UsageTokenSourceEstimated
+		clone.InputTokensEstimated = true
+	}
 	return &clone
+}
+
+// Billing workers must verify the attempt's account identity independently of
+// the protocol adapters, which already scope their own client projections.
+func customerBillingForwardResultForAccount(result *ForwardResult, account *Account) *ForwardResult {
+	if result != nil && result.GeminiInputCounting != nil && (account == nil || account.ID != result.GeminiInputCounting.AccountID) {
+		clone := *result
+		clone.GeminiInputCounting = nil
+		return customerBillingForwardResult(&clone)
+	}
+	return customerBillingForwardResult(result)
 }

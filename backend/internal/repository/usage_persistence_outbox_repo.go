@@ -15,8 +15,9 @@ import (
 )
 
 const (
-	usagePersistencePayloadVersion       = 2
-	usagePersistencePayloadLegacyVersion = 1
+	usagePersistencePayloadVersion           = 3
+	usagePersistencePayloadProvenanceVersion = 2
+	usagePersistencePayloadLegacyVersion     = 1
 )
 const usagePersistencePayloadMaxBytes = 256 * 1024
 
@@ -101,19 +102,22 @@ type usagePersistenceUsage struct {
 }
 
 type usagePersistenceOutcome struct {
-	HTTPStatus        int                       `json:"http_status"`
-	UpstreamStatus    int                       `json:"upstream_status"`
-	HasText           bool                      `json:"has_text"`
-	HasToolCall       bool                      `json:"has_tool_call"`
-	HasReasoning      bool                      `json:"has_reasoning"`
-	HasMedia          bool                      `json:"has_media"`
-	OutputBytes       int64                     `json:"output_bytes"`
-	EventCount        int                       `json:"event_count"`
-	StreamCompleted   bool                      `json:"stream_completed"`
-	FinishReason      string                    `json:"finish_reason"`
-	DisconnectSource  service.DisconnectSource  `json:"disconnect_source"`
-	UpstreamErrorKind service.UpstreamErrorKind `json:"upstream_error_kind"`
-	CollectorVersion  int                       `json:"collector_version"`
+	HTTPStatus            int                       `json:"http_status"`
+	UpstreamStatus        int                       `json:"upstream_status"`
+	HasText               bool                      `json:"has_text"`
+	HasToolCall           bool                      `json:"has_tool_call"`
+	HasReasoning          bool                      `json:"has_reasoning"`
+	HasMedia              bool                      `json:"has_media"`
+	OutputBytes           int64                     `json:"output_bytes"`
+	EventCount            int                       `json:"event_count"`
+	StreamCompleted       bool                      `json:"stream_completed"`
+	FinishReason          string                    `json:"finish_reason"`
+	DisconnectSource      service.DisconnectSource  `json:"disconnect_source"`
+	UpstreamErrorKind     service.UpstreamErrorKind `json:"upstream_error_kind"`
+	CollectorVersion      int                       `json:"collector_version"`
+	UpstreamInputTokens   *int                      `json:"upstream_input_tokens,omitempty"`
+	InputTokenPolicy      string                    `json:"input_token_policy,omitempty"`
+	InputTokenPolicyCount *int                      `json:"input_token_policy_count,omitempty"`
 }
 
 func encodeUsagePersistencePayload(cmd *service.UsageBillingCommand, thresholdExemptCost float64) ([]byte, error) {
@@ -124,7 +128,9 @@ func encodeUsagePersistencePayload(cmd *service.UsageBillingCommand, thresholdEx
 	if cmd.RequestID == "" || log.APIKeyID <= 0 || log.UserID <= 0 || log.AccountID <= 0 || strings.TrimSpace(log.RequestID) != cmd.RequestID || log.APIKeyID != cmd.APIKeyID || log.UserID != cmd.UserID || log.AccountID != cmd.AccountID {
 		return nil, errors.New("usage persistence snapshot identity mismatch")
 	}
-	payload := usagePersistencePayload{Version: usagePersistencePayloadVersion, Usage: usagePersistenceUsage{
+	// Default-off requests retain the deployed v2 wire shape. Only snapshots
+	// carrying input-policy audit require a v3-capable consumer.
+	payload := usagePersistencePayload{Version: usagePersistencePayloadProvenanceVersion, Usage: usagePersistenceUsage{
 		UserID:                    log.UserID,
 		APIKeyID:                  log.APIKeyID,
 		AccountID:                 log.AccountID,
@@ -202,20 +208,26 @@ func encodeUsagePersistencePayload(cmd *service.UsageBillingCommand, thresholdEx
 		payload.Usage.CreatedAt = time.Now().UTC()
 	}
 	if log.Outcome != nil {
+		if responseOutcomeHasInputCountingAudit(log.Outcome) {
+			payload.Version = usagePersistencePayloadVersion
+		}
 		payload.Usage.Outcome = &usagePersistenceOutcome{
-			HTTPStatus:        log.Outcome.HTTPStatus,
-			UpstreamStatus:    log.Outcome.UpstreamStatus,
-			HasText:           log.Outcome.HasText,
-			HasToolCall:       log.Outcome.HasToolCall,
-			HasReasoning:      log.Outcome.HasReasoning,
-			HasMedia:          log.Outcome.HasMedia,
-			OutputBytes:       log.Outcome.OutputBytes,
-			EventCount:        log.Outcome.EventCount,
-			StreamCompleted:   log.Outcome.StreamCompleted,
-			FinishReason:      log.Outcome.FinishReason,
-			DisconnectSource:  log.Outcome.DisconnectSource,
-			UpstreamErrorKind: log.Outcome.UpstreamErrorKind,
-			CollectorVersion:  log.Outcome.CollectorVersion,
+			HTTPStatus:            log.Outcome.HTTPStatus,
+			UpstreamStatus:        log.Outcome.UpstreamStatus,
+			HasText:               log.Outcome.HasText,
+			HasToolCall:           log.Outcome.HasToolCall,
+			HasReasoning:          log.Outcome.HasReasoning,
+			HasMedia:              log.Outcome.HasMedia,
+			OutputBytes:           log.Outcome.OutputBytes,
+			EventCount:            log.Outcome.EventCount,
+			StreamCompleted:       log.Outcome.StreamCompleted,
+			FinishReason:          log.Outcome.FinishReason,
+			DisconnectSource:      log.Outcome.DisconnectSource,
+			UpstreamErrorKind:     log.Outcome.UpstreamErrorKind,
+			CollectorVersion:      log.Outcome.CollectorVersion,
+			UpstreamInputTokens:   log.Outcome.UpstreamInputTokens,
+			InputTokenPolicy:      log.Outcome.InputTokenPolicy,
+			InputTokenPolicyCount: log.Outcome.InputTokenPolicyCount,
 		}
 	}
 	raw, err := json.Marshal(payload)
@@ -250,10 +262,29 @@ func decodeUsagePersistencePayload(raw []byte, requestID string, apiKeyID int64)
 	if err := decoder.Decode(new(any)); err != io.EOF {
 		return nil, errors.New("invalid trailing usage persistence snapshot")
 	}
-	if payload.Version != usagePersistencePayloadLegacyVersion && payload.Version != usagePersistencePayloadVersion {
+	if payload.Version != usagePersistencePayloadLegacyVersion && payload.Version != usagePersistencePayloadProvenanceVersion && payload.Version != usagePersistencePayloadVersion {
 		return nil, errors.New("unsupported usage persistence snapshot version")
 	}
 	usage := payload.Usage
+	if payload.Version < usagePersistencePayloadVersion {
+		// Keep deployed v1/v2 contracts strict, including explicitly null audit
+		// values that a pointer field alone cannot distinguish from absence.
+		var legacy struct {
+			Usage struct {
+				Outcome map[string]json.RawMessage `json:"outcome"`
+			} `json:"usage"`
+		}
+		if err := json.Unmarshal(raw, &legacy); err != nil {
+			return nil, errors.New("invalid legacy usage persistence snapshot")
+		}
+		for key := range legacy.Usage.Outcome {
+			for _, auditKey := range []string{"upstream_input_tokens", "input_token_policy", "input_token_policy_count"} {
+				if strings.EqualFold(key, auditKey) {
+					return nil, errors.New("legacy usage persistence snapshot contains v3 metadata")
+				}
+			}
+		}
+	}
 	if payload.Version == usagePersistencePayloadLegacyVersion {
 		// Keep the deployed v1 contract strict: neither provenance key was part
 		// of it, including an explicitly empty or null value. Read old snapshots
@@ -349,19 +380,22 @@ func decodeUsagePersistencePayload(raw []byte, requestID string, apiKeyID int64)
 	}
 	if usage.Outcome != nil {
 		log.Outcome = &service.ResponseOutcome{
-			HTTPStatus:        usage.Outcome.HTTPStatus,
-			UpstreamStatus:    usage.Outcome.UpstreamStatus,
-			HasText:           usage.Outcome.HasText,
-			HasToolCall:       usage.Outcome.HasToolCall,
-			HasReasoning:      usage.Outcome.HasReasoning,
-			HasMedia:          usage.Outcome.HasMedia,
-			OutputBytes:       usage.Outcome.OutputBytes,
-			EventCount:        usage.Outcome.EventCount,
-			StreamCompleted:   usage.Outcome.StreamCompleted,
-			FinishReason:      usage.Outcome.FinishReason,
-			DisconnectSource:  usage.Outcome.DisconnectSource,
-			UpstreamErrorKind: usage.Outcome.UpstreamErrorKind,
-			CollectorVersion:  usage.Outcome.CollectorVersion,
+			HTTPStatus:            usage.Outcome.HTTPStatus,
+			UpstreamStatus:        usage.Outcome.UpstreamStatus,
+			HasText:               usage.Outcome.HasText,
+			HasToolCall:           usage.Outcome.HasToolCall,
+			HasReasoning:          usage.Outcome.HasReasoning,
+			HasMedia:              usage.Outcome.HasMedia,
+			OutputBytes:           usage.Outcome.OutputBytes,
+			EventCount:            usage.Outcome.EventCount,
+			StreamCompleted:       usage.Outcome.StreamCompleted,
+			FinishReason:          usage.Outcome.FinishReason,
+			DisconnectSource:      usage.Outcome.DisconnectSource,
+			UpstreamErrorKind:     usage.Outcome.UpstreamErrorKind,
+			CollectorVersion:      usage.Outcome.CollectorVersion,
+			UpstreamInputTokens:   usage.Outcome.UpstreamInputTokens,
+			InputTokenPolicy:      usage.Outcome.InputTokenPolicy,
+			InputTokenPolicyCount: usage.Outcome.InputTokenPolicyCount,
 		}
 	}
 	return log, nil

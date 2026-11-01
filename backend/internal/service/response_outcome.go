@@ -47,6 +47,12 @@ type ResponseOutcome struct {
 	DisconnectSource  DisconnectSource  `json:"disconnect_source"`
 	UpstreamErrorKind UpstreamErrorKind `json:"upstream_error_kind"`
 	CollectorVersion  int               `json:"collector_version"`
+	// Counting-policy audit is internal accounting evidence. Public evidence
+	// DTOs may marshal this struct directly; only the durable snapshot DTO
+	// explicitly serializes these scalar values.
+	UpstreamInputTokens   *int   `json:"-"`
+	InputTokenPolicy      string `json:"-"`
+	InputTokenPolicyCount *int   `json:"-"`
 }
 
 // ensureResponseOutcomeForUsageLog creates a minimal outcome row when a

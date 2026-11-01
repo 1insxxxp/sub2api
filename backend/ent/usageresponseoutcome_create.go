@@ -284,6 +284,48 @@ func (_c *UsageResponseOutcomeCreate) SetNillableOutputTokensSource(v *string) *
 	return _c
 }
 
+// SetUpstreamInputTokens sets the "upstream_input_tokens" field.
+func (_c *UsageResponseOutcomeCreate) SetUpstreamInputTokens(v int) *UsageResponseOutcomeCreate {
+	_c.mutation.SetUpstreamInputTokens(v)
+	return _c
+}
+
+// SetNillableUpstreamInputTokens sets the "upstream_input_tokens" field if the given value is not nil.
+func (_c *UsageResponseOutcomeCreate) SetNillableUpstreamInputTokens(v *int) *UsageResponseOutcomeCreate {
+	if v != nil {
+		_c.SetUpstreamInputTokens(*v)
+	}
+	return _c
+}
+
+// SetInputTokenPolicy sets the "input_token_policy" field.
+func (_c *UsageResponseOutcomeCreate) SetInputTokenPolicy(v string) *UsageResponseOutcomeCreate {
+	_c.mutation.SetInputTokenPolicy(v)
+	return _c
+}
+
+// SetNillableInputTokenPolicy sets the "input_token_policy" field if the given value is not nil.
+func (_c *UsageResponseOutcomeCreate) SetNillableInputTokenPolicy(v *string) *UsageResponseOutcomeCreate {
+	if v != nil {
+		_c.SetInputTokenPolicy(*v)
+	}
+	return _c
+}
+
+// SetInputTokenPolicyCount sets the "input_token_policy_count" field.
+func (_c *UsageResponseOutcomeCreate) SetInputTokenPolicyCount(v int) *UsageResponseOutcomeCreate {
+	_c.mutation.SetInputTokenPolicyCount(v)
+	return _c
+}
+
+// SetNillableInputTokenPolicyCount sets the "input_token_policy_count" field if the given value is not nil.
+func (_c *UsageResponseOutcomeCreate) SetNillableInputTokenPolicyCount(v *int) *UsageResponseOutcomeCreate {
+	if v != nil {
+		_c.SetInputTokenPolicyCount(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *UsageResponseOutcomeCreate) SetCreatedAt(v time.Time) *UsageResponseOutcomeCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -393,6 +435,10 @@ func (_c *UsageResponseOutcomeCreate) defaults() {
 		v := usageresponseoutcome.DefaultOutputTokensSource
 		_c.mutation.SetOutputTokensSource(v)
 	}
+	if _, ok := _c.mutation.InputTokenPolicy(); !ok {
+		v := usageresponseoutcome.DefaultInputTokenPolicy
+		_c.mutation.SetInputTokenPolicy(v)
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := usageresponseoutcome.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
@@ -486,6 +532,14 @@ func (_c *UsageResponseOutcomeCreate) check() error {
 	if v, ok := _c.mutation.OutputTokensSource(); ok {
 		if err := usageresponseoutcome.OutputTokensSourceValidator(v); err != nil {
 			return &ValidationError{Name: "output_tokens_source", err: fmt.Errorf(`ent: validator failed for field "UsageResponseOutcome.output_tokens_source": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.InputTokenPolicy(); !ok {
+		return &ValidationError{Name: "input_token_policy", err: errors.New(`ent: missing required field "UsageResponseOutcome.input_token_policy"`)}
+	}
+	if v, ok := _c.mutation.InputTokenPolicy(); ok {
+		if err := usageresponseoutcome.InputTokenPolicyValidator(v); err != nil {
+			return &ValidationError{Name: "input_token_policy", err: fmt.Errorf(`ent: validator failed for field "UsageResponseOutcome.input_token_policy": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
@@ -601,6 +655,18 @@ func (_c *UsageResponseOutcomeCreate) createSpec() (*UsageResponseOutcome, *sqlg
 	if value, ok := _c.mutation.OutputTokensSource(); ok {
 		_spec.SetField(usageresponseoutcome.FieldOutputTokensSource, field.TypeString, value)
 		_node.OutputTokensSource = value
+	}
+	if value, ok := _c.mutation.UpstreamInputTokens(); ok {
+		_spec.SetField(usageresponseoutcome.FieldUpstreamInputTokens, field.TypeInt, value)
+		_node.UpstreamInputTokens = &value
+	}
+	if value, ok := _c.mutation.InputTokenPolicy(); ok {
+		_spec.SetField(usageresponseoutcome.FieldInputTokenPolicy, field.TypeString, value)
+		_node.InputTokenPolicy = value
+	}
+	if value, ok := _c.mutation.InputTokenPolicyCount(); ok {
+		_spec.SetField(usageresponseoutcome.FieldInputTokenPolicyCount, field.TypeInt, value)
+		_node.InputTokenPolicyCount = &value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(usageresponseoutcome.FieldCreatedAt, field.TypeTime, value)
@@ -979,6 +1045,66 @@ func (u *UsageResponseOutcomeUpsert) SetOutputTokensSource(v string) *UsageRespo
 // UpdateOutputTokensSource sets the "output_tokens_source" field to the value that was provided on create.
 func (u *UsageResponseOutcomeUpsert) UpdateOutputTokensSource() *UsageResponseOutcomeUpsert {
 	u.SetExcluded(usageresponseoutcome.FieldOutputTokensSource)
+	return u
+}
+
+// SetUpstreamInputTokens sets the "upstream_input_tokens" field.
+func (u *UsageResponseOutcomeUpsert) SetUpstreamInputTokens(v int) *UsageResponseOutcomeUpsert {
+	u.Set(usageresponseoutcome.FieldUpstreamInputTokens, v)
+	return u
+}
+
+// UpdateUpstreamInputTokens sets the "upstream_input_tokens" field to the value that was provided on create.
+func (u *UsageResponseOutcomeUpsert) UpdateUpstreamInputTokens() *UsageResponseOutcomeUpsert {
+	u.SetExcluded(usageresponseoutcome.FieldUpstreamInputTokens)
+	return u
+}
+
+// AddUpstreamInputTokens adds v to the "upstream_input_tokens" field.
+func (u *UsageResponseOutcomeUpsert) AddUpstreamInputTokens(v int) *UsageResponseOutcomeUpsert {
+	u.Add(usageresponseoutcome.FieldUpstreamInputTokens, v)
+	return u
+}
+
+// ClearUpstreamInputTokens clears the value of the "upstream_input_tokens" field.
+func (u *UsageResponseOutcomeUpsert) ClearUpstreamInputTokens() *UsageResponseOutcomeUpsert {
+	u.SetNull(usageresponseoutcome.FieldUpstreamInputTokens)
+	return u
+}
+
+// SetInputTokenPolicy sets the "input_token_policy" field.
+func (u *UsageResponseOutcomeUpsert) SetInputTokenPolicy(v string) *UsageResponseOutcomeUpsert {
+	u.Set(usageresponseoutcome.FieldInputTokenPolicy, v)
+	return u
+}
+
+// UpdateInputTokenPolicy sets the "input_token_policy" field to the value that was provided on create.
+func (u *UsageResponseOutcomeUpsert) UpdateInputTokenPolicy() *UsageResponseOutcomeUpsert {
+	u.SetExcluded(usageresponseoutcome.FieldInputTokenPolicy)
+	return u
+}
+
+// SetInputTokenPolicyCount sets the "input_token_policy_count" field.
+func (u *UsageResponseOutcomeUpsert) SetInputTokenPolicyCount(v int) *UsageResponseOutcomeUpsert {
+	u.Set(usageresponseoutcome.FieldInputTokenPolicyCount, v)
+	return u
+}
+
+// UpdateInputTokenPolicyCount sets the "input_token_policy_count" field to the value that was provided on create.
+func (u *UsageResponseOutcomeUpsert) UpdateInputTokenPolicyCount() *UsageResponseOutcomeUpsert {
+	u.SetExcluded(usageresponseoutcome.FieldInputTokenPolicyCount)
+	return u
+}
+
+// AddInputTokenPolicyCount adds v to the "input_token_policy_count" field.
+func (u *UsageResponseOutcomeUpsert) AddInputTokenPolicyCount(v int) *UsageResponseOutcomeUpsert {
+	u.Add(usageresponseoutcome.FieldInputTokenPolicyCount, v)
+	return u
+}
+
+// ClearInputTokenPolicyCount clears the value of the "input_token_policy_count" field.
+func (u *UsageResponseOutcomeUpsert) ClearInputTokenPolicyCount() *UsageResponseOutcomeUpsert {
+	u.SetNull(usageresponseoutcome.FieldInputTokenPolicyCount)
 	return u
 }
 
@@ -1402,6 +1528,76 @@ func (u *UsageResponseOutcomeUpsertOne) SetOutputTokensSource(v string) *UsageRe
 func (u *UsageResponseOutcomeUpsertOne) UpdateOutputTokensSource() *UsageResponseOutcomeUpsertOne {
 	return u.Update(func(s *UsageResponseOutcomeUpsert) {
 		s.UpdateOutputTokensSource()
+	})
+}
+
+// SetUpstreamInputTokens sets the "upstream_input_tokens" field.
+func (u *UsageResponseOutcomeUpsertOne) SetUpstreamInputTokens(v int) *UsageResponseOutcomeUpsertOne {
+	return u.Update(func(s *UsageResponseOutcomeUpsert) {
+		s.SetUpstreamInputTokens(v)
+	})
+}
+
+// AddUpstreamInputTokens adds v to the "upstream_input_tokens" field.
+func (u *UsageResponseOutcomeUpsertOne) AddUpstreamInputTokens(v int) *UsageResponseOutcomeUpsertOne {
+	return u.Update(func(s *UsageResponseOutcomeUpsert) {
+		s.AddUpstreamInputTokens(v)
+	})
+}
+
+// UpdateUpstreamInputTokens sets the "upstream_input_tokens" field to the value that was provided on create.
+func (u *UsageResponseOutcomeUpsertOne) UpdateUpstreamInputTokens() *UsageResponseOutcomeUpsertOne {
+	return u.Update(func(s *UsageResponseOutcomeUpsert) {
+		s.UpdateUpstreamInputTokens()
+	})
+}
+
+// ClearUpstreamInputTokens clears the value of the "upstream_input_tokens" field.
+func (u *UsageResponseOutcomeUpsertOne) ClearUpstreamInputTokens() *UsageResponseOutcomeUpsertOne {
+	return u.Update(func(s *UsageResponseOutcomeUpsert) {
+		s.ClearUpstreamInputTokens()
+	})
+}
+
+// SetInputTokenPolicy sets the "input_token_policy" field.
+func (u *UsageResponseOutcomeUpsertOne) SetInputTokenPolicy(v string) *UsageResponseOutcomeUpsertOne {
+	return u.Update(func(s *UsageResponseOutcomeUpsert) {
+		s.SetInputTokenPolicy(v)
+	})
+}
+
+// UpdateInputTokenPolicy sets the "input_token_policy" field to the value that was provided on create.
+func (u *UsageResponseOutcomeUpsertOne) UpdateInputTokenPolicy() *UsageResponseOutcomeUpsertOne {
+	return u.Update(func(s *UsageResponseOutcomeUpsert) {
+		s.UpdateInputTokenPolicy()
+	})
+}
+
+// SetInputTokenPolicyCount sets the "input_token_policy_count" field.
+func (u *UsageResponseOutcomeUpsertOne) SetInputTokenPolicyCount(v int) *UsageResponseOutcomeUpsertOne {
+	return u.Update(func(s *UsageResponseOutcomeUpsert) {
+		s.SetInputTokenPolicyCount(v)
+	})
+}
+
+// AddInputTokenPolicyCount adds v to the "input_token_policy_count" field.
+func (u *UsageResponseOutcomeUpsertOne) AddInputTokenPolicyCount(v int) *UsageResponseOutcomeUpsertOne {
+	return u.Update(func(s *UsageResponseOutcomeUpsert) {
+		s.AddInputTokenPolicyCount(v)
+	})
+}
+
+// UpdateInputTokenPolicyCount sets the "input_token_policy_count" field to the value that was provided on create.
+func (u *UsageResponseOutcomeUpsertOne) UpdateInputTokenPolicyCount() *UsageResponseOutcomeUpsertOne {
+	return u.Update(func(s *UsageResponseOutcomeUpsert) {
+		s.UpdateInputTokenPolicyCount()
+	})
+}
+
+// ClearInputTokenPolicyCount clears the value of the "input_token_policy_count" field.
+func (u *UsageResponseOutcomeUpsertOne) ClearInputTokenPolicyCount() *UsageResponseOutcomeUpsertOne {
+	return u.Update(func(s *UsageResponseOutcomeUpsert) {
+		s.ClearInputTokenPolicyCount()
 	})
 }
 
@@ -1991,6 +2187,76 @@ func (u *UsageResponseOutcomeUpsertBulk) SetOutputTokensSource(v string) *UsageR
 func (u *UsageResponseOutcomeUpsertBulk) UpdateOutputTokensSource() *UsageResponseOutcomeUpsertBulk {
 	return u.Update(func(s *UsageResponseOutcomeUpsert) {
 		s.UpdateOutputTokensSource()
+	})
+}
+
+// SetUpstreamInputTokens sets the "upstream_input_tokens" field.
+func (u *UsageResponseOutcomeUpsertBulk) SetUpstreamInputTokens(v int) *UsageResponseOutcomeUpsertBulk {
+	return u.Update(func(s *UsageResponseOutcomeUpsert) {
+		s.SetUpstreamInputTokens(v)
+	})
+}
+
+// AddUpstreamInputTokens adds v to the "upstream_input_tokens" field.
+func (u *UsageResponseOutcomeUpsertBulk) AddUpstreamInputTokens(v int) *UsageResponseOutcomeUpsertBulk {
+	return u.Update(func(s *UsageResponseOutcomeUpsert) {
+		s.AddUpstreamInputTokens(v)
+	})
+}
+
+// UpdateUpstreamInputTokens sets the "upstream_input_tokens" field to the value that was provided on create.
+func (u *UsageResponseOutcomeUpsertBulk) UpdateUpstreamInputTokens() *UsageResponseOutcomeUpsertBulk {
+	return u.Update(func(s *UsageResponseOutcomeUpsert) {
+		s.UpdateUpstreamInputTokens()
+	})
+}
+
+// ClearUpstreamInputTokens clears the value of the "upstream_input_tokens" field.
+func (u *UsageResponseOutcomeUpsertBulk) ClearUpstreamInputTokens() *UsageResponseOutcomeUpsertBulk {
+	return u.Update(func(s *UsageResponseOutcomeUpsert) {
+		s.ClearUpstreamInputTokens()
+	})
+}
+
+// SetInputTokenPolicy sets the "input_token_policy" field.
+func (u *UsageResponseOutcomeUpsertBulk) SetInputTokenPolicy(v string) *UsageResponseOutcomeUpsertBulk {
+	return u.Update(func(s *UsageResponseOutcomeUpsert) {
+		s.SetInputTokenPolicy(v)
+	})
+}
+
+// UpdateInputTokenPolicy sets the "input_token_policy" field to the value that was provided on create.
+func (u *UsageResponseOutcomeUpsertBulk) UpdateInputTokenPolicy() *UsageResponseOutcomeUpsertBulk {
+	return u.Update(func(s *UsageResponseOutcomeUpsert) {
+		s.UpdateInputTokenPolicy()
+	})
+}
+
+// SetInputTokenPolicyCount sets the "input_token_policy_count" field.
+func (u *UsageResponseOutcomeUpsertBulk) SetInputTokenPolicyCount(v int) *UsageResponseOutcomeUpsertBulk {
+	return u.Update(func(s *UsageResponseOutcomeUpsert) {
+		s.SetInputTokenPolicyCount(v)
+	})
+}
+
+// AddInputTokenPolicyCount adds v to the "input_token_policy_count" field.
+func (u *UsageResponseOutcomeUpsertBulk) AddInputTokenPolicyCount(v int) *UsageResponseOutcomeUpsertBulk {
+	return u.Update(func(s *UsageResponseOutcomeUpsert) {
+		s.AddInputTokenPolicyCount(v)
+	})
+}
+
+// UpdateInputTokenPolicyCount sets the "input_token_policy_count" field to the value that was provided on create.
+func (u *UsageResponseOutcomeUpsertBulk) UpdateInputTokenPolicyCount() *UsageResponseOutcomeUpsertBulk {
+	return u.Update(func(s *UsageResponseOutcomeUpsert) {
+		s.UpdateInputTokenPolicyCount()
+	})
+}
+
+// ClearInputTokenPolicyCount clears the value of the "input_token_policy_count" field.
+func (u *UsageResponseOutcomeUpsertBulk) ClearInputTokenPolicyCount() *UsageResponseOutcomeUpsertBulk {
+	return u.Update(func(s *UsageResponseOutcomeUpsert) {
+		s.ClearInputTokenPolicyCount()
 	})
 }
 

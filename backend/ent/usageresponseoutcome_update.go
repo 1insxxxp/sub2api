@@ -403,6 +403,74 @@ func (_u *UsageResponseOutcomeUpdate) SetNillableOutputTokensSource(v *string) *
 	return _u
 }
 
+// SetUpstreamInputTokens sets the "upstream_input_tokens" field.
+func (_u *UsageResponseOutcomeUpdate) SetUpstreamInputTokens(v int) *UsageResponseOutcomeUpdate {
+	_u.mutation.ResetUpstreamInputTokens()
+	_u.mutation.SetUpstreamInputTokens(v)
+	return _u
+}
+
+// SetNillableUpstreamInputTokens sets the "upstream_input_tokens" field if the given value is not nil.
+func (_u *UsageResponseOutcomeUpdate) SetNillableUpstreamInputTokens(v *int) *UsageResponseOutcomeUpdate {
+	if v != nil {
+		_u.SetUpstreamInputTokens(*v)
+	}
+	return _u
+}
+
+// AddUpstreamInputTokens adds value to the "upstream_input_tokens" field.
+func (_u *UsageResponseOutcomeUpdate) AddUpstreamInputTokens(v int) *UsageResponseOutcomeUpdate {
+	_u.mutation.AddUpstreamInputTokens(v)
+	return _u
+}
+
+// ClearUpstreamInputTokens clears the value of the "upstream_input_tokens" field.
+func (_u *UsageResponseOutcomeUpdate) ClearUpstreamInputTokens() *UsageResponseOutcomeUpdate {
+	_u.mutation.ClearUpstreamInputTokens()
+	return _u
+}
+
+// SetInputTokenPolicy sets the "input_token_policy" field.
+func (_u *UsageResponseOutcomeUpdate) SetInputTokenPolicy(v string) *UsageResponseOutcomeUpdate {
+	_u.mutation.SetInputTokenPolicy(v)
+	return _u
+}
+
+// SetNillableInputTokenPolicy sets the "input_token_policy" field if the given value is not nil.
+func (_u *UsageResponseOutcomeUpdate) SetNillableInputTokenPolicy(v *string) *UsageResponseOutcomeUpdate {
+	if v != nil {
+		_u.SetInputTokenPolicy(*v)
+	}
+	return _u
+}
+
+// SetInputTokenPolicyCount sets the "input_token_policy_count" field.
+func (_u *UsageResponseOutcomeUpdate) SetInputTokenPolicyCount(v int) *UsageResponseOutcomeUpdate {
+	_u.mutation.ResetInputTokenPolicyCount()
+	_u.mutation.SetInputTokenPolicyCount(v)
+	return _u
+}
+
+// SetNillableInputTokenPolicyCount sets the "input_token_policy_count" field if the given value is not nil.
+func (_u *UsageResponseOutcomeUpdate) SetNillableInputTokenPolicyCount(v *int) *UsageResponseOutcomeUpdate {
+	if v != nil {
+		_u.SetInputTokenPolicyCount(*v)
+	}
+	return _u
+}
+
+// AddInputTokenPolicyCount adds value to the "input_token_policy_count" field.
+func (_u *UsageResponseOutcomeUpdate) AddInputTokenPolicyCount(v int) *UsageResponseOutcomeUpdate {
+	_u.mutation.AddInputTokenPolicyCount(v)
+	return _u
+}
+
+// ClearInputTokenPolicyCount clears the value of the "input_token_policy_count" field.
+func (_u *UsageResponseOutcomeUpdate) ClearInputTokenPolicyCount() *UsageResponseOutcomeUpdate {
+	_u.mutation.ClearInputTokenPolicyCount()
+	return _u
+}
+
 // Mutation returns the UsageResponseOutcomeMutation object of the builder.
 func (_u *UsageResponseOutcomeUpdate) Mutation() *UsageResponseOutcomeMutation {
 	return _u.mutation
@@ -465,6 +533,11 @@ func (_u *UsageResponseOutcomeUpdate) check() error {
 	if v, ok := _u.mutation.OutputTokensSource(); ok {
 		if err := usageresponseoutcome.OutputTokensSourceValidator(v); err != nil {
 			return &ValidationError{Name: "output_tokens_source", err: fmt.Errorf(`ent: validator failed for field "UsageResponseOutcome.output_tokens_source": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.InputTokenPolicy(); ok {
+		if err := usageresponseoutcome.InputTokenPolicyValidator(v); err != nil {
+			return &ValidationError{Name: "input_token_policy", err: fmt.Errorf(`ent: validator failed for field "UsageResponseOutcome.input_token_policy": %w`, err)}
 		}
 	}
 	return nil
@@ -580,6 +653,27 @@ func (_u *UsageResponseOutcomeUpdate) sqlSave(ctx context.Context) (_node int, e
 	}
 	if value, ok := _u.mutation.OutputTokensSource(); ok {
 		_spec.SetField(usageresponseoutcome.FieldOutputTokensSource, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.UpstreamInputTokens(); ok {
+		_spec.SetField(usageresponseoutcome.FieldUpstreamInputTokens, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedUpstreamInputTokens(); ok {
+		_spec.AddField(usageresponseoutcome.FieldUpstreamInputTokens, field.TypeInt, value)
+	}
+	if _u.mutation.UpstreamInputTokensCleared() {
+		_spec.ClearField(usageresponseoutcome.FieldUpstreamInputTokens, field.TypeInt)
+	}
+	if value, ok := _u.mutation.InputTokenPolicy(); ok {
+		_spec.SetField(usageresponseoutcome.FieldInputTokenPolicy, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.InputTokenPolicyCount(); ok {
+		_spec.SetField(usageresponseoutcome.FieldInputTokenPolicyCount, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedInputTokenPolicyCount(); ok {
+		_spec.AddField(usageresponseoutcome.FieldInputTokenPolicyCount, field.TypeInt, value)
+	}
+	if _u.mutation.InputTokenPolicyCountCleared() {
+		_spec.ClearField(usageresponseoutcome.FieldInputTokenPolicyCount, field.TypeInt)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -977,6 +1071,74 @@ func (_u *UsageResponseOutcomeUpdateOne) SetNillableOutputTokensSource(v *string
 	return _u
 }
 
+// SetUpstreamInputTokens sets the "upstream_input_tokens" field.
+func (_u *UsageResponseOutcomeUpdateOne) SetUpstreamInputTokens(v int) *UsageResponseOutcomeUpdateOne {
+	_u.mutation.ResetUpstreamInputTokens()
+	_u.mutation.SetUpstreamInputTokens(v)
+	return _u
+}
+
+// SetNillableUpstreamInputTokens sets the "upstream_input_tokens" field if the given value is not nil.
+func (_u *UsageResponseOutcomeUpdateOne) SetNillableUpstreamInputTokens(v *int) *UsageResponseOutcomeUpdateOne {
+	if v != nil {
+		_u.SetUpstreamInputTokens(*v)
+	}
+	return _u
+}
+
+// AddUpstreamInputTokens adds value to the "upstream_input_tokens" field.
+func (_u *UsageResponseOutcomeUpdateOne) AddUpstreamInputTokens(v int) *UsageResponseOutcomeUpdateOne {
+	_u.mutation.AddUpstreamInputTokens(v)
+	return _u
+}
+
+// ClearUpstreamInputTokens clears the value of the "upstream_input_tokens" field.
+func (_u *UsageResponseOutcomeUpdateOne) ClearUpstreamInputTokens() *UsageResponseOutcomeUpdateOne {
+	_u.mutation.ClearUpstreamInputTokens()
+	return _u
+}
+
+// SetInputTokenPolicy sets the "input_token_policy" field.
+func (_u *UsageResponseOutcomeUpdateOne) SetInputTokenPolicy(v string) *UsageResponseOutcomeUpdateOne {
+	_u.mutation.SetInputTokenPolicy(v)
+	return _u
+}
+
+// SetNillableInputTokenPolicy sets the "input_token_policy" field if the given value is not nil.
+func (_u *UsageResponseOutcomeUpdateOne) SetNillableInputTokenPolicy(v *string) *UsageResponseOutcomeUpdateOne {
+	if v != nil {
+		_u.SetInputTokenPolicy(*v)
+	}
+	return _u
+}
+
+// SetInputTokenPolicyCount sets the "input_token_policy_count" field.
+func (_u *UsageResponseOutcomeUpdateOne) SetInputTokenPolicyCount(v int) *UsageResponseOutcomeUpdateOne {
+	_u.mutation.ResetInputTokenPolicyCount()
+	_u.mutation.SetInputTokenPolicyCount(v)
+	return _u
+}
+
+// SetNillableInputTokenPolicyCount sets the "input_token_policy_count" field if the given value is not nil.
+func (_u *UsageResponseOutcomeUpdateOne) SetNillableInputTokenPolicyCount(v *int) *UsageResponseOutcomeUpdateOne {
+	if v != nil {
+		_u.SetInputTokenPolicyCount(*v)
+	}
+	return _u
+}
+
+// AddInputTokenPolicyCount adds value to the "input_token_policy_count" field.
+func (_u *UsageResponseOutcomeUpdateOne) AddInputTokenPolicyCount(v int) *UsageResponseOutcomeUpdateOne {
+	_u.mutation.AddInputTokenPolicyCount(v)
+	return _u
+}
+
+// ClearInputTokenPolicyCount clears the value of the "input_token_policy_count" field.
+func (_u *UsageResponseOutcomeUpdateOne) ClearInputTokenPolicyCount() *UsageResponseOutcomeUpdateOne {
+	_u.mutation.ClearInputTokenPolicyCount()
+	return _u
+}
+
 // Mutation returns the UsageResponseOutcomeMutation object of the builder.
 func (_u *UsageResponseOutcomeUpdateOne) Mutation() *UsageResponseOutcomeMutation {
 	return _u.mutation
@@ -1052,6 +1214,11 @@ func (_u *UsageResponseOutcomeUpdateOne) check() error {
 	if v, ok := _u.mutation.OutputTokensSource(); ok {
 		if err := usageresponseoutcome.OutputTokensSourceValidator(v); err != nil {
 			return &ValidationError{Name: "output_tokens_source", err: fmt.Errorf(`ent: validator failed for field "UsageResponseOutcome.output_tokens_source": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.InputTokenPolicy(); ok {
+		if err := usageresponseoutcome.InputTokenPolicyValidator(v); err != nil {
+			return &ValidationError{Name: "input_token_policy", err: fmt.Errorf(`ent: validator failed for field "UsageResponseOutcome.input_token_policy": %w`, err)}
 		}
 	}
 	return nil
@@ -1184,6 +1351,27 @@ func (_u *UsageResponseOutcomeUpdateOne) sqlSave(ctx context.Context) (_node *Us
 	}
 	if value, ok := _u.mutation.OutputTokensSource(); ok {
 		_spec.SetField(usageresponseoutcome.FieldOutputTokensSource, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.UpstreamInputTokens(); ok {
+		_spec.SetField(usageresponseoutcome.FieldUpstreamInputTokens, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedUpstreamInputTokens(); ok {
+		_spec.AddField(usageresponseoutcome.FieldUpstreamInputTokens, field.TypeInt, value)
+	}
+	if _u.mutation.UpstreamInputTokensCleared() {
+		_spec.ClearField(usageresponseoutcome.FieldUpstreamInputTokens, field.TypeInt)
+	}
+	if value, ok := _u.mutation.InputTokenPolicy(); ok {
+		_spec.SetField(usageresponseoutcome.FieldInputTokenPolicy, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.InputTokenPolicyCount(); ok {
+		_spec.SetField(usageresponseoutcome.FieldInputTokenPolicyCount, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedInputTokenPolicyCount(); ok {
+		_spec.AddField(usageresponseoutcome.FieldInputTokenPolicyCount, field.TypeInt, value)
+	}
+	if _u.mutation.InputTokenPolicyCountCleared() {
+		_spec.ClearField(usageresponseoutcome.FieldInputTokenPolicyCount, field.TypeInt)
 	}
 	_node = &UsageResponseOutcome{config: _u.config}
 	_spec.Assign = _node.assignValues

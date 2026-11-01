@@ -2808,8 +2808,14 @@ func init() {
 	usageresponseoutcome.DefaultOutputTokensSource = usageresponseoutcomeDescOutputTokensSource.Default.(string)
 	// usageresponseoutcome.OutputTokensSourceValidator is a validator for the "output_tokens_source" field. It is called by the builders before save.
 	usageresponseoutcome.OutputTokensSourceValidator = usageresponseoutcomeDescOutputTokensSource.Validators[0].(func(string) error)
+	// usageresponseoutcomeDescInputTokenPolicy is the schema descriptor for input_token_policy field.
+	usageresponseoutcomeDescInputTokenPolicy := usageresponseoutcomeFields[22].Descriptor()
+	// usageresponseoutcome.DefaultInputTokenPolicy holds the default value on creation for the input_token_policy field.
+	usageresponseoutcome.DefaultInputTokenPolicy = usageresponseoutcomeDescInputTokenPolicy.Default.(string)
+	// usageresponseoutcome.InputTokenPolicyValidator is a validator for the "input_token_policy" field. It is called by the builders before save.
+	usageresponseoutcome.InputTokenPolicyValidator = usageresponseoutcomeDescInputTokenPolicy.Validators[0].(func(string) error)
 	// usageresponseoutcomeDescCreatedAt is the schema descriptor for created_at field.
-	usageresponseoutcomeDescCreatedAt := usageresponseoutcomeFields[21].Descriptor()
+	usageresponseoutcomeDescCreatedAt := usageresponseoutcomeFields[24].Descriptor()
 	// usageresponseoutcome.DefaultCreatedAt holds the default value on creation for the created_at field.
 	usageresponseoutcome.DefaultCreatedAt = usageresponseoutcomeDescCreatedAt.Default.(func() time.Time)
 	userMixin := schema.User{}.Mixin()

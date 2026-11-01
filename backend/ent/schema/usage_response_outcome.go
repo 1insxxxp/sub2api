@@ -40,6 +40,9 @@ func (UsageResponseOutcome) Fields() []ent.Field {
 		field.Int16("collector_version").Default(1),
 		field.String("input_tokens_source").MaxLen(20).Default("unknown"),
 		field.String("output_tokens_source").MaxLen(20).Default("unknown"),
+		field.Int("upstream_input_tokens").Optional().Nillable(),
+		field.String("input_token_policy").MaxLen(64).Default(""),
+		field.Int("input_token_policy_count").Optional().Nillable(),
 		field.Time("created_at").Default(time.Now).Immutable(),
 	}
 }

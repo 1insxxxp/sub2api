@@ -21,8 +21,9 @@ import (
 
 func usagePersistenceWorkerPayload(t *testing.T) ([]byte, *service.UsageLog) {
 	t.Helper()
+	upstreamInput, policyCount := 1037, 667
 	log := &service.UsageLog{UserID: 1, APIKeyID: 2, AccountID: 3, RequestID: "durable-worker", Model: "gemini-2.5-flash", InputTokens: 12, OutputTokens: 2, UpstreamOutputTokens: 10000, ActualCost: 2, RateMultiplier: 1, CreatedAt: time.Date(2026, 10, 23, 2, 3, 4, 0, time.UTC),
-		Outcome: &service.ResponseOutcome{HTTPStatus: 200, HasText: true, OutputBytes: 14, CollectorVersion: 1}}
+		Outcome: &service.ResponseOutcome{HTTPStatus: 200, HasText: true, OutputBytes: 14, CollectorVersion: 1, UpstreamInputTokens: &upstreamInput, InputTokenPolicy: "vertex_like_discount_v1", InputTokenPolicyCount: &policyCount}}
 	cmd := &service.UsageBillingCommand{RequestID: log.RequestID, APIKeyID: log.APIKeyID, UserID: log.UserID, AccountID: log.AccountID, UsageLog: log}
 	raw, err := encodeUsagePersistencePayload(cmd, 0.5)
 	require.NoError(t, err)
@@ -64,7 +65,11 @@ func TestUsagePersistenceOutboxDeliver_UsageOutcomeAndAckShareOneTransaction(t *
 			raw, log := usagePersistenceWorkerPayload(t)
 			expectUsagePersistenceOwnedRow(mock, raw, "replica-a")
 			expectUsagePersistenceInsert(mock, log.CreatedAt)
-			outcome := mock.ExpectExec(`(?s)INSERT INTO usage_response_outcomes.*FROM usage_logs ul`)
+			outcome := mock.ExpectExec(`(?s)INSERT INTO usage_response_outcomes.*upstream_input_tokens, input_token_policy, input_token_policy_count.*FROM usage_logs ul`).WithArgs(
+				log.RequestID, log.APIKeyID, log.UserID, log.AccountID, nil,
+				200, 0, true, false, false, false, int64(14), 0, false, "", "none", "none", int16(1), 0, "unknown", "unknown",
+				1037, "vertex_like_discount_v1", 667,
+			)
 			if failOutcome {
 				outcome.WillReturnError(errors.New("injected outcome failure"))
 				mock.ExpectRollback()
