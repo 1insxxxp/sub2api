@@ -706,6 +706,8 @@ func buildGenerationConfig(req *ClaudeRequest) *GeminiGenerationConfig {
 					minimumBudget = 1024
 				} else if strings.Contains(req.Model, "gemini-2.5-pro") {
 					minimumBudget = 128
+				} else if strings.Contains(req.Model, "gemini-2.5-flash-lite") {
+					minimumBudget = 512
 				}
 				if budget < minimumBudget {
 					config.ThinkingConfig = nil

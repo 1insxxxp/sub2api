@@ -46,6 +46,7 @@ func TestGenerationThinkingBudgetFitsExplicitOutputLimit(t *testing.T) {
 		{name: "dynamic budget preserved", model: "claude-sonnet-4-6", limit: 4096, thinking: ThinkingConfig{Type: "enabled"}, wantBudget: -1},
 		{name: "Gemini Pro budget fits cap", model: "gemini-2.5-pro", limit: 512, thinking: ThinkingConfig{Type: "enabled", BudgetTokens: 8192}, wantBudget: 511},
 		{name: "too small for Gemini Pro thinking", model: "gemini-2.5-pro", limit: 128, thinking: ThinkingConfig{Type: "enabled", BudgetTokens: 8192}, omitThink: true},
+		{name: "too small for Gemini Flash Lite thinking", model: "gemini-2.5-flash-lite", limit: 512, thinking: ThinkingConfig{Type: "enabled", BudgetTokens: 8192}, omitThink: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			req := &ClaudeRequest{Model: tc.model, MaxTokens: tc.limit, Thinking: &tc.thinking}
