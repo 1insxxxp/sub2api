@@ -472,6 +472,19 @@ const routes: RouteRecordRaw[] = [
     }
   },
 
+  {
+    path: '/admin/user-support',
+    name: 'UserSupport',
+    redirect: { path: '/admin/workbench', query: { tab: 'user-support' } },
+    meta: {
+      requiresAuth: true,
+      requiresAdminWorkbench: true,
+      title: 'User Support',
+      titleKey: 'userSupport.title',
+      descriptionKey: 'userSupport.description'
+    }
+  },
+
   // ==================== Admin Routes ====================
   {
     path: '/admin',
@@ -933,11 +946,6 @@ router.beforeEach(async (to, _from, next) => {
   if (!requiresAuth) {
     // If already authenticated and trying to access login/register, redirect to appropriate dashboard
     if (authStore.isAuthenticated && (to.path === '/login' || to.path === '/register')) {
-      // In backend mode, users without workbench access should stay on login.
-      if (appStore.backendModeEnabled && !authStore.canAccessAdminWorkbench) {
-        next()
-        return
-      }
       next(
         authStore.isAdmin
           ? '/admin/dashboard'

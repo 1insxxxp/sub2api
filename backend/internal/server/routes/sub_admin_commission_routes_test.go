@@ -53,6 +53,8 @@ func TestSubAdminCommissionMonthlyReportRouteUsesWorkbenchAuth(t *testing.T) {
 					c.AbortWithStatus(http.StatusUnauthorized)
 					return
 				}
+				c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: 7})
+				c.Set(string(middleware.ContextKeyUserRole), "sub_admin")
 				c.Next()
 			})
 			audit := middleware.AuditLogMiddleware(func(c *gin.Context) { c.Next() })

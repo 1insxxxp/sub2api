@@ -2,6 +2,9 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { reactive, ref } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import AppSidebar from '../AppSidebar.vue'
+import { getAccess } from '@/api/admin/userSupport'
+import { useUserSupportAccess } from '@/composables/useUserSupportAccess'
+vi.mock('@/api/admin/userSupport', () => ({ getAccess: vi.fn().mockResolvedValue({ enabled: false }) }))
 
 const authState = reactive({
   user: { id: 72, role: 'user', balance_redeem_code_enabled: false as boolean | undefined },
@@ -54,6 +57,8 @@ const mountSidebar = () => {
 }
 
 beforeEach(() => {
+  vi.mocked(getAccess).mockResolvedValue({ enabled: false })
+  useUserSupportAccess(authState).revoke()
   authState.user.balance_redeem_code_enabled = false
   authState.isSimpleMode = false
   appState.backendModeEnabled = false
@@ -62,6 +67,18 @@ beforeEach(() => {
 afterEach(() => { wrapper?.unmount(); wrapper = undefined })
 
 describe('ordinary user balance-transfer navigation', () => {
+  it('never adds a separate support entry for an ordinary user', async () => {
+    vi.mocked(getAccess).mockResolvedValue({ enabled: true })
+    const view = mountSidebar()
+    await flushPromises()
+    expect(view.find('a[href="/admin/user-support"]').exists()).toBe(false)
+    expect(view.find('a[href="/admin/workbench"]').exists()).toBe(false)
+    expect(view.find('a[href="/keys"]').exists()).toBe(true)
+    useUserSupportAccess(authState).revoke()
+    await flushPromises()
+    expect(view.find('a[href="/admin/user-support"]').exists()).toBe(false)
+  })
+
   it('only advertises the independent tool after explicit authorization', async () => {
     const view = mountSidebar()
     expect(view.find('a[href="/balance-transfer"]').exists()).toBe(false)

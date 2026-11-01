@@ -4,6 +4,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import type { AdminUser } from '@/types'
 import UserCreateModal from '../UserCreateModal.vue'
 import UserEditModal from '../UserEditModal.vue'
+vi.mock('@/api/admin/userSupport', () => ({ getUserWorkbenchAccess: vi.fn().mockResolvedValue({ commission: false, affiliate_leaderboard: false, user_support: false }) }))
 
 const { createUser, updateUser, updateUserAttributeValues, showSuccess } = vi.hoisted(() => ({
   createUser: vi.fn(),
@@ -112,6 +113,12 @@ describe('admin user sub-admin role controls', () => {
     )
   })
 
+  it.each(['user', 'admin'] as const)('does not offer support access for target role %s', (role) => {
+    const wrapper = mount(UserEditModal, { props: { show: true, user: baseUser({ role }) }, global: { stubs: globalStubs } })
+    expect(wrapper.find('[data-test="support-access-control"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
   it('shows and submits the sub-admin role while editing a user', async () => {
     const wrapper = mount(UserEditModal, {
       props: { show: true, user: baseUser({ role: 'sub_admin' }) },
@@ -119,6 +126,7 @@ describe('admin user sub-admin role controls', () => {
     })
 
     expect(wrapper.text()).toContain('admin.users.roles.sub_admin')
+    expect(wrapper.find('[data-test="support-access-control"]').exists()).toBe(true)
 
     await wrapper.get('#edit-user-form').trigger('submit')
     await flushPromises()

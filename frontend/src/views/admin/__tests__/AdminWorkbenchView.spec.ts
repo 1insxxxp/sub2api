@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 
 import AdminWorkbenchView from '../AdminWorkbenchView.vue'
+vi.mock('@/api/admin/userSupport', () => ({ getWorkbenchAccess: vi.fn().mockResolvedValue({ commission: true, affiliate_leaderboard: true, user_support: false, balance_transfer: true }) }))
+vi.mock('vue-router', async original => ({ ...(await original<typeof import('vue-router')>()), useRoute: () => ({ query: {} }), useRouter: () => ({ replace: vi.fn() }) }))
 import type { GeneratedRedeemCode } from '@/api/redeem'
 
 const {
@@ -146,11 +148,13 @@ const mountWorkbench = () => {
 }
 
 const openCommissionTab = async (wrapper: ReturnType<typeof mountWorkbench>) => {
+  await flushPromises()
   await wrapper.get('[data-test="workbench-tab-commission"]').trigger('click')
   await flushPromises()
 }
 
 const openBalanceTab = async (wrapper: ReturnType<typeof mountWorkbench>) => {
+  await flushPromises()
   await wrapper.get('[data-test="workbench-tab-balance-transfer"]').trigger('click')
   await flushPromises()
 }

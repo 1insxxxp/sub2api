@@ -13,6 +13,8 @@ import (
 func ProvideAdminHandlers(
 	dashboardHandler *admin.DashboardHandler,
 	userHandler *admin.UserHandler,
+	userSupportHandler *admin.UserSupportHandler,
+	workbenchAccessHandler *admin.AdminWorkbenchAccessHandler,
 	groupHandler *admin.GroupHandler,
 	systemCustomGroupHandler *admin.SystemCustomGroupHandler,
 	accountHandler *admin.AccountHandler,
@@ -65,6 +67,8 @@ func ProvideAdminHandlers(
 	return &AdminHandlers{
 		Dashboard:              dashboardHandler,
 		User:                   userHandler,
+		UserSupport:            userSupportHandler,
+		WorkbenchAccess:        workbenchAccessHandler,
 		Group:                  groupHandler,
 		SystemCustomGroup:      systemCustomGroupHandler,
 		Account:                accountHandler,
@@ -338,6 +342,8 @@ var ProviderSet = wire.NewSet(
 	// Admin handlers
 	admin.NewDashboardHandler,
 	admin.NewUserHandler,
+	admin.NewUserSupportHandler,
+	admin.NewAdminWorkbenchAccessHandler,
 	admin.NewGroupHandlerWithAccountExclusions,
 	admin.NewSystemCustomGroupHandler,
 	admin.ProvideAccountHandler,
