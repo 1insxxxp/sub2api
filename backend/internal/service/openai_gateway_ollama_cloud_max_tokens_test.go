@@ -22,7 +22,7 @@ func ollamaMaxTokensCapTestAccount(id int64, cap any) *Account {
 }
 
 func TestOllamaCloudMaxTokensClamp(t *testing.T) {
-	ollama := ollamaUsageAccount(101)
+	ollama := ollamaMaxTokensCapTestAccount(101, 65535)
 
 	tests := []struct {
 		name    string
@@ -32,13 +32,13 @@ func TestOllamaCloudMaxTokensClamp(t *testing.T) {
 		raw     bool // want 非法 JSON 时按原始字节比较
 	}{
 		{
-			name:    "max_tokens above default cap is clamped",
+			name:    "max_tokens above explicit cap is clamped",
 			account: ollama,
 			body:    `{"model":"gpt-oss:120b-cloud","max_tokens":70000}`,
 			want:    `{"model":"gpt-oss:120b-cloud","max_tokens":65535}`,
 		},
 		{
-			name:    "max_completion_tokens above default cap is clamped",
+			name:    "max_completion_tokens above explicit cap is clamped",
 			account: ollama,
 			body:    `{"model":"gpt-oss:120b-cloud","max_completion_tokens":131072}`,
 			want:    `{"model":"gpt-oss:120b-cloud","max_completion_tokens":65535}`,
@@ -50,7 +50,7 @@ func TestOllamaCloudMaxTokensClamp(t *testing.T) {
 			want:    `{"model":"m","max_tokens":65535,"max_completion_tokens":65535}`,
 		},
 		{
-			name:    "values at or below default cap are kept",
+			name:    "values at or below explicit cap are kept",
 			account: ollama,
 			body:    `{"model":"m","max_tokens":65535,"max_completion_tokens":4096}`,
 			want:    `{"model":"m","max_tokens":65535,"max_completion_tokens":4096}`,
@@ -68,10 +68,10 @@ func TestOllamaCloudMaxTokensClamp(t *testing.T) {
 			want:    `{"model":"m","max_tokens":50000}`,
 		},
 		{
-			name:    "non-numeric extra cap falls back to default",
+			name:    "non-numeric extra cap leaves client limit unchanged",
 			account: ollamaMaxTokensCapTestAccount(104, "abc"),
 			body:    `{"model":"m","max_tokens":100000}`,
-			want:    `{"model":"m","max_tokens":65535}`,
+			want:    `{"model":"m","max_tokens":100000}`,
 		},
 		{
 			name:    "invalid json is left untouched",
@@ -107,8 +107,8 @@ func TestOllamaCloudMaxTokensClamp(t *testing.T) {
 }
 
 func TestOllamaCloudMaxTokensCap(t *testing.T) {
-	require.Equal(t, int64(65535), ollamaCloudMaxTokensCap(nil))
-	require.Equal(t, int64(65535), ollamaCloudMaxTokensCap(ollamaUsageAccount(201)))
+	require.Equal(t, int64(0), ollamaCloudMaxTokensCap(nil))
+	require.Equal(t, int64(0), ollamaCloudMaxTokensCap(ollamaUsageAccount(201)))
 
 	tests := []struct {
 		name string
@@ -119,11 +119,11 @@ func TestOllamaCloudMaxTokensCap(t *testing.T) {
 		{"int", 40000, 40000},
 		{"int64", int64(50000), 50000},
 		{"json.Number", json.Number("60000"), 60000},
-		{"json.Number invalid", json.Number("abc"), 65535},
+		{"json.Number invalid", json.Number("abc"), 0},
 		{"zero disables", 0, 0},
 		{"negative disables", int64(-1), -1},
-		{"string falls back", "abc", 65535},
-		{"bool falls back", true, 65535},
+		{"string is not a policy", "abc", 0},
+		{"bool is not a policy", true, 0},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -141,9 +141,9 @@ func TestApplyOllamaCloudRawChatCompletionsRequestClampsMaxTokens(t *testing.T) 
 	body := []byte(`{"model":"deepseek-chat","max_tokens":100000}`)
 
 	// Ollama Cloud 账号：reasoning 钩子不再 clamp，字节级原样。
-	ollama := ollamaCloudRawChatCompletionsTestAccount()
+	ollama := ollamaCappedRawChatCompletionsTestAccount()
 	require.Equal(t, string(body), string(applyOllamaCloudRawChatCompletionsRequest(ollama, body)))
-	// 独立 token 钩子接续 clamp 到既有默认 cap。
+	// 独立 token 钩子接续 clamp 到账号显式配置的 cap。
 	require.JSONEq(t, `{"model":"deepseek-chat","max_tokens":65535}`,
 		string(clampOllamaCloudUpstreamMaxTokens(ollama, body)))
 
@@ -158,8 +158,8 @@ func TestApplyOllamaCloudRawChatCompletionsRequestClampsMaxTokens(t *testing.T) 
 
 	// ollama.com 但无 force_chat_completions：reasoning 钩子不生效；独立钩子按
 	// DeepSeek 系模型判定仍 clamp（DeepSeek 覆盖不依赖 responses_mode extra）。
-	noForce := ollamaCloudRawChatCompletionsTestAccount()
-	noForce.Extra = nil
+	noForce := ollamaCappedRawChatCompletionsTestAccount()
+	noForce.Extra = map[string]any{OllamaCloudMaxTokensCapExtraKey: 65535}
 	require.Equal(t, body, applyOllamaCloudRawChatCompletionsRequest(noForce, body))
 	require.JSONEq(t, `{"model":"deepseek-chat","max_tokens":65535}`,
 		string(clampOllamaCloudUpstreamMaxTokens(noForce, body)))
@@ -169,7 +169,7 @@ func TestApplyOllamaCloudRawChatCompletionsRequestClampsMaxTokens(t *testing.T) 
 	require.Equal(t, []byte{}, applyOllamaCloudRawChatCompletionsRequest(ollama, []byte{}))
 }
 
-// ollamaUpstreamTestAccount 构造挂在实际 ollama.com 上游的 APIKey 账号。平台标签
+// ollamaUpstreamTestAccount 构造显式配置 cap=65535 的 ollama.com APIKey 账号。平台标签
 // 不参与 clamp 判定，这里用不同平台仅为了覆盖生产里的挂载方式；base_url 与生产
 // 实测一致（https://ollama.com/v1）。
 func ollamaUpstreamTestAccount(platform string, id int64) *Account {
@@ -182,7 +182,7 @@ func ollamaUpstreamTestAccount(platform string, id int64) *Account {
 			"api_key":  "sk-test",
 			"base_url": "https://ollama.com/v1",
 		},
-		Extra: map[string]any{},
+		Extra: map[string]any{OllamaCloudMaxTokensCapExtraKey: 65535},
 	}
 }
 
@@ -252,7 +252,7 @@ func TestClampOllamaCloudUpstreamMaxTokens(t *testing.T) {
 			// 既有 openai 平台 Ollama（真实 ollama.com + force_chat_completions）对
 			// 非 DeepSeek 模型的 clamp 保留。
 			name:    "openai platform ollama.com non-deepseek model keeps legacy clamp",
-			account: ollamaCloudRawChatCompletionsTestAccount(),
+			account: ollamaCappedRawChatCompletionsTestAccount(),
 			body:    `{"model":"gpt-oss:120b-cloud","max_tokens":70000}`,
 			want:    `{"model":"gpt-oss:120b-cloud","max_tokens":65535}`,
 		},
@@ -272,7 +272,7 @@ func TestClampOllamaCloudUpstreamMaxTokens(t *testing.T) {
 			// clamp 会命中该账号，解耦后已封堵）。
 			name: "openai platform non-ollama host with leftover usage extra untouched",
 			account: func() *Account {
-				account := ollamaCloudRawChatCompletionsTestAccount()
+				account := ollamaCappedRawChatCompletionsTestAccount()
 				account.Credentials["base_url"] = "https://example.invalid/v1"
 				account.Extra[OllamaCloudUsageSnapshotExtraKey] = map[string]any{"status": "ok"}
 				return account
@@ -550,4 +550,10 @@ func TestForwardResponsesClampsOllamaCloudMaxOutputTokensForCodexClients(t *test
 			require.Equal(t, test.wantCap, gjson.GetBytes(upstream.lastBody, "max_output_tokens").Int())
 		})
 	}
+}
+
+func ollamaCappedRawChatCompletionsTestAccount() *Account {
+	account := ollamaCloudRawChatCompletionsTestAccount()
+	account.Extra[OllamaCloudMaxTokensCapExtraKey] = 65535
+	return account
 }

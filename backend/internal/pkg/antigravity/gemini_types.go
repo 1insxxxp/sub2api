@@ -1,5 +1,7 @@
 package antigravity
 
+import "encoding/json"
+
 // Gemini v1internal 请求/响应类型定义
 
 // V1InternalRequest v1internal 请求包装
@@ -61,13 +63,26 @@ type GeminiFunctionResponse struct {
 
 // GeminiGenerationConfig Gemini 生成配置
 type GeminiGenerationConfig struct {
-	MaxOutputTokens int                   `json:"maxOutputTokens,omitempty"`
-	Temperature     *float64              `json:"temperature,omitempty"`
-	TopP            *float64              `json:"topP,omitempty"`
-	TopK            *int                  `json:"topK,omitempty"`
-	ThinkingConfig  *GeminiThinkingConfig `json:"thinkingConfig,omitempty"`
-	StopSequences   []string              `json:"stopSequences,omitempty"`
-	ImageConfig     *GeminiImageConfig    `json:"imageConfig,omitempty"`
+	MaxOutputTokens        int                   `json:"maxOutputTokens,omitempty"`
+	MaxOutputTokensPresent bool                  `json:"-"`
+	Temperature            *float64              `json:"temperature,omitempty"`
+	TopP                   *float64              `json:"topP,omitempty"`
+	TopK                   *int                  `json:"topK,omitempty"`
+	ThinkingConfig         *GeminiThinkingConfig `json:"thinkingConfig,omitempty"`
+	StopSequences          []string              `json:"stopSequences,omitempty"`
+	ImageConfig            *GeminiImageConfig    `json:"imageConfig,omitempty"`
+}
+
+func (c GeminiGenerationConfig) MarshalJSON() ([]byte, error) {
+	type config GeminiGenerationConfig
+	var limit *int
+	if c.MaxOutputTokensPresent || c.MaxOutputTokens != 0 {
+		limit = &c.MaxOutputTokens
+	}
+	return json.Marshal(struct {
+		MaxOutputTokens *int `json:"maxOutputTokens,omitempty"`
+		*config
+	}{MaxOutputTokens: limit, config: (*config)(&c)})
 }
 
 // GeminiImageConfig Gemini 图片生成配置（gemini-3-pro-image / gemini-3.1-flash-image 等图片模型支持）

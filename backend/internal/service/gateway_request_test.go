@@ -1316,7 +1316,7 @@ func TestApplyGroupDefaultReasoningEffort(t *testing.T) {
 		wantEffort        string
 		wantThinkingType  string
 		wantBudget        int64
-		wantMinMaxTokens  int64
+		wantMaxTokens     int64
 		wantOutputMissing bool
 	}{
 		{
@@ -1350,8 +1350,8 @@ func TestApplyGroupDefaultReasoningEffort(t *testing.T) {
 			wantApplied:      true,
 			wantEffort:       "high",
 			wantThinkingType: "enabled",
-			wantBudget:       10240,
-			wantMinMaxTokens: 10241,
+			wantBudget:       4095,
+			wantMaxTokens:    4096,
 		},
 		{
 			name:             "xhigh maps to max effort",
@@ -1360,8 +1360,21 @@ func TestApplyGroupDefaultReasoningEffort(t *testing.T) {
 			wantApplied:      true,
 			wantEffort:       "max",
 			wantThinkingType: "enabled",
-			wantBudget:       32768,
-			wantMinMaxTokens: 32769,
+			wantBudget:       8191,
+			wantMaxTokens:    8192,
+		},
+		{
+			name:          "explicit zero skips group thinking default",
+			group:         &Group{DefaultReasoningEffort: "high"},
+			input:         `{"model":"claude-opus-4-6","max_tokens":0,"messages":[]}`,
+			wantUnchanged: true,
+		},
+		{
+			name:        "unknown model has no invented output allowance",
+			group:       &Group{DefaultReasoningEffort: "high"},
+			input:       `{"model":"private-model","messages":[]}`,
+			wantApplied: true, wantEffort: "high", wantThinkingType: "enabled", wantBudget: 10240,
+			wantOutputMissing: true,
 		},
 		{
 			name:          "invalid default is ignored",
@@ -1384,7 +1397,10 @@ func TestApplyGroupDefaultReasoningEffort(t *testing.T) {
 			require.Equal(t, tt.wantEffort, gjson.GetBytes(got, "output_config.effort").String())
 			require.Equal(t, tt.wantThinkingType, gjson.GetBytes(got, "thinking.type").String())
 			require.Equal(t, tt.wantBudget, gjson.GetBytes(got, "thinking.budget_tokens").Int())
-			require.GreaterOrEqual(t, gjson.GetBytes(got, "max_tokens").Int(), tt.wantMinMaxTokens)
+			require.Equal(t, tt.wantMaxTokens, gjson.GetBytes(got, "max_tokens").Int())
+			if tt.wantOutputMissing {
+				require.False(t, gjson.GetBytes(got, "max_tokens").Exists())
+			}
 		})
 	}
 }

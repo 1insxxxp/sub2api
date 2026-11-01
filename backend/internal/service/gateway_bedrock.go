@@ -28,7 +28,7 @@ func (s *GatewayService) ApplyBedrockCCCompat(c *gin.Context, body []byte, model
 	if resolved, ok := ResolveBedrockModelID(account, model); ok {
 		model = resolved
 	}
-	body = sanitizeBedrockCCFields(body)
+	body = sanitizeBedrockCCFieldsWithDefaultMaxTokens(body, defaultAnthropicOutputTokens(account, model))
 	body = sanitizeBedrockThinking(body, model)
 	body = sanitizeBedrockToolUseIDs(body)
 	body = sanitizeBedrockCCBetaTokens(body, model)

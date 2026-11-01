@@ -54,9 +54,9 @@ func AnthropicToResponsesWithMinOutputTokens(req *AnthropicRequest, minOutputTok
 	out.ParallelToolCalls = &parallelToolCalls
 	out.Text = &ResponsesText{Verbosity: "medium"}
 
-	if req.MaxTokens > 0 {
+	if req.MaxTokensPresent || req.MaxTokens != 0 {
 		v := req.MaxTokens
-		if v < minOutputTokens {
+		if v > 0 && v < minOutputTokens {
 			v = minOutputTokens
 		}
 		out.MaxOutputTokens = &v

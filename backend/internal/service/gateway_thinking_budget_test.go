@@ -39,14 +39,16 @@ func TestRectifyThinkingBudgetFinalAnswerReserve(t *testing.T) {
 	for _, tc := range []struct {
 		maxTokens int
 		want      int64
+		budget    int64
 		changed   bool
 	}{
-		{1024, 64000, true},
-		{32000, 64000, true},
-		{32001, 32001, false},
-		{40000, 40000, false},
-		{64000, 64000, false},
-		{100000, 100000, false},
+		{1024, 1024, 32000, false},
+		{4096, 4096, 4095, true},
+		{32000, 32000, 31999, true},
+		{32001, 32001, 32000, false},
+		{40000, 40000, 32000, false},
+		{64000, 64000, 32000, false},
+		{100000, 100000, 32000, false},
 	} {
 		t.Run(fmt.Sprint(tc.maxTokens), func(t *testing.T) {
 			body := []byte(fmt.Sprintf(`{"model":"example","max_tokens":%d,"thinking":{"type":"enabled","budget_tokens":32000},"messages":[{"role":"user","content":"hi"}]}`, tc.maxTokens))
@@ -54,7 +56,7 @@ func TestRectifyThinkingBudgetFinalAnswerReserve(t *testing.T) {
 			got, changed := RectifyThinkingBudget(body)
 			require.Equal(t, tc.changed, changed)
 			require.Equal(t, tc.want, gjson.GetBytes(got, "max_tokens").Int())
-			require.Equal(t, int64(32000), gjson.GetBytes(got, "thinking.budget_tokens").Int())
+			require.Equal(t, tc.budget, gjson.GetBytes(got, "thinking.budget_tokens").Int())
 			require.Equal(t, "hi", gjson.GetBytes(got, "messages.0.content").String())
 		})
 	}
@@ -66,4 +68,22 @@ func TestRectifyThinkingBudgetFinalAnswerReserve(t *testing.T) {
 	got, changed = RectifyThinkingBudget(legacy)
 	require.False(t, changed)
 	require.Equal(t, legacy, got)
+}
+
+func TestRectifyThinkingBudgetDoesNotInventOutputAllowance(t *testing.T) {
+	for _, body := range []string{
+		`{"model":"private-model","thinking":{"type":"enabled","budget_tokens":1}}`,
+		`{"model":"claude-opus-4-6","thinking":{"type":"enabled","budget_tokens":1}}`,
+	} {
+		got, changed := RectifyThinkingBudget([]byte(body))
+		require.True(t, changed)
+		require.False(t, gjson.GetBytes(got, "max_tokens").Exists())
+		require.Equal(t, int64(32000), gjson.GetBytes(got, "thinking.budget_tokens").Int())
+	}
+	for _, limit := range []string{"0", "null", "1024", "1", "\"invalid\""} {
+		body := []byte(fmt.Sprintf(`{"max_tokens":%s,"thinking":{"type":"enabled","budget_tokens":1}}`, limit))
+		got, changed := RectifyThinkingBudget(body)
+		require.False(t, changed)
+		require.Equal(t, body, got)
+	}
 }

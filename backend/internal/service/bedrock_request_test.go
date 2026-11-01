@@ -1077,7 +1077,7 @@ func TestSanitizeBedrockCCFields(t *testing.T) {
 	t.Run("injects max_tokens when missing", func(t *testing.T) {
 		body := []byte(`{"model":"claude-opus-4-6","messages":[]}`)
 		result := sanitizeBedrockCCFields(body)
-		assert.Equal(t, int64(defaultCCMaxTokens), gjson.GetBytes(result, "max_tokens").Int())
+		assert.Equal(t, int64(128000), gjson.GetBytes(result, "max_tokens").Int())
 	})
 
 	t.Run("preserves existing max_tokens", func(t *testing.T) {
@@ -1101,7 +1101,7 @@ func TestSanitizeBedrockCCFields(t *testing.T) {
 	t.Run("no-op when fields already clean", func(t *testing.T) {
 		body := []byte(`{"model":"claude-opus-4-6","max_tokens":81920,"anthropic_version":"bedrock-2023-05-31","messages":[]}`)
 		result := sanitizeBedrockCCFields(body)
-		assert.Equal(t, int64(defaultCCMaxTokens), gjson.GetBytes(result, "max_tokens").Int())
+		assert.Equal(t, int64(81920), gjson.GetBytes(result, "max_tokens").Int())
 		assert.Equal(t, "bedrock-2023-05-31", gjson.GetBytes(result, "anthropic_version").String())
 		assert.False(t, gjson.GetBytes(result, "service_tier").Exists())
 		assert.False(t, gjson.GetBytes(result, "interface_geo").Exists())
@@ -1121,7 +1121,7 @@ func TestSanitizeBedrockCCFields(t *testing.T) {
 		assert.False(t, gjson.GetBytes(result, "service_tier").Exists())
 		assert.False(t, gjson.GetBytes(result, "interface_geo").Exists())
 		assert.False(t, gjson.GetBytes(result, "context_management").Exists())
-		assert.Equal(t, int64(defaultCCMaxTokens), gjson.GetBytes(result, "max_tokens").Int())
+		assert.Equal(t, int64(128000), gjson.GetBytes(result, "max_tokens").Int())
 		assert.Equal(t, "bedrock-2023-05-31", gjson.GetBytes(result, "anthropic_version").String())
 		assert.Equal(t, "enabled", gjson.GetBytes(result, "thinking.type").String())
 	})

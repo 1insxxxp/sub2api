@@ -775,7 +775,14 @@ func sanitizeBedrockThinking(body []byte, modelID string) []byte {
 	}
 
 	if thinkingType == "enabled" && !thinking.Get("budget_tokens").Exists() {
-		body, _ = sjson.SetBytes(body, "thinking.budget_tokens", defaultThinkingBudgetTokens)
+		budget := int64(defaultThinkingBudgetTokens)
+		if limit := gjson.GetBytes(body, "max_tokens"); limit.Exists() {
+			if limit.Type != gjson.Number || limit.Int() <= 1024 {
+				return body
+			}
+			budget = min(budget, limit.Int()-1)
+		}
+		body, _ = sjson.SetBytes(body, "thinking.budget_tokens", budget)
 	}
 
 	return body
@@ -816,17 +823,21 @@ func sanitizeIDField(body []byte, id, path string) []byte {
 	return body
 }
 
-const defaultCCMaxTokens = 81920
-
 // sanitizeBedrockCCFields 处理 Claude Code 发送的 Bedrock 不兼容字段：
 //   - 移除 service_tier（Anthropic API 专有，Bedrock 不支持）
 //   - 移除 interface_geo（Anthropic API 专有，Bedrock 不支持）
 //   - 移除 context_management（Anthropic API 专有，Bedrock 不支持，CC v2.1.87+ 默认携带）
 //   - 无条件移除 fallbacks / fallback_credit_token（server-side refusal fallback，
 //     Anthropic 直连 beta API 专有；Bedrock Invoke 无对应 beta，永不支持）
-//   - 注入 max_tokens 默认值 81920（CC 可能省略，Bedrock 要求必须提供）
+//   - max_tokens 缺失时仅使用已确认的模型能力，不编造未知模型的上限
 //   - 注入 anthropic_version（CC 通过 HTTP 头发送，Bedrock 需要放在请求体中）
 func sanitizeBedrockCCFields(body []byte) []byte {
+	return sanitizeBedrockCCFieldsWithDefaultMaxTokens(body, defaultAnthropicOutputTokens(nil, gjson.GetBytes(body, "model").String()))
+}
+
+// The forwarding path resolves the selected account's final Bedrock model and
+// supplies its capability. Existing fields, including explicit zero, are kept.
+func sanitizeBedrockCCFieldsWithDefaultMaxTokens(body []byte, defaultMaxTokens int) []byte {
 	if gjson.GetBytes(body, "service_tier").Exists() {
 		body, _ = sjson.DeleteBytes(body, "service_tier")
 	}
@@ -842,8 +853,8 @@ func sanitizeBedrockCCFields(body []byte) []byte {
 	if gjson.GetBytes(body, "fallback_credit_token").Exists() {
 		body, _ = sjson.DeleteBytes(body, "fallback_credit_token")
 	}
-	if !gjson.GetBytes(body, "max_tokens").Exists() {
-		body, _ = sjson.SetBytes(body, "max_tokens", defaultCCMaxTokens)
+	if !gjson.GetBytes(body, "max_tokens").Exists() && defaultMaxTokens > 0 {
+		body, _ = sjson.SetBytes(body, "max_tokens", defaultMaxTokens)
 	}
 	if !gjson.GetBytes(body, "anthropic_version").Exists() {
 		body, _ = sjson.SetBytes(body, "anthropic_version", "bedrock-2023-05-31")

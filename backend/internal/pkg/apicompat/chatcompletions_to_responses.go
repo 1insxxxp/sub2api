@@ -59,16 +59,13 @@ func ChatCompletionsToResponsesWithMinOutputTokens(req *ChatCompletionsRequest, 
 	out.Store = &storeFalse
 
 	// max_tokens / max_completion_tokens → max_output_tokens, prefer max_completion_tokens
-	maxTokens := 0
-	if req.MaxTokens != nil {
-		maxTokens = *req.MaxTokens
-	}
+	maxTokens := req.MaxTokens
 	if req.MaxCompletionTokens != nil {
-		maxTokens = *req.MaxCompletionTokens
+		maxTokens = req.MaxCompletionTokens
 	}
-	if maxTokens > 0 {
-		v := maxTokens
-		if v < minOutputTokens {
+	if maxTokens != nil {
+		v := *maxTokens
+		if v > 0 && v < minOutputTokens {
 			v = minOutputTokens
 		}
 		out.MaxOutputTokens = &v

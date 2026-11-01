@@ -67,9 +67,9 @@ func AnthropicToChatCompletionsRequestWithMinOutputTokens(req *AnthropicRequest,
 		out.TopP = req.TopP
 	}
 
-	if req.MaxTokens > 0 {
+	if req.MaxTokensPresent || req.MaxTokens != 0 {
 		v := req.MaxTokens
-		if v < minOutputTokens {
+		if v > 0 && v < minOutputTokens {
 			v = minOutputTokens
 		}
 		out.MaxCompletionTokens = &v

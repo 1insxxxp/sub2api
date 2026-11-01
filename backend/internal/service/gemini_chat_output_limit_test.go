@@ -21,13 +21,16 @@ func TestGeminiChatOutputLimitPreservesClientIntent(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	for _, stream := range []bool{false, true} {
 		for _, tc := range []struct {
-			name  string
-			extra string
-			want  int64
+			name     string
+			extra    string
+			want     int64
+			explicit bool
 		}{
 			{name: "omitted"},
 			{name: "null", extra: `,"max_tokens":null`},
-			{name: "nonpositive", extra: `,"max_tokens":0`},
+			{name: "explicit zero", extra: `,"max_tokens":0`, explicit: true},
+			{name: "explicit negative", extra: `,"max_tokens":-1`, want: -1},
+			{name: "explicit small", extra: `,"max_tokens":8`, want: 8},
 			{name: "explicit 8192", extra: `,"max_tokens":8192`, want: 8192},
 			{name: "explicit large", extra: `,"max_tokens":32768`, want: 32768},
 			{name: "completion precedence", extra: `,"max_tokens":32768,"max_completion_tokens":8192`, want: 8192},
@@ -43,9 +46,10 @@ func TestGeminiChatOutputLimitPreservesClientIntent(t *testing.T) {
 				require.Equal(t, http.StatusOK, recorder.Code)
 				require.Len(t, upstream.bodies, 1, "changing a default must not generate a second request")
 				limit := gjson.GetBytes(upstream.bodies[0], "generationConfig.maxOutputTokens")
-				if tc.want == 0 {
+				if tc.want == 0 && !tc.explicit {
 					require.False(t, limit.Exists(), "an intermediate Claude request must not add a Gemini output limit")
 				} else {
+					require.True(t, limit.Exists())
 					require.Equal(t, tc.want, limit.Int())
 				}
 				require.Equal(t, "gemini-4-argon", result.UpstreamModel)

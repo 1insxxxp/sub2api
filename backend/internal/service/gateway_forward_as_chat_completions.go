@@ -56,7 +56,7 @@ func (s *GatewayService) ForwardAsChatCompletions(
 	}
 
 	// 2. Convert CC → Responses → Anthropic (chained conversion)
-	responsesReq, err := chatCompletionsToResponses(s.cfg, &ccReq)
+	responsesReq, err := apicompat.ChatCompletionsToResponsesWithMinOutputTokens(&ccReq, 0)
 	if err != nil {
 		return nil, fmt.Errorf("convert chat completions to responses: %w", err)
 	}
@@ -108,7 +108,7 @@ func (s *GatewayService) ForwardAsChatCompletions(
 	if err != nil {
 		return nil, fmt.Errorf("marshal anthropic request: %w", err)
 	}
-	if rewritten, applied := ApplyGroupDefaultReasoningEffort(anthropicBody, group); applied {
+	if rewritten, applied := applyGroupDefaultReasoningEffort(anthropicBody, group, account); applied {
 		anthropicBody = rewritten
 		logger.LegacyPrintf("service.gateway", "Applied group default reasoning effort for chat completions: group=%d effort=%s", group.ID, group.DefaultReasoningEffort)
 	}
