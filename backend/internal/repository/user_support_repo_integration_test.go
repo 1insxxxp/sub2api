@@ -207,18 +207,39 @@ func TestUserSupportRecordsAreBoundedOwnedAndSafe(t *testing.T) {
 	r := NewUserSupportRepository(integrationDB)
 	key := mustCreateApiKey(t, testEntClient(t), &service.APIKey{UserID: u.ID, Key: "sk-" + uuid.NewString(), Name: "secret.example"})
 	account := mustCreateAccount(t, testEntClient(t), &service.Account{Name: "http://secret.example", Type: service.AccountTypeAPIKey})
+	group := mustCreateGroup(t, testEntClient(t), &service.Group{Name: "支持分组-" + uuid.NewString()})
+	deletedGroup := mustCreateGroup(t, testEntClient(t), &service.Group{Name: "历史分组-" + uuid.NewString()})
+	_, err := integrationDB.Exec("UPDATE groups SET deleted_at=NOW() WHERE id=$1", deletedGroup.ID)
+	require.NoError(t, err)
 	stamp := time.Now().UTC()
 	for i := 0; i < 12; i++ {
-		_, err := integrationDB.Exec(`INSERT INTO usage_logs(user_id,api_key_id,account_id,request_id,model,requested_model,input_tokens,output_tokens,actual_cost,created_at) VALUES($1,$2,$3,$4,'mapped-secret.example','按量vet/gemini-4-argon',11,12,0.3,$5)`, u.ID, key.ID, account.ID, uuid.NewString(), stamp)
+		var groupID any = group.ID
+		if i == 10 {
+			groupID = nil
+		} else if i == 11 {
+			groupID = deletedGroup.ID
+		}
+		_, err := integrationDB.Exec(`INSERT INTO usage_logs(user_id,api_key_id,account_id,request_id,model,requested_model,input_tokens,output_tokens,actual_cost,created_at,group_id) VALUES($1,$2,$3,$4,'mapped-secret.example','按量vet/gemini-4-argon',11,12,0.3,$5,$6)`, u.ID, key.ID, account.ID, uuid.NewString(), stamp, groupID)
 		require.NoError(t, err)
 		_, err = integrationDB.Exec(`INSERT INTO ops_error_logs(user_id,created_at,error_phase,error_type,status_code,model,requested_model,error_message,is_count_tokens) VALUES($1,$2,'upstream','api_error',502,'mapped-secret.example','gemini-4-argon','http://secret.example sk-secret',false)`, u.ID, stamp)
 		require.NoError(t, err)
 	}
-	_, err := integrationDB.Exec(`INSERT INTO ops_error_logs(user_id,error_phase,error_type,status_code,model,error_message) VALUES($1,'upstream','api_error',502,'secret.example','sk-other')`, other.ID)
+	otherKey := mustCreateApiKey(t, testEntClient(t), &service.APIKey{UserID: other.ID, Key: "sk-" + uuid.NewString(), Name: "other"})
+	_, err = integrationDB.Exec(`INSERT INTO usage_logs(user_id,api_key_id,account_id,request_id,model,requested_model,group_id,created_at) VALUES($1,$2,$3,$4,'gemini-4-argon','gemini-4-argon',$5,$6)`, other.ID, otherKey.ID, account.ID, uuid.NewString(), group.ID, stamp.Add(time.Hour))
+	require.NoError(t, err)
+	_, err = integrationDB.Exec(`INSERT INTO ops_error_logs(user_id,error_phase,error_type,status_code,model,error_message) VALUES($1,'upstream','api_error',502,'secret.example','sk-other')`, other.ID)
 	require.NoError(t, err)
 	usage, err := r.ListUsage(ctx, u.ID)
 	require.NoError(t, err)
 	require.Len(t, usage, 10)
+	usageJSON, err := json.Marshal(usage)
+	require.NoError(t, err)
+	var publicUsage []map[string]any
+	require.NoError(t, json.Unmarshal(usageJSON, &publicUsage))
+	require.Equal(t, deletedGroup.Name, publicUsage[0]["group_name"])
+	require.Equal(t, "", publicUsage[1]["group_name"])
+	require.Equal(t, group.Name, publicUsage[2]["group_name"])
+	require.True(t, usage[0].CreatedAt.Before(stamp.Add(time.Hour)), "another user's newer usage must not appear")
 	errors, err := r.ListErrors(ctx, u.ID)
 	require.NoError(t, err)
 	require.Len(t, errors, 10)

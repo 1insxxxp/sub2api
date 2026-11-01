@@ -21,6 +21,7 @@ const result = () => ({
   trial: { status: 'granted', amount: 15, legacy: false, granted_at: '2026-10-31T04:00:00Z' },
   usage: { status: 'ok', items: Array.from({ length: 10 }, (_, i) => ({
     id: 100 + i, created_at: '2026-10-31T04:00:00Z', model: 'gemini-4-argon',
+    group_name: i === 1 ? '' : 'Gemini <VIP>',
     input_tokens: 200 + i, output_tokens: 12, cache_read_tokens: 0,
     charged_amount: 0.1, duration_ms: 900, first_token_ms: 200, status: 'completed', stream: true,
     account: { name: 'SECRET-UPSTREAM' }, upstream_model: 'https://secret.invalid/provider',
@@ -48,6 +49,10 @@ describe('user support panel', () => {
     expect(view.findAll('[data-test="support-error-row"]')).toHaveLength(10)
     expect(view.text()).toContain('customer@example.com')
     expect(view.text()).toContain('userSupport.trial.granted')
+    const rows = view.findAll('[data-test="support-usage-row"]')
+    expect(rows[0].get('td[data-label="userSupport.columns.group"]').text()).toBe('Gemini <VIP>')
+    expect(rows[0].find('vip').exists()).toBe(false)
+    expect(rows[1].get('td[data-label="userSupport.columns.group"]').text()).toBe('—')
     expect(view.html()).not.toMatch(/SECRET-UPSTREAM|secret\.invalid|sk-secret/)
     view.unmount()
   })

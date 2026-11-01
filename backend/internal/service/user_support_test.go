@@ -42,7 +42,7 @@ func (r *supportRepoStub) ListErrors(context.Context, int64) ([]UserSupportError
 func TestUserSupportOnlyReturnsSafeRecordValuesAndTenRows(t *testing.T) {
 	r := &supportRepoStub{allowed: true, result: UserSupportGrantResult{User: UserSupportUser{ID: 2}, Trial: UserSupportTrial{Status: "already_received", Amount: 15}}}
 	for i := 0; i < 12; i++ {
-		r.usageRows = append(r.usageRows, UserSupportUsageRecord{ID: int64(i + 1), Model: "https://secret.example/sk-secret", Status: "account-secret.example"})
+		r.usageRows = append(r.usageRows, UserSupportUsageRecord{ID: int64(i + 1), Model: "https://secret.example/sk-secret", GroupName: "客户分组", Status: "account-secret.example"})
 		r.errorRows = append(r.errorRows, UserSupportErrorRecord{ID: int64(i + 1), Model: "private-secret.example", Category: "http://secret.example"})
 	}
 	got, err := NewUserSupportService(r, nil, nil).Lookup(context.Background(), 1, "2")
@@ -50,6 +50,7 @@ func TestUserSupportOnlyReturnsSafeRecordValuesAndTenRows(t *testing.T) {
 	require.Len(t, got.Usage.Items, 10)
 	require.Len(t, got.Errors.Items, 10)
 	require.Equal(t, "unknown", got.Usage.Items[0].Status)
+	require.Equal(t, "客户分组", got.Usage.Items[0].GroupName)
 	require.Equal(t, "other", got.Errors.Items[0].Category)
 	encoded, err := json.Marshal(got)
 	require.NoError(t, err)
@@ -65,7 +66,7 @@ func TestUserSupportOnlyReturnsSafeRecordValuesAndTenRows(t *testing.T) {
 		require.NoError(t, json.Unmarshal(panel["items"], &items))
 		for _, item := range items {
 			if panelName == "usage" {
-				assertSupportSchema(t, item, "id", "created_at", "model", "input_tokens", "output_tokens", "cache_read_tokens", "charged_amount", "duration_ms", "first_token_ms", "status", "stream")
+				assertSupportSchema(t, item, "id", "created_at", "model", "group_name", "input_tokens", "output_tokens", "cache_read_tokens", "charged_amount", "duration_ms", "first_token_ms", "status", "stream")
 			} else {
 				assertSupportSchema(t, item, "id", "created_at", "model", "category")
 			}

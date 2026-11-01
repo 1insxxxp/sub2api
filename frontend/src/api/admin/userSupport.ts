@@ -10,6 +10,7 @@ export interface SupportUsageRecord {
   id: number
   created_at: string
   model: string
+  group_name: string
   input_tokens: number | null
   output_tokens: number | null
   cache_read_tokens: number | null

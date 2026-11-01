@@ -18,7 +18,7 @@ export default {
   initial: 'Enter a user account to view balance and recent requests',
   unknownModel: 'Unknown model',
   stream: 'Stream', sync: 'Sync', cache: 'Cache', firstToken: 'First token',
-  columns: { time: 'Time', model: 'Model', tokens: 'Input / output tokens', charge: 'Charged', duration: 'Duration', status: 'Status', error: 'Error' },
+  columns: { time: 'Time', model: 'Model', group: 'Group', tokens: 'Input / output tokens', charge: 'Charged', duration: 'Duration', status: 'Status', error: 'Error' },
   trial: { title: '15 trial credits', granted: '15 credits issued now', alreadyReceived: 'Already received; no additional credit', historical: 'Previous manual trial credit found', once: 'Issued once per account' },
   status: { completed: 'Completed', interrupted: 'Interrupted', failed: 'Failed', empty: 'No useful response', unknown: 'Unknown' },
   categories: { auth: 'Authentication failed', quota: 'Insufficient balance or quota', rate_limit: 'Too many requests', invalid_request: 'Invalid request parameters', timeout: 'Request timed out', service_unavailable: 'Service temporarily unavailable', other: 'Request did not complete' },

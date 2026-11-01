@@ -52,11 +52,12 @@
           <p v-else-if="usage.length === 0" class="support-empty">{{ t('userSupport.noUsage') }}</p>
           <div v-else class="support-table-wrap">
             <table class="support-table">
-              <thead><tr><th>{{ t('userSupport.columns.time') }}</th><th>{{ t('userSupport.columns.model') }}</th><th>{{ t('userSupport.columns.tokens') }}</th><th>{{ t('userSupport.columns.charge') }}</th><th>{{ t('userSupport.columns.duration') }}</th><th>{{ t('userSupport.columns.status') }}</th></tr></thead>
+              <thead><tr><th>{{ t('userSupport.columns.time') }}</th><th>{{ t('userSupport.columns.model') }}</th><th>{{ t('userSupport.columns.group') }}</th><th>{{ t('userSupport.columns.tokens') }}</th><th>{{ t('userSupport.columns.charge') }}</th><th>{{ t('userSupport.columns.duration') }}</th><th>{{ t('userSupport.columns.status') }}</th></tr></thead>
               <tbody>
                 <tr v-for="item in usage" :key="item.id" data-test="support-usage-row">
                   <td :data-label="t('userSupport.columns.time')" class="support-time">{{ formatTime(item.created_at) }}</td>
                   <td :data-label="t('userSupport.columns.model')"><span class="break-words font-medium">{{ displayModel(item.model) }}</span><span class="mt-1 block text-xs text-gray-400 dark:text-dark-500">{{ t(item.stream ? 'userSupport.stream' : 'userSupport.sync') }}</span></td>
+                  <td :data-label="t('userSupport.columns.group')" class="[overflow-wrap:anywhere]">{{ item.group_name || '—' }}</td>
                   <td :data-label="t('userSupport.columns.tokens')" class="tabular-nums"><span class="text-emerald-600 dark:text-emerald-400">↓ {{ formatCount(item.input_tokens) }}</span><span class="ml-2 text-violet-600 dark:text-violet-400">↑ {{ formatCount(item.output_tokens) }}</span><span class="mt-1 block text-xs text-gray-400 dark:text-dark-500">{{ t('userSupport.cache') }} {{ formatCount(item.cache_read_tokens) }}</span></td>
                   <td :data-label="t('userSupport.columns.charge')" class="tabular-nums">{{ formatAmount(item.charged_amount) }}</td>
                   <td :data-label="t('userSupport.columns.duration')" class="tabular-nums">{{ formatDuration(item.duration_ms) }}<span class="mt-1 block text-xs text-gray-400 dark:text-dark-500">{{ t('userSupport.firstToken') }} {{ formatDuration(item.first_token_ms) }}</span></td>

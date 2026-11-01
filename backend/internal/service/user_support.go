@@ -39,6 +39,7 @@ type UserSupportUsageRecord struct {
 	ID              int64     `json:"id"`
 	CreatedAt       time.Time `json:"created_at"`
 	Model           string    `json:"model"`
+	GroupName       string    `json:"group_name"`
 	InputTokens     *int64    `json:"input_tokens"`
 	OutputTokens    *int64    `json:"output_tokens"`
 	CacheReadTokens *int64    `json:"cache_read_tokens"`

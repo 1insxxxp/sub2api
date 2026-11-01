@@ -216,15 +216,16 @@ func (r *userSupportRepository) ListUsage(ctx context.Context, userID int64) ([]
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	rows, err := r.db.QueryContext(ctx, `SELECT ul.id,ul.created_at,COALESCE(ul.requested_model,''),
+	rows, err := r.db.QueryContext(ctx, `SELECT ul.id,ul.created_at,COALESCE(ul.requested_model,''),COALESCE(g.name,''),
 	CASE WHEN o.input_tokens_source='unreported' THEN NULL ELSE ul.input_tokens END,
 	CASE WHEN o.output_tokens_source='unreported' THEN NULL ELSE ul.output_tokens END,
 	ul.cache_read_tokens,GREATEST(ul.actual_cost-ul.compensated_cost,0),ul.duration_ms,ul.first_token_ms,ul.stream,
 	COALESCE(o.collector_version,0),COALESCE(o.http_status,0),COALESCE(o.upstream_status,0),
 	COALESCE(o.has_text,FALSE),COALESCE(o.has_tool_call,FALSE),COALESCE(o.has_reasoning,FALSE),COALESCE(o.has_media,FALSE),
 	COALESCE(o.stream_completed,FALSE),COALESCE(o.disconnect_source,''),COALESCE(o.upstream_error_kind,'')
-	FROM (SELECT id,created_at,requested_model,input_tokens,output_tokens,cache_read_tokens,
+	FROM (SELECT id,created_at,requested_model,group_id,input_tokens,output_tokens,cache_read_tokens,
 	actual_cost,compensated_cost,duration_ms,first_token_ms,stream FROM usage_logs WHERE user_id=$1 ORDER BY created_at DESC,id DESC LIMIT 10) ul
+	LEFT JOIN groups g ON g.id=ul.group_id
 	LEFT JOIN LATERAL (SELECT collector_version,http_status,upstream_status,has_text,has_tool_call,has_reasoning,has_media,
 	stream_completed,disconnect_source,upstream_error_kind,input_tokens_source,output_tokens_source FROM usage_response_outcomes
 	WHERE usage_log_id=ul.id AND user_id=$1 ORDER BY id DESC LIMIT 1) o ON TRUE ORDER BY ul.created_at DESC,ul.id DESC`, userID)
@@ -237,7 +238,7 @@ func (r *userSupportRepository) ListUsage(ctx context.Context, userID int64) ([]
 		var item service.UserSupportUsageRecord
 		var input, output, cache, duration, first sql.NullInt64
 		var outcome service.ResponseOutcome
-		if err = rows.Scan(&item.ID, &item.CreatedAt, &item.Model, &input, &output, &cache, &item.ChargedAmount, &duration, &first, &item.Stream,
+		if err = rows.Scan(&item.ID, &item.CreatedAt, &item.Model, &item.GroupName, &input, &output, &cache, &item.ChargedAmount, &duration, &first, &item.Stream,
 			&outcome.CollectorVersion, &outcome.HTTPStatus, &outcome.UpstreamStatus, &outcome.HasText, &outcome.HasToolCall, &outcome.HasReasoning, &outcome.HasMedia,
 			&outcome.StreamCompleted, &outcome.DisconnectSource, &outcome.UpstreamErrorKind); err != nil {
 			return nil, err
