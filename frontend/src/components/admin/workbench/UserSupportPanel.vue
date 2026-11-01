@@ -31,13 +31,13 @@
           </div>
           <div>
             <p class="support-label">{{ t('userSupport.balance') }}</p>
-            <p class="mt-1.5 text-2xl font-semibold tabular-nums tracking-tight text-gray-900 dark:text-white">{{ formatAmount(result.user.balance) }}</p>
+            <p class="support-balance mt-1.5 text-2xl font-semibold tabular-nums tracking-tight text-gray-900 dark:text-white">{{ formatAmount(result.user.balance) }}</p>
           </div>
           <div>
             <p class="support-label">{{ t('userSupport.trial.title') }}</p>
             <p class="mt-2 inline-flex items-center gap-1.5 text-sm font-medium" :class="result.trial.status === 'granted' ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-700 dark:text-dark-200'">
-              <Icon :name="result.trial.status === 'granted' ? 'checkCircle' : 'check'" size="sm" />
-              {{ t(result.trial.status === 'granted' ? 'userSupport.trial.granted' : 'userSupport.trial.alreadyReceived') }}
+              <Icon :name="result.trial.status === 'granted' ? 'checkCircle' : 'check'" size="sm" class="shrink-0" />
+              <span class="min-w-0">{{ t(result.trial.status === 'granted' ? 'userSupport.trial.granted' : 'userSupport.trial.alreadyReceived') }}</span>
             </p>
             <p class="mt-1 text-xs text-gray-500 dark:text-dark-400">{{ t(result.trial.legacy ? 'userSupport.trial.historical' : 'userSupport.trial.once') }}</p>
           </div>
@@ -51,17 +51,17 @@
           <p v-if="result.usage.status !== 'ok'" class="support-empty">{{ t('userSupport.recordsUnavailable') }}</p>
           <p v-else-if="usage.length === 0" class="support-empty">{{ t('userSupport.noUsage') }}</p>
           <div v-else class="support-table-wrap">
-            <table class="support-table">
+            <table class="support-table support-usage-table">
               <thead><tr><th>{{ t('userSupport.columns.time') }}</th><th>{{ t('userSupport.columns.model') }}</th><th>{{ t('userSupport.columns.group') }}</th><th>{{ t('userSupport.columns.tokens') }}</th><th>{{ t('userSupport.columns.charge') }}</th><th>{{ t('userSupport.columns.duration') }}</th><th>{{ t('userSupport.columns.status') }}</th></tr></thead>
               <tbody>
                 <tr v-for="item in usage" :key="item.id" data-test="support-usage-row">
-                  <td :data-label="t('userSupport.columns.time')" class="support-time">{{ formatTime(item.created_at) }}</td>
-                  <td :data-label="t('userSupport.columns.model')"><span class="break-words font-medium">{{ displayModel(item.model) }}</span><span class="mt-1 block text-xs text-gray-400 dark:text-dark-500">{{ t(item.stream ? 'userSupport.stream' : 'userSupport.sync') }}</span></td>
-                  <td :data-label="t('userSupport.columns.group')" class="[overflow-wrap:anywhere]">{{ item.group_name || '—' }}</td>
-                  <td :data-label="t('userSupport.columns.tokens')" class="tabular-nums"><span class="text-emerald-600 dark:text-emerald-400">↓ {{ formatCount(item.input_tokens) }}</span><span class="ml-2 text-violet-600 dark:text-violet-400">↑ {{ formatCount(item.output_tokens) }}</span><span class="mt-1 block text-xs text-gray-400 dark:text-dark-500">{{ t('userSupport.cache') }} {{ formatCount(item.cache_read_tokens) }}</span></td>
-                  <td :data-label="t('userSupport.columns.charge')" class="tabular-nums">{{ formatAmount(item.charged_amount) }}</td>
-                  <td :data-label="t('userSupport.columns.duration')" class="tabular-nums">{{ formatDuration(item.duration_ms) }}<span class="mt-1 block text-xs text-gray-400 dark:text-dark-500">{{ t('userSupport.firstToken') }} {{ formatDuration(item.first_token_ms) }}</span></td>
-                  <td :data-label="t('userSupport.columns.status')"><span class="support-status" :class="statusClass(item.status)">{{ t(`userSupport.status.${safeStatus(item.status)}`) }}</span></td>
+                  <td :data-label="t('userSupport.columns.time')" class="support-time support-usage-time">{{ formatTime(item.created_at) }}</td>
+                  <td :data-label="t('userSupport.columns.model')" class="support-usage-model"><span class="break-words font-medium">{{ displayModel(item.model) }}</span><span class="mt-1 block text-xs text-gray-400 dark:text-dark-500">{{ t(item.stream ? 'userSupport.stream' : 'userSupport.sync') }}</span></td>
+                  <td :data-label="t('userSupport.columns.group')" class="support-usage-group [overflow-wrap:anywhere]">{{ item.group_name || '—' }}</td>
+                  <td :data-label="t('userSupport.columns.tokens')" class="support-usage-tokens tabular-nums"><span class="text-emerald-600 dark:text-emerald-400">↓ {{ formatCount(item.input_tokens) }}</span><span class="ml-2 text-violet-600 dark:text-violet-400">↑ {{ formatCount(item.output_tokens) }}</span><span class="mt-1 block text-xs text-gray-400 dark:text-dark-500">{{ t('userSupport.cache') }} {{ formatCount(item.cache_read_tokens) }}</span></td>
+                  <td :data-label="t('userSupport.columns.charge')" class="support-usage-charge tabular-nums">{{ formatAmount(item.charged_amount) }}</td>
+                  <td :data-label="t('userSupport.columns.duration')" class="support-usage-duration tabular-nums">{{ formatDuration(item.duration_ms) }}<span class="mt-1 block text-xs text-gray-400 dark:text-dark-500">{{ t('userSupport.firstToken') }} {{ formatDuration(item.first_token_ms) }}</span></td>
+                  <td :data-label="t('userSupport.columns.status')" class="support-usage-status"><span class="support-status" :class="statusClass(item.status)">{{ t(`userSupport.status.${safeStatus(item.status)}`) }}</span></td>
                 </tr>
               </tbody>
             </table>
@@ -197,7 +197,8 @@ function statusClass(value: string) {
 .support-lookup { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; max-width: 850px; }
 .support-lookup > div { min-width: min(100%, 260px); }
 .support-notice { flex-basis: 100%; margin-top: -4px; }
-.support-summary { display: grid; grid-template-columns: minmax(0, 1.4fr) 1fr 1.2fr; gap: 24px; padding: 22px; border: 1px solid var(--workspace-rule); border-radius: 8px; background: var(--workspace-surface); box-shadow: inset 0 1px 0 var(--workspace-highlight), 0 3px 12px rgb(15 23 42 / 0.025); }
+.support-summary { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1.2fr); gap: 24px; padding: 22px; border: 1px solid var(--workspace-rule); border-radius: 8px; background: var(--workspace-surface); box-shadow: inset 0 1px 0 var(--workspace-highlight), 0 3px 12px rgb(15 23 42 / 0.025); }
+.support-summary > div { min-width: 0; overflow-wrap: anywhere; }
 .support-label { font-size: 12px; color: var(--workspace-muted); }
 .support-section-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding-bottom: 12px; }
 .support-table-wrap { min-width: 0; border-block: 1px solid var(--workspace-rule); }
@@ -212,18 +213,26 @@ function statusClass(value: string) {
 .support-error-table th:first-child { width: 25%; }
 .support-error-table th:nth-child(2) { width: 35%; }
 @media (max-width: 767px) {
-  .support-lookup > div { flex-basis: 100%; }
-  .support-lookup > button { width: 100%; }
-  .support-summary { grid-template-columns: 1fr 1fr; gap: 20px 14px; padding: 18px; }
+  .support-panel .support-lookup > div { flex-basis: 100%; min-width: 0; }
+  .support-panel .support-lookup .input { min-height: 44px; font-size: 16px; }
+  .support-panel .support-lookup > button { width: 100%; min-height: 44px; white-space: normal; }
+  .support-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 14px; padding: 18px; }
   .support-summary > div:first-child { grid-column: 1 / -1; }
-  .support-table, .support-table tbody { display: block; }
+  .support-balance { font-size: 20px; line-height: 1.4; }
+  .support-table, .support-table tbody { display: block; font-size: 13px; line-height: 1.5; }
   .support-table thead { display: none; }
-  .support-table tr { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; padding: 16px 0; border-bottom: 1px solid var(--workspace-rule); }
+  .support-table tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; padding: 16px 0; border-bottom: 1px solid var(--workspace-rule); }
   .support-table tr:last-child { border-bottom: 0; }
-  .support-table td, .support-table td:first-child { display: block; min-width: 0; border: 0; padding: 0; }
-  .support-table td::before { content: attr(data-label); display: block; margin-bottom: 5px; font-size: 10px; font-weight: 400; color: var(--workspace-muted); }
-  .support-table td:nth-child(2) { overflow-wrap: anywhere; }
-  .support-error-table tr { grid-template-columns: 1fr 1fr; }
+  .support-table td, .support-table td:first-child { display: block; min-width: 0; border: 0; padding: 0; overflow-wrap: anywhere; }
+  .support-table td::before { content: attr(data-label); display: block; margin-bottom: 5px; font-size: 11px; font-weight: 400; color: var(--workspace-muted); }
+  .support-usage-table tr { grid-template-areas: 'time status' 'model model' 'group group' 'tokens tokens' 'charge duration'; }
+  .support-usage-time { grid-area: time; }
+  .support-usage-model { grid-area: model; }
+  .support-usage-group { grid-area: group; }
+  .support-usage-tokens { grid-area: tokens; }
+  .support-usage-charge { grid-area: charge; }
+  .support-usage-duration { grid-area: duration; }
+  .support-usage-status { grid-area: status; text-align: right; }
   .support-error-table td:last-child { grid-column: 1 / -1; }
 }
 </style>
