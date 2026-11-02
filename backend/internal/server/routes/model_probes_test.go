@@ -55,7 +55,8 @@ func (probeRouteSettings) GetMultiple(_ context.Context, keys []string) (map[str
 	}
 	return values, nil
 }
-func (probeRouteSettings) Set(context.Context, string, string) error { return nil }
+func (probeRouteSettings) Set(context.Context, string, string) error            { return nil }
+func (probeRouteSettings) SetMultiple(context.Context, map[string]string) error { return nil }
 
 type probeRouteUsers struct{ role string }
 
@@ -96,16 +97,21 @@ func TestModelProbeRoutesUseJWTAndFreshSupportCapability(t *testing.T) {
 	}
 	role = service.RoleSubAdmin
 	require.Equal(t, 403, request("GET", "/api/v1/admin/model-probes/config/groups", "Bearer session", "").Code)
-	require.Equal(t, 403, request("PUT", "/api/v1/admin/model-probes/config/groups/7", "Bearer session", `{"models":[]}`).Code)
+	require.Equal(t, 403, request("PUT", "/api/v1/admin/model-probes/config/groups/7", "Bearer session", `{"enabled":false}`).Code)
+	require.Equal(t, 401, request("PUT", "/api/v1/admin/model-probes/config/groups", "", `{"groups":[]}`).Code)
+	require.Equal(t, 403, request("PUT", "/api/v1/admin/model-probes/config/groups", "Bearer session", `{"groups":[]}`).Code)
 	require.Equal(t, 200, request("GET", "/api/v1/admin/model-probes/groups?timezone=Asia%2FShanghai", "Bearer session", "").Code)
 	require.Equal(t, 200, request("POST", "/api/v1/admin/model-probes/run", "Bearer session", `{"group_id":7,"model":"gemini-2.5-flash"}`).Code)
 	require.Equal(t, 1, gateway.selected)
 	role = service.RoleAdmin
 	require.Equal(t, 200, request("GET", "/api/v1/admin/model-probes/config/groups", "Bearer session", "").Code)
 	require.Equal(t, 200, request("GET", "/api/v1/admin/model-probes/config/groups/7", "Bearer session", "").Code)
-	require.Equal(t, 200, request("PUT", "/api/v1/admin/model-probes/config/groups/7", "Bearer session", `{"models":[]}`).Code)
+	require.Equal(t, 200, request("PUT", "/api/v1/admin/model-probes/config/groups/7", "Bearer session", `{"enabled":false}`).Code)
+	require.Equal(t, 400, request("PUT", "/api/v1/admin/model-probes/config/groups/7", "Bearer session", `{"models":[]}`).Code)
+	require.Equal(t, 200, request("PUT", "/api/v1/admin/model-probes/config/groups", "Bearer session", `{"groups":[{"group_id":7,"enabled":true}]}`).Code)
 	users.role = service.RoleSubAdmin // Stale root JWT does not grant configuration.
-	require.Equal(t, 403, request("PUT", "/api/v1/admin/model-probes/config/groups/7", "Bearer session", `{"models":[]}`).Code)
+	require.Equal(t, 403, request("PUT", "/api/v1/admin/model-probes/config/groups/7", "Bearer session", `{"enabled":false}`).Code)
+	require.Equal(t, 403, request("PUT", "/api/v1/admin/model-probes/config/groups", "Bearer session", `{"groups":[{"group_id":7,"enabled":true}]}`).Code)
 	role = service.RoleSubAdmin
 	access.enabled = false
 	require.Equal(t, 403, request("GET", "/api/v1/admin/model-probes/groups", "Bearer session", "").Code)

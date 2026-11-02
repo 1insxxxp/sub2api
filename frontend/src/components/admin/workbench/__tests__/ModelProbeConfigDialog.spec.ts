@@ -3,122 +3,158 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { reactive, ref } from 'vue'
 import ModelProbeConfigDialog from '../ModelProbeConfigDialog.vue'
 
-const { listConfigGroups, getGroupConfig, saveGroupConfig, state } = vi.hoisted(() => ({
-  listConfigGroups: vi.fn(), getGroupConfig: vi.fn(), saveGroupConfig: vi.fn(),
+const { listConfigGroups, saveConfigGroups, state } = vi.hoisted(() => ({
+  listConfigGroups: vi.fn(), saveConfigGroups: vi.fn(),
   state: { id: 1, role: 'admin', token: 'session-one' },
 }))
-vi.mock('@/api/admin/modelProbes', () => ({ listConfigGroups, getGroupConfig, saveGroupConfig }))
+vi.mock('@/api/admin/modelProbes', () => ({ listConfigGroups, saveConfigGroups }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => { const s = reactive(state); return { get user() { return { id: s.id, role: s.role } }, get token() { return s.token } } } }))
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key, locale: ref('zh') }) }))
 const views: VueWrapper[] = []
-const SelectStub = { props: ['modelValue', 'options', 'disabled', 'searchable'], emits: ['update:modelValue'], template: '<select :disabled="disabled" :value="modelValue ?? \'\'" @change="$emit(\'update:modelValue\', Number($event.target.value))"><option value="">Choose</option><option v-for="item in options" :key="item.value" :value="item.value">{{ item.label }}</option></select>' }
-const DialogStub = { props: ['show'], emits: ['close'], template: '<div v-if="show"><slot/><slot name="footer"/></div>' }
-function create(initialGroupId: number | null = 1) {
-  const view = mount(ModelProbeConfigDialog, { props: { initialGroupId }, global: { stubs: { BaseDialog: DialogStub, Select: SelectStub, Icon: true } } })
+const DialogStub = { props: ['show', 'closeOnEscape', 'showCloseButton'], emits: ['close'], template: '<div v-if="show"><slot/><slot name="footer"/></div>' }
+function create() {
+  const view = mount(ModelProbeConfigDialog, { global: { stubs: { BaseDialog: DialogStub, Icon: true } } })
   views.push(view); return view
 }
 function deferred<T>() { let resolve!: (value: T) => void; let reject!: (error: unknown) => void; const promise = new Promise<T>((a, b) => { resolve = a; reject = b }); return { promise, resolve, reject } }
-const detail = (id = 1) => ({ group: { id, name: 'Group', platform: 'gemini' }, models: ['Exact-Model'], available_models: [{ id: 'Exact-Model' }, { id: 'exact-model' }, { id: 'Other-Model' }] })
+const catalog = () => ({ items: [
+  { id: 1, name: 'Enabled Gemini', platform: 'gemini', enabled: true },
+  { id: 2, name: 'Other OpenAI', platform: 'openai', enabled: false },
+  { id: 3, name: 'Another Gemini', platform: 'gemini', enabled: false },
+] })
 beforeEach(() => {
   vi.resetAllMocks(); Object.assign(reactive(state), { id: 1, role: 'admin', token: 'session-one' })
-  listConfigGroups.mockResolvedValue({ items: [{ id: 1, name: 'One', platform: 'gemini' }, { id: 2, name: 'Two', platform: 'openai' }] })
-  getGroupConfig.mockImplementation(async (id: number) => detail(id))
-  saveGroupConfig.mockImplementation(async (id: number, models: string[]) => ({ group_id: id, models }))
+  listConfigGroups.mockResolvedValue(catalog())
+  saveConfigGroups.mockImplementation(async (groups: { group_id: number; enabled: boolean }[]) => ({ items: groups }))
 })
 afterEach(() => { views.splice(0).forEach(view => view.unmount()) })
 
-describe('model probe configuration', () => {
+describe('model probe group configuration', () => {
   it('does not request privileged configuration for a secondary administrator', async () => {
     state.role = 'sub_admin'; const view = create(); await flushPromises()
-    expect(listConfigGroups).not.toHaveBeenCalled(); expect(getGroupConfig).not.toHaveBeenCalled()
+    expect(listConfigGroups).not.toHaveBeenCalled(); expect(saveConfigGroups).not.toHaveBeenCalled()
     expect(view.emitted('close')).toHaveLength(1)
   })
-  it('loads public candidates without saving and preserves exact case-sensitive IDs', async () => {
+  it('loads group switches without saving and disables save until something changes', async () => {
     const view = create(); await flushPromises()
-    expect(listConfigGroups).toHaveBeenCalledTimes(1); expect(getGroupConfig.mock.calls[0][0]).toBe(1)
-    expect(view.getComponent(SelectStub).props('searchable')).toBe(true)
-    const inputs = view.findAll<HTMLInputElement>('[data-test="probe-config-model"]')
-    expect(inputs.map(input => [input.attributes('aria-label'), input.element.checked])).toEqual([['Exact-Model', true], ['exact-model', false], ['Other-Model', false]])
-    expect(saveGroupConfig).not.toHaveBeenCalled()
+    expect(listConfigGroups).toHaveBeenCalledTimes(1)
+    const inputs = view.findAll<HTMLInputElement>('[data-test="probe-config-group"]')
+    expect(inputs.map(input => [input.attributes('data-group-id'), input.element.checked])).toEqual([['1', true], ['2', false], ['3', false]])
+    expect(view.find('[data-test="probe-config-model"]').exists()).toBe(false)
+    expect(view.get('[data-test="probe-config-save"]').attributes('disabled')).toBeDefined()
+    expect(saveConfigGroups).not.toHaveBeenCalled()
   })
-  it('selects only the current search results and saves explicitly', async () => {
+  it('searches groups, selects only visible results and explicitly saves changed groups only', async () => {
     const view = create(); await flushPromises()
-    await view.get('[data-test="probe-config-search"]').setValue('other')
+    await view.get('[data-test="probe-config-search"]').setValue('openai')
     await view.get('[data-test="probe-config-select-visible"]').trigger('click')
-    expect(saveGroupConfig).not.toHaveBeenCalled()
+    expect(saveConfigGroups).not.toHaveBeenCalled()
     await view.get('[data-test="probe-config-save"]').trigger('click'); await flushPromises()
-    expect(saveGroupConfig.mock.calls[0].slice(0, 2)).toEqual([1, ['Exact-Model', 'Other-Model']])
-    expect(view.emitted('saved')).toEqual([[1]])
+    expect(saveConfigGroups.mock.calls[0][0]).toEqual([{ group_id: 2, enabled: true }])
+    expect(saveConfigGroups.mock.calls[0][1]).toBeInstanceOf(AbortSignal)
+    expect(view.emitted('saved')).toEqual([[]])
   })
-  it('can explicitly clear all models and close group probing', async () => {
+  it('sends only previously enabled groups when clearing the selection', async () => {
     const view = create(); await flushPromises()
     await view.get('[data-test="probe-config-clear"]').trigger('click')
     expect(view.text()).toContain('modelProbes.config.emptyHint')
     await view.get('[data-test="probe-config-save"]').trigger('click'); await flushPromises()
-    expect(saveGroupConfig.mock.calls[0].slice(0, 2)).toEqual([1, []])
+    expect(saveConfigGroups.mock.calls[0][0]).toEqual([{ group_id: 1, enabled: false }])
+  })
+  it('removes a reverted edit from the delta instead of overwriting other administrators', async () => {
+    const view = create(); await flushPromises()
+    const input = view.get('[data-group-id="2"]')
+    await input.setValue(true); await input.setValue(false)
+    expect(view.get('[data-test="probe-config-save"]').attributes('disabled')).toBeDefined()
+    expect(saveConfigGroups).not.toHaveBeenCalled()
   })
   it('isolates configuration denial without revoking shared support access', async () => {
-    getGroupConfig.mockRejectedValue({ status: 403, message: 'https://upstream-secret.invalid' })
+    listConfigGroups.mockRejectedValue({ status: 403, message: 'https://upstream-secret.invalid' })
     const view = create(); await flushPromises()
     expect(view.text()).toContain('modelProbes.config.errors.forbidden')
     expect(view.get('[data-test="probe-config-save"]').attributes('disabled')).toBeDefined()
     expect(view.emitted('access-denied')).toBeUndefined(); expect(view.text()).not.toContain('upstream-secret')
-    expect(saveGroupConfig).not.toHaveBeenCalled()
+    expect(saveConfigGroups).not.toHaveBeenCalled()
   })
-  it('prevents a failed catalog load from overwriting existing settings', async () => {
-    getGroupConfig.mockRejectedValueOnce({ status: 503, message: 'private' })
+  it('cannot save after a failed load and can retry discovery safely', async () => {
+    listConfigGroups.mockRejectedValueOnce({ status: 503, message: 'private' })
     const view = create(); await flushPromises()
     expect(view.get('[data-test="probe-config-save"]').attributes('disabled')).toBeDefined()
     await view.get('[data-test="probe-config-reload"]').trigger('click'); await flushPromises()
-    expect(view.get('[data-test="probe-config-save"]').attributes('disabled')).toBeUndefined()
-    expect(saveGroupConfig).not.toHaveBeenCalled()
+    expect(view.findAll('[data-test="probe-config-group"]')).toHaveLength(3)
+    expect(view.get('[data-test="probe-config-save"]').attributes('disabled')).toBeDefined()
+    expect(saveConfigGroups).not.toHaveBeenCalled()
   })
-  it('ignores an older group response after changing groups', async () => {
-    const pending = deferred<ReturnType<typeof detail>>(); getGroupConfig.mockReturnValueOnce(pending.promise)
+  it.each([
+    { reason: 'legacy snapshot without enabled', data: { items: [{ id: 1, name: 'Legacy', platform: 'gemini' }] } },
+    { reason: 'duplicate group IDs', data: { items: [...catalog().items, { id: 1, name: 'Duplicate', platform: 'gemini', enabled: false }] } },
+    { reason: 'non-array items', data: { items: null } },
+    { reason: 'non-positive ID', data: { items: [{ ...catalog().items[0], id: 0 }] } },
+    { reason: 'unsafe integer ID', data: { items: [{ ...catalog().items[0], id: Number.MAX_SAFE_INTEGER + 1 }] } },
+    { reason: 'non-boolean enabled', data: { items: [{ ...catalog().items[0], enabled: 'true' }] } },
+    { reason: 'non-string name', data: { items: [{ ...catalog().items[0], name: null }] } },
+    { reason: 'non-string platform', data: { items: [{ ...catalog().items[0], platform: 1 }] } },
+  ])('rejects the entire configuration snapshot for $reason', async ({ data }) => {
+    listConfigGroups.mockResolvedValueOnce(data)
     const view = create(); await flushPromises()
-    const signal = getGroupConfig.mock.calls[0][1] as AbortSignal
-    await view.get('[data-test="probe-config-group"]').setValue('2'); await flushPromises()
-    expect(signal.aborted).toBe(true)
-    pending.resolve({ ...detail(), available_models: [{ id: 'stale-model' }] }); await flushPromises()
-    expect(view.text()).not.toContain('stale-model')
-    await view.get('[data-test="probe-config-save"]').trigger('click'); await flushPromises()
-    expect(saveGroupConfig.mock.calls[0][0]).toBe(2)
+    expect(view.text()).toContain('modelProbes.config.errors.groups')
+    expect(view.findAll('[data-test="probe-config-group"]')).toHaveLength(0)
+    expect(view.get('[data-test="probe-config-save"]').attributes('disabled')).toBeDefined()
+    expect(saveConfigGroups).not.toHaveBeenCalled()
   })
-  it('locks the group during save and ignores results from an expired session', async () => {
-    const pending = deferred<{ group_id: number; models: string[] }>(); saveGroupConfig.mockReturnValueOnce(pending.promise)
-    const view = create(); await flushPromises(); await view.get('[data-test="probe-config-save"]').trigger('click')
-    expect(view.get('[data-test="probe-config-group"]').attributes('disabled')).toBeDefined()
-    const signal = saveGroupConfig.mock.calls[0][2] as AbortSignal
+  it('locks editing and closing during save and ignores an expired session response', async () => {
+    const pending = deferred<{ items: { group_id: number; enabled: boolean }[] }>(); saveConfigGroups.mockReturnValueOnce(pending.promise)
+    const view = create(); await flushPromises(); await view.get('[data-group-id="2"]').setValue(true)
+    await view.get('[data-test="probe-config-save"]').trigger('click')
+    expect(view.get('[data-test="probe-config-search"]').attributes('disabled')).toBeDefined()
+    expect(view.get('[data-group-id="2"]').attributes('disabled')).toBeDefined()
+    expect(view.get('[data-test="probe-config-cancel"]').attributes('disabled')).toBeDefined()
+    expect(view.getComponent(DialogStub).props('closeOnEscape')).toBe(false)
+    view.getComponent(DialogStub).vm.$emit('close'); await flushPromises()
+    expect(view.emitted('close')).toBeUndefined()
+    const signal = saveConfigGroups.mock.calls[0][1] as AbortSignal
     reactive(state).token = 'session-two'; await flushPromises()
     expect(signal.aborted).toBe(true); expect(view.emitted('close')).toHaveLength(1)
-    pending.resolve({ group_id: 1, models: ['Exact-Model'] }); await flushPromises()
+    pending.resolve({ items: [{ group_id: 2, enabled: true }] }); await flushPromises()
     expect(view.emitted('saved')).toBeUndefined()
   })
-  it('limits a bulk selection to at most 200 exact model IDs', async () => {
-    getGroupConfig.mockResolvedValueOnce({ ...detail(), models: [], available_models: Array.from({ length: 201 }, (_, i) => ({ id: `model-${i}` })) })
+  it('keeps edits after an atomic batch failure without reporting success', async () => {
+    saveConfigGroups.mockRejectedValueOnce({ status: 503, message: 'private details' })
+    const view = create(); await flushPromises(); await view.get('[data-group-id="2"]').setValue(true)
+    await view.get('[data-test="probe-config-save"]').trigger('click'); await flushPromises()
+    expect(view.emitted('saved')).toBeUndefined(); expect(view.text()).toContain('modelProbes.config.errors.save')
+    expect(view.text()).not.toContain('private details'); expect(view.get<HTMLInputElement>('[data-group-id="2"]').element.checked).toBe(true)
+    expect(view.get('[data-test="probe-config-save"]').attributes('disabled')).toBeUndefined()
+  })
+  it.each([
+    [{ group_id: 2, enabled: false }],
+    [{ group_id: 3, enabled: true }],
+    [{ group_id: 2, enabled: true }, { group_id: 2, enabled: true }],
+    [],
+  ])('rejects mismatched or duplicate confirmation entries %j', async (...items) => {
+    saveConfigGroups.mockResolvedValueOnce({ items })
+    const view = create(); await flushPromises(); await view.get('[data-group-id="2"]').setValue(true)
+    await view.get('[data-test="probe-config-save"]').trigger('click'); await flushPromises()
+    expect(view.emitted('saved')).toBeUndefined(); expect(view.text()).toContain('modelProbes.config.errors.save')
+  })
+  it('accepts a matching confirmation regardless of entry ordering', async () => {
+    saveConfigGroups.mockResolvedValueOnce({ items: [{ group_id: 3, enabled: true }, { group_id: 2, enabled: true }] })
+    const view = create(); await flushPromises(); await view.get('[data-test="probe-config-select-visible"]').trigger('click')
+    await view.get('[data-test="probe-config-save"]').trigger('click'); await flushPromises()
+    expect(view.emitted('saved')).toEqual([[]])
+  })
+  it('blocks save when more than 500 group switches changed', async () => {
+    listConfigGroups.mockResolvedValueOnce({ items: Array.from({ length: 501 }, (_, i) => ({ id: i + 1, name: `Group ${i}`, platform: 'gemini', enabled: false })) })
     const view = create(); await flushPromises(); await view.get('[data-test="probe-config-select-visible"]').trigger('click')
     expect(view.text()).toContain('modelProbes.config.errors.limit')
-    expect(view.get('[data-test="probe-config-save"]').attributes('disabled')).toBeDefined()
-    expect(view.findAll<HTMLInputElement>('[data-test="probe-config-model"]').filter(input => input.element.checked)).toHaveLength(0)
-    expect(saveGroupConfig).not.toHaveBeenCalled()
+    expect(view.get('[data-test="probe-config-save"]').attributes('disabled')).toBeDefined(); expect(saveConfigGroups).not.toHaveBeenCalled()
+    await view.get('[data-group-id="501"]').setValue(false)
+    expect(view.get('[data-test="probe-config-save"]').attributes('disabled')).toBeUndefined()
   })
-  it('keeps unavailable configured models visible so they can be removed', async () => {
-    getGroupConfig.mockResolvedValueOnce({ ...detail(), models: ['Removed-Model', 'Exact-Model'] })
-    const view = create(); await flushPromises()
-    expect(view.text()).toContain('Removed-Model'); expect(view.text()).toContain('modelProbes.config.unavailable')
-    expect(view.get('[data-test="probe-config-save"]').attributes('disabled')).toBeDefined()
-    const removed = view.findAll<HTMLInputElement>('[data-test="probe-config-model"]').find(input => input.attributes('aria-label') === 'Removed-Model')!
-    await removed.setValue(false)
-    expect(removed.attributes('disabled')).toBeDefined()
-    removed.element.click(); await flushPromises()
-    expect(removed.element.checked).toBe(false)
-    await view.get('[data-test="probe-config-save"]').trigger('click'); await flushPromises()
-    expect(saveGroupConfig.mock.calls[0].slice(0, 2)).toEqual([1, ['Exact-Model']])
-  })
-  it('aborts outstanding detail requests when the editor closes', async () => {
-    const pending = deferred<ReturnType<typeof detail>>(); getGroupConfig.mockReturnValueOnce(pending.promise)
-    const view = create(); await flushPromises(); const signal = getGroupConfig.mock.calls[0][1] as AbortSignal
+  it('aborts discovery and ignores late data when the editor closes', async () => {
+    const pending = deferred<ReturnType<typeof catalog>>(); listConfigGroups.mockReturnValueOnce(pending.promise)
+    const view = create(); await flushPromises(); const signal = listConfigGroups.mock.calls[0][0] as AbortSignal
     view.unmount(); views.pop(); expect(signal.aborted).toBe(true)
-    pending.resolve(detail()); await flushPromises(); expect(view.emitted('saved')).toBeUndefined()
+    pending.resolve(catalog()); await flushPromises(); expect(view.emitted('saved')).toBeUndefined()
   })
 })

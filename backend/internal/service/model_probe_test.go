@@ -16,6 +16,7 @@ type modelProbeGroupsStub struct {
 	visibilitySet bool
 	visibilityErr error
 	actors        []int64
+	onList        func()
 }
 
 func (s *modelProbeGroupsStub) GetByID(context.Context, int64) (*Group, error) {
@@ -24,6 +25,9 @@ func (s *modelProbeGroupsStub) GetByID(context.Context, int64) (*Group, error) {
 }
 func (s *modelProbeGroupsStub) ListActive(context.Context) ([]Group, error) {
 	s.calls++
+	if s.onList != nil {
+		s.onList()
+	}
 	if s.all != nil {
 		return s.all, nil
 	}

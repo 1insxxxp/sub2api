@@ -41,7 +41,7 @@
       </div>
     </template>
     <p v-else-if="!checking && !loadingGroups && !loadingModels && !denied && !errorKey" class="probe-empty">{{ t(selectedGroup ? 'modelProbes.noModels' : groups.length ? 'modelProbes.initial' : 'modelProbes.noGroups') }}</p>
-    <ModelProbeConfigDialog v-if="showConfig && auth.user?.role === 'admin'" :initial-group-id="typeof selectedGroup === 'number' ? selectedGroup : null" @close="showConfig = false" @saved="configurationSaved" />
+    <ModelProbeConfigDialog v-if="showConfig && auth.user?.role === 'admin'" @close="showConfig = false" @saved="configurationSaved" />
   </div>
 </template>
 

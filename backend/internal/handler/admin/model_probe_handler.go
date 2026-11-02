@@ -15,9 +15,10 @@ type modelProbeService interface {
 	Groups(context.Context, int64) ([]service.ModelProbeGroup, error)
 	Models(context.Context, int64, int64) (*service.ModelProbeCatalog, error)
 	Run(context.Context, int64, int64, string) (*service.ModelProbeResult, error)
-	ConfigGroups(context.Context, int64) ([]service.ModelProbeGroup, error)
+	ConfigGroups(context.Context, int64) ([]service.ModelProbeConfigGroup, error)
 	Config(context.Context, int64, int64) (*service.ModelProbeConfig, error)
-	SaveConfig(context.Context, int64, int64, []string) (*service.ModelProbeConfigResult, error)
+	SaveConfig(context.Context, int64, int64, bool) (*service.ModelProbeConfigResult, error)
+	SaveConfigs(context.Context, int64, []service.ModelProbeConfigChange) ([]service.ModelProbeConfigResult, error)
 }
 type ModelProbeHandler struct{ service modelProbeService }
 

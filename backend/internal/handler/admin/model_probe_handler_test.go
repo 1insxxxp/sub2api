@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
@@ -29,17 +30,21 @@ func (s *modelProbeHandlerStub) Run(context.Context, int64, int64, string) (*ser
 	s.calls++
 	return &service.ModelProbeResult{Status: "success"}, s.err
 }
-func (s *modelProbeHandlerStub) ConfigGroups(context.Context, int64) ([]service.ModelProbeGroup, error) {
+func (s *modelProbeHandlerStub) ConfigGroups(context.Context, int64) ([]service.ModelProbeConfigGroup, error) {
 	s.calls++
-	return []service.ModelProbeGroup{}, s.err
+	return []service.ModelProbeConfigGroup{}, s.err
 }
 func (s *modelProbeHandlerStub) Config(context.Context, int64, int64) (*service.ModelProbeConfig, error) {
 	s.calls++
-	return &service.ModelProbeConfig{Models: []string{}, AvailableModels: []service.ModelProbeModel{}}, s.err
+	return &service.ModelProbeConfig{Enabled: true}, s.err
 }
-func (s *modelProbeHandlerStub) SaveConfig(_ context.Context, _ int64, id int64, models []string) (*service.ModelProbeConfigResult, error) {
+func (s *modelProbeHandlerStub) SaveConfig(_ context.Context, _ int64, id int64, enabled bool) (*service.ModelProbeConfigResult, error) {
 	s.calls++
-	return &service.ModelProbeConfigResult{GroupID: id, Models: models}, s.err
+	return &service.ModelProbeConfigResult{GroupID: id, Enabled: enabled}, s.err
+}
+func (s *modelProbeHandlerStub) SaveConfigs(_ context.Context, _ int64, changes []service.ModelProbeConfigChange) ([]service.ModelProbeConfigResult, error) {
+	s.calls++
+	return changes, s.err
 }
 func probeHandlerRequest(h *ModelProbeHandler, role, path, body string, authenticated bool) *httptest.ResponseRecorder {
 	w := httptest.NewRecorder()
@@ -96,7 +101,11 @@ func probeConfigHandlerRequest(h *ModelProbeHandler, role, method, path, body st
 	c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: 4})
 	c.Set(string(middleware.ContextKeyUserRole), role)
 	if method == "PUT" {
-		h.SaveConfig(c)
+		if strings.Split(path, "?")[0] == "/config/groups" {
+			h.SaveConfigs(c)
+		} else {
+			h.SaveConfig(c)
+		}
 	} else if path == "/config/groups" {
 		h.ConfigGroups(c)
 	} else {
@@ -108,7 +117,7 @@ func TestModelProbeConfigHandlerRequiresRootRole(t *testing.T) {
 	for _, role := range []string{"user", "sub_admin"} {
 		for _, method := range []string{"GET", "PUT"} {
 			s := &modelProbeHandlerStub{}
-			w := probeConfigHandlerRequest(&ModelProbeHandler{service: s}, role, method, "/config/groups/7", `{"models":[]}`)
+			w := probeConfigHandlerRequest(&ModelProbeHandler{service: s}, role, method, "/config/groups/7", `{"enabled":false}`)
 			require.Equal(t, 403, w.Code)
 			require.Zero(t, s.calls)
 		}
@@ -116,8 +125,8 @@ func TestModelProbeConfigHandlerRequiresRootRole(t *testing.T) {
 }
 func TestModelProbeConfigHandlerStrictBoundedBody(t *testing.T) {
 	for _, body := range []string{
-		`{}`, `null`, `{"models":null}`, `{"models":[],"account_id":3}`, `{"models":[],"models":["x"]}`,
-		`{"models":[]} {}`, `{"models":[3]}`, `{"models":[]}` + strings.Repeat(" ", 65536),
+		`{}`, `null`, `{"enabled":null}`, `{"enabled":false,"account_id":3}`, `{"enabled":false,"enabled":true}`,
+		`{"enabled":false} {}`, `{"enabled":3}`, `{"enabled":false}` + strings.Repeat(" ", 65536), `{"models":[]}`,
 	} {
 		s := &modelProbeHandlerStub{}
 		w := probeConfigHandlerRequest(&ModelProbeHandler{service: s}, "admin", "PUT", "/config/groups/7", body)
@@ -125,12 +134,10 @@ func TestModelProbeConfigHandlerStrictBoundedBody(t *testing.T) {
 		require.Zero(t, s.calls)
 	}
 	s := &modelProbeHandlerStub{}
-	w := probeConfigHandlerRequest(&ModelProbeHandler{service: s}, "admin", "PUT", "/config/groups/7?account_id=3", `{"models":[]}`)
+	w := probeConfigHandlerRequest(&ModelProbeHandler{service: s}, "admin", "PUT", "/config/groups/7?account_id=3", `{"enabled":false}`)
 	require.Equal(t, 400, w.Code)
 	require.Zero(t, s.calls)
-	// More than the support facade's 2 KiB is valid for up to 200 model IDs.
-	body := `{"models":["` + strings.Repeat("a", 250) + `"` + strings.Repeat(`,"`+strings.Repeat("b", 250)+`"`, 15) + `]}`
-	w = probeConfigHandlerRequest(&ModelProbeHandler{service: s}, "admin", "PUT", "/config/groups/7", body)
+	w = probeConfigHandlerRequest(&ModelProbeHandler{service: s}, "admin", "PUT", "/config/groups/7", `{"enabled":false}`)
 	require.Equal(t, 200, w.Code)
 	require.Equal(t, 1, s.calls)
 	require.Equal(t, "private, no-store", w.Header().Get("Cache-Control"))
@@ -142,10 +149,60 @@ func TestModelProbeConfigHandlerMapsFreshAuthorizationAndSafeErrors(t *testing.T
 	}{{service.ErrUserSupportForbidden, 403}, {service.ErrModelProbeInvalid, 400}, {errors.New("https://secret.invalid sk-private"), 503}, {nil, 200}} {
 		s := &modelProbeHandlerStub{err: tc.err}
 		for _, method := range []string{"GET", "PUT"} {
-			w := probeConfigHandlerRequest(&ModelProbeHandler{service: s}, "admin", method, "/config/groups/7", `{"models":[]}`)
+			w := probeConfigHandlerRequest(&ModelProbeHandler{service: s}, "admin", method, "/config/groups/7", `{"enabled":false}`)
 			require.Equal(t, tc.status, w.Code)
 			require.NotContains(t, w.Body.String(), "secret.invalid")
 			require.NotContains(t, w.Body.String(), "sk-private")
 		}
 	}
+}
+
+func TestModelProbeGroupSwitchBulkHandlerStrictBoundedChanges(t *testing.T) {
+	for _, body := range []string{
+		`{}`, `{"groups":null}`, `{"groups":[{"group_id":7}]}`, `{"groups":[{"enabled":true}]}`,
+		`{"groups":[{"group_id":7,"enabled":null}]}`, `{"groups":[{"group_id":null,"enabled":true}]}`,
+		`{"groups":[{"group_id":7,"enabled":true,"models":[]}]}`, `{"groups":[],"models":[]}`,
+		`{"groups":[{"group_id":7,"enabled":true},{"group_id":7,"enabled":false}]}`,
+		`{"groups":[{"group_id":7,"group_id":8,"enabled":true}]}`, `{"groups":[],"groups":[]}`,
+		`{"groups":[]} {}`, `{"groups":[]}` + strings.Repeat(" ", 65536),
+	} {
+		s := &modelProbeHandlerStub{}
+		w := probeConfigHandlerRequest(&ModelProbeHandler{service: s}, "admin", "PUT", "/config/groups", body)
+		require.Equal(t, 400, w.Code, "body %s", body[:min(len(body), 100)])
+		require.Zero(t, s.calls)
+	}
+	items := make([]string, 501)
+	for i := range items {
+		items[i] = fmt.Sprintf(`{"group_id":%d,"enabled":true}`, i+1)
+	}
+	for _, tc := range []struct {
+		body   string
+		status int
+	}{{`{"groups":[]}`, 200}, {`{"groups":[` + strings.Join(items[:500], ",") + `]}`, 200}, {`{"groups":[` + strings.Join(items, ",") + `]}`, 400}} {
+		s := &modelProbeHandlerStub{}
+		w := probeConfigHandlerRequest(&ModelProbeHandler{service: s}, "admin", "PUT", "/config/groups", tc.body)
+		require.Equal(t, tc.status, w.Code)
+		if tc.status == 400 {
+			require.Zero(t, s.calls)
+		} else {
+			require.Equal(t, 1, s.calls)
+		}
+	}
+	for _, role := range []string{"user", "sub_admin"} {
+		s := &modelProbeHandlerStub{}
+		w := probeConfigHandlerRequest(&ModelProbeHandler{service: s}, role, "PUT", "/config/groups", `{"groups":[]}`)
+		require.Equal(t, 403, w.Code)
+		require.Zero(t, s.calls)
+	}
+}
+
+func TestModelProbeGroupSwitchHandlerAcceptsOnlyEnabled(t *testing.T) {
+	s := &modelProbeHandlerStub{}
+	w := probeConfigHandlerRequest(&ModelProbeHandler{service: s}, "admin", "PUT", "/config/groups/7", `{"enabled":true}`)
+	require.Equal(t, 200, w.Code)
+	require.Equal(t, 1, s.calls)
+	s = &modelProbeHandlerStub{}
+	w = probeConfigHandlerRequest(&ModelProbeHandler{service: s}, "admin", "PUT", "/config/groups/7", `{"models":[]}`)
+	require.Equal(t, 400, w.Code)
+	require.Zero(t, s.calls)
 }

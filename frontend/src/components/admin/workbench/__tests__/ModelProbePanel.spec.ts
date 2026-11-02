@@ -13,7 +13,7 @@ vi.mock('@/composables/useUserSupportAccess', () => ({ useUserSupportAccess: () 
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key, locale: ref('zh') }) }))
 const views: VueWrapper[] = []
 const SelectStub = { props: ['modelValue', 'options', 'searchable'], emits: ['update:modelValue'], template: '<select :value="modelValue ?? \'\'" @change="$emit(\'update:modelValue\', Number($event.target.value))"><option value="">Choose</option><option v-for="item in options" :key="item.value" :value="item.value">{{ item.label }}</option></select>' }
-const ConfigStub = { props: ['initialGroupId'], emits: ['close', 'saved'], template: '<div data-test="config-editor"><button data-test="config-save" @click="$emit(\'saved\')">Save</button></div>' }
+const ConfigStub = { emits: ['close', 'saved'], template: '<div data-test="config-editor"><button data-test="config-save" @click="$emit(\'saved\')">Save</button></div>' }
 function create() { const v = mount(ModelProbePanel, { global: { stubs: { Select: SelectStub, Icon: true, ModelProbeConfigDialog: ConfigStub } } }); views.push(v); return v }
 function deferred<T>() { let resolve!: (v: T) => void; let reject!: (e: unknown) => void; const promise = new Promise<T>((a, b) => { resolve = a; reject = b }); return { promise, resolve, reject } }
 function success(model = 'model-1') { return { group_id: 1, model, status: 'success', duration_ms: 240, started_at: '2026-11-02T00:00:00Z' } }
@@ -32,7 +32,7 @@ describe('group model probes', () => {
     sub.unmount(); views.pop(); state.role = 'admin'
     const admin = create(); await select(admin)
     await admin.get('[data-test="probe-configure"]').trigger('click')
-    expect(admin.getComponent(ConfigStub).props('initialGroupId')).toBe(1)
+    expect(admin.getComponent(ConfigStub).attributes('initial-group-id')).toBeUndefined()
     reactive(state).token = 'new-session'; await flushPromises()
     expect(admin.find('[data-test="config-editor"]').exists()).toBe(false)
   })

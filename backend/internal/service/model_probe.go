@@ -137,7 +137,7 @@ func (s *ModelProbeService) requireVisibleGroup(ctx context.Context, actor, id i
 	return ErrModelProbeInvalid
 }
 
-func (s *ModelProbeService) catalog(ctx context.Context, actor, id int64, requested string) (*Group, *ModelProbeCatalog, error) {
+func (s *ModelProbeService) catalog(ctx context.Context, actor, id int64) (*Group, *ModelProbeCatalog, error) {
 	if id <= 0 {
 		return nil, nil, ErrModelProbeInvalid
 	}
@@ -146,12 +146,8 @@ func (s *ModelProbeService) catalog(ctx context.Context, actor, id int64, reques
 	if err := s.requireVisibleGroup(ctx, actor, id); err != nil {
 		return nil, nil, err
 	}
-	configured, err := s.policy(ctx, id)
-	if err != nil {
+	if err := s.requireEnabledGroup(ctx, id); err != nil {
 		return nil, nil, err
-	}
-	if len(configured) == 0 || (requested != "" && !probePolicyContains(configured, requested)) {
-		return nil, nil, ErrModelProbeInvalid
 	}
 	g, err := s.trustedGroup(ctx, id)
 	if err != nil {
@@ -161,19 +157,14 @@ func (s *ModelProbeService) catalog(ctx context.Context, actor, id int64, reques
 	if err != nil {
 		return nil, nil, err
 	}
-	out := &ModelProbeCatalog{Group: probeGroupDTO(g), Items: []ModelProbeModel{}}
-	for _, m := range models {
-		if probePolicyContains(configured, m.ID) {
-			out.Items = append(out.Items, m)
-		}
-	}
+	out := &ModelProbeCatalog{Group: probeGroupDTO(g), Items: models}
 	return g, out, nil
 }
 func (s *ModelProbeService) Models(ctx context.Context, actor, id int64) (*ModelProbeCatalog, error) {
 	if err := s.authorize(ctx, actor); err != nil {
 		return nil, err
 	}
-	_, v, err := s.catalog(ctx, actor, id, "")
+	_, v, err := s.catalog(ctx, actor, id)
 	return v, err
 }
 func (s *ModelProbeService) Run(ctx context.Context, actor, id int64, model string) (*ModelProbeResult, error) {
@@ -189,9 +180,9 @@ func (s *ModelProbeService) Run(ctx context.Context, actor, id int64, model stri
 	if err != nil {
 		return nil, err
 	}
-	// A manifest refresh can take time. Revoking a model during discovery must
+	// A manifest refresh can take time. Closing a group during discovery must
 	// take effect before actual scheduling, even for an already loaded client.
-	if err := s.requireConfiguredModel(ctx, id, model); err != nil {
+	if err := s.requireEnabledGroup(ctx, id); err != nil {
 		return nil, err
 	}
 	started := time.Now()
@@ -219,7 +210,7 @@ func (s *ModelProbeService) Run(ctx context.Context, actor, id int64, model stri
 	return out, nil
 }
 func (s *ModelProbeService) groupForProbe(ctx context.Context, actor, id int64, model string) (*Group, error) {
-	group, catalog, err := s.catalog(ctx, actor, id, model)
+	group, catalog, err := s.catalog(ctx, actor, id)
 	if err != nil {
 		return nil, err
 	}
