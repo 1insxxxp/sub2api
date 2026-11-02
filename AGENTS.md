@@ -1502,6 +1502,29 @@ curl -fsS -X PUT "${BASE}/api/v1/admin/users/123/support-access" \
 
 安全数据采用专用白名单：公开模型、客户分组名称、用量/客户扣费/耗时/状态。使用记录和报错以两个紧凑Tab切换。报错记录提供 `group_name`、`status_code`、`error_kind`、分类及 `original_message`；`original_message` 为兼容字段名，页面标为“报错原因（已脱敏）”，不再回显任意自由文本原文。优先提取本次请求的 `error_message`，仅在没有可提取原因时参考 `upstream_error_message`；未知主原因不能被较早上游尝试覆盖。只从审核过的 JSON message/error 与同一错误对象的精确 status/code 位置提取，用已审查错误码映射固定安全说明（保留指定的完整 Gemini `PROHIBITED_CONTENT` 示例），不拼接原文、捕获值、项目/组织/渠道/请求标识或非标准密钥；未知原因统一提示为保护敏感信息已隐藏细节。输出幂等，仓储和服务层均投影，内部 Ops 原始记录不变；不读取或返回原始error_body/upstream_errors，不使用v-html。客户分组名属于有意公开的业务标签，正常名称保留；含明确凭据、地址、内部身份/资源标记或控制字符时整名替换 `[REDACTED]`，不修改分组配置。无标记的任意别名不能自动与公开名称区分，不承诺从公开分组标签中推断并消除所有来源线索。`status_code` 使用日志保存的状态码，不用上游状态码替换，有效范围100–599，缺失/无效为null；流式记录的该值不承诺等于已打开连接的HTTP状态。`error_kind` 仅允许 `request/auth/account_auth/routing/upstream/network/internal/unknown`，对应既有错误阶段类型，未知历史字符串不回显。不返回请求正文、URL/IP/域名、密钥、上游账号/渠道/映射/请求ID/成本等内部信息；无法确认的模型显示未知，不回退内部模型。查询无记录与暂不可用分别表示。授权撤销由后端实时校验。收益管理和邀请排行榜的全部工作台接口分别检查独立能力，不能只隐藏页签。256迁移保留既存二级管理员原两项权限，新升角色默认关闭；用户支持授权不连带开放其它能力。普通用户不增加任何后台登录或身份读取例外。共享收益分组、计算及历史授予日保持原口径。
 
+### 8. 分组模型探测（2026-11-02，本地实现）
+
+工作台入口 `/admin/workbench?tab=model-probes`，复用 `user_support` 权限：主管理员默认可用，二级管理员需用户支持授权。接口仅接受工作人员 Bearer JWT；普通用户和受限 Admin API Key 不获得该能力。每次请求实时校验有效账号与权限，不开放账号管理接口。
+
+| 方法 | 端点 | 参数与响应 |
+|------|------|------------|
+| GET | `/api/v1/admin/model-probes/groups` | 返回 `{items:[{id,name,platform}]}`，仅有效可探测分组；只接受通用可选 `timezone` 查询参数 |
+| GET | `/api/v1/admin/model-probes/groups/:id/models` | 返回 `{group:{id,name,platform},items:[{id}]}`，模型使用分组公开目录与别名 |
+| POST | `/api/v1/admin/model-probes/run` | 精确 JSON `{group_id:123,model:"公开模型名"}`；返回 `{group_id,model,status,duration_ms,started_at,error_code?}` |
+
+```bash
+curl -fsS "${BASE}/api/v1/admin/model-probes/groups" \
+  -H "Authorization: Bearer ${STAFF_JWT}"
+curl -fsS "${BASE}/api/v1/admin/model-probes/groups/${GROUP_ID}/models" \
+  -H "Authorization: Bearer ${STAFF_JWT}"
+# 实际探测：会调用该分组调度选中的上游，仅在工作人员主动探测时执行。
+curl -fsS -X POST "${BASE}/api/v1/admin/model-probes/run" \
+  -H "Authorization: Bearer ${STAFF_JWT}" -H 'Content-Type: application/json' \
+  --data '{"group_id":123,"model":"gemini-2.5-flash"}'
+```
+
+每个模型重新核对分组和公开目录，按实际分组路由、模型映射与调度选取账号，取得业务并发槽后复用账号管理的原生探测。状态为 `success/failed/timeout/cancelled/unsupported`；只有明确的成功结束事件才能判定成功，空响应和中途断流不能算成功。服务端限时120秒，前端单次请求限时180秒，批量最多3个并发，支持停止、重试和切组取消。结果只返回公开模型、闭集状态与静态原因，不返回上游账号、真实映射、地址、凭据、原始报错或生成内容。探测可能产生上游费用和原生账号健康状态更新；不使用客户密钥、钱包或客户用量账单，也不代表某个客户的余额、订阅或密钥权限验收。
+
 ## 注意事项
 
 1. **前端必须打包进镜像**：使用 `docker build` 在构建服务器（`us-asaki-root`）上构建，Dockerfile 会自动编译前端并 embed 到后端二进制中，构建完成后通过 `docker save | docker load` 传输到生产服务器（`clicodeplus`）

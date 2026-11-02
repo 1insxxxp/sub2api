@@ -10,6 +10,7 @@ type AdminHandlers struct {
 	Dashboard              *admin.DashboardHandler
 	User                   *admin.UserHandler
 	UserSupport            *admin.UserSupportHandler
+	ModelProbe             *admin.ModelProbeHandler
 	WorkbenchAccess        *admin.AdminWorkbenchAccessHandler
 	Group                  *admin.GroupHandler
 	SystemCustomGroup      *admin.SystemCustomGroupHandler

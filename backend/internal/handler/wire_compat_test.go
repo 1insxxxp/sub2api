@@ -55,10 +55,12 @@ func TestProvideAdminHandlersPreservesLegacyConstructor(t *testing.T) {
 	upstreamBillingProbe := &service.UpstreamBillingProbeService{}
 	ollamaCloudUsage := &service.OllamaCloudUsageService{}
 
+	modelProbeHandler := &admin.ModelProbeHandler{}
 	got := ProvideAdminHandlers(
 		dashboardHandler,
 		userHandler,
 		&admin.UserSupportHandler{},
+		modelProbeHandler,
 		&admin.AdminWorkbenchAccessHandler{},
 		groupHandler,
 		systemCustomGroupHandler,
@@ -105,6 +107,7 @@ func TestProvideAdminHandlersPreservesLegacyConstructor(t *testing.T) {
 		nil,
 	)
 
+	require.Same(t, modelProbeHandler, got.ModelProbe)
 	require.Same(t, dashboardHandler, got.Dashboard)
 	require.Same(t, userHandler, got.User)
 	require.Same(t, groupHandler, got.Group)

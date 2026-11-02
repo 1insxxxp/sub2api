@@ -12,10 +12,12 @@ import lottery from './lottery'
 import manager from './manager'
 import modelStatus from './modelStatus'
 import userSupport from './userSupport'
+import modelProbes from './modelProbes'
 
 export default mergeMessages({
   adminAccessKeys,
   userSupport,
+  modelProbes,
   ...landing,
   ...common,
   ...dashboard,

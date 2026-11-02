@@ -6,8 +6,8 @@
           data-test="admin-workbench-tabs"
           role="tablist"
           :aria-label="t('adminWorkbench.tabs.label')"
-          class="workbench-tabs grid min-w-0 sm:flex"
-          :class="workbenchTabs.length === 3 ? 'grid-cols-3' : workbenchTabs.length === 1 ? 'grid-cols-1' : 'grid-cols-2'"
+          class="workbench-tabs grid min-w-0 sm:flex sm:flex-wrap"
+          :class="workbenchTabs.length === 1 ? 'grid-cols-1' : workbenchTabs.length === 3 || workbenchTabs.length > 4 ? 'grid-cols-3' : 'grid-cols-2'"
         >
           <button
             v-for="tab in workbenchTabs"
@@ -76,6 +76,17 @@
       >
         <UserSupportPanel @access-denied="revokeUserSupport" />
       </section>
+
+      <section
+        v-if="activeTab === 'model-probes' && canUseUserSupport"
+        id="workbench-panel-model-probes"
+        data-test="workbench-model-probes-panel"
+        role="tabpanel"
+        aria-labelledby="workbench-tab-model-probes"
+        class="min-w-0"
+      >
+        <ModelProbePanel @access-denied="revokeUserSupport" />
+      </section>
     </div>
   </AppLayout>
 </template>
@@ -92,6 +103,7 @@ import Icon from '@/components/icons/Icon.vue'
 import SubAdminCommissionPanel from '@/components/admin/workbench/SubAdminCommissionPanel.vue'
 import AdminAffiliateLeaderboardPanel from '@/components/admin/workbench/AdminAffiliateLeaderboardPanel.vue'
 import UserSupportPanel from '@/components/admin/workbench/UserSupportPanel.vue'
+import ModelProbePanel from '@/components/admin/workbench/ModelProbePanel.vue'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -103,10 +115,10 @@ const accessFailed = ref(false)
 const canUseUserSupport = computed(() => ['admin', 'sub_admin'].includes(auth.user?.role ?? '') && workbenchAccess.value?.user_support === true)
 let accessVersion = 0
 
-type WorkbenchTab = 'balance-transfer' | 'commission' | 'affiliate-leaderboard' | 'user-support'
+type WorkbenchTab = 'balance-transfer' | 'commission' | 'affiliate-leaderboard' | 'user-support' | 'model-probes'
 
 const activeTab = ref<WorkbenchTab>('commission')
-const workbenchTabs = computed<Array<{ id: WorkbenchTab; label: string; icon: 'gift' | 'chartBar' | 'users' }>>(() => [
+const workbenchTabs = computed<Array<{ id: WorkbenchTab; label: string; icon: 'gift' | 'chartBar' | 'users' | 'play' }>>(() => [
   ...(workbenchAccess.value?.commission ? [
   {
     id: 'commission',
@@ -125,7 +137,10 @@ const workbenchTabs = computed<Array<{ id: WorkbenchTab; label: string; icon: 'g
     label: t('adminWorkbench.tabs.affiliateLeaderboard'),
     icon: 'users'
   } as const] : []),
-  ...(canUseUserSupport.value ? [{ id: 'user-support' as const, label: t('userSupport.title'), icon: 'users' as const }] : []),
+  ...(canUseUserSupport.value ? [
+    { id: 'user-support' as const, label: t('userSupport.title'), icon: 'users' as const },
+    { id: 'model-probes' as const, label: t('modelProbes.title'), icon: 'play' as const },
+  ] : []),
 ])
 const workbenchTabIds = computed(() => workbenchTabs.value.map(tab => tab.id))
 

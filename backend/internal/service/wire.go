@@ -942,6 +942,7 @@ func ProvideImageStorageSettingService(
 // ProviderSet is the Wire provider set for all services
 var ProviderSet = wire.NewSet(
 	NewUserSupportService,
+	ProvideModelProbeService,
 	NewAdminWorkbenchAccessService,
 	// Core services
 	ProvideAuthService,

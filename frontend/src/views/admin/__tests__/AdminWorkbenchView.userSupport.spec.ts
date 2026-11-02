@@ -19,6 +19,7 @@ const createView = () => mount(AdminWorkbenchView, { global: { stubs: {
   SubAdminCommissionPanel: { template: '<div data-test="commission" />' },
   BalanceTransferPanel: { setup() { const user = useAuthStore().user; const owner = `REDEEM-CODE-${user?.id}-${user?.role}`; balanceMounted(); return () => h('div', [h('span', { 'data-test': 'cached-balance-owner' }, owner)]) } }, AdminAffiliateLeaderboardPanel: true,
   UserSupportPanel: { template: '<div data-test="support-panel" />' },
+  ModelProbePanel: { name: 'ModelProbePanel', template: '<div data-test="probe-panel" />' },
 } } })
 beforeEach(() => { state.id = 7; state.token = 'session-one'; state.role = 'sub_admin'; state.enabled = false; route.query = {}; route.fullPath = '/admin/workbench'; vi.clearAllMocks(); refresh.mockResolvedValue(false); getWorkbenchAccess.mockImplementation(async () => ({ commission: state.role === 'admin', affiliate_leaderboard: state.role === 'admin', user_support: state.role === 'admin' || state.enabled, balance_transfer: true })) })
 
@@ -58,11 +59,11 @@ describe('User Support inside admin workbench', () => {
   it('keeps support-only staff out of earnings and ranking panels', async () => {
     state.enabled = true
     const view = createView(); await flushPromises()
-    expect(view.findAll('[role="tab"]').map(tab => tab.attributes('data-test'))).toEqual(['workbench-tab-balance-transfer', 'workbench-tab-user-support'])
+    expect(view.findAll('[role="tab"]').map(tab => tab.attributes('data-test'))).toEqual(['workbench-tab-balance-transfer', 'workbench-tab-user-support', 'workbench-tab-model-probes'])
     expect(view.find('[data-test="commission"]').exists()).toBe(false)
     await view.get('[data-test="workbench-tab-balance-transfer"]').trigger('keydown', { key: 'End' })
     await flushPromises()
-    expect(view.get('[data-test="workbench-tab-user-support"]').attributes('aria-selected')).toBe('true')
+    expect(view.get('[data-test="workbench-tab-model-probes"]').attributes('aria-selected')).toBe('true')
     view.unmount()
   })
 
@@ -97,5 +98,26 @@ describe('User Support inside admin workbench', () => {
     expect(view.find('[data-test="workbench-tab-user-support"]').exists()).toBe(false)
     expect(view.find('[data-test="support-panel"]').exists()).toBe(false)
     view.unmount()
+  })
+})
+
+
+describe('Model probes share user support capability', () => {
+  it('removes both support-powered tabs when probe access is revoked', async () => {
+    state.enabled = true; route.query = { tab: 'model-probes' }
+    const view = createView(); await flushPromises()
+    view.getComponent({ name: 'ModelProbePanel' }).vm.$emit('access-denied')
+    await flushPromises()
+    expect(view.find('[data-test="workbench-tab-model-probes"]').exists()).toBe(false)
+    expect(view.find('[data-test="workbench-tab-user-support"]').exists()).toBe(false)
+    expect(view.find('[data-test="probe-panel"]').exists()).toBe(false)
+    view.unmount()
+  })
+  it('opens the model probe tab only with the existing support grant', async () => {
+    route.query = { tab: 'model-probes' }
+    const denied = createView(); await flushPromises(); expect(denied.find('[data-test="workbench-tab-model-probes"]').exists()).toBe(false); denied.unmount()
+    state.enabled = true
+    const allowed = createView(); await flushPromises(); expect(allowed.find('[data-test="probe-panel"]').exists()).toBe(true)
+    expect(allowed.get('[data-test="workbench-tab-model-probes"]').attributes('aria-selected')).toBe('true'); allowed.unmount()
   })
 })
