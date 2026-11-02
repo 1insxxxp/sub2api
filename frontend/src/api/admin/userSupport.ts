@@ -30,11 +30,21 @@ export interface SupportErrorRecord {
   status_code: number | null
   error_kind: SupportErrorKind
   category: SupportErrorCategory
+  original_message: string
+}
+
+export interface SupportSearchItem { id: number; email: string }
+export interface SupportSearchResult { items: SupportSearchItem[] }
+export interface SupportUser { id: number; email: string; balance: number }
+export interface SupportTrial { status: 'eligible' | 'granted' | 'already_received'; amount: number; granted_at: string; legacy: boolean }
+export interface SupportGrantResult {
+  user: SupportUser
+  trial: Omit<SupportTrial, 'status'> & { status: 'granted' | 'already_received' }
 }
 
 export interface UserSupportResult {
-  user: { id: number; email: string; balance: number }
-  trial: { status: 'granted' | 'already_received'; amount: number; granted_at: string; legacy: boolean }
+  user: SupportUser
+  trial: SupportTrial
   usage: { status: 'ok' | 'unavailable'; items: SupportUsageRecord[] }
   errors: { status: 'ok' | 'unavailable'; items: SupportErrorRecord[] }
 }
@@ -61,6 +71,16 @@ export async function setUserWorkbenchAccess(userID: number, permissions: Workbe
 
 export async function lookup(account: string): Promise<UserSupportResult> {
   const { data } = await apiClient.post<UserSupportResult>('/admin/user-support/lookup', { account })
+  return data
+}
+
+export async function search(query: string): Promise<SupportSearchResult> {
+  const { data } = await apiClient.post<SupportSearchResult>('/admin/user-support/search', { query })
+  return data
+}
+
+export async function grant(userID: number): Promise<SupportGrantResult> {
+  const { data } = await apiClient.post<SupportGrantResult>('/admin/user-support/grant', { user_id: userID })
   return data
 }
 

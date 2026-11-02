@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 )
 
 const UserSupportTrialAmount = 15
@@ -24,6 +25,10 @@ type UserSupportUser struct {
 	ID      int64   `json:"id"`
 	Email   string  `json:"email"`
 	Balance float64 `json:"balance"`
+}
+type UserSupportSuggestion struct {
+	ID    int64  `json:"id"`
+	Email string `json:"email"`
 }
 type UserSupportTrial struct {
 	Status    string    `json:"status"`
@@ -50,13 +55,14 @@ type UserSupportUsageRecord struct {
 	Stream          bool      `json:"stream"`
 }
 type UserSupportErrorRecord struct {
-	ID         int64     `json:"id"`
-	CreatedAt  time.Time `json:"created_at"`
-	Model      string    `json:"model"`
-	GroupName  string    `json:"group_name"`
-	StatusCode *int64    `json:"status_code"`
-	ErrorKind  string    `json:"error_kind"`
-	Category   string    `json:"category"`
+	ID              int64     `json:"id"`
+	CreatedAt       time.Time `json:"created_at"`
+	Model           string    `json:"model"`
+	GroupName       string    `json:"group_name"`
+	StatusCode      *int64    `json:"status_code"`
+	ErrorKind       string    `json:"error_kind"`
+	Category        string    `json:"category"`
+	OriginalMessage string    `json:"original_message"`
 }
 type UserSupportUsagePanel struct {
 	Status string                   `json:"status"`
@@ -77,6 +83,8 @@ type UserSupportRepository interface {
 	CanAccess(context.Context, int64) (bool, error)
 	GetAccess(context.Context, int64, int64) (bool, error)
 	SetAccess(context.Context, int64, int64, bool) error
+	Search(context.Context, int64, string) ([]UserSupportSuggestion, error)
+	Lookup(context.Context, int64, string) (*UserSupportGrantResult, error)
 	LookupAndGrant(context.Context, int64, string) (*UserSupportGrantResult, error)
 	ListUsage(context.Context, int64) ([]UserSupportUsageRecord, error)
 	ListErrors(context.Context, int64) ([]UserSupportErrorRecord, error)
@@ -122,19 +130,82 @@ func (s *UserSupportService) SetAccess(ctx context.Context, actorID, targetID in
 	}
 	return safeUserSupportError(s.repo.SetAccess(ctx, actorID, targetID, enabled))
 }
-func (s *UserSupportService) Lookup(ctx context.Context, actorID int64, account string) (*UserSupportResult, error) {
+func (s *UserSupportService) requireSupportAccess(ctx context.Context, actorID int64) error {
 	ok, err := s.CanAccess(ctx, actorID)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if !ok {
-		return nil, ErrUserSupportForbidden
+		return ErrUserSupportForbidden
+	}
+	return nil
+}
+
+// Search is a bounded identity-only read. It never checks out or consumes a
+// trial grant, and never changes either balance or authentication caches.
+func (s *UserSupportService) Search(ctx context.Context, actorID int64, query string) ([]UserSupportSuggestion, error) {
+	if err := s.requireSupportAccess(ctx, actorID); err != nil {
+		return nil, err
+	}
+	query = strings.TrimSpace(query)
+	if query == "" || len(query) > 254 || strings.IndexFunc(query, unicode.IsControl) >= 0 {
+		return nil, ErrUserSupportInvalidAccount
+	}
+	rows, err := s.repo.Search(ctx, actorID, query)
+	if err != nil {
+		return nil, safeUserSupportError(err)
+	}
+	items := make([]UserSupportSuggestion, 0, min(len(rows), 8))
+	for _, row := range rows {
+		if row.ID <= 0 || !strings.Contains(row.Email, "@") || !validUserSupportAccount(row.Email) {
+			continue
+		}
+		items = append(items, row)
+		if len(items) == 8 {
+			break
+		}
+	}
+	return items, nil
+}
+
+// Grant is the sole financial entry point. The displayed lookup snapshot is
+// advisory: the original repository transaction rechecks eligibility and access.
+func (s *UserSupportService) Grant(ctx context.Context, actorID, userID int64) (*UserSupportGrantResult, error) {
+	if err := s.requireSupportAccess(ctx, actorID); err != nil {
+		return nil, err
+	}
+	if userID <= 0 {
+		return nil, ErrUserSupportInvalidAccount
+	}
+	grant, err := s.repo.LookupAndGrant(ctx, actorID, strconv.FormatInt(userID, 10))
+	if err != nil {
+		return nil, safeUserSupportError(err)
+	}
+	if grant == nil {
+		return nil, ErrUserSupportUnavailable
+	}
+	// Also invalidate on replay: a previous process may have committed the grant
+	// and exited before invalidation. Never report a committed credit as failed.
+	cacheCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	if s.authCache != nil {
+		s.authCache.InvalidateAuthCacheByUserID(cacheCtx, grant.User.ID)
+	}
+	if s.billingCache != nil {
+		_ = s.billingCache.InvalidateUserBalance(cacheCtx, grant.User.ID)
+	}
+	return grant, nil
+}
+
+func (s *UserSupportService) Lookup(ctx context.Context, actorID int64, account string) (*UserSupportResult, error) {
+	if err := s.requireSupportAccess(ctx, actorID); err != nil {
+		return nil, err
 	}
 	account = strings.TrimSpace(account)
 	if !validUserSupportAccount(account) {
 		return nil, ErrUserSupportInvalidAccount
 	}
-	grant, err := s.repo.LookupAndGrant(ctx, actorID, account)
+	grant, err := s.repo.Lookup(ctx, actorID, account)
 	if err != nil {
 		return nil, safeUserSupportError(err)
 	}
@@ -142,16 +213,6 @@ func (s *UserSupportService) Lookup(ctx context.Context, actorID int64, account 
 		return nil, ErrUserSupportUnavailable
 	}
 
-	// Also invalidate on replay: a previous process may have committed the grant
-	// and exited before invalidation. Never report a committed credit as failed.
-	cacheCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-	if s.authCache != nil {
-		s.authCache.InvalidateAuthCacheByUserID(cacheCtx, grant.User.ID)
-	}
-	if s.billingCache != nil {
-		_ = s.billingCache.InvalidateUserBalance(cacheCtx, grant.User.ID)
-	}
-	cancel()
 	result := &UserSupportResult{User: grant.User, Trial: grant.Trial,
 		Usage:  UserSupportUsagePanel{Status: "unavailable", Items: []UserSupportUsageRecord{}},
 		Errors: UserSupportErrorPanel{Status: "unavailable", Items: []UserSupportErrorRecord{}}}
@@ -160,6 +221,7 @@ func (s *UserSupportService) Lookup(ctx context.Context, actorID int64, account 
 		for i := 0; i < len(rows) && i < 10; i++ {
 			row := rows[i]
 			row.Model = PublicUserSupportModel(row.Model)
+			row.GroupName = PublicUserSupportGroupName(row.GroupName)
 			switch row.Status {
 			case "completed", "interrupted", "failed", "empty":
 			default:
@@ -173,7 +235,9 @@ func (s *UserSupportService) Lookup(ctx context.Context, actorID int64, account 
 		for i := 0; i < len(rows) && i < 10; i++ {
 			row := rows[i]
 			row.Model = PublicUserSupportModel(row.Model)
+			row.GroupName = PublicUserSupportGroupName(row.GroupName)
 			row.ErrorKind = PublicUserSupportErrorKind(row.ErrorKind)
+			row.OriginalMessage = PublicUserSupportOriginalMessage(row.OriginalMessage, "")
 			if row.StatusCode != nil && (*row.StatusCode < 100 || *row.StatusCode > 599) {
 				row.StatusCode = nil
 			}

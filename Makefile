@@ -36,7 +36,12 @@ FRONTEND_CRITICAL_VITEST := \
 	src/features/channel-monitor-v2/__tests__/designSystem.structure.spec.ts \
 	src/features/channel-monitor-v2/__tests__/monitorFormat.spec.ts \
 	src/features/channel-monitor-v2/__tests__/monitorZoom.spec.ts \
-	src/components/admin/channel/__tests__/PricingEntryCard.modelDefaultPrice.spec.ts
+	src/components/admin/channel/__tests__/PricingEntryCard.modelDefaultPrice.spec.ts \
+	src/api/__tests__/admin.userSupport.spec.ts \
+	src/components/admin/workbench/__tests__/UserSupportPanel.spec.ts \
+	src/components/admin/workbench/__tests__/UserSupportPanel.mobile.spec.ts \
+	src/views/admin/__tests__/AdminWorkbenchView.userSupport.spec.ts \
+	src/router/__tests__/feature-access.spec.ts
 
 # 一键编译前后端
 build: build-backend build-frontend

@@ -3,6 +3,9 @@ import { resolve } from 'path'
 import vue from '@vitejs/plugin-vue'
 
 export default defineConfig({
+  define: {
+    __INTLIFY_JIT_COMPILATION__: true
+  },
   plugins: [vue()],
   resolve: {
     alias: {

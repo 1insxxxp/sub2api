@@ -294,3 +294,135 @@ func TestUserSupportAmbiguousLegacyEmailNeverCreditsEitherUser(t *testing.T) {
 	require.Equal(t, secondID, got.User.ID)
 	t.Cleanup(func() { _, _ = integrationDB.Exec("DELETE FROM support_trial_grants WHERE user_id=$1", secondID) })
 }
+
+func TestUserSupportReadsLeaveTrialEligibleUntilExplicitGrant(t *testing.T) {
+	ctx := context.Background()
+	admin := supportUser(t, service.RoleAdmin, 0)
+	target := supportUser(t, service.RoleUser, 7)
+	r := NewUserSupportRepository(integrationDB)
+	for i := 0; i < 3; i++ {
+		suggestions, err := r.Search(ctx, admin.ID, target.Email)
+		require.NoError(t, err)
+		require.Equal(t, []service.UserSupportSuggestion{{ID: target.ID, Email: target.Email}}, suggestions)
+		got, err := r.Lookup(ctx, admin.ID, target.Email)
+		require.NoError(t, err)
+		require.Equal(t, float64(7), got.User.Balance)
+		require.Equal(t, "eligible", got.Trial.Status)
+	}
+	var balance, gift float64
+	var claims, codes int
+	require.NoError(t, integrationDB.QueryRow(`SELECT balance,gift_balance FROM users WHERE id=$1`, target.ID).Scan(&balance, &gift))
+	require.Equal(t, float64(7), balance)
+	require.Zero(t, gift)
+	require.NoError(t, integrationDB.QueryRow(`SELECT COUNT(*) FROM support_trial_grants WHERE user_id=$1`, target.ID).Scan(&claims))
+	require.NoError(t, integrationDB.QueryRow(`SELECT COUNT(*) FROM redeem_codes WHERE used_by=$1`, target.ID).Scan(&codes))
+	require.Zero(t, claims)
+	require.Zero(t, codes)
+
+	granted, err := r.LookupAndGrant(ctx, admin.ID, strconv.FormatInt(target.ID, 10))
+	require.NoError(t, err)
+	require.Equal(t, "granted", granted.Trial.Status)
+	require.Equal(t, float64(22), granted.User.Balance)
+	lookedUp, err := r.Lookup(ctx, admin.ID, target.Email)
+	require.NoError(t, err)
+	require.Equal(t, "already_received", lookedUp.Trial.Status)
+	require.Equal(t, float64(22), lookedUp.User.Balance)
+	replayed, err := r.LookupAndGrant(ctx, admin.ID, strconv.FormatInt(target.ID, 10))
+	require.NoError(t, err)
+	require.Equal(t, "already_received", replayed.Trial.Status)
+	require.Equal(t, float64(22), replayed.User.Balance)
+}
+
+func TestUserSupportReadOnlyLegacyRecognitionDoesNotMaterializeClaim(t *testing.T) {
+	ctx := context.Background()
+	admin := supportUser(t, service.RoleAdmin, 0)
+	target := supportUser(t, service.RoleUser, 19)
+	_, err := integrationDB.Exec(`INSERT INTO redeem_codes(code,type,value,status,used_by,used_at,created_at) VALUES($1,'admin_balance',15,'used',$2,NOW(),NOW())`, uuid.NewString()[:30], target.ID)
+	require.NoError(t, err)
+	r := NewUserSupportRepository(integrationDB)
+	got, err := r.Lookup(ctx, admin.ID, target.Email)
+	require.NoError(t, err)
+	require.Equal(t, "already_received", got.Trial.Status)
+	require.True(t, got.Trial.Legacy)
+	require.Equal(t, float64(19), got.User.Balance)
+	var claims int
+	require.NoError(t, integrationDB.QueryRow(`SELECT COUNT(*) FROM support_trial_grants WHERE user_id=$1`, target.ID).Scan(&claims))
+	require.Zero(t, claims, "recognizing historical credit during lookup must remain read-only")
+}
+
+func TestUserSupportSuggestionsAreLiteralBoundedActiveAndFreshlyAuthorized(t *testing.T) {
+	ctx := context.Background()
+	admin := supportUser(t, service.RoleAdmin, 0)
+	staff := supportUser(t, service.RoleSubAdmin, 0)
+	r := NewUserSupportRepository(integrationDB)
+	require.NoError(t, r.SetAccess(ctx, admin.ID, staff.ID, true))
+	prefix := "suggest-" + uuid.NewString()
+	var visibleIDs []int64
+	for i := 0; i < 11; i++ {
+		u := supportUser(t, service.RoleUser, 0)
+		_, err := integrationDB.Exec(`UPDATE users SET email=$1 WHERE id=$2`, fmt.Sprintf("%s-%%_-%02d@example.com", prefix, i), u.ID)
+		require.NoError(t, err)
+		if i == 9 {
+			_, err = integrationDB.Exec(`UPDATE users SET status='disabled' WHERE id=$1`, u.ID)
+			require.NoError(t, err)
+		} else if i == 10 {
+			_, err = integrationDB.Exec(`UPDATE users SET deleted_at=NOW() WHERE id=$1`, u.ID)
+			require.NoError(t, err)
+		} else {
+			visibleIDs = append(visibleIDs, u.ID)
+		}
+	}
+	decoy := supportUser(t, service.RoleUser, 0)
+	_, err := integrationDB.Exec(`UPDATE users SET email=$1 WHERE id=$2`, prefix+"-XY-00@example.com", decoy.ID)
+	require.NoError(t, err)
+	rows, err := r.Search(ctx, staff.ID, strings.ToUpper(prefix)+"-%_")
+	require.NoError(t, err)
+	require.Len(t, rows, 8)
+	for _, row := range rows {
+		require.Contains(t, visibleIDs, row.ID)
+		require.Contains(t, row.Email, "-%_-")
+	}
+	rows, err = r.Search(ctx, staff.ID, strconv.FormatInt(decoy.ID, 10))
+	require.NoError(t, err)
+	require.Contains(t, rows, service.UserSupportSuggestion{ID: decoy.ID, Email: prefix + "-XY-00@example.com"})
+	require.Equal(t, decoy.ID, rows[0].ID, "an ID match must precede email substring matches that could fill the eight suggestions")
+	require.NoError(t, r.SetAccess(ctx, admin.ID, staff.ID, false))
+	_, err = r.Search(ctx, staff.ID, prefix)
+	require.ErrorIs(t, err, service.ErrUserSupportForbidden)
+	_, err = r.Lookup(ctx, staff.ID, decoy.Email)
+	require.ErrorIs(t, err, service.ErrUserSupportForbidden)
+}
+
+func TestUserSupportExplicitGrantRechecksRevocationAfterWalletWait(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	admin := supportUser(t, service.RoleAdmin, 0)
+	staff := supportUser(t, service.RoleSubAdmin, 0)
+	target := supportUser(t, service.RoleUser, 7)
+	r := NewUserSupportRepository(integrationDB)
+	require.NoError(t, r.SetAccess(ctx, admin.ID, staff.ID, true))
+	lock, err := integrationDB.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	defer func() { _ = lock.Rollback() }()
+	var lockedID, blockerPID int64
+	require.NoError(t, lock.QueryRowContext(ctx, `SELECT id,pg_backend_pid() FROM users WHERE id=$1 FOR UPDATE`, target.ID).Scan(&lockedID, &blockerPID))
+	finished := make(chan error, 1)
+	go func() {
+		_, err := r.LookupAndGrant(ctx, staff.ID, strconv.FormatInt(target.ID, 10))
+		finished <- err
+	}()
+	require.Eventually(t, func() bool {
+		var waiting bool
+		err := integrationDB.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE $1=ANY(pg_blocking_pids(pid)))`, blockerPID).Scan(&waiting)
+		return err == nil && waiting
+	}, 3*time.Second, 10*time.Millisecond, "the explicit grant must be waiting for the target wallet before revocation")
+	require.NoError(t, r.SetAccess(ctx, admin.ID, staff.ID, false))
+	require.NoError(t, lock.Commit())
+	require.ErrorIs(t, <-finished, service.ErrUserSupportForbidden)
+	var balance float64
+	var claims int
+	require.NoError(t, integrationDB.QueryRow(`SELECT balance FROM users WHERE id=$1`, target.ID).Scan(&balance))
+	require.Equal(t, float64(7), balance)
+	require.NoError(t, integrationDB.QueryRow(`SELECT COUNT(*) FROM support_trial_grants WHERE user_id=$1`, target.ID).Scan(&claims))
+	require.Zero(t, claims)
+}

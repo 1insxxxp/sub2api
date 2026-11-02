@@ -20,6 +20,8 @@ type userSupportService interface {
 	GetAccess(context.Context, int64, int64) (bool, error)
 	SetAccess(context.Context, int64, int64, bool) error
 	Lookup(context.Context, int64, string) (*service.UserSupportResult, error)
+	Search(context.Context, int64, string) ([]service.UserSupportSuggestion, error)
+	Grant(context.Context, int64, int64) (*service.UserSupportGrantResult, error)
 }
 
 // UserSupportHandler exposes a narrow, privacy-safe support capability.
@@ -96,18 +98,83 @@ func (h *UserSupportHandler) GetMyAccess(c *gin.Context) {
 	response.Success(c, gin.H{"enabled": enabled})
 }
 
-func (h *UserSupportHandler) Lookup(c *gin.Context) {
+func (h *UserSupportHandler) supportActor(c *gin.Context) (int64, bool) {
 	actor, ok := h.actor(c, false)
 	if !ok {
-		return
+		return 0, false
 	}
 	allowed, err := h.service.CanAccess(c.Request.Context(), actor)
 	if err != nil {
 		supportError(c, err)
-		return
+		return 0, false
 	}
 	if !allowed {
 		supportError(c, service.ErrUserSupportForbidden)
+		return 0, false
+	}
+	return actor, true
+}
+
+func (h *UserSupportHandler) Search(c *gin.Context) {
+	actor, ok := h.supportActor(c)
+	if !ok {
+		return
+	}
+	var req struct {
+		Query string `json:"query"`
+	}
+	if !supportDecode(c, &req) {
+		return
+	}
+	req.Query = strings.TrimSpace(req.Query)
+	if req.Query == "" || len(req.Query) > 254 {
+		supportError(c, service.ErrUserSupportInvalidAccount)
+		return
+	}
+	middleware.SetAuditAction(c, "admin.user_support.search")
+	items, err := h.service.Search(c.Request.Context(), actor, req.Query)
+	if err != nil {
+		supportError(c, err)
+		return
+	}
+	if items == nil {
+		items = []service.UserSupportSuggestion{}
+	}
+	response.Success(c, gin.H{"items": items})
+}
+
+func (h *UserSupportHandler) Grant(c *gin.Context) {
+	actor, ok := h.supportActor(c)
+	if !ok {
+		return
+	}
+	var req struct {
+		UserID *int64 `json:"user_id"`
+	}
+	if !supportDecode(c, &req) {
+		return
+	}
+	if req.UserID == nil || *req.UserID <= 0 {
+		supportError(c, service.ErrUserSupportInvalidAccount)
+		return
+	}
+	middleware.SetAuditAction(c, "admin.user_support.trial.grant")
+	result, err := h.service.Grant(c.Request.Context(), actor, *req.UserID)
+	if err != nil {
+		supportError(c, err)
+		return
+	}
+	if result == nil {
+		supportError(c, service.ErrUserSupportUnavailable)
+		return
+	}
+	middleware.SetAuditExtra(c, map[string]any{"user_id": result.User.ID, "status": result.Trial.Status, "amount": result.Trial.Amount})
+	response.Success(c, result)
+}
+
+func (h *UserSupportHandler) Lookup(c *gin.Context) {
+	actor, ok := h.supportActor(c)
+	if !ok {
 		return
 	}
 	var req struct {

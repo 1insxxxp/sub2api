@@ -30,6 +30,12 @@ func (s *supportRouteRepo) LookupAndGrant(context.Context, int64, string) (*serv
 	s.grants++
 	return &service.UserSupportGrantResult{User: service.UserSupportUser{ID: 12, Email: "customer@example.com", Balance: 15}, Trial: service.UserSupportTrial{Status: "granted", Amount: 15}}, nil
 }
+func (s *supportRouteRepo) Lookup(context.Context, int64, string) (*service.UserSupportGrantResult, error) {
+	return &service.UserSupportGrantResult{User: service.UserSupportUser{ID: 12, Email: "customer@example.com"}, Trial: service.UserSupportTrial{Status: "eligible", Amount: 15}}, nil
+}
+func (s *supportRouteRepo) Search(context.Context, int64, string) ([]service.UserSupportSuggestion, error) {
+	return []service.UserSupportSuggestion{{ID: 12, Email: "customer@example.com"}}, nil
+}
 func (s *supportRouteRepo) ListUsage(context.Context, int64) ([]service.UserSupportUsageRecord, error) {
 	return nil, nil
 }
@@ -57,9 +63,13 @@ func TestUserSupportRoutesRequireAdminRoleAndIndependentCapability(t *testing.T)
 	})
 	RegisterAdminRoutes(v1, h, middleware.AdminAuthMiddleware(deny), middleware.AdminWorkbenchAuthMiddleware(deny), middleware.AuditLogMiddleware(noop), middleware.StepUpAuthMiddleware(noop), nil, nil)
 	RegisterUserSupportRoutes(v1, h, jwt, middleware.AuditLogMiddleware(noop), nil, nil)
-	request := func(method, path, token string) *httptest.ResponseRecorder {
+	request := func(method, path, token string, bodies ...string) *httptest.ResponseRecorder {
 		w := httptest.NewRecorder()
-		req := httptest.NewRequest(method, path, strings.NewReader(`{"account":"12"}`))
+		body := `{"account":"12"}`
+		if len(bodies) > 0 {
+			body = bodies[0]
+		}
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
 		req.Header.Set("Authorization", token)
 		req.Header.Set("Content-Type", "application/json")
 		r.ServeHTTP(w, req)
@@ -73,11 +83,17 @@ func TestUserSupportRoutesRequireAdminRoleAndIndependentCapability(t *testing.T)
 	require.Zero(t, repo.grants)
 	role = service.RoleSubAdmin
 	require.Equal(t, 200, request("POST", "/api/v1/admin/user-support/lookup", "Bearer fixture").Code)
+	require.Zero(t, repo.grants, "looking up a customer must not send credit")
+	require.Equal(t, 200, request("POST", "/api/v1/admin/user-support/search", "Bearer fixture", `{"query":"customer"}`).Code)
+	require.Zero(t, repo.grants)
+	require.Equal(t, 200, request("POST", "/api/v1/admin/user-support/grant", "Bearer fixture", `{"user_id":12}`).Code)
 	require.Equal(t, 1, repo.grants)
 	for _, path := range []string{"/api/v1/admin/users", "/api/v1/admin/workbench/redeem/generated", "/api/v1/admin/users/8/support-access"} {
 		require.Equal(t, 403, request("GET", path, "Bearer fixture").Code, path)
 	}
 	repo.enabled = false
 	require.Equal(t, 403, request("POST", "/api/v1/admin/user-support/lookup", "Bearer fixture").Code)
+	require.Equal(t, 403, request("POST", "/api/v1/admin/user-support/search", "Bearer fixture", `{"query":"customer"}`).Code)
+	require.Equal(t, 403, request("POST", "/api/v1/admin/user-support/grant", "Bearer fixture", `{"user_id":12}`).Code)
 	require.Equal(t, 1, repo.grants)
 }

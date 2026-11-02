@@ -58,3 +58,17 @@ func TestUserSupportErrorMetadataIsBoundedAndPublic(t *testing.T) {
 		}
 	}
 }
+
+func TestUserSupportErrorsKeepRequestScopedOriginalReason(t *testing.T) {
+	u := supportUser(t, service.RoleUser, 0)
+	_, err := integrationDB.Exec(`INSERT INTO ops_error_logs
+	(user_id,error_phase,error_type,status_code,requested_model,error_message,upstream_error_message)
+	VALUES($1,'request','content_filter',400,'gemini-3.8-flash',$2,$3)`,
+		u.ID, "Gemini rejected prompt: PROHIBITED_CONTENT", "Provider temporarily unavailable")
+	require.NoError(t, err)
+	rows, err := NewUserSupportRepository(integrationDB).ListErrors(context.Background(), u.ID)
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	require.Contains(t, rows[0].OriginalMessage, "PROHIBITED_CONTENT")
+	require.NotContains(t, rows[0].OriginalMessage, "temporarily unavailable", "a provider diagnostic must not replace this request's rejection reason")
+}

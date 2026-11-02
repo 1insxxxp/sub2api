@@ -20,5 +20,7 @@ func RegisterUserSupportRoutes(v1 *gin.RouterGroup, h *handler.Handlers, jwtAuth
 	support.Use(gin.HandlerFunc(audit))
 	support.Use(middleware.AdminComplianceGuard(settingService))
 	support.GET("/access", h.Admin.UserSupport.GetMyAccess)
+	support.POST("/search", h.Admin.UserSupport.Search)
 	support.POST("/lookup", h.Admin.UserSupport.Lookup)
+	support.POST("/grant", h.Admin.UserSupport.Grant)
 }

@@ -166,7 +166,7 @@ func newGeminiCountFallbackFixture(t *testing.T, response string) (*GatewayServi
 }
 
 func TestGeminiFallbackInput_RemoteCountIsBoundedSingleRequestAndClearsSnapshot(t *testing.T) {
-	for _, measured := range []int{0, 21916} {
+	for _, measured := range []int{21916} {
 		raw, _ := json.Marshal(map[string]int{"totalTokens": measured})
 		svc, input, upstream := newGeminiCountFallbackFixture(t, string(raw))
 		ctx, cancel := context.WithCancel(context.Background())
@@ -184,6 +184,43 @@ func TestGeminiFallbackInput_RemoteCountIsBoundedSingleRequestAndClearsSnapshot(
 		_, hasDeadline := upstream.lastReq.Context().Deadline()
 		require.True(t, hasDeadline)
 		require.Zero(t, input.Result.Usage.InputTokens, "caller decides estimation policy; this helper does not bill or mark actual usage")
+	}
+}
+
+func TestGeminiFallbackInput_ZeroCountRequiresEmptySemantics(t *testing.T) {
+	for _, tc := range []struct {
+		name, body string
+		nonempty   bool
+	}{
+		{"text", geminiFallbackInputBody, true},
+		{"system_only", `{"systemInstruction":{"parts":[{"text":"Be precise."}]}}`, true},
+		{"tools", `{"tools":[{"functionDeclarations":[{"name":"lookup","parameters":{"type":"OBJECT"}}]}]}`, true},
+		{"schema", `{"generationConfig":{"responseSchema":{"type":"OBJECT","properties":{"answer":{"type":"STRING"}}}}}`, true},
+		{"function_call", `{"contents":[{"role":"model","parts":[{"functionCall":{"name":"lookup","args":{"query":"hello"}}}]}]}`, true},
+		{"function_response", `{"contents":[{"role":"user","parts":[{"functionResponse":{"name":"lookup","response":{"answer":"hello"}}}]}]}`, true},
+		{"text_with_media", `{"contents":[{"parts":[{"text":"Describe this."},{"inlineData":{"mimeType":"image/png","data":"AAAA"}}]}]}`, true},
+		{"empty_text", `{"contents":[{"parts":[{"text":""}]}]}`, false},
+		{"opaque_only", `{"contents":[{"parts":[{"thoughtSignature":"opaque"},{"inlineData":{"mimeType":"image/png","data":"AAAA"}}]}]}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			svc, input, upstream := newGeminiCountFallbackFixture(t, `{"totalTokens":0}`)
+			fallback := prepareGeminiInputUsageFallback(newGeminiFallbackInputRequest(t, geminiFallbackInputURL, tc.body), input.Account.ID, geminiInputUsageRegressionModel)
+			require.True(t, fallback.Known)
+			require.Positive(t, fallback.Tokens, "structural overhead alone must not make a zero count contradictory")
+			input.Result.GeminiUsageFallback.Input = fallback
+			tokens, ok, err := svc.CountGeminiInputFallback(context.Background(), input)
+			require.Zero(t, tokens)
+			if tc.nonempty {
+				require.ErrorIs(t, err, ErrGeminiInputCountUnavailable)
+				require.False(t, ok, "a secondary zero count must not hide known semantic input")
+			} else {
+				require.NoError(t, err)
+				require.True(t, ok, "empty semantics may legitimately count as zero")
+			}
+			require.Len(t, upstream.requests, 1)
+			require.Nil(t, fallback.CountRequest)
+			require.Zero(t, input.Result.Usage.InputTokens, "count validation has no financial side effects")
+		})
 	}
 }
 

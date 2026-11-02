@@ -30,6 +30,110 @@ func (r *userSupportRepository) CanAccess(ctx context.Context, actorID int64) (b
 	return allowed, err
 }
 
+func (r *userSupportRepository) Search(ctx context.Context, actorID int64, query string) ([]service.UserSupportSuggestion, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if err := r.checkReadAccess(ctx, actorID); err != nil {
+		return nil, err
+	}
+	query = strings.TrimSpace(query)
+	if query == "" || len(query) > 254 || strings.ContainsAny(query, "\r\n\x00") {
+		return nil, service.ErrUserSupportInvalidAccount
+	}
+	escaped := escapeLikeWildcards(strings.ToLower(query))
+	rows, err := r.db.QueryContext(ctx, `SELECT u.id,u.email FROM users u WHERE u.deleted_at IS NULL AND u.status='active'
+	AND (LOWER(TRIM(u.email)) LIKE $1 ESCAPE '\' OR u.id::text LIKE $2 ESCAPE '\')
+	ORDER BY (u.id::text LIKE $2 ESCAPE '\') DESC,u.id ASC LIMIT 8`, "%"+escaped+"%", escaped+"%")
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	result := make([]service.UserSupportSuggestion, 0, 8)
+	for rows.Next() {
+		var item service.UserSupportSuggestion
+		if err = rows.Scan(&item.ID, &item.Email); err != nil {
+			return nil, err
+		}
+		result = append(result, item)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	if err = r.checkReadAccess(ctx, actorID); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (r *userSupportRepository) Lookup(ctx context.Context, actorID int64, account string) (*service.UserSupportGrantResult, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if err := r.checkReadAccess(ctx, actorID); err != nil {
+		return nil, err
+	}
+	account = strings.TrimSpace(account)
+	if account == "" || len(account) > 254 || strings.ContainsAny(account, "\r\n\x00") {
+		return nil, service.ErrUserSupportInvalidAccount
+	}
+	result := &service.UserSupportGrantResult{Trial: service.UserSupportTrial{Status: "eligible", Amount: service.UserSupportTrialAmount}}
+	var err error
+	if id, parseErr := strconv.ParseInt(account, 10, 64); parseErr == nil && id > 0 {
+		err = r.db.QueryRowContext(ctx, `SELECT id,email,balance FROM users WHERE id=$1 AND deleted_at IS NULL AND status='active'`, id).
+			Scan(&result.User.ID, &result.User.Email, &result.User.Balance)
+	} else {
+		var id int64
+		id, err = supportUniqueEmailID(ctx, r.db, account)
+		if err != nil {
+			return nil, err
+		}
+		// Revalidate the exact identity after disambiguation, without taking a
+		// wallet/advisory lock or changing eligibility during a support read.
+		err = r.db.QueryRowContext(ctx, `SELECT id,email,balance FROM users WHERE id=$1 AND LOWER(TRIM(email))=$2 AND deleted_at IS NULL AND status='active'`, id, normalizeEmailLookupValue(account)).
+			Scan(&result.User.ID, &result.User.Email, &result.User.Balance)
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, service.ErrUserSupportUserNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	err = r.db.QueryRowContext(ctx, `SELECT granted_at,legacy FROM support_trial_grants WHERE user_id=$1`, result.User.ID).
+		Scan(&result.Trial.GrantedAt, &result.Trial.Legacy)
+	if err == nil {
+		result.Trial.Status = "already_received"
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	} else {
+		var ledgerID int64
+		err = r.db.QueryRowContext(ctx, `SELECT id,COALESCE(used_at,created_at) FROM redeem_codes
+		WHERE used_by=$1 AND type='admin_balance' AND status='used' AND value=15 ORDER BY id ASC LIMIT 1`, result.User.ID).
+			Scan(&ledgerID, &result.Trial.GrantedAt)
+		if err == nil {
+			result.Trial.Status, result.Trial.Legacy = "already_received", true
+		} else if !errors.Is(err, sql.ErrNoRows) {
+			return nil, err
+		}
+	}
+	if err = r.checkReadAccess(ctx, actorID); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (r *userSupportRepository) checkReadAccess(ctx context.Context, actorID int64) error {
+	if actorID <= 0 {
+		return service.ErrUserSupportForbidden
+	}
+	allowed, err := r.CanAccess(ctx, actorID)
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		return service.ErrUserSupportForbidden
+	}
+	return nil
+}
+
 func (r *userSupportRepository) GetAccess(ctx context.Context, actorID, targetID int64) (bool, error) {
 	var main bool
 	if err := r.db.QueryRowContext(ctx, supportMainAdminSQL, actorID).Scan(&main); err != nil {
@@ -184,8 +288,12 @@ func (r *userSupportRepository) LookupAndGrant(ctx context.Context, actorID int6
 	return result, nil
 }
 
-func supportUniqueEmailID(ctx context.Context, tx *sql.Tx, account string) (int64, error) {
-	rows, err := tx.QueryContext(ctx, `SELECT id FROM users WHERE LOWER(TRIM(email))=$1 AND deleted_at IS NULL ORDER BY id LIMIT 2`, normalizeEmailLookupValue(account))
+type supportRowsQueryer interface {
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+}
+
+func supportUniqueEmailID(ctx context.Context, queryer supportRowsQueryer, account string) (int64, error) {
+	rows, err := queryer.QueryContext(ctx, `SELECT id FROM users WHERE LOWER(TRIM(email))=$1 AND deleted_at IS NULL ORDER BY id LIMIT 2`, normalizeEmailLookupValue(account))
 	if err != nil {
 		return 0, err
 	}
@@ -249,6 +357,7 @@ func (r *userSupportRepository) ListUsage(ctx context.Context, userID int64) ([]
 		item.DurationMs = supportInt64Pointer(duration)
 		item.FirstTokenMs = supportInt64Pointer(first)
 		item.Model = service.PublicUserSupportModel(item.Model)
+		item.GroupName = service.PublicUserSupportGroupName(item.GroupName)
 		item.Status = string(service.ClassifyUsageRequestStatus(&outcome))
 		result = append(result, item)
 	}
@@ -265,7 +374,8 @@ func (r *userSupportRepository) ListErrors(ctx context.Context, userID int64) ([
 	// its provider-preferred status/message/model projection.
 	where, args := buildOpsErrorLogsWhere(&service.OpsErrorLogFilter{UserID: &userID, View: "all", ExcludeCountTokens: true, ExcludeCanceledRequests: true})
 	rows, err := r.db.QueryContext(ctx, `SELECT e.id,e.created_at,COALESCE(e.requested_model,''),COALESCE(g.name,''),
-	CASE WHEN e.status_code BETWEEN 100 AND 599 THEN e.status_code ELSE NULL END,e.error_phase,e.error_type
+	CASE WHEN e.status_code BETWEEN 100 AND 599 THEN e.status_code ELSE NULL END,e.error_phase,e.error_type,
+	COALESCE(e.error_message,''),COALESCE(e.upstream_error_message,'')
 	FROM ops_error_logs e LEFT JOIN groups g ON g.id=e.group_id `+where+` ORDER BY e.created_at DESC,e.id DESC LIMIT 10`, args...)
 	if err != nil {
 		return nil, err
@@ -275,14 +385,16 @@ func (r *userSupportRepository) ListErrors(ctx context.Context, userID int64) ([
 	for rows.Next() {
 		var item service.UserSupportErrorRecord
 		var status sql.NullInt64
-		var phase, kind string
-		if err = rows.Scan(&item.ID, &item.CreatedAt, &item.Model, &item.GroupName, &status, &phase, &kind); err != nil {
+		var phase, kind, primaryMessage, upstreamMessage string
+		if err = rows.Scan(&item.ID, &item.CreatedAt, &item.Model, &item.GroupName, &status, &phase, &kind, &primaryMessage, &upstreamMessage); err != nil {
 			return nil, err
 		}
 		item.Model = service.PublicUserSupportModel(item.Model)
+		item.GroupName = service.PublicUserSupportGroupName(item.GroupName)
 		item.StatusCode = supportInt64Pointer(status)
 		item.ErrorKind = service.PublicUserSupportErrorKind(phase)
 		item.Category = service.UserSupportErrorCategory(phase, kind)
+		item.OriginalMessage = service.PublicUserSupportOriginalMessage(primaryMessage, upstreamMessage)
 		result = append(result, item)
 	}
 	return result, rows.Err()

@@ -34,6 +34,7 @@ var ErrGeminiInputCountUnavailable = errors.New("upstream input token count unav
 type GeminiInputUsageFallback struct {
 	Tokens                          int
 	Known                           bool
+	HasSemanticInput                bool // Text/tool content, excluding envelope overhead and opaque media.
 	CalibrationKey                  string
 	CountRequest                    *geminiInputCountRequest
 	LocalTokensExcludeCachedContent bool
@@ -105,6 +106,7 @@ func prepareGeminiInputUsageFallback(req *http.Request, accountID int64, model s
 		return fallback
 	}
 	fallback.Known, fallback.Tokens = true, counter.tokens
+	fallback.HasSemanticInput = counter.runes > 0
 	identity := geminiUsageLedgerRequestIdentity(req)
 	hasExternalCache := len(payload["cachedContent"]) > 0 || len(payload["cached_content"]) > 0
 	fallback.LocalTokensExcludeCachedContent = hasExternalCache
@@ -212,6 +214,12 @@ func (s *GatewayService) CountGeminiInputFallback(ctx context.Context, input *Re
 	}
 	tokens, err := geminiLedgerTokenCount(fields["totalTokens"])
 	if err != nil {
+		return 0, false, ErrGeminiInputCountUnavailable
+	}
+	// A secondary count of zero cannot account for known text/tool input.
+	// Let settlement use the existing semantic fallback instead. Generation
+	// usage (including an explicitly reported zero) skips this helper above.
+	if tokens == 0 && fallback.Input.Known && fallback.Input.HasSemanticInput && fallback.Input.Tokens > 0 {
 		return 0, false, ErrGeminiInputCountUnavailable
 	}
 	return tokens, true, nil

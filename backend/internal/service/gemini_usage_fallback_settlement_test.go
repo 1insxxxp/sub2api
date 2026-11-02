@@ -5,6 +5,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -98,4 +99,67 @@ func TestGeminiFallbackSettlementSnapshotCannotBeSerialized(t *testing.T) {
 	require.NoError(t, err)
 	require.NotContains(t, string(raw), "GeminiUsageFallback")
 	require.NotContains(t, string(raw), "private-count")
+}
+
+func TestGeminiFallbackSettlementZeroCountPreservesCacheBoundaries(t *testing.T) {
+	for _, tc := range []struct {
+		name            string
+		externalCache   bool
+		fullyCached     bool
+		measuredCount   bool
+		upstreamAccepts bool
+	}{
+		{name: "local_text", upstreamAccepts: true},
+		{name: "explicit_cache_excludes_cached_content", externalCache: true, upstreamAccepts: true},
+		{name: "fully_cached_local_estimate", fullyCached: true, upstreamAccepts: true},
+		{name: "fully_cached_positive_provider_count", fullyCached: true, measuredCount: true, upstreamAccepts: true},
+		{name: "no_acceptance"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			svc, input, upstream := newGeminiCountFallbackFixture(t, `{"totalTokens":0}`)
+			body := geminiFallbackInputBody
+			if tc.externalCache {
+				body = strings.Replace(body, `"contents":`, `"cachedContent":"cachedContents/test-cache","contents":`, 1)
+			}
+			fallback := prepareGeminiInputUsageFallback(newGeminiFallbackInputRequest(t, geminiFallbackInputURL, body), input.Account.ID, geminiInputUsageRegressionModel)
+			require.True(t, fallback.Known)
+			require.Positive(t, fallback.Tokens)
+			fallback.CalibrationKey = "" // This test isolates count/cache precedence from calibration training.
+			cache := 0
+			if tc.externalCache || tc.fullyCached {
+				cache = fallback.Tokens
+			}
+			if tc.measuredCount {
+				raw, err := json.Marshal(map[string]int{"totalTokens": cache})
+				require.NoError(t, err)
+				upstream.resp = geminiUsageRecoveryResponse(200, string(raw))
+			}
+			result := input.Result
+			result.Model = geminiInputUsageRegressionModel
+			result.Usage.CacheReadInputTokens = cache
+			result.GeminiUsageFallback.Input = fallback
+			result.GeminiUsageFallback.UpstreamAccepted = tc.upstreamAccepts
+			result.GeminiUsageFallback.CandidateTokens = 71
+			applyGeminiMeasuredUsageEvidence(result, 8)
+			svc.FinalizeGeminiUsageFallback(context.Background(), input)
+			wantInput, wantOutput, wantCalls := fallback.Tokens, 71, 1
+			if tc.fullyCached {
+				wantInput = 0
+			}
+			if !tc.upstreamAccepts {
+				wantInput, wantOutput, wantCalls = 0, 0, 0
+			}
+			require.Equal(t, wantInput, result.Usage.InputTokens)
+			require.Equal(t, wantOutput, result.Usage.OutputTokens)
+			require.Equal(t, cache, result.Usage.CacheReadInputTokens)
+			require.Equal(t, UsageTokenSourceEstimated, result.InputTokensSource)
+			require.False(t, result.MeasuredUsageComplete)
+			require.True(t, result.GeminiUsageFinalized)
+			require.Nil(t, fallback.CountRequest)
+			require.Len(t, upstream.requests, wantCalls)
+			svc.FinalizeGeminiUsageFallback(context.Background(), input)
+			require.Equal(t, wantInput, result.Usage.InputTokens)
+			require.Len(t, upstream.requests, wantCalls, "finalization must not repeat the count query")
+		})
+	}
 }
