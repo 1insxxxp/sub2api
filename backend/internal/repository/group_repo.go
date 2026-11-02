@@ -979,20 +979,44 @@ func (r *groupRepository) deleteCascade(ctx context.Context, id int64, requireEm
 		}
 	}
 
-	// Recheck while holding the source group row lock. The service-level check
-	// provides a fast, user-friendly rejection; this transactional check closes
-	// the race with a concurrent custom-group mapping insert.
-	customGroupReferenceCount, err := countCustomGroupModelReferences(ctx, exec, id)
+	// Model writers take a shared source-group lock before touching their
+	// custom group. Holding this exclusive lock therefore makes reference
+	// cleanup atomic with deletion and prevents a stale writer reinserting it.
+	// Keep custom-group containers and their bound keys, including when removal
+	// leaves the container empty: those keys must continue to fail closed.
+	var affectedUserIDs []int64
+	affectedUsers := make(map[int64]struct{})
+	addAffectedUser := func(userID int64) {
+		if _, exists := affectedUsers[userID]; !exists {
+			affectedUsers[userID] = struct{}{}
+			affectedUserIDs = append(affectedUserIDs, userID)
+		}
+	}
+	rows, err = exec.QueryContext(ctx, `DELETE FROM user_custom_group_models AS model
+		USING user_custom_groups AS custom_group
+		WHERE model.source_group_id = $1 AND custom_group.id = model.custom_group_id
+		RETURNING custom_group.user_id, custom_group.deleted_at IS NULL`, id)
 	if err != nil {
 		return nil, err
 	}
-	if customGroupReferenceCount > 0 {
-		return nil, service.ErrGroupCustomGroupSourceInUse.WithMetadata(map[string]string{
-			"reference_count": fmt.Sprintf("%d", customGroupReferenceCount),
-		})
+	for rows.Next() {
+		var userID int64
+		var liveParent bool
+		if err := rows.Scan(&userID, &liveParent); err != nil {
+			_ = rows.Close()
+			return nil, err
+		}
+		if liveParent {
+			addAffectedUser(userID)
+		}
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
-	var affectedUserIDs []int64
 	if subscriptionType == service.SubscriptionTypeSubscription {
 		// 只查询未软删除的订阅，避免通知已取消订阅的用户
 		rows, err := exec.QueryContext(ctx, "SELECT user_id FROM user_subscriptions WHERE group_id = $1 AND deleted_at IS NULL", id)
@@ -1005,7 +1029,7 @@ func (r *groupRepository) deleteCascade(ctx context.Context, id int64, requireEm
 				_ = rows.Close()
 				return nil, scanErr
 			}
-			affectedUserIDs = append(affectedUserIDs, userID)
+			addAffectedUser(userID)
 		}
 		if err := rows.Close(); err != nil {
 			return nil, err
@@ -1073,6 +1097,7 @@ func (r *groupRepository) deleteCascade(ctx context.Context, id int64, requireEm
 		logger.LegacyPrintf("repository.group", "[SchedulerOutbox] enqueue group cascade delete failed: group=%d err=%v", id, err)
 	}
 
+	sort.Slice(affectedUserIDs, func(i, j int) bool { return affectedUserIDs[i] < affectedUserIDs[j] })
 	return affectedUserIDs, nil
 }
 

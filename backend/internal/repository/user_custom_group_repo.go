@@ -51,6 +51,9 @@ func (r *userCustomGroupRepository) Create(ctx context.Context, group *service.U
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err := lockCustomGroupModelSources(ctx, tx.Client(), models); err != nil {
+		return err
+	}
 	row, err := tx.UserCustomGroup.Create().SetUserID(group.UserID).SetName(group.Name).SetStatus(group.Status).Save(ctx)
 	if err != nil {
 		return err
@@ -73,6 +76,14 @@ func (r *userCustomGroupRepository) Update(ctx context.Context, group *service.U
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
+	if models != nil {
+		// Take source locks before the custom-group row lock. The deleter locks
+		// the source before deleting model rows, so reversing this order can
+		// deadlock a model replacement against source-group deletion.
+		if err := lockCustomGroupModelSources(ctx, tx.Client(), *models); err != nil {
+			return err
+		}
+	}
 	n, err := tx.UserCustomGroup.Update().Where(usercustomgroup.IDEQ(group.ID), usercustomgroup.UserIDEQ(group.UserID), usercustomgroup.DeletedAtIsNil()).SetName(group.Name).SetStatus(group.Status).Save(ctx)
 	if err != nil {
 		return err
@@ -91,6 +102,16 @@ func (r *userCustomGroupRepository) Update(ctx context.Context, group *service.U
 		}
 	}
 	return tx.Commit()
+}
+
+func lockCustomGroupModelSources(ctx context.Context, exec sqlExecutor, models []service.UserCustomGroupModelInput) error {
+	groupIDs := make([]int64, 0, len(models))
+	for _, model := range models {
+		groupIDs = append(groupIDs, model.SourceGroupID)
+	}
+	// lockLiveGroups locks matching rows in ascending ID order and rechecks
+	// deleted_at after any wait, including when validation preceded deletion.
+	return lockLiveGroups(ctx, exec, groupIDs)
 }
 
 func (r *userCustomGroupRepository) Delete(ctx context.Context, id, userID int64) error {

@@ -1420,6 +1420,48 @@ curl -fsS -X DELETE "${BASE}/api/v1/admin/groups/10/account-user-exclusions/1" \
 
 ---
 
+#### 5.7 删除来源分组并清理用户自定义模型引用（2026-11-02，本地实现）
+
+`DELETE /api/v1/admin/groups/:id` 删除普通来源分组时，在现有删除事务内同步删除
+`user_custom_group_models.source_group_id` 指向它的模型映射，不再因这些引用返回
+`CUSTOM_GROUP_SOURCE_IN_USE`。失败时整个事务回滚。
+
+保留用户自定义分组本身、其密钥绑定和其他来源模型；删完最后一个模型后保留空分组，
+原密钥不能因此变成可访问默认/公共分组的密钥。历史使用记录、费用及余额不改写。
+提交成功后失效受影响用户的认证缓存。并发保存自定义模型会先锁定存活来源分组，
+避免删除完成后重新写入失效引用。系统托管分组及 Simple 模式非空账号保护继续生效。
+本次仅调整用户自定义模型引用，系统订阅来源编排和 fallback 配置仍沿用其专用管理流程。
+
+示例（只有执行删除操作时才使用；不用于只读排查）：
+
+```bash
+curl -fsS -X DELETE "${BASE}/api/v1/admin/groups/${GROUP_ID}" \
+  -H "x-api-key: ${KEY}"
+```
+
+#### 用户自定义分组验收接口（2026-11-02）
+
+以下为用户 JWT 会话接口，不能用 Admin API Key 冒充用户：
+
+| 方法 | 端点 | 请求和说明 |
+|------|------|------------|
+| GET | `/api/v1/custom-groups` | 返回当前登录用户的自定义分组列表 |
+| GET | `/api/v1/custom-groups/:id` | 仅返回该用户拥有的分组，包括 `models` |
+| POST | `/api/v1/custom-groups` | `{ "name":"测试组合", "models":[{"public_model":"测试别名","source_group_id":123,"source_model":"claude-sonnet-4-6"}] }`；来源须启用、对用户开放且模型可用 |
+| PUT | `/api/v1/custom-groups/:id` | 可选 `name`、`status`（`active`/`disabled`）、`models`（完整替换）；来源校验同创建 |
+| DELETE | `/api/v1/custom-groups/:id` | 有绑定密钥时返回冲突；`?force=true` 会先解除该组的密钥绑定，再删除组。清理测试数据时应先删除专属测试密钥，避免解绑定产生意外回退 |
+| POST | `/api/v1/keys` | `{ "name":"测试密钥", "custom_group_id":456, "expires_in_days":1 }` 创建绑定当前用户自定义分组的密钥 |
+| GET / DELETE | `/api/v1/keys/:id` | 读取 / 删除当前用户拥有的专属测试密钥 |
+
+所有成功响应继续使用 `{code:0,data:...}` 包装。删除普通来源分组后，自定义组可变为空；其已有密钥保留 `custom_group_id`，不得自动解除绑定。使用独立测试普通用户、独占来源组和随机名称验收，不借用客户身份/密钥，不删除客户分组；最后先删除专属密钥，再删自定义组和来源组并停用测试用户。空组推理验证只检查本地拒绝，不创建真实上游账号、不触发付费请求。
+
+示例（`${USER_JWT}` 仅使用本次专属测试用户的短期会话，不写入文件或日志）：
+
+```bash
+curl -fsS "${BASE}/api/v1/custom-groups/${CUSTOM_GROUP_ID}" \
+  -H "Authorization: Bearer ${USER_JWT}"
+```
+
 ### 6. 收益管理客户排除名单
 
 仅主管理员可读取和管理名单，沿用 Admin API 认证。二级管理员只能查看应用排除规则后的收益汇总。名单不影响用户状态、余额扣费、真实使用记录或分组管理统计。

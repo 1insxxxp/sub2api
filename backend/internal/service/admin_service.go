@@ -723,7 +723,6 @@ type adminServiceImpl struct {
 	userRepo              UserRepository
 	groupRepo             GroupRepository
 	groupDuplicateRepo    GroupDuplicateRepository
-	groupSourceRefRepo    GroupCustomSourceReferenceRepository
 	emptyGroupDeleteRepo  EmptyGroupDeleteRepository
 	accountRepo           AccountRepository
 	accountDuplicateRepo  AccountDuplicateRepository
@@ -803,7 +802,6 @@ func NewAdminService(
 		userRepo:                userRepo,
 		groupRepo:               groupRepo,
 		groupDuplicateRepo:      optionalGroupDuplicateRepository(groupRepo),
-		groupSourceRefRepo:      optionalGroupSourceReferenceRepository(groupRepo),
 		emptyGroupDeleteRepo:    optionalEmptyGroupDeleteRepository(groupRepo),
 		accountRepo:             accountRepo,
 		accountDuplicateRepo:    accountRepo,
@@ -837,11 +835,6 @@ func NewAdminService(
 
 func optionalGroupDuplicateRepository(repo GroupRepository) GroupDuplicateRepository {
 	value, _ := repo.(GroupDuplicateRepository)
-	return value
-}
-
-func optionalGroupSourceReferenceRepository(repo GroupRepository) GroupCustomSourceReferenceRepository {
-	value, _ := repo.(GroupCustomSourceReferenceRepository)
 	return value
 }
 

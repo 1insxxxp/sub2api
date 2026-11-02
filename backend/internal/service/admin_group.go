@@ -1371,17 +1371,6 @@ func (s *adminServiceImpl) deleteGroup(ctx context.Context, id int64, requireEmp
 	if group.SystemCustomRoutingEnabled {
 		return ErrSystemCustomGroupManagedOnly
 	}
-	if s.groupSourceRefRepo != nil {
-		referenceCount, err := s.groupSourceRefRepo.CountCustomGroupModelReferences(ctx, id)
-		if err != nil {
-			return err
-		}
-		if referenceCount > 0 {
-			return ErrGroupCustomGroupSourceInUse.WithMetadata(map[string]string{
-				"reference_count": fmt.Sprintf("%d", referenceCount),
-			})
-		}
-	}
 	var groupKeys []string
 	if s.authCacheInvalidator != nil {
 		keys, err := s.apiKeyRepo.ListKeysByGroupID(ctx, id)
@@ -1416,6 +1405,11 @@ func (s *adminServiceImpl) deleteGroup(ctx context.Context, id int64, requireEmp
 		}()
 	}
 	if s.authCacheInvalidator != nil {
+		// Custom groups retain their keys, but their deleted source mappings
+		// must disappear from the affected owners' authenticated views.
+		for _, userID := range affectedUserIDs {
+			s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, userID)
+		}
 		for _, key := range groupKeys {
 			s.authCacheInvalidator.InvalidateAuthCacheByKey(ctx, key)
 		}

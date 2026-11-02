@@ -7542,7 +7542,8 @@ const confirmDelete = async () => {
     refreshGroupData();
   } catch (error: any) {
     appStore.showError(
-      error.response?.data?.detail || t("admin.groups.failedToDelete"),
+      error?.response?.data?.message ||
+        extractApiErrorMessage(error, t("admin.groups.failedToDelete")),
     );
     console.error("Error deleting group:", error);
   }

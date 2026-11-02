@@ -213,6 +213,7 @@ async function mountCatalog(
     global: {
       plugins: [installPinia()],
       stubs: {
+        Transition: true, // Interaction tests do not wait for CSS leave animations.
         PlatformIcon: {
           props: ['platform'],
           template: '<i data-platform-icon :data-platform="platform" />',

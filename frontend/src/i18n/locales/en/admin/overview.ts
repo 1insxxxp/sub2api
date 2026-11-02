@@ -1206,9 +1206,9 @@ export default {
         composite: 'Composite',
       },
       deleteConfirm:
-        "Are you sure you want to delete '{name}'? All associated API keys will no longer belong to any group.",
+        "Are you sure you want to delete '{name}'? All associated API keys will no longer belong to any group. Custom model mappings that reference this group will also be removed. User custom groups and models from other sources will be kept. This action cannot be undone.",
       deleteConfirmSubscription:
-        "Are you sure you want to delete subscription group '{name}'? This will invalidate all API keys bound to this subscription and delete all related subscription records. This action cannot be undone.",
+        "Are you sure you want to delete subscription group '{name}'? This will invalidate all API keys bound to this subscription and delete all related subscription records. Custom model mappings that reference this group will also be removed. User custom groups and models from other sources will be kept. This action cannot be undone.",
       subscription: {
         title: 'Subscription Settings',
         type: 'Billing Type',

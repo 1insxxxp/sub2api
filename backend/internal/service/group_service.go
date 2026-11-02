@@ -57,8 +57,8 @@ type GroupDuplicateRepository interface {
 	CreateFromSource(ctx context.Context, group *Group, sourceGroupID int64) error
 }
 
-// GroupCustomSourceReferenceRepository guards source groups that are still
-// referenced by non-deleted user custom groups.
+// GroupCustomSourceReferenceRepository reports mappings from non-deleted user
+// custom groups to a source group. Deletion removes these mappings atomically.
 type GroupCustomSourceReferenceRepository interface {
 	CountCustomGroupModelReferences(ctx context.Context, sourceGroupID int64) (int, error)
 }
