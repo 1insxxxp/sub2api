@@ -72,6 +72,9 @@ func TestUserSupportGrantConcurrentAndDurable(t *testing.T) {
 	var count int
 	require.NoError(t, integrationDB.QueryRow("SELECT COUNT(*) FROM redeem_codes WHERE used_by=$1 AND source='support_trial' AND threshold_exempt=true", target.ID).Scan(&count))
 	require.Equal(t, 1, count)
+	var notes string
+	require.NoError(t, integrationDB.QueryRow("SELECT notes FROM redeem_codes WHERE used_by=$1 AND source='support_trial'", target.ID).Scan(&notes))
+	require.Equal(t, "测试额度-15刀", notes)
 	_, err := integrationDB.Exec("DELETE FROM redeem_codes WHERE used_by=$1 AND source='support_trial'", target.ID)
 	require.NoError(t, err)
 	got, err := r.LookupAndGrant(ctx, admin.ID, strconv.FormatInt(target.ID, 10))
@@ -323,6 +326,9 @@ func TestUserSupportReadsLeaveTrialEligibleUntilExplicitGrant(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "granted", granted.Trial.Status)
 	require.Equal(t, float64(22), granted.User.Balance)
+	var notes string
+	require.NoError(t, integrationDB.QueryRow("SELECT notes FROM redeem_codes WHERE used_by=$1 AND source='support_trial'", target.ID).Scan(&notes))
+	require.Equal(t, "测试额度-15刀", notes)
 	lookedUp, err := r.Lookup(ctx, admin.ID, target.Email)
 	require.NoError(t, err)
 	require.Equal(t, "already_received", lookedUp.Trial.Status)

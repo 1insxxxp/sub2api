@@ -271,7 +271,7 @@ func (r *userSupportRepository) LookupAndGrant(ctx context.Context, actorID int6
 			return nil, err
 		}
 		err = tx.QueryRowContext(ctx, `INSERT INTO redeem_codes(code,type,value,status,used_by,used_at,created_by,source,threshold_exempt,notes)
-		VALUES($1,'balance',15,'used',$2,NOW(),$3,'support_trial',TRUE,'Support trial credit') RETURNING id,used_at`, code, result.User.ID, actorID).Scan(&ledgerID, &result.Trial.GrantedAt)
+		VALUES($1,'balance',15,'used',$2,NOW(),$3,'support_trial',TRUE,'测试额度-15刀') RETURNING id,used_at`, code, result.User.ID, actorID).Scan(&ledgerID, &result.Trial.GrantedAt)
 		if err != nil {
 			return nil, err
 		}
