@@ -19,7 +19,8 @@
     "src/views/admin/__tests__/GroupsView.systemCustom.spec.ts",
     "src/views/admin/__tests__/GroupsView.geminiInputCounting.spec.ts",
     "src/api/__tests__/admin.modelProbes.spec.ts",
-    "src/components/admin/workbench/__tests__/ModelProbePanel.spec.ts"
+    "src/components/admin/workbench/__tests__/ModelProbePanel.spec.ts",
+    "src/components/admin/workbench/__tests__/ModelProbeConfigDialog.spec.ts"
   ],
   "exclude": []
 }

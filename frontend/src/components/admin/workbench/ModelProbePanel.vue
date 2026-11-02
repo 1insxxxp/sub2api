@@ -15,6 +15,7 @@
           <Icon name="play" size="sm" />{{ t('modelProbes.probeAll') }}
         </button>
         <button type="button" data-test="probe-retry-failed" class="btn btn-secondary min-h-11" :disabled="running || !retryRows.length || denied" @click="start(retryRows)">{{ t('modelProbes.retryFailed') }}</button>
+        <button v-if="auth.user?.role === 'admin'" type="button" data-test="probe-configure" class="btn btn-secondary min-h-11 gap-2" :disabled="checking || denied || loadingGroups" @click="showConfig = true"><Icon name="cog" size="sm" />{{ t('modelProbes.config.manage') }}</button>
       </div>
     </div>
     <p class="probe-note">{{ t('modelProbes.description') }}</p>
@@ -40,16 +41,18 @@
       </div>
     </template>
     <p v-else-if="!checking && !loadingGroups && !loadingModels && !denied && !errorKey" class="probe-empty">{{ t(selectedGroup ? 'modelProbes.noModels' : groups.length ? 'modelProbes.initial' : 'modelProbes.noGroups') }}</p>
+    <ModelProbeConfigDialog v-if="showConfig && auth.user?.role === 'admin'" :initial-group-id="typeof selectedGroup === 'number' ? selectedGroup : null" @close="showConfig = false" @saved="configurationSaved" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useUserSupportAccess } from '@/composables/useUserSupportAccess'
 import Icon from '@/components/icons/Icon.vue'
 import Select from '@/components/common/Select.vue'
+import ModelProbeConfigDialog from './ModelProbeConfigDialog.vue'
 import { listGroups, listModels, runProbe, type ProbeGroup, type ProbeModel, type ProbeStatus } from '@/api/admin/modelProbes'
 
 type RowStatus = ProbeStatus | 'idle' | 'pending' | 'testing'
@@ -67,6 +70,7 @@ const loadingGroups = ref(false)
 const loadingModels = ref(false)
 const running = ref(false)
 const errorKey = ref('')
+const showConfig = ref(false)
 let sessionVersion = 0
 let modelVersion = 0
 let runVersion = 0
@@ -116,6 +120,7 @@ function revokeAccess() {
 
 async function initialize() {
   const version = ++sessionVersion
+  showConfig.value = false
   stop()
   modelVersion++
   metadataController?.abort()
@@ -141,6 +146,25 @@ async function initialize() {
     return
   }
   await reload()
+}
+
+async function configurationSaved() {
+  showConfig.value = false
+  const version = sessionVersion
+  const previousGroup = selectedGroup.value
+  stop()
+  modelVersion++
+  metadataController?.abort()
+  rows.value = []
+  groups.value = []
+  loadingModels.value = false
+  selectedGroup.value = null
+  // Let the selection watcher finish before starting the replacement catalog request.
+  await nextTick()
+  if (version !== sessionVersion || denied.value) return
+  await reload()
+  if (version !== sessionVersion || denied.value) return
+  if (typeof previousGroup === 'number' && groups.value.some(group => group.id === previousGroup)) selectedGroup.value = previousGroup
 }
 
 async function reload() {

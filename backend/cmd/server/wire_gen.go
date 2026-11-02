@@ -231,7 +231,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	pluginKVStore := repository.NewPluginKVStore(redisClient)
 	pluginManager := service.ProvidePluginManager(pluginRepository, secretEncryptor, configConfig, pluginHostInfo, pluginKVStore, openAIGatewayService)
 	accountTestService := service.ProvideAccountTestService(accountRepository, geminiTokenProvider, claudeTokenProvider, grokTokenProvider, antigravityGatewayService, httpUpstream, configConfig, tlsFingerprintProfileService, openAIGatewayService, settingService, pluginManager)
-	modelProbeService := service.ProvideModelProbeService(groupRepository, userSupportService, gatewayHandler, accountTestService, apiKeyService)
+	modelProbeService := service.ProvideModelProbeService(groupRepository, userSupportService, gatewayHandler, accountTestService, apiKeyService, settingRepository, userRepository)
 	modelProbeHandler := admin.NewModelProbeHandler(modelProbeService)
 	adminWorkbenchAccessRepository := repository.NewAdminWorkbenchAccessRepository(db)
 	adminWorkbenchAccessService := service.NewAdminWorkbenchAccessService(adminWorkbenchAccessRepository)

@@ -55,10 +55,14 @@ type modelProbeGatewayStub struct {
 	catalogCalls int
 	selected     int
 	released     int
+	onCatalog    func()
 }
 
 func (s *modelProbeGatewayStub) ModelsForProbe(context.Context, *Group) ([]string, error) {
 	s.catalogCalls++
+	if s.onCatalog != nil {
+		s.onCatalog()
+	}
 	return s.models, nil
 }
 func (s *modelProbeGatewayStub) SelectForProbe(context.Context, *Group, string) (*ModelProbeSelection, error) {
@@ -83,7 +87,7 @@ func modelProbeFixture() (*ModelProbeService, *modelProbeGroupsStub, *modelProbe
 	access := &modelProbeAccessStub{allowed: true}
 	gateway := &modelProbeGatewayStub{models: []string{"public-model"}}
 	runner := &modelProbeRunnerStub{result: ModelProbeExecution{Status: "success"}}
-	return NewModelProbeService(groups, access, gateway, runner, groups), groups, access, gateway, runner
+	return NewModelProbeService(groups, access, gateway, runner, groups, probeSettingsFor(7), probeRoot()), groups, access, gateway, runner
 }
 func TestModelProbeDeniedBeforeCatalogOrSelection(t *testing.T) {
 	svc, g, a, gw, _ := modelProbeFixture()
@@ -208,5 +212,21 @@ func TestModelProbeVisibilityLookupFailureFailsClosed(t *testing.T) {
 	}
 	if gw.catalogCalls != 0 || gw.selected != 0 {
 		t.Fatal("failed scope lookup touched infrastructure")
+	}
+}
+
+func TestModelProbeMissingPolicyDefaultsClosed(t *testing.T) {
+	svc, groups, access, gateway, runner := modelProbeFixture()
+	// A fresh service with no policy dependency must never inherit all models.
+	svc = NewModelProbeService(groups, access, gateway, runner, groups, probeSettingsFor(), probeRoot())
+	got, err := svc.Groups(context.Background(), 4)
+	if err != nil || len(got) != 0 {
+		t.Fatalf("missing configuration must expose no groups, got %#v %v", got, err)
+	}
+	if _, err := svc.Run(context.Background(), 4, 7, "public-model"); !errors.Is(err, ErrModelProbeInvalid) {
+		t.Fatalf("missing configuration must deny probes, got %v", err)
+	}
+	if gateway.catalogCalls != 0 || gateway.selected != 0 || runner.account != 0 {
+		t.Fatal("unconfigured group touched catalog or upstream")
 	}
 }

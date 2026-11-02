@@ -1508,9 +1508,12 @@ curl -fsS -X PUT "${BASE}/api/v1/admin/users/123/support-access" \
 
 | 方法 | 端点 | 参数与响应 |
 |------|------|------------|
-| GET | `/api/v1/admin/model-probes/groups` | 返回 `{items:[{id,name,platform}]}`，复用当前账号普通 API 密钥页的可绑定分组范围；只接受通用可选 `timezone` 查询参数 |
-| GET | `/api/v1/admin/model-probes/groups/:id/models` | 返回 `{group:{id,name,platform},items:[{id}]}`，模型使用分组公开目录与别名 |
+| GET | `/api/v1/admin/model-probes/groups` | 返回 `{items:[{id,name,platform}]}`，取当前账号普通 API 密钥页可绑定分组与超级管理员探测配置的交集；只接受通用可选 `timezone` 查询参数 |
+| GET | `/api/v1/admin/model-probes/groups/:id/models` | 返回 `{group:{id,name,platform},items:[{id}]}`，只返回配置允许且仍在分组公开目录中的模型与别名 |
 | POST | `/api/v1/admin/model-probes/run` | 精确 JSON `{group_id:123,model:"公开模型名"}`；返回 `{group_id,model,status,duration_ms,started_at,error_code?}` |
+| GET | `/api/v1/admin/model-probes/config/groups` | 仅超级管理员，返回可配置的活跃分组 `{items:[{id,name,platform}]}`；配置范围不授予实际探测分组权限 |
+| GET | `/api/v1/admin/model-probes/config/groups/:id` | 仅超级管理员，返回 `{group:{id,name,platform},models:["已配置模型"],available_models:[{id}]}` |
+| PUT | `/api/v1/admin/model-probes/config/groups/:id` | 仅超级管理员，精确 JSON `{models:["公开模型名"]}`，返回 `{group_id,models}`；空列表关闭该组探测 |
 
 ```bash
 curl -fsS "${BASE}/api/v1/admin/model-probes/groups" \
@@ -1521,9 +1524,17 @@ curl -fsS "${BASE}/api/v1/admin/model-probes/groups/${GROUP_ID}/models" \
 curl -fsS -X POST "${BASE}/api/v1/admin/model-probes/run" \
   -H "Authorization: Bearer ${STAFF_JWT}" -H 'Content-Type: application/json' \
   --data '{"group_id":123,"model":"gemini-2.5-flash"}'
+# 超级管理员配置：只接受当前分组公开目录中的精确模型 ID，不自动开放全部模型。
+curl -fsS "${BASE}/api/v1/admin/model-probes/config/groups/${GROUP_ID}" \
+  -H "Authorization: Bearer ${SUPER_ADMIN_JWT}"
+curl -fsS -X PUT "${BASE}/api/v1/admin/model-probes/config/groups/${GROUP_ID}" \
+  -H "Authorization: Bearer ${SUPER_ADMIN_JWT}" -H 'Content-Type: application/json' \
+  --data '{"models":["gemini-2.5-flash"]}'
 ```
 
 分组可见范围直接复用 `APIKeyService.GetAvailableGroups(当前登录账号ID)`：活跃公开组按账号公开组限制筛选，专属组需显式授权，订阅组需有效订阅；管理员角色不额外扩大范围。不借其他客户身份。列表、模型查询与执行均实时检查同一范围，不可见分组 ID 统一拒绝且不读取模型目录或调用上游；授权/订阅查询失败时不回退完整管理员列表。
+
+可探测模型由超级管理员在探测页单独配置，采用按分组独立的版本化设置项，不改分组计费或普通用户模型目录。未配置或空列表默认关闭，配置读取或解析失败时拒绝探测；不将通配符当成全部模型。配置接口仅接受 JWT，服务端重新读取有效、未删除的 `admin` 身份；二级管理员即使具有用户支持权限也不能读写配置。每组最多200个精确公开模型 ID，提交体最大64KiB，保存空列表无需发现上游目录。执行前再次检查最新配置，已撤销的模型不能借旧页面继续发起探测。配置改变不追溯取消已经开始的原生探测。部署此限制时两个入口的所有活跃应用实例均须更新，旧应用不会执行新增策略。
 
 每个模型重新核对分组和公开目录，按实际分组路由、模型映射与调度选取账号，取得业务并发槽后复用账号管理的原生探测。状态为 `success/failed/timeout/cancelled/unsupported`；只有明确的成功结束事件才能判定成功，空响应和中途断流不能算成功。服务端限时120秒，前端单次请求限时180秒，批量最多3个并发，支持停止、重试和切组取消。结果只返回公开模型、闭集状态与静态原因，不返回上游账号、真实映射、地址、凭据、原始报错或生成内容。探测可能产生上游费用和原生账号健康状态更新；不使用客户密钥、钱包或客户用量账单，也不代表某个客户的余额、订阅或密钥权限验收。
 

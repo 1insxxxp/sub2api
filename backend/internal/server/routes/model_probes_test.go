@@ -42,11 +42,33 @@ type probeRouteRunner struct{}
 func (probeRouteRunner) RunModelProbe(context.Context, int64, string) (service.ModelProbeExecution, error) {
 	return service.ModelProbeExecution{Status: "success"}, nil
 }
+
+type probeRouteSettings struct{}
+
+func (probeRouteSettings) GetValue(context.Context, string) (string, error) {
+	return `{"version":1,"models":["gemini-2.5-flash"]}`, nil
+}
+func (probeRouteSettings) GetMultiple(_ context.Context, keys []string) (map[string]string, error) {
+	values := map[string]string{}
+	for _, key := range keys {
+		values[key] = `{"version":1,"models":["gemini-2.5-flash"]}`
+	}
+	return values, nil
+}
+func (probeRouteSettings) Set(context.Context, string, string) error { return nil }
+
+type probeRouteUsers struct{ role string }
+
+func (s *probeRouteUsers) GetByID(_ context.Context, id int64) (*service.User, error) {
+	return &service.User{ID: id, Role: s.role, Status: service.StatusActive}, nil
+}
+
 func TestModelProbeRoutesUseJWTAndFreshSupportCapability(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	access := &supportRouteRepo{enabled: true}
 	gateway := &probeRouteGateway{}
-	svc := service.NewModelProbeService(probeRouteGroups{}, access, gateway, probeRouteRunner{}, probeRouteGroups{})
+	users := &probeRouteUsers{role: service.RoleAdmin}
+	svc := service.NewModelProbeService(probeRouteGroups{}, access, gateway, probeRouteRunner{}, probeRouteGroups{}, probeRouteSettings{}, users)
 	h := &handler.Handlers{Admin: &handler.AdminHandlers{ModelProbe: admin.NewModelProbeHandler(svc)}}
 	r := gin.New()
 	role := service.RoleUser
@@ -68,14 +90,23 @@ func TestModelProbeRoutesUseJWTAndFreshSupportCapability(t *testing.T) {
 		r.ServeHTTP(w, req)
 		return w
 	}
-	for _, path := range []string{"/groups", "/groups/7/models"} {
+	for _, path := range []string{"/groups", "/groups/7/models", "/config/groups", "/config/groups/7"} {
 		require.Equal(t, 401, request("GET", "/api/v1/admin/model-probes"+path, "", "").Code)
 		require.Equal(t, 403, request("GET", "/api/v1/admin/model-probes"+path, "Bearer session", "").Code)
 	}
 	role = service.RoleSubAdmin
+	require.Equal(t, 403, request("GET", "/api/v1/admin/model-probes/config/groups", "Bearer session", "").Code)
+	require.Equal(t, 403, request("PUT", "/api/v1/admin/model-probes/config/groups/7", "Bearer session", `{"models":[]}`).Code)
 	require.Equal(t, 200, request("GET", "/api/v1/admin/model-probes/groups?timezone=Asia%2FShanghai", "Bearer session", "").Code)
 	require.Equal(t, 200, request("POST", "/api/v1/admin/model-probes/run", "Bearer session", `{"group_id":7,"model":"gemini-2.5-flash"}`).Code)
 	require.Equal(t, 1, gateway.selected)
+	role = service.RoleAdmin
+	require.Equal(t, 200, request("GET", "/api/v1/admin/model-probes/config/groups", "Bearer session", "").Code)
+	require.Equal(t, 200, request("GET", "/api/v1/admin/model-probes/config/groups/7", "Bearer session", "").Code)
+	require.Equal(t, 200, request("PUT", "/api/v1/admin/model-probes/config/groups/7", "Bearer session", `{"models":[]}`).Code)
+	users.role = service.RoleSubAdmin // Stale root JWT does not grant configuration.
+	require.Equal(t, 403, request("PUT", "/api/v1/admin/model-probes/config/groups/7", "Bearer session", `{"models":[]}`).Code)
+	role = service.RoleSubAdmin
 	access.enabled = false
 	require.Equal(t, 403, request("GET", "/api/v1/admin/model-probes/groups", "Bearer session", "").Code)
 	require.Equal(t, 403, request("POST", "/api/v1/admin/model-probes/run", "Bearer session", `{"group_id":7,"model":"gemini-2.5-flash"}`).Code)

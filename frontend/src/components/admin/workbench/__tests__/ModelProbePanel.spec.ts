@@ -13,7 +13,8 @@ vi.mock('@/composables/useUserSupportAccess', () => ({ useUserSupportAccess: () 
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key, locale: ref('zh') }) }))
 const views: VueWrapper[] = []
 const SelectStub = { props: ['modelValue', 'options', 'searchable'], emits: ['update:modelValue'], template: '<select :value="modelValue ?? \'\'" @change="$emit(\'update:modelValue\', Number($event.target.value))"><option value="">Choose</option><option v-for="item in options" :key="item.value" :value="item.value">{{ item.label }}</option></select>' }
-function create() { const v = mount(ModelProbePanel, { global: { stubs: { Select: SelectStub, Icon: true } } }); views.push(v); return v }
+const ConfigStub = { props: ['initialGroupId'], emits: ['close', 'saved'], template: '<div data-test="config-editor"><button data-test="config-save" @click="$emit(\'saved\')">Save</button></div>' }
+function create() { const v = mount(ModelProbePanel, { global: { stubs: { Select: SelectStub, Icon: true, ModelProbeConfigDialog: ConfigStub } } }); views.push(v); return v }
 function deferred<T>() { let resolve!: (v: T) => void; let reject!: (e: unknown) => void; const promise = new Promise<T>((a, b) => { resolve = a; reject = b }); return { promise, resolve, reject } }
 function success(model = 'model-1') { return { group_id: 1, model, status: 'success', duration_ms: 240, started_at: '2026-11-02T00:00:00Z' } }
 async function select(v: VueWrapper, id = 1) { await flushPromises(); await v.get('[data-test="probe-group"]').setValue(String(id)); await flushPromises() }
@@ -26,6 +27,40 @@ beforeEach(() => {
 afterEach(() => { views.splice(0).forEach(v => v.unmount()) })
 
 describe('group model probes', () => {
+  it('offers configuration only to the primary administrator', async () => {
+    const sub = create(); await flushPromises(); expect(sub.find('[data-test="probe-configure"]').exists()).toBe(false)
+    sub.unmount(); views.pop(); state.role = 'admin'
+    const admin = create(); await select(admin)
+    await admin.get('[data-test="probe-configure"]').trigger('click')
+    expect(admin.getComponent(ConfigStub).props('initialGroupId')).toBe(1)
+    reactive(state).token = 'new-session'; await flushPromises()
+    expect(admin.find('[data-test="config-editor"]').exists()).toBe(false)
+  })
+  it('stops a batch and refreshes eligible groups after configuration changes', async () => {
+    state.role = 'admin'
+    const pending = deferred<ReturnType<typeof success>>(); runProbe.mockReturnValue(pending.promise)
+    const v = create(); await select(v); await v.get('[data-test="probe-all"]').trigger('click'); await flushPromises()
+    const signals = runProbe.mock.calls.map(args => args[2] as AbortSignal)
+    await v.get('[data-test="probe-configure"]').trigger('click')
+    listGroups.mockResolvedValueOnce({ items: [] })
+    await v.get('[data-test="config-save"]').trigger('click'); await flushPromises()
+    expect(signals.every(signal => signal.aborted)).toBe(true)
+    expect(listGroups).toHaveBeenCalledTimes(2)
+    expect(v.findAll('[data-test="probe-row"]')).toHaveLength(0)
+    expect(revoke).not.toHaveBeenCalled()
+    pending.resolve(success()); await flushPromises()
+    expect(v.findAll('[data-probe-status="success"]')).toHaveLength(0)
+  })
+  it('reloads configured models when the selected group is still eligible after saving', async () => {
+    state.role = 'admin'
+    const v = create(); await select(v)
+    await v.get('[data-test="probe-configure"]').trigger('click')
+    listModels.mockResolvedValueOnce({ group: { id: 1, name: 'Group', platform: 'gemini' }, items: [{ id: 'newly-configured-model' }] })
+    await v.get('[data-test="config-save"]').trigger('click'); await flushPromises()
+    expect(listGroups).toHaveBeenCalledTimes(2); expect(listModels).toHaveBeenCalledTimes(2)
+    expect(v.findAll('[data-test="probe-row"]')).toHaveLength(1)
+    expect(v.text()).toContain('newly-configured-model'); expect(runProbe).not.toHaveBeenCalled()
+  })
   it('checks support permission and offers searchable groups before any probe', async () => {
     const v = create(); await flushPromises(); expect(refresh).toHaveBeenCalled(); expect(listGroups).toHaveBeenCalledTimes(1)
     expect(v.getComponent(SelectStub).props('searchable')).toBe(true); expect(runProbe).not.toHaveBeenCalled(); expect(listModels).not.toHaveBeenCalled()

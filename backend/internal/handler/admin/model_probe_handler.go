@@ -15,6 +15,9 @@ type modelProbeService interface {
 	Groups(context.Context, int64) ([]service.ModelProbeGroup, error)
 	Models(context.Context, int64, int64) (*service.ModelProbeCatalog, error)
 	Run(context.Context, int64, int64, string) (*service.ModelProbeResult, error)
+	ConfigGroups(context.Context, int64) ([]service.ModelProbeGroup, error)
+	Config(context.Context, int64, int64) (*service.ModelProbeConfig, error)
+	SaveConfig(context.Context, int64, int64, []string) (*service.ModelProbeConfigResult, error)
 }
 type ModelProbeHandler struct{ service modelProbeService }
 

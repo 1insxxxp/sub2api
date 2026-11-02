@@ -20,4 +20,7 @@ func RegisterModelProbeRoutes(v1 *gin.RouterGroup, h *handler.Handlers, jwt midd
 	g.GET("/groups", h.Admin.ModelProbe.Groups)
 	g.GET("/groups/:id/models", h.Admin.ModelProbe.Models)
 	g.POST("/run", h.Admin.ModelProbe.Run)
+	g.GET("/config/groups", h.Admin.ModelProbe.ConfigGroups)
+	g.GET("/config/groups/:id", h.Admin.ModelProbe.Config)
+	g.PUT("/config/groups/:id", h.Admin.ModelProbe.SaveConfig)
 }
