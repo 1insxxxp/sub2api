@@ -36,21 +36,25 @@
 
       <div v-if="result" data-test="support-result" class="support-results" aria-live="polite">
         <section class="support-summary" :aria-label="t('userSupport.summary')">
-          <div class="support-summary-identity">
-            <p class="support-label">{{ t('userSupport.account') }}</p>
-            <div class="support-summary-account"><span>{{ result.user.email }}</span><span class="support-user-id">#{{ result.user.id }}</span></div>
-          </div>
-          <div class="support-summary-balance">
-            <p class="support-label">{{ t('userSupport.balance') }}</p>
-            <p class="support-balance">{{ formatAmount(result.user.balance) }}</p>
+          <div class="support-summary-overview">
+            <div class="support-summary-identity">
+              <div class="support-summary-heading"><p class="support-label">{{ t('userSupport.account') }}</p><span class="support-user-id">#{{ result.user.id }}</span></div>
+              <p class="support-summary-account">{{ result.user.email }}</p>
+            </div>
+            <div class="support-summary-balance">
+              <p class="support-label">{{ t('userSupport.balance') }}</p>
+              <p class="support-balance">{{ formatAmount(result.user.balance) }}</p>
+            </div>
           </div>
           <div class="support-summary-trial">
             <div class="support-trial-copy">
-              <p class="support-label">{{ t('userSupport.trial.title') }}</p>
-              <p class="support-trial-state" :class="result.trial.status === 'granted' ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-700 dark:text-dark-200'">
-                <Icon :name="result.trial.status === 'eligible' ? 'gift' : result.trial.status === 'granted' ? 'checkCircle' : 'check'" size="xs" class="shrink-0" />
-                <span>{{ t(result.trial.status === 'eligible' ? 'userSupport.trial.eligible' : result.trial.status === 'granted' ? 'userSupport.trial.granted' : 'userSupport.trial.alreadyReceived') }}</span>
-              </p>
+              <div class="support-trial-heading">
+                <p class="support-trial-caption">{{ t('userSupport.trial.title') }}</p>
+                <p class="support-trial-state" :class="result.trial.status === 'granted' ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-700 dark:text-dark-200'">
+                  <Icon :name="result.trial.status === 'eligible' ? 'gift' : result.trial.status === 'granted' ? 'checkCircle' : 'check'" size="xs" class="shrink-0" />
+                  <span>{{ t(result.trial.status === 'eligible' ? 'userSupport.trial.eligible' : result.trial.status === 'granted' ? 'userSupport.trial.granted' : 'userSupport.trial.alreadyReceived') }}</span>
+                </p>
+              </div>
               <p class="support-trial-note">{{ t(result.trial.legacy ? 'userSupport.trial.historical' : 'userSupport.trial.once') }}</p>
             </div>
             <button v-if="result.trial.status === 'eligible'" type="button" data-test="support-grant" class="btn btn-primary support-grant"
@@ -395,20 +399,23 @@ function statusClass(value: string) {
   background-image: linear-gradient(125deg, rgb(255 255 255 / 4%), transparent 65%, rgb(148 163 184 / 3%));
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%), 0 2px 5px rgb(0 0 0 / 12%);
 }
-.support-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; padding: 12px 14px; }
-.support-summary > div { min-width: 0; }
-.support-summary-identity { flex: 1 1 220px; }
-.support-summary-account { display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 8px; margin-top: 3px; font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
-.support-summary-account > span:first-child { min-width: 0; }
-.support-user-id { color: var(--workspace-muted); font-size: 11px; font-weight: 400; font-variant-numeric: tabular-nums; }
-.support-summary-balance { flex-shrink: 0; }
-.support-balance { margin-top: 2px; font-size: 19px; font-weight: 600; line-height: 1.3; letter-spacing: -0.025em; font-variant-numeric: tabular-nums; }
+.support-summary { display: grid; gap: 10px; padding: 12px 14px; }
+.support-summary-overview { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px 24px; min-width: 0; }
+.support-summary-identity { min-width: 0; }
+.support-summary-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.support-summary-account { margin-top: 4px; font-size: 14px; line-height: 1.4; font-weight: 600; overflow-wrap: anywhere; }
+.support-user-id { padding: 1px 5px; border-radius: 4px; background: var(--workspace-hover); color: var(--workspace-muted); font-size: 10px; line-height: 1.4; font-weight: 500; font-variant-numeric: tabular-nums; }
+.support-summary-balance { min-width: 0; text-align: right; }
+.support-balance { margin-top: 4px; font-size: 20px; font-weight: 600; line-height: 1.2; letter-spacing: -0.025em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .support-label { font-size: 11px; line-height: 1.4; color: var(--workspace-muted); }
-.support-summary-trial { display: flex; align-items: center; gap: 12px; }
-.support-trial-copy { min-width: 0; }
-.support-trial-state { display: flex; align-items: center; gap: 5px; margin-top: 3px; font-size: 12px; line-height: 1.4; font-weight: 500; }
-.support-trial-note { margin-top: 2px; font-size: 10px; line-height: 1.4; color: var(--workspace-muted); }
-.support-panel .support-grant { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; gap: 5px; min-height: 32px; padding: 6px 10px; font-size: 12px; white-space: nowrap; }
+.support-summary-trial { display: flex; align-items: center; gap: 12px; min-width: 0; padding-top: 9px; border-top: 1px solid var(--support-card-rule); }
+.support-trial-copy { flex: 1; min-width: 0; }
+.support-trial-heading { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; }
+.support-trial-caption { color: var(--workspace-ink); font-size: 12px; line-height: 1.5; font-weight: 500; }
+.support-trial-state { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; font-size: 12px; line-height: 1.5; }
+.support-trial-state > span { min-width: 0; overflow-wrap: anywhere; }
+.support-trial-note { margin-top: 3px; font-size: 11px; line-height: 1.5; color: var(--workspace-muted); overflow-wrap: anywhere; }
+.support-panel .support-grant { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; gap: 5px; min-height: 36px; padding: 7px 12px; font-size: 12px; white-space: nowrap; }
 .support-record-tabs { display: flex; align-items: center; gap: 4px; padding-bottom: 6px; border-bottom: 1px solid var(--workspace-rule); }
 .support-record-tabs button { display: inline-flex; align-items: center; gap: 7px; min-height: 34px; padding: 6px 10px; border: 1px solid transparent; border-radius: 6px; font-size: 12px; font-weight: 500; color: var(--workspace-muted); transition: color 120ms ease, background-color 120ms ease; }
 .support-record-tabs button[aria-selected="true"] { border-color: var(--workspace-rule); background: var(--workspace-surface); color: rgb(var(--brand-rgb)); box-shadow: inset 0 1px 0 var(--workspace-highlight), 0 1px 2px rgb(15 23 42 / 3%); }
@@ -446,23 +453,21 @@ function statusClass(value: string) {
 .support-empty { padding: 20px 0; font-size: 12px; color: var(--workspace-muted); }
 .support-initial { display: flex; min-height: 150px; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
 @container support (min-width: 760px) { .support-record-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container support (max-width: 320px) {
+  .support-summary-overview { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .support-summary-balance { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; text-align: left; }
+  .support-balance { margin-top: 0; }
+  .support-trial-heading { column-gap: 10px; }
+}
 @media (max-width: 767px) {
   .support-panel .support-lookup > div { flex-basis: 100%; min-width: 0; }
   .support-panel .support-lookup .input { min-height: 44px; font-size: 16px; }
   .support-panel .support-lookup > button { width: 100%; min-height: 44px; white-space: normal; }
-  .support-summary { gap: 10px 18px; padding: 11px 12px; }
-  .support-summary-identity { flex-basis: 100%; }
-  .support-summary-trial { flex: 1; justify-content: flex-end; gap: 8px; }
-  .support-trial-copy { max-width: 115px; }
+  .support-summary { padding: 12px; }
   .support-panel .support-grant { min-height: 44px; padding: 6px 9px; }
   .support-record-tabs button { min-height: 44px; }
 }
 @media (max-width: 359px) {
-  .support-summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; }
-  .support-summary-identity { grid-column: 1; }
-  .support-summary-balance { grid-column: 2; grid-row: 1; align-self: start; text-align: right; }
-  .support-summary-trial { grid-column: 1 / -1; justify-content: space-between; }
-  .support-trial-copy { max-width: none; }
   .support-record-meta { column-gap: 8px; }
   .support-token-line, .support-record-footer { column-gap: 12px; }
 }
