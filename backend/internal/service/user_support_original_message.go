@@ -11,8 +11,9 @@ import (
 )
 
 const (
-	userSupportPrivateReason = "Request failed. Additional details were hidden to protect sensitive information."
-	userSupportHiddenGroup   = "[REDACTED]"
+	userSupportPrivateReason          = "Request failed. Additional details were hidden to protect sensitive information."
+	userSupportHiddenGroup            = "[REDACTED]"
+	userSupportGeminiProhibitedReason = "Gemini rejected the prompt (PROHIBITED_CONTENT). Review the text and attached media, then try again."
 )
 
 // Only static reviewed explanations may leave this boundary. Never append
@@ -21,7 +22,7 @@ var supportOriginalTemplates = []struct {
 	code    *regexp.Regexp
 	message string
 }{
-	{regexp.MustCompile(`(?i)\bPROHIBITED_CONTENT\b`), "Gemini rejected the prompt (PROHIBITED_CONTENT). Review the text and attached media, then try again."},
+	{regexp.MustCompile(`(?i)\bPROHIBITED_CONTENT\b`), userSupportGeminiProhibitedReason},
 	{regexp.MustCompile(`(?i)\b(?:SAFETY|BLOCKED_REASON_SAFETY|CONTENT_FILTERED|CONTENT_POLICY_VIOLATION)\b`), "The request was blocked by a content safety check. Review the text and attached media, then try again."},
 	{regexp.MustCompile(`(?i)\b(?:RESOURCE_EXHAUSTED|QUOTA_EXCEEDED)\b`), "Request quota is temporarily unavailable. Please try again later or contact support."},
 	{regexp.MustCompile(`(?i)\b(?:RATE_LIMIT_EXCEEDED|RATE_LIMIT_ERROR|TOO_MANY_REQUESTS)\b`), "Too many requests. Please try again later."},
@@ -33,8 +34,9 @@ var supportOriginalTemplates = []struct {
 }
 
 var (
-	supportPrivateIdentity = regexp.MustCompile(`(?i)\b(?:project(?:[_ -]?(?:id|number|name))?|org(?:anization)?(?:[_ -]?(?:id|name))?|account(?:[_ -]?(?:id|name))?|tenant|workspace|subscription|consumer|channel|provider|upstream|proxy|request[_ -]?id|trace[_ -]?id|resource|key)\b(?:\s*[:=#/_-]\s*|\s+)`)
-	supportPrivateResource = regexp.MustCompile(`(?i)\b(?:projects|organizations|folders|subscriptions|tenants|workspaces|consumers|accounts|channels|proxies)/`)
+	supportOriginalGeminiPromptRejection = regexp.MustCompile(`(?i)^Gemini rejected (?:the )?prompt:[ \t]+PROHIBITED_CONTENT(?:$|[.;, \t])`)
+	supportPrivateIdentity               = regexp.MustCompile(`(?i)\b(?:project(?:[_ -]?(?:id|number|name))?|org(?:anization)?(?:[_ -]?(?:id|name))?|account(?:[_ -]?(?:id|name))?|tenant|workspace|subscription|consumer|channel|provider|upstream|proxy|request[_ -]?id|trace[_ -]?id|resource|key)\b(?:\s*[:=#/_-]\s*|\s+)`)
+	supportPrivateResource               = regexp.MustCompile(`(?i)\b(?:projects|organizations|folders|subscriptions|tenants|workspaces|consumers|accounts|channels|proxies)/`)
 )
 
 var (
@@ -82,6 +84,11 @@ func supportOriginalPublicReason(message string) string {
 		if message == template.message {
 			return template.message
 		}
+	}
+	// This recorded natural sentence owns its prompt label; it is not a prompt
+	// payload. Return only its static explanation before private-tail removal.
+	if supportOriginalGeminiPromptRejection.MatchString(message) {
+		return userSupportGeminiProhibitedReason
 	}
 	end := len(message)
 	for _, pattern := range []*regexp.Regexp{supportOriginalPrivateTail, supportOriginalHeader, supportOriginalStack, supportOriginalHTML, supportPrivateIdentity, supportPrivateResource} {

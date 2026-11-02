@@ -49,6 +49,50 @@ func TestUserSupportPrivacyPreservesExactApprovedGeminiReason(t *testing.T) {
 	}
 }
 
+func TestUserSupportPrivacyPreservesReviewedGeminiPromptRejection(t *testing.T) {
+	const approved = "Gemini rejected the prompt (PROHIBITED_CONTENT). Review the text and attached media, then try again."
+	const private = "; project=naturalPromptProjectCanary7f2; key=naturalPromptKeyCanary4d8; request_body={\"input\":\"naturalPromptInputCanary9c3\"}"
+	for _, reason := range []string{
+		"Gemini rejected prompt: PROHIBITED_CONTENT",
+		"Gemini rejected the prompt: PROHIBITED_CONTENT",
+	} {
+		for _, raw := range []string{
+			reason,
+			reason + private,
+			supportPrivacyJSON(t, map[string]any{"error": map[string]any{"message": reason + private}}),
+			supportPrivacyJSON(t, map[string]any{"response": map[string]any{"error": map[string]any{"message": reason + private}}}),
+		} {
+			got := PublicUserSupportOriginalMessage(raw, "RESOURCE_EXHAUSTED")
+			if got != approved {
+				t.Errorf("reviewed request-scoped natural reason must use its static template: got %q, want %q", got, approved)
+			}
+			assertSupportPrivacyOutput(t, got, "naturalPromptProjectCanary7f2", "naturalPromptKeyCanary4d8", "naturalPromptInputCanary9c3")
+		}
+	}
+}
+
+func TestUserSupportPrivacyGeminiPromptRejectionDoesNotRecognizePayloadEchoes(t *testing.T) {
+	want := PublicUserSupportOriginalMessage("Unrecognized final failure", "")
+	for _, raw := range []string{
+		`prompt: PROHIBITED_CONTENT`,
+		`prompt: "Gemini rejected prompt: PROHIBITED_CONTENT"`,
+		`Final failure; prompt: "PROHIBITED_CONTENT"`,
+		`Final failure; prompt: Gemini rejected prompt: PROHIBITED_CONTENT`,
+		`Final failure; debug="Gemini rejected prompt: PROHIBITED_CONTENT"`,
+		`Final failure; ["Gemini rejected prompt: PROHIBITED_CONTENT"]`,
+		`Final failure; Gemini rejected prompt: PROHIBITED_CONTENT`,
+		`Gemini rejected prompt: ["PROHIBITED_CONTENT"]`,
+		`Gemini rejected prompt: "PROHIBITED_CONTENT"`,
+		`Gemini rejected prompt: PROHIBITED_CONTENT_SUFFIX`,
+		`{"message":"Final failure","request":{"message":"Gemini rejected prompt: PROHIBITED_CONTENT"}}`,
+		`{"error":{"message":"Final failure"},"debug":{"message":"Gemini rejected prompt: PROHIBITED_CONTENT"}}`,
+	} {
+		if got := PublicUserSupportOriginalMessage(raw, ""); got != want {
+			t.Errorf("unknown payload text must not supply an approved Gemini reason: %q -> %q", raw, got)
+		}
+	}
+}
+
 func TestUserSupportPrivacyUnknownTextNeverReflectsPrivateValues(t *testing.T) {
 	canonical := PublicUserSupportOriginalMessage("Unrecognized upstream failure", "")
 	assertSupportPrivacyOutput(t, canonical)
