@@ -125,6 +125,7 @@
                 <span class="support-error-kind">{{ t(`userSupport.errorKinds.${safeErrorKind(item.error_kind)}`) }}</span>
               </div>
               <p data-test="support-error-original" class="support-error-original"><span class="support-label">{{ t('userSupport.columns.originalError') }}：</span>{{ originalError(item.original_message) }}</p>
+              <p v-if="item.chineseExplanation" data-test="support-error-chinese" class="support-error-chinese" lang="zh-CN"><span class="support-label">{{ t('userSupport.columns.chineseExplanation') }}：</span>{{ item.chineseExplanation }}</p>
             </li>
           </ol>
         </section>
@@ -140,6 +141,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
+import { translateSupportErrorToChinese } from './supportErrorTranslation'
 import { useAuthStore } from '@/stores/auth'
 import { useUserSupportAccess } from '@/composables/useUserSupportAccess'
 import { grant, lookup, search, type SupportSearchItem, type UserSupportResult } from '@/api/admin/userSupport'
@@ -165,7 +167,7 @@ const trialDescription = computed(() => {
   return `${t(`userSupport.trial.${status}`)} · ${t(trial.legacy ? 'userSupport.trial.historical' : 'userSupport.trial.once')}`
 })
 const usage = computed(() => result.value?.usage.items.slice(0, 10) ?? [])
-const errors = computed(() => result.value?.errors.items.slice(0, 10) ?? [])
+const errors = computed(() => result.value?.errors.items.slice(0, 10).map(item => ({ ...item, chineseExplanation: chineseError(item.original_message) })) ?? [])
 const lookupRoot = ref<HTMLElement | null>(null)
 const recordTabs = ref<HTMLElement | null>(null)
 const recordTabNames = ['usage', 'errors'] as const
@@ -368,6 +370,10 @@ function errorStatus(value: unknown, category: string) {
   return http + t(`userSupport.categories.${safeCategory(category)}`)
 }
 function originalError(value: unknown) { return typeof value === 'string' && value.trim() ? value : t('userSupport.noOriginalError') }
+function chineseError(value: unknown) {
+  if (typeof value !== 'string' || !/[a-z]{2}/i.test(value) || /[\u3400-\u9fff]/.test(value)) return ''
+  return translateSupportErrorToChinese(value) ?? t('userSupport.noChineseTranslation')
+}
 const statuses = new Set(['completed', 'interrupted', 'failed', 'empty', 'unknown'])
 const categories = new Set(['auth', 'quota', 'rate_limit', 'invalid_request', 'timeout', 'service_unavailable', 'other'])
 const errorKinds = new Set(['request', 'auth', 'account_auth', 'routing', 'upstream', 'network', 'internal', 'unknown'])
@@ -461,7 +467,8 @@ function statusClass(value: string) {
 .dark .support-error-status { color: #e6b786; }
 .support-error-kind { color: var(--workspace-muted); font-size: 10px; }
 .support-error-original { margin-top: 7px; padding-top: 7px; border-top: 1px solid var(--support-card-rule); color: var(--workspace-ink); font-size: 12px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
-.support-error-original .support-label { font-size: 10px; }
+.support-error-original .support-label, .support-error-chinese .support-label { font-size: 10px; }
+.support-error-chinese { margin-top: 4px; color: var(--workspace-ink); font-size: 12px; line-height: 1.55; overflow-wrap: anywhere; }
 .support-empty { padding: 20px 0; font-size: 12px; color: var(--workspace-muted); }
 .support-initial { display: flex; min-height: 150px; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
 @container support (min-width: 760px) { .support-record-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

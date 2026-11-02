@@ -20,7 +20,7 @@ func supportPrivacyJSON(t *testing.T, value any) string {
 func assertSupportPrivacyOutput(t *testing.T, got string, private ...string) {
 	t.Helper()
 	if strings.TrimSpace(got) == "" {
-		t.Fatal("a recorded reason must yield a nonempty static safe explanation")
+		t.Fatal("a recorded reason must yield a nonempty masked reason")
 	}
 	for _, canary := range private {
 		if strings.Contains(got, canary) {
@@ -50,7 +50,6 @@ func TestUserSupportPrivacyPreservesExactApprovedGeminiReason(t *testing.T) {
 }
 
 func TestUserSupportPrivacyPreservesReviewedGeminiPromptRejection(t *testing.T) {
-	const approved = "Gemini rejected the prompt (PROHIBITED_CONTENT). Review the text and attached media, then try again."
 	const private = "; project=naturalPromptProjectCanary7f2; key=naturalPromptKeyCanary4d8; request_body={\"input\":\"naturalPromptInputCanary9c3\"}"
 	for _, reason := range []string{
 		"Gemini rejected prompt: PROHIBITED_CONTENT",
@@ -63,8 +62,14 @@ func TestUserSupportPrivacyPreservesReviewedGeminiPromptRejection(t *testing.T) 
 			supportPrivacyJSON(t, map[string]any{"response": map[string]any{"error": map[string]any{"message": reason + private}}}),
 		} {
 			got := PublicUserSupportOriginalMessage(raw, "RESOURCE_EXHAUSTED")
-			if got != approved {
-				t.Errorf("reviewed request-scoped natural reason must use its static template: got %q, want %q", got, approved)
+			if !strings.HasPrefix(got, reason) {
+				t.Errorf("the recorded natural reason must remain readable: got %q, want prefix %q", got, reason)
+			}
+			if raw == reason && got != reason {
+				t.Errorf("a plain reason must not be rewritten: got %q, want %q", got, reason)
+			}
+			if raw != reason && !strings.Contains(got, "*") {
+				t.Errorf("private fragments must be replaced with an asterisk: %q", got)
 			}
 			assertSupportPrivacyOutput(t, got, "naturalPromptProjectCanary7f2", "naturalPromptKeyCanary4d8", "naturalPromptInputCanary9c3")
 		}
@@ -72,7 +77,6 @@ func TestUserSupportPrivacyPreservesReviewedGeminiPromptRejection(t *testing.T) 
 }
 
 func TestUserSupportPrivacyGeminiPromptRejectionDoesNotRecognizePayloadEchoes(t *testing.T) {
-	want := PublicUserSupportOriginalMessage("Unrecognized final failure", "")
 	for _, raw := range []string{
 		`prompt: PROHIBITED_CONTENT`,
 		`prompt: "Gemini rejected prompt: PROHIBITED_CONTENT"`,
@@ -80,22 +84,32 @@ func TestUserSupportPrivacyGeminiPromptRejectionDoesNotRecognizePayloadEchoes(t 
 		`Final failure; prompt: Gemini rejected prompt: PROHIBITED_CONTENT`,
 		`Final failure; debug="Gemini rejected prompt: PROHIBITED_CONTENT"`,
 		`Final failure; ["Gemini rejected prompt: PROHIBITED_CONTENT"]`,
-		`Final failure; Gemini rejected prompt: PROHIBITED_CONTENT`,
 		`Gemini rejected prompt: ["PROHIBITED_CONTENT"]`,
 		`Gemini rejected prompt: "PROHIBITED_CONTENT"`,
-		`Gemini rejected prompt: PROHIBITED_CONTENT_SUFFIX`,
 		`{"message":"Final failure","request":{"message":"Gemini rejected prompt: PROHIBITED_CONTENT"}}`,
 		`{"error":{"message":"Final failure"},"debug":{"message":"Gemini rejected prompt: PROHIBITED_CONTENT"}}`,
 	} {
-		if got := PublicUserSupportOriginalMessage(raw, ""); got != want {
-			t.Errorf("unknown payload text must not supply an approved Gemini reason: %q -> %q", raw, got)
+		got := PublicUserSupportOriginalMessage(raw, "")
+		assertSupportPrivacyOutput(t, got, "PROHIBITED_CONTENT", "Review the text and attached media")
+		if strings.Contains(raw, "Final failure") && !strings.HasPrefix(got, "Final failure") {
+			t.Errorf("masking a payload must preserve the actual failure: %q -> %q", raw, got)
 		}
+	}
+	// A plain symbolic suffix is still recorded text, not a classifier that may
+	// fabricate the longer reviewed content-policy explanation.
+	const reason = "Gemini rejected prompt: PROHIBITED_CONTENT_SUFFIX"
+	got := PublicUserSupportOriginalMessage(reason, "")
+	assertSupportPrivacyOutput(t, got, "Review the text and attached media")
+	if got == "Gemini rejected the prompt (PROHIBITED_CONTENT). Review the text and attached media, then try again." {
+		t.Errorf("a recorded suffix must not be classified as another reason: %q", got)
 	}
 }
 
 func TestUserSupportPrivacyUnknownTextNeverReflectsPrivateValues(t *testing.T) {
-	canonical := PublicUserSupportOriginalMessage("Unrecognized upstream failure", "")
-	assertSupportPrivacyOutput(t, canonical)
+	const plain = "Unrecognized upstream failure"
+	if got := PublicUserSupportOriginalMessage(plain, ""); got != plain {
+		t.Fatalf("ordinary recorded text must be preserved: %q", got)
+	}
 	for _, tc := range []struct{ name, raw, canary string }{
 		{"project", "Rejected; project=privateProjectCanary9b7", "privateProjectCanary9b7"},
 		{"organization", "Rejected; organization=privateOrgCanary3f2", "privateOrgCanary3f2"},
@@ -115,30 +129,33 @@ func TestUserSupportPrivacyUnknownTextNeverReflectsPrivateValues(t *testing.T) {
 			} {
 				got := PublicUserSupportOriginalMessage(raw, "")
 				assertSupportPrivacyOutput(t, got, tc.canary)
-				if got != canonical {
-					t.Errorf("unknown free text must use one static safe explanation: got %q, want %q", got, canonical)
+				if !strings.HasPrefix(got, "Rejected") || !strings.Contains(got, "*") {
+					t.Errorf("retain the reason and replace private fragments with an asterisk: %q", got)
 				}
 			}
 		})
 	}
 }
 
-func TestUserSupportPrivacyRecognizedCodesUseOnlyStaticTemplates(t *testing.T) {
+func TestUserSupportPrivacyRecognizedCodesPreserveRecordedTextAndMaskPrivateValues(t *testing.T) {
 	const private = "project=privateCodeProjectCanary4d8; org=privateCodeOrgCanary2a5; channel=privateCodeChannelCanary1c9; proxy=privateCodeProxyCanary3f7; request_id=privateCodeRequestCanary6b2; trace_id=privateCodeTraceCanary8e1; resource=projects/privateCodeResourceCanary7d3; key=privateCodeBareKeyCanary5a6; opaqueCodeCredentialCanary8q2M5v7P1k9"
 	canaries := []string{"privateCodeProjectCanary4d8", "privateCodeOrgCanary2a5", "privateCodeChannelCanary1c9", "privateCodeProxyCanary3f7", "privateCodeRequestCanary6b2", "privateCodeTraceCanary8e1", "privateCodeResourceCanary7d3", "privateCodeBareKeyCanary5a6", "opaqueCodeCredentialCanary8q2M5v7P1k9"}
 	for _, code := range []string{"RESOURCE_EXHAUSTED", "INVALID_ARGUMENT", "UNAUTHENTICATED", "PROHIBITED_CONTENT"} {
 		t.Run(code, func(t *testing.T) {
 			canonical := PublicUserSupportOriginalMessage(code, "")
 			assertSupportPrivacyOutput(t, canonical, canaries...)
-			for _, raw := range []string{
-				code + "; " + private,
-				supportPrivacyJSON(t, map[string]any{"error": map[string]any{"message": code + "; " + private}}),
-				supportPrivacyJSON(t, map[string]any{"error": map[string]any{"status": code, "message": private}}),
+			if canonical != code {
+				t.Fatalf("a code must remain its recorded value: %q", canonical)
+			}
+			for _, tc := range []struct{ raw, prefix string }{
+				{code + "; " + private, code + "; "},
+				{supportPrivacyJSON(t, map[string]any{"error": map[string]any{"message": code + "; " + private}}), code + "; "},
+				{supportPrivacyJSON(t, map[string]any{"error": map[string]any{"status": code, "message": private}}), "project=*"},
 			} {
-				got := PublicUserSupportOriginalMessage(raw, "")
+				got := PublicUserSupportOriginalMessage(tc.raw, "")
 				assertSupportPrivacyOutput(t, got, canaries...)
-				if got != canonical {
-					t.Errorf("recognized code must project its static template: got %q, want %q", got, canonical)
+				if !strings.HasPrefix(got, tc.prefix) || !strings.Contains(got, "*") {
+					t.Errorf("preserve the recorded message rather than substitute the status code: got %q, want prefix %q", got, tc.prefix)
 				}
 			}
 		})
@@ -175,20 +192,21 @@ func TestUserSupportPrivacyMissingOrUnextractableReasonIsEmpty(t *testing.T) {
 
 func TestUserSupportPrivacyIdentityOnlyPrimaryDoesNotReviveEarlierAttempt(t *testing.T) {
 	const earlier = "PROHIBITED_CONTENT"
-	want := PublicUserSupportOriginalMessage("Unrecognized final failure", "")
 	for _, primary := range []string{
 		"project=private-final-project; request failed",
 		"projects/private-final-project/locations/global: request failed",
 		"key=private-final-key",
 	} {
-		if got := PublicUserSupportOriginalMessage(primary, earlier); got != want {
-			t.Errorf("private primary must retain an unknown explanation, not an earlier attempt: %q", got)
+		want := PublicUserSupportOriginalMessage(primary, "")
+		got := PublicUserSupportOriginalMessage(primary, earlier)
+		assertSupportPrivacyOutput(t, got, "private-final-project", "private-final-key", earlier)
+		if got != want || !strings.Contains(got, "*") {
+			t.Errorf("mask the final reason without reviving an earlier attempt: %q", got)
 		}
 	}
 }
 
 func TestUserSupportPrivacyDoesNotClassifyRequestOrDebugPayloads(t *testing.T) {
-	want := PublicUserSupportOriginalMessage("Unrecognized final failure", "")
 	for _, raw := range []string{
 		`Final failure; debug="PROHIBITED_CONTENT"`,
 		`Final failure; request_body={"message":"PROHIBITED_CONTENT"}`,
@@ -199,8 +217,40 @@ func TestUserSupportPrivacyDoesNotClassifyRequestOrDebugPayloads(t *testing.T) {
 		`{"message":"Final failure","request":{"status":"PROHIBITED_CONTENT"}}`,
 		`{"message":"Final failure","status":"INVALID_ARGUMENT private-metadata"}`,
 	} {
-		if got := PublicUserSupportOriginalMessage(raw, ""); got != want {
+		got := PublicUserSupportOriginalMessage(raw, "")
+		assertSupportPrivacyOutput(t, got, "PROHIBITED_CONTENT", "RESOURCE_EXHAUSTED", "INVALID_ARGUMENT", "private-metadata")
+		if !strings.HasPrefix(got, "Final failure") {
 			t.Errorf("private diagnostic data must not supply a public reason: %q", got)
 		}
+	}
+}
+
+func TestUserSupportPrivacyMasksCredentialsAndPrivateTransportDetails(t *testing.T) {
+	for _, tc := range []struct {
+		name, raw string
+		private   []string
+	}{
+		{"cookie assignment", "Rejected; cookie=sessionCookieCanary9r3; retry later", []string{"sessionCookieCanary9r3"}},
+		{"set cookie assignment", "Rejected; set-cookie=session=setCookieCanary4s8; retry later", []string{"setCookieCanary4s8"}},
+		{"quoted credential label", `Rejected; api_key"="quotedLabelCanary7v2"; retry later`, []string{"quotedLabelCanary7v2"}},
+		{"non HTTP proxy", "Rejected socks5://proxyUserCanary:proxyPasswordCanary@10.12.13.14:1080; retry later", []string{"proxyUserCanary", "proxyPasswordCanary", "10.12.13.14", "1080"}},
+		{"PEM block", "Rejected; -----BEGIN PRIVATE KEY-----\nPRIVATE_BLOCK_PAYLOAD\n-----END PRIVATE KEY-----", []string{"PRIVATE_BLOCK_PAYLOAD", "BEGIN PRIVATE KEY", "END PRIVATE KEY"}},
+		{"truncated PEM block", "Rejected; -----BEGIN PRIVATE KEY-----\nTRUNCATED_BLOCK_PAYLOAD", []string{"TRUNCATED_BLOCK_PAYLOAD", "BEGIN PRIVATE KEY"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := PublicUserSupportOriginalMessage(tc.raw, "")
+			assertSupportPrivacyOutput(t, got, tc.private...)
+			if !strings.HasPrefix(got, "Rejected") || !strings.Contains(got, "*") {
+				t.Errorf("mask the private fragment while preserving the failure: %q", got)
+			}
+		})
+	}
+}
+
+func TestUserSupportPrivacyTruncatedLegacyPlaceholderIsBounded(t *testing.T) {
+	got := PublicUserSupportOriginalMessage("Rejected; [upstream", "")
+	assertSupportPrivacyOutput(t, got, "[upstream")
+	if !strings.HasPrefix(got, "Rejected") || !strings.Contains(got, "*") {
+		t.Errorf("a truncated private placeholder must be masked: %q", got)
 	}
 }

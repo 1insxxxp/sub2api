@@ -41,6 +41,7 @@ FRONTEND_CRITICAL_VITEST := \
 	src/api/__tests__/admin.modelProbes.spec.ts \
 	src/components/admin/workbench/__tests__/UserSupportPanel.spec.ts \
 	src/components/admin/workbench/__tests__/UserSupportPanel.mobile.spec.ts \
+	src/components/admin/workbench/__tests__/supportErrorTranslation.spec.ts \
 	src/components/admin/workbench/__tests__/ModelProbePanel.spec.ts \
 	src/components/admin/workbench/__tests__/ModelProbeConfigDialog.spec.ts \
 	src/views/admin/__tests__/AdminWorkbenchView.userSupport.spec.ts \
