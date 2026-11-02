@@ -101,6 +101,7 @@
                 <div data-field="charge"><dt>{{ t('userSupport.columns.charge') }}</dt><dd>{{ formatAmount(item.charged_amount) }}</dd></div>
                 <div data-field="duration"><dt>{{ t('userSupport.columns.duration') }}</dt><dd>{{ formatDuration(item.duration_ms) }}</dd></div>
                 <div data-field="first-token"><dt>{{ t('userSupport.firstToken') }}</dt><dd>{{ formatDuration(item.first_token_ms) }}</dd></div>
+                <div data-field="output-tps" :title="t('userSupport.outputTpsHint')"><dt>{{ t('userSupport.outputTps') }}</dt><dd>{{ formatOutputTps(item.output_tps) }}</dd></div>
               </dl>
             </li>
           </ol>
@@ -364,6 +365,7 @@ function formatTime(value: string, seconds = false) {
 function formatCount(value: number | null) { return typeof value === 'number' && Number.isFinite(value) ? value.toLocaleString() : '—' }
 function formatAmount(value: number) { return typeof value === 'number' && Number.isFinite(value) ? value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 }) : '—' }
 function formatDuration(value: number | null) { return typeof value === 'number' && Number.isFinite(value) ? `${(value / 1000).toFixed(2)}s` : '—' }
+function formatOutputTps(value: number | null) { return typeof value === 'number' && Number.isFinite(value) && value > 0 ? `${value.toFixed(1)} tok/s` : '—' }
 function displayModel(model: string) { return model && model !== 'unknown' ? model : t('userSupport.unknownModel') }
 function errorStatus(value: unknown, category: string) {
   const http = typeof value === 'number' && Number.isInteger(value) && value >= 100 && value <= 599 ? `HTTP ${value}｜` : ''

@@ -274,6 +274,84 @@ func TestUserSupportRecordsAreBoundedOwnedAndSafe(t *testing.T) {
 	require.ErrorIs(t, err, service.ErrUserSupportUserNotFound)
 }
 
+func TestUserSupportOutputTPSUsesPublicOutputAndTotalDuration(t *testing.T) {
+	ctx := context.Background()
+	u := supportUser(t, service.RoleUser, 0)
+	key := mustCreateApiKey(t, testEntClient(t), &service.APIKey{UserID: u.ID, Key: "sk-" + uuid.NewString(), Name: "support-output-tps"})
+	account := mustCreateAccount(t, testEntClient(t), &service.Account{Name: "support-output-tps", Type: service.AccountTypeAPIKey})
+	r := NewUserSupportRepository(integrationDB)
+	positive, zero, negative := 20_000, 0, -1
+	cases := []struct {
+		name        string
+		output      int
+		duration    *int
+		requestType service.RequestType
+		imageCount  int
+		imageTokens int
+		billingMode string
+		source      string
+		wantRate    bool
+	}{
+		{"legacy sync", 1000, &positive, service.RequestTypeSync, 0, 0, "token", "", true},
+		{"stream", 1000, &positive, service.RequestTypeStream, 0, 0, "token", "upstream", true},
+		{"websocket", 1000, &positive, service.RequestTypeWSV2, 0, 0, "token", "upstream", true},
+		{"cyber", 1000, &positive, service.RequestTypeCyberBlocked, 0, 0, "token", "upstream", true},
+		{"legacy unknown source", 1000, &positive, service.RequestTypeSync, 0, 0, "", "unknown", true},
+		{"positive local estimate", 1000, &positive, service.RequestTypeSync, 0, 0, "token", "estimated", true},
+		{"unreported positive persisted output", 1000, &positive, service.RequestTypeSync, 0, 0, "token", "unreported", false},
+		{"reported zero", 0, &positive, service.RequestTypeSync, 0, 0, "token", "upstream", false},
+		{"estimated zero", 0, &positive, service.RequestTypeSync, 0, 0, "token", "estimated", false},
+		{"negative output", -1, &positive, service.RequestTypeSync, 0, 0, "token", "", false},
+		{"missing duration", 1000, nil, service.RequestTypeSync, 0, 0, "token", "", false},
+		{"zero duration", 1000, &zero, service.RequestTypeSync, 0, 0, "token", "", false},
+		{"negative duration", 1000, &negative, service.RequestTypeSync, 0, 0, "token", "", false},
+		{"image count", 1000, &positive, service.RequestTypeSync, 1, 0, "token", "", false},
+		{"image output tokens", 1000, &positive, service.RequestTypeSync, 0, 1, "token", "", false},
+		{"image billing", 1000, &positive, service.RequestTypeSync, 0, 0, "image", "", false},
+		{"live", 1000, &positive, service.RequestTypeLive, 0, 0, "token", "", false},
+		{"unknown request type", 1000, &positive, service.RequestTypeUnknown, 0, 0, "token", "", false},
+	}
+	stamp := time.Now().UTC()
+	for index, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			requestID := uuid.NewString()
+			var usageID int64
+			err := integrationDB.QueryRowContext(ctx, `INSERT INTO usage_logs
+				(user_id,api_key_id,account_id,request_id,model,requested_model,output_tokens,duration_ms,first_token_ms,request_type,image_count,image_output_tokens,billing_mode,image_size,created_at)
+				VALUES($1,$2,$3,$4,'gemini-4-argon','gemini-4-argon',$5,$6,5000,$7,$8,$9,$10,CASE WHEN $8>0 THEN '1K' ELSE NULL END,$11) RETURNING id`,
+				u.ID, key.ID, account.ID, requestID, tc.output, tc.duration, tc.requestType, tc.imageCount, tc.imageTokens, tc.billingMode, stamp.Add(time.Duration(index)*time.Second)).Scan(&usageID)
+			require.NoError(t, err)
+			if tc.source != "" {
+				_, err = integrationDB.ExecContext(ctx, `INSERT INTO usage_response_outcomes
+					(usage_log_id,request_id,api_key_id,user_id,account_id,output_tokens_source)
+					VALUES($1,$2,$3,$4,$5,$6)`, usageID, requestID, key.ID, u.ID, account.ID, tc.source)
+				require.NoError(t, err)
+			}
+			items, err := r.ListUsage(ctx, u.ID)
+			require.NoError(t, err)
+			require.NotEmpty(t, items)
+			require.Equal(t, usageID, items[0].ID)
+			encoded, err := json.Marshal(items[0])
+			require.NoError(t, err)
+			var public map[string]any
+			require.NoError(t, json.Unmarshal(encoded, &public))
+			rate, present := public["output_tps"]
+			require.True(t, present, "output_tps must be explicitly null when not applicable")
+			if tc.wantRate {
+				require.Equal(t, float64(50), rate, "use the total 20s duration, including the 5s first-token wait")
+			} else {
+				require.Nil(t, rate)
+			}
+			if tc.source == "unreported" {
+				require.Nil(t, public["output_tokens"])
+			}
+			for _, internal := range []string{"image_count", "image_output_tokens", "billing_mode", "request_type", "output_tokens_source", "account_id"} {
+				require.NotContains(t, public, internal)
+			}
+		})
+	}
+}
+
 func TestUserSupportAmbiguousLegacyEmailNeverCreditsEitherUser(t *testing.T) {
 	ctx := context.Background()
 	admin := supportUser(t, service.RoleAdmin, 0)

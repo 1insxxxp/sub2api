@@ -80,7 +80,7 @@ func TestUserSupportOnlyReturnsSafeRecordValuesAndTenRows(t *testing.T) {
 		require.NoError(t, json.Unmarshal(panel["items"], &items))
 		for _, item := range items {
 			if panelName == "usage" {
-				assertSupportSchema(t, item, "id", "created_at", "model", "group_name", "input_tokens", "output_tokens", "cache_read_tokens", "charged_amount", "duration_ms", "first_token_ms", "status", "stream")
+				assertSupportSchema(t, item, "id", "created_at", "model", "group_name", "input_tokens", "output_tokens", "cache_read_tokens", "charged_amount", "duration_ms", "first_token_ms", "output_tps", "status", "stream")
 			} else {
 				assertSupportSchema(t, item, "id", "created_at", "model", "category", "group_name", "status_code", "error_kind", "original_message")
 			}

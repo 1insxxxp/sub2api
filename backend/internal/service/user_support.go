@@ -51,6 +51,7 @@ type UserSupportUsageRecord struct {
 	ChargedAmount   float64   `json:"charged_amount"`
 	DurationMs      *int64    `json:"duration_ms"`
 	FirstTokenMs    *int64    `json:"first_token_ms"`
+	OutputTPS       *float64  `json:"output_tps"`
 	Status          string    `json:"status"`
 	Stream          bool      `json:"stream"`
 }

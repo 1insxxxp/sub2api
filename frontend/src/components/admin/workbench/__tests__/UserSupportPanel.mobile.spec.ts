@@ -30,7 +30,7 @@ describe('support H5 content and touch interaction', () => {
     search.mockResolvedValue({ items: [{ id: 7147, email }] })
     lookup.mockResolvedValue({
       user: { id: 7147, email, balance: 2 }, trial: { status: 'eligible', amount: 15, granted_at: '', legacy: false },
-      usage: { status: 'ok', items: [{ id: 1, created_at: '2026-11-01T04:00:00Z', model: 'gemini-4-argon', group_name: 'Gemini <VIP>', input_tokens: 1234, output_tokens: 50, cache_read_tokens: 0, charged_amount: 0.2, duration_ms: 900, first_token_ms: 100, status: 'completed', stream: true }] },
+      usage: { status: 'ok', items: [{ id: 1, created_at: '2026-11-01T04:00:00Z', model: 'gemini-4-argon', group_name: 'Gemini <VIP>', input_tokens: 1234, output_tokens: 50, cache_read_tokens: 0, charged_amount: 0.2, duration_ms: 900, first_token_ms: 100, output_tps: 50 * 1000 / 900, status: 'completed', stream: true }] },
       errors: { status: 'ok', items: [{ id: 2, created_at: '2026-11-01T04:00:00Z', model: 'gemini-4-argon', group_name: 'Gemini <VIP>', status_code: 502, error_kind: 'upstream', category: 'service_unavailable', original_message: original }] },
     })
     const i18n = createI18n({ legacy: false, locale, messages: { zh: { userSupport: zh }, en: { userSupport: en } } })
@@ -53,6 +53,7 @@ describe('support H5 content and touch interaction', () => {
       ['tokens', '输入 / 输出 Token', 'Input / output tokens', ['1,234', '50']], ['cache', '缓存', 'Cache', ['0']],
       ['charge', '实际扣费', 'Charged', ['0.20']], ['duration', '耗时', 'Duration', ['0.90s']],
       ['first-token', '首字', 'First token', ['0.10s']],
+      ['output-tps', '输出 TPS', 'Output TPS', ['55.6 tok/s']],
     ] as const) {
       const metric = usage.get(`[data-field="${field}"]`)
       expect(metric.isVisible()).toBe(true); expect(metric.get('dt').text()).toBe(locale === 'zh' ? zhLabel : enLabel)
@@ -68,6 +69,20 @@ describe('support H5 content and touch interaction', () => {
     expect(error.get('[data-test="support-error-chinese"]').text()).toContain(locale === 'zh' ? '暂未提供此报错的中文翻译，请查看原始报错。' : 'No Chinese translation is available for this error. Please refer to the original error.')
     expect(error.find('img').exists()).toBe(false)
     expect(view.get('[data-test="support-tab-errors"]').attributes('aria-selected')).toBe('true')
+  })
+  it.each([null, undefined, 0, -1, NaN, Infinity])('shows no rate when output TPS is unavailable or invalid: %s', async output_tps => {
+    lookup.mockResolvedValue({
+      user: { id: 5262, email: 'tps-preview@local.invalid', balance: 0 }, trial: { status: 'eligible', amount: 15, granted_at: '', legacy: false },
+      usage: { status: 'ok', items: [{ id: 1, created_at: '2026-11-03T02:00:00Z', model: 'gemini-4-argon', group_name: '本地演示', input_tokens: 1234, output_tokens: 50, cache_read_tokens: 0, charged_amount: 0.2, duration_ms: 900, first_token_ms: 100, output_tps, status: 'completed', stream: true }] },
+      errors: { status: 'ok', items: [] },
+    })
+    const i18n = createI18n({ legacy: false, locale: 'zh', messages: { zh: { userSupport: zh } } })
+    view = mount(UserSupportPanel, { global: { plugins: [i18n], stubs: { Icon: true } } })
+    await flushPromises()
+    await view.get('[data-test="support-account"]').setValue('5262')
+    await view.get('form').trigger('submit'); await flushPromises()
+    expect(view.get('[data-field="output-tps"] dd').text()).toBe('—')
+    expect(grant).not.toHaveBeenCalled()
   })
   it.each([
     ['Gemini rejected the prompt (PROHIBITED_CONTENT). Review the text and attached media, then try again.', 'Gemini 拒绝了此次请求（PROHIBITED_CONTENT，内容限制）。请检查文本和附加媒体后重试。'],

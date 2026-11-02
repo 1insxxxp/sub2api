@@ -18,6 +18,7 @@ export interface SupportUsageRecord {
   charged_amount: number
   duration_ms: number | null
   first_token_ms: number | null
+  output_tps: number | null
   status: SupportRequestStatus
   stream: boolean
 }
