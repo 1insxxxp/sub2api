@@ -112,18 +112,20 @@ describe('support query and explicit credit grant', () => {
   })
   it('looks up without a grant and exposes a separate eligible action', async () => {
     const view = createView(); await query(view, ' customer@example.com '); expect(lookup).toHaveBeenCalledWith('customer@example.com'); expect(grant).not.toHaveBeenCalled()
-    expect(view.get('[data-test="support-grant"]').text()).toBe('userSupport.trial.send'); expect(view.text()).toContain('userSupport.trial.eligible')
+    expect(view.get('[data-test="support-grant"]').text()).toBe('userSupport.trial.send'); expect(view.text()).toContain('userSupport.trial.eligibleShort')
     expect(view.findAll('[data-test="support-usage-row"]')).toHaveLength(10); expect(view.get('[data-test="support-errors"]').isVisible()).toBe(false); expect(view.html()).not.toMatch(/SECRET-UPSTREAM|secret\.invalid|sk-secret/)
   })
   it('grants once to the current result ID, updates balance and preserves usage', async () => {
     const pending = deferred<unknown>(); grant.mockReturnValueOnce(pending.promise); const view = createView(); await query(view)
     await view.get('[data-test="support-grant"]').trigger('click'); await view.get('[data-test="support-grant"]').trigger('click'); expect(grant).toHaveBeenCalledTimes(1); expect(grant).toHaveBeenCalledWith(7147)
     expect(view.get('[data-test="support-grant"]').attributes('disabled')).toBeDefined(); pending.resolve({ user: { ...result().user, balance: 32.5 }, trial: { ...result().trial, status: 'granted' } }); await flushPromises()
-    expect(view.text()).toContain('32.50'); expect(view.text()).toContain('userSupport.trial.granted'); expect(view.find('[data-test="support-grant"]').exists()).toBe(false); expect(view.findAll('[data-test="support-usage-row"]')).toHaveLength(10)
+    expect(view.text()).toContain('32.50'); expect(view.text()).toContain('userSupport.trial.grantedShort'); expect(view.find('[data-test="support-grant"]').exists()).toBe(false); expect(view.findAll('[data-test="support-usage-row"]')).toHaveLength(10)
   })
   it('does not offer another grant for historical claims', async () => {
     const data = result(); data.trial.status = 'already_received'; data.trial.legacy = true; lookup.mockResolvedValue(data); const view = createView(); await query(view)
-    expect(view.text()).toContain('userSupport.trial.alreadyReceived'); expect(view.text()).toContain('userSupport.trial.historical'); expect(view.find('[data-test="support-grant"]').exists()).toBe(false)
+    expect(view.text()).toContain('userSupport.trial.receivedShort'); expect(view.text()).toContain('userSupport.trial.historicalShort'); expect(view.find('[data-test="support-grant"]').exists()).toBe(false)
+    expect(view.get('.support-trial-outcome').attributes('title')).toContain('userSupport.trial.alreadyReceived')
+    expect(view.get('.support-trial-outcome').attributes('title')).toContain('userSupport.trial.historical')
   })
   it('keeps the same customer grant disabled if a lookup is repeated while sending', async () => {
     const pending = deferred<unknown>(); grant.mockReturnValueOnce(pending.promise)
@@ -134,7 +136,7 @@ describe('support query and explicit credit grant', () => {
     expect(view.get('[data-test="support-grant"]').attributes('disabled')).toBeDefined()
     await view.get('[data-test="support-grant"]').trigger('click'); expect(grant).toHaveBeenCalledTimes(1)
     pending.resolve({ user: result().user, trial: { ...result().trial, status: 'granted' } }); await flushPromises()
-    expect(view.text()).toContain('32.50'); expect(view.text()).toContain('userSupport.trial.granted')
+    expect(view.text()).toContain('32.50'); expect(view.text()).toContain('userSupport.trial.grantedShort')
     expect(view.find('[data-test="support-grant"]').exists()).toBe(false); expect(lookup).toHaveBeenCalledTimes(3)
   })
   it('refreshes a pre-grant lookup snapshot that arrives after the grant succeeds', async () => {
@@ -146,7 +148,7 @@ describe('support query and explicit credit grant', () => {
     await view.get('form').trigger('submit'); await flushPromises()
     pendingGrant.resolve({ user: { ...result().user, balance: 32.5 }, trial: granted.trial }); await flushPromises()
     pendingLookup.resolve(result()); await flushPromises()
-    expect(view.text()).toContain('32.50'); expect(view.text()).toContain('userSupport.trial.granted')
+    expect(view.text()).toContain('32.50'); expect(view.text()).toContain('userSupport.trial.grantedShort')
     expect(view.find('[data-test="support-grant"]').exists()).toBe(false); expect(lookup).toHaveBeenCalledTimes(3); expect(grant).toHaveBeenCalledTimes(1)
   })
   it('keeps the successful receipt if a post-grant refresh is temporarily unavailable', async () => {
@@ -155,7 +157,7 @@ describe('support query and explicit credit grant', () => {
     const view = createView(); await query(view); await view.get('[data-test="support-grant"]').trigger('click')
     await view.get('form').trigger('submit'); await flushPromises()
     pending.resolve({ user: { ...result().user, balance: 32.5 }, trial: { ...result().trial, status: 'granted' } }); await flushPromises()
-    expect(view.text()).toContain('32.50'); expect(view.text()).toContain('userSupport.trial.granted')
+    expect(view.text()).toContain('32.50'); expect(view.text()).toContain('userSupport.trial.grantedShort')
     expect(view.text()).toContain('userSupport.errors.refreshAfterGrant'); expect(view.find('[data-test="support-grant"]').exists()).toBe(false)
     expect(view.text()).not.toContain('SECRET-UPSTREAM')
   })

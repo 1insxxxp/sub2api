@@ -46,21 +46,25 @@
               <p class="support-balance">{{ formatAmount(result.user.balance) }}</p>
             </div>
           </div>
-          <div class="support-summary-trial">
-            <div class="support-trial-copy">
-              <div class="support-trial-heading">
-                <p class="support-trial-caption">{{ t('userSupport.trial.title') }}</p>
-                <p class="support-trial-state" :class="result.trial.status === 'granted' ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-700 dark:text-dark-200'">
-                  <Icon :name="result.trial.status === 'eligible' ? 'gift' : result.trial.status === 'granted' ? 'checkCircle' : 'check'" size="xs" class="shrink-0" />
-                  <span>{{ t(result.trial.status === 'eligible' ? 'userSupport.trial.eligible' : result.trial.status === 'granted' ? 'userSupport.trial.granted' : 'userSupport.trial.alreadyReceived') }}</span>
-                </p>
+          <div class="support-summary-trial" :data-state="result.trial.status">
+            <p class="support-trial-label">
+              <Icon name="gift" size="sm" aria-hidden="true" />
+              <span>{{ t('userSupport.trial.label') }}</span>
+              <strong>{{ formatCount(result.trial.amount) }}</strong>
+            </p>
+            <div class="support-trial-controls">
+              <div class="support-trial-outcome" role="group" :aria-label="trialDescription" :title="trialDescription">
+                <span class="support-trial-state" :class="{ 'is-granted': result.trial.status === 'granted' }">
+                  <Icon v-if="result.trial.status !== 'eligible'" name="check" size="xs" aria-hidden="true" />
+                  <span>{{ t(result.trial.status === 'eligible' ? 'userSupport.trial.eligibleShort' : result.trial.status === 'granted' ? 'userSupport.trial.grantedShort' : 'userSupport.trial.receivedShort') }}</span>
+                </span>
+                <span v-if="result.trial.legacy" class="support-trial-source">{{ t('userSupport.trial.historicalShort') }}</span>
               </div>
-              <p class="support-trial-note">{{ t(result.trial.legacy ? 'userSupport.trial.historical' : 'userSupport.trial.once') }}</p>
+              <button v-if="result.trial.status === 'eligible'" type="button" data-test="support-grant" class="btn btn-primary support-grant"
+                :disabled="granting || busy || checking || denied" :aria-busy="granting" aria-describedby="support-trial-notice" @click="sendTrial">
+                <Icon v-if="granting" name="refresh" size="sm" class="motion-safe:animate-spin" />{{ t(granting ? 'userSupport.trial.sending' : 'userSupport.trial.send') }}
+              </button>
             </div>
-            <button v-if="result.trial.status === 'eligible'" type="button" data-test="support-grant" class="btn btn-primary support-grant"
-              :disabled="granting || busy || checking || denied" :aria-busy="granting" @click="sendTrial">
-              <Icon v-if="granting" name="refresh" size="sm" class="motion-safe:animate-spin" />{{ t(granting ? 'userSupport.trial.sending' : 'userSupport.trial.send') }}
-            </button>
           </div>
         </section>
 
@@ -154,6 +158,12 @@ const settledGrants = new Map<string, number>()
 let grantSequence = 0
 const errorKey = ref('')
 const result = ref<UserSupportResult | null>(null)
+const trialDescription = computed(() => {
+  const trial = result.value?.trial
+  if (!trial) return ''
+  const status = trial.status === 'eligible' ? 'eligible' : trial.status === 'granted' ? 'granted' : 'alreadyReceived'
+  return `${t(`userSupport.trial.${status}`)} · ${t(trial.legacy ? 'userSupport.trial.historical' : 'userSupport.trial.once')}`
+})
 const usage = computed(() => result.value?.usage.items.slice(0, 10) ?? [])
 const errors = computed(() => result.value?.errors.items.slice(0, 10) ?? [])
 const lookupRoot = ref<HTMLElement | null>(null)
@@ -399,8 +409,8 @@ function statusClass(value: string) {
   background-image: linear-gradient(125deg, rgb(255 255 255 / 4%), transparent 65%, rgb(148 163 184 / 3%));
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%), 0 2px 5px rgb(0 0 0 / 12%);
 }
-.support-summary { display: grid; gap: 10px; padding: 12px 14px; }
-.support-summary-overview { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px 24px; min-width: 0; }
+.support-summary { --support-summary-inset: 14px; display: grid; padding: 0; }
+.support-summary-overview { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px 24px; min-width: 0; padding: 12px var(--support-summary-inset); }
 .support-summary-identity { min-width: 0; }
 .support-summary-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .support-summary-account { margin-top: 4px; font-size: 14px; line-height: 1.4; font-weight: 600; overflow-wrap: anywhere; }
@@ -408,13 +418,15 @@ function statusClass(value: string) {
 .support-summary-balance { min-width: 0; text-align: right; }
 .support-balance { margin-top: 4px; font-size: 20px; font-weight: 600; line-height: 1.2; letter-spacing: -0.025em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .support-label { font-size: 11px; line-height: 1.4; color: var(--workspace-muted); }
-.support-summary-trial { display: flex; align-items: center; gap: 12px; min-width: 0; padding-top: 9px; border-top: 1px solid var(--support-card-rule); }
-.support-trial-copy { flex: 1; min-width: 0; }
-.support-trial-heading { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; }
-.support-trial-caption { color: var(--workspace-ink); font-size: 12px; line-height: 1.5; font-weight: 500; }
-.support-trial-state { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; font-size: 12px; line-height: 1.5; }
-.support-trial-state > span { min-width: 0; overflow-wrap: anywhere; }
-.support-trial-note { margin-top: 3px; font-size: 11px; line-height: 1.5; color: var(--workspace-muted); overflow-wrap: anywhere; }
+.support-summary-trial { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 12px; min-width: 0; padding: 8px var(--support-summary-inset); border-top: 1px solid var(--support-card-rule); border-radius: 0 0 7px 7px; background: var(--workspace-hover); }
+.support-trial-label { display: inline-flex; align-items: center; gap: 7px; min-width: max-content; color: var(--workspace-muted); font-size: 11px; line-height: 1.5; }
+.support-trial-label strong { margin-left: 1px; color: var(--workspace-ink); font-size: 14px; line-height: 1.4; font-weight: 600; font-variant-numeric: tabular-nums; }
+.support-trial-controls { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px 12px; min-width: 0; max-width: 100%; margin-inline-start: auto; }
+.support-trial-outcome { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.support-trial-state { display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border: 1px solid var(--workspace-rule); border-radius: 4px; background: var(--workspace-surface); color: var(--workspace-muted); font-size: 11px; line-height: 1.5; white-space: nowrap; }
+.support-trial-state.is-granted { border-color: rgb(16 185 129 / 18%); background: rgb(16 185 129 / 6%); color: #047857; }
+.dark .support-trial-state.is-granted { color: #6ee7b7; }
+.support-trial-source { color: var(--workspace-muted); font-size: 10px; line-height: 1.5; white-space: nowrap; }
 .support-panel .support-grant { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; gap: 5px; min-height: 36px; padding: 7px 12px; font-size: 12px; white-space: nowrap; }
 .support-record-tabs { display: flex; align-items: center; gap: 4px; padding-bottom: 6px; border-bottom: 1px solid var(--workspace-rule); }
 .support-record-tabs button { display: inline-flex; align-items: center; gap: 7px; min-height: 34px; padding: 6px 10px; border: 1px solid transparent; border-radius: 6px; font-size: 12px; font-weight: 500; color: var(--workspace-muted); transition: color 120ms ease, background-color 120ms ease; }
@@ -457,13 +469,19 @@ function statusClass(value: string) {
   .support-summary-overview { grid-template-columns: minmax(0, 1fr); gap: 10px; }
   .support-summary-balance { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; text-align: left; }
   .support-balance { margin-top: 0; }
-  .support-trial-heading { column-gap: 10px; }
+}
+@container support (max-width: 420px) {
+  .support-summary-trial[data-state="eligible"] { display: grid; grid-template-columns: minmax(0, 1fr) auto; row-gap: 4px; }
+  .support-summary-trial[data-state="eligible"] .support-trial-label { grid-column: 1; grid-row: 1; }
+  .support-summary-trial[data-state="eligible"] .support-trial-controls { display: contents; }
+  .support-summary-trial[data-state="eligible"] .support-trial-outcome { grid-column: 1; grid-row: 2; }
+  .support-summary-trial[data-state="eligible"] .support-grant { grid-column: 2; grid-row: 1 / 3; }
 }
 @media (max-width: 767px) {
   .support-panel .support-lookup > div { flex-basis: 100%; min-width: 0; }
   .support-panel .support-lookup .input { min-height: 44px; font-size: 16px; }
   .support-panel .support-lookup > button { width: 100%; min-height: 44px; white-space: normal; }
-  .support-summary { padding: 12px; }
+  .support-summary { --support-summary-inset: 12px; }
   .support-panel .support-grant { min-height: 44px; padding: 6px 9px; }
   .support-record-tabs button { min-height: 44px; }
 }
