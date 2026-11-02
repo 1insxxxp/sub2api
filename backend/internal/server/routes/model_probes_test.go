@@ -23,6 +23,10 @@ func (probeRouteGroups) ListActive(context.Context) ([]service.Group, error) {
 	return []service.Group{*g}, nil
 }
 
+func (probeRouteGroups) GetAvailableGroups(ctx context.Context, _ int64) ([]service.Group, error) {
+	return (probeRouteGroups{}).ListActive(ctx)
+}
+
 type probeRouteGateway struct{ selected int }
 
 func (*probeRouteGateway) ModelsForProbe(context.Context, *service.Group) ([]string, error) {
@@ -42,7 +46,7 @@ func TestModelProbeRoutesUseJWTAndFreshSupportCapability(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	access := &supportRouteRepo{enabled: true}
 	gateway := &probeRouteGateway{}
-	svc := service.NewModelProbeService(probeRouteGroups{}, access, gateway, probeRouteRunner{})
+	svc := service.NewModelProbeService(probeRouteGroups{}, access, gateway, probeRouteRunner{}, probeRouteGroups{})
 	h := &handler.Handlers{Admin: &handler.AdminHandlers{ModelProbe: admin.NewModelProbeHandler(svc)}}
 	r := gin.New()
 	role := service.RoleUser

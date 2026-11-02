@@ -50,7 +50,9 @@ type ModelProbeGateway interface {
 }
 type modelProbeGroups interface {
 	GetByID(context.Context, int64) (*Group, error)
-	ListActive(context.Context) ([]Group, error)
+}
+type modelProbeGroupVisibility interface {
+	GetAvailableGroups(context.Context, int64) ([]Group, error)
 }
 type modelProbeAccess interface {
 	CanAccess(context.Context, int64) (bool, error)
@@ -63,10 +65,11 @@ type ModelProbeService struct {
 	access  modelProbeAccess
 	gateway ModelProbeGateway
 	runner  modelProbeRunner
+	visible modelProbeGroupVisibility
 }
 
-func NewModelProbeService(groups modelProbeGroups, access modelProbeAccess, gateway ModelProbeGateway, runner modelProbeRunner) *ModelProbeService {
-	return &ModelProbeService{groups, access, gateway, runner}
+func NewModelProbeService(groups modelProbeGroups, access modelProbeAccess, gateway ModelProbeGateway, runner modelProbeRunner, visible modelProbeGroupVisibility) *ModelProbeService {
+	return &ModelProbeService{groups: groups, access: access, gateway: gateway, runner: runner, visible: visible}
 }
 func (s *ModelProbeService) authorize(ctx context.Context, id int64) error {
 	if s == nil || s.access == nil || id <= 0 {
@@ -91,7 +94,7 @@ func (s *ModelProbeService) Groups(ctx context.Context, actor int64) ([]ModelPro
 	if err := s.authorize(ctx, actor); err != nil {
 		return nil, err
 	}
-	rows, err := s.groups.ListActive(ctx)
+	rows, err := s.availableGroups(ctx, actor)
 	if err != nil {
 		return nil, ErrUserSupportUnavailable
 	}
@@ -103,9 +106,38 @@ func (s *ModelProbeService) Groups(ctx context.Context, actor int64) ([]ModelPro
 	}
 	return out, nil
 }
-func (s *ModelProbeService) catalog(ctx context.Context, id int64) (*Group, *ModelProbeCatalog, error) {
+func (s *ModelProbeService) availableGroups(ctx context.Context, actor int64) ([]Group, error) {
+	if s.visible == nil {
+		return nil, ErrUserSupportUnavailable
+	}
+	rows, err := s.visible.GetAvailableGroups(ctx, actor)
+	if err != nil {
+		return nil, ErrUserSupportUnavailable
+	}
+	return rows, nil
+}
+
+func (s *ModelProbeService) requireVisibleGroup(ctx context.Context, actor, id int64) error {
+	rows, err := s.availableGroups(ctx, actor)
+	if err != nil {
+		return err
+	}
+	for i := range rows {
+		if rows[i].ID == id && rows[i].Status == StatusActive && IsGroupContextValid(&rows[i]) {
+			return nil
+		}
+	}
+	return ErrModelProbeInvalid
+}
+
+func (s *ModelProbeService) catalog(ctx context.Context, actor, id int64) (*Group, *ModelProbeCatalog, error) {
 	if id <= 0 {
 		return nil, nil, ErrModelProbeInvalid
+	}
+	// Use the same actor-scoped directory as the ordinary API-key page on every
+	// request. A cached UI selection or a guessed group ID is not authorization.
+	if err := s.requireVisibleGroup(ctx, actor, id); err != nil {
+		return nil, nil, err
 	}
 	g, err := s.groups.GetByID(ctx, id)
 	if err != nil || g == nil || g.ID != id || g.Status != StatusActive || !IsGroupContextValid(g) {
@@ -131,7 +163,7 @@ func (s *ModelProbeService) Models(ctx context.Context, actor, id int64) (*Model
 	if err := s.authorize(ctx, actor); err != nil {
 		return nil, err
 	}
-	_, v, err := s.catalog(ctx, id)
+	_, v, err := s.catalog(ctx, actor, id)
 	return v, err
 }
 func (s *ModelProbeService) Run(ctx context.Context, actor, id int64, model string) (*ModelProbeResult, error) {
@@ -143,7 +175,7 @@ func (s *ModelProbeService) Run(ctx context.Context, actor, id int64, model stri
 	}
 	ctx, cancel := context.WithTimeout(ctx, 120*time.Second)
 	defer cancel()
-	group, err := s.groupForProbe(ctx, id, model)
+	group, err := s.groupForProbe(ctx, actor, id, model)
 	if err != nil {
 		return nil, err
 	}
@@ -171,8 +203,8 @@ func (s *ModelProbeService) Run(ctx context.Context, actor, id int64, model stri
 	applyProbeExecution(out, result, err)
 	return out, nil
 }
-func (s *ModelProbeService) groupForProbe(ctx context.Context, id int64, model string) (*Group, error) {
-	group, catalog, err := s.catalog(ctx, id)
+func (s *ModelProbeService) groupForProbe(ctx context.Context, actor, id int64, model string) (*Group, error) {
+	group, catalog, err := s.catalog(ctx, actor, id)
 	if err != nil {
 		return nil, err
 	}
@@ -216,6 +248,6 @@ func setProbeContextOutcome(ctx context.Context, out *ModelProbeResult) {
 }
 
 // Concrete provider keeps small interfaces testable while Wire resolves existing services.
-func ProvideModelProbeService(groups GroupRepository, access *UserSupportService, gateway ModelProbeGateway, runner *AccountTestService) *ModelProbeService {
-	return NewModelProbeService(groups, access, gateway, runner)
+func ProvideModelProbeService(groups GroupRepository, access *UserSupportService, gateway ModelProbeGateway, runner *AccountTestService, apiKeys *APIKeyService) *ModelProbeService {
+	return NewModelProbeService(groups, access, gateway, runner, apiKeys)
 }

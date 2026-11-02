@@ -1508,7 +1508,7 @@ curl -fsS -X PUT "${BASE}/api/v1/admin/users/123/support-access" \
 
 | 方法 | 端点 | 参数与响应 |
 |------|------|------------|
-| GET | `/api/v1/admin/model-probes/groups` | 返回 `{items:[{id,name,platform}]}`，仅有效可探测分组；只接受通用可选 `timezone` 查询参数 |
+| GET | `/api/v1/admin/model-probes/groups` | 返回 `{items:[{id,name,platform}]}`，复用当前账号普通 API 密钥页的可绑定分组范围；只接受通用可选 `timezone` 查询参数 |
 | GET | `/api/v1/admin/model-probes/groups/:id/models` | 返回 `{group:{id,name,platform},items:[{id}]}`，模型使用分组公开目录与别名 |
 | POST | `/api/v1/admin/model-probes/run` | 精确 JSON `{group_id:123,model:"公开模型名"}`；返回 `{group_id,model,status,duration_ms,started_at,error_code?}` |
 
@@ -1522,6 +1522,8 @@ curl -fsS -X POST "${BASE}/api/v1/admin/model-probes/run" \
   -H "Authorization: Bearer ${STAFF_JWT}" -H 'Content-Type: application/json' \
   --data '{"group_id":123,"model":"gemini-2.5-flash"}'
 ```
+
+分组可见范围直接复用 `APIKeyService.GetAvailableGroups(当前登录账号ID)`：活跃公开组按账号公开组限制筛选，专属组需显式授权，订阅组需有效订阅；管理员角色不额外扩大范围。不借其他客户身份。列表、模型查询与执行均实时检查同一范围，不可见分组 ID 统一拒绝且不读取模型目录或调用上游；授权/订阅查询失败时不回退完整管理员列表。
 
 每个模型重新核对分组和公开目录，按实际分组路由、模型映射与调度选取账号，取得业务并发槽后复用账号管理的原生探测。状态为 `success/failed/timeout/cancelled/unsupported`；只有明确的成功结束事件才能判定成功，空响应和中途断流不能算成功。服务端限时120秒，前端单次请求限时180秒，批量最多3个并发，支持停止、重试和切组取消。结果只返回公开模型、闭集状态与静态原因，不返回上游账号、真实映射、地址、凭据、原始报错或生成内容。探测可能产生上游费用和原生账号健康状态更新；不使用客户密钥、钱包或客户用量账单，也不代表某个客户的余额、订阅或密钥权限验收。
 

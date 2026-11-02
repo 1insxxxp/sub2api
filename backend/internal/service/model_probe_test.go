@@ -9,8 +9,13 @@ import (
 )
 
 type modelProbeGroupsStub struct {
-	group *Group
-	calls int
+	group         *Group
+	calls         int
+	all           []Group
+	visible       []Group
+	visibilitySet bool
+	visibilityErr error
+	actors        []int64
 }
 
 func (s *modelProbeGroupsStub) GetByID(context.Context, int64) (*Group, error) {
@@ -19,6 +24,19 @@ func (s *modelProbeGroupsStub) GetByID(context.Context, int64) (*Group, error) {
 }
 func (s *modelProbeGroupsStub) ListActive(context.Context) ([]Group, error) {
 	s.calls++
+	if s.all != nil {
+		return s.all, nil
+	}
+	return []Group{*s.group}, nil
+}
+func (s *modelProbeGroupsStub) GetAvailableGroups(_ context.Context, actor int64) ([]Group, error) {
+	s.actors = append(s.actors, actor)
+	if s.visibilityErr != nil {
+		return nil, s.visibilityErr
+	}
+	if s.visibilitySet {
+		return s.visible, nil
+	}
 	return []Group{*s.group}, nil
 }
 
@@ -33,12 +51,14 @@ func (s *modelProbeAccessStub) CanAccess(context.Context, int64) (bool, error) {
 }
 
 type modelProbeGatewayStub struct {
-	models   []string
-	selected int
-	released int
+	models       []string
+	catalogCalls int
+	selected     int
+	released     int
 }
 
 func (s *modelProbeGatewayStub) ModelsForProbe(context.Context, *Group) ([]string, error) {
+	s.catalogCalls++
 	return s.models, nil
 }
 func (s *modelProbeGatewayStub) SelectForProbe(context.Context, *Group, string) (*ModelProbeSelection, error) {
@@ -63,7 +83,7 @@ func modelProbeFixture() (*ModelProbeService, *modelProbeGroupsStub, *modelProbe
 	access := &modelProbeAccessStub{allowed: true}
 	gateway := &modelProbeGatewayStub{models: []string{"public-model"}}
 	runner := &modelProbeRunnerStub{result: ModelProbeExecution{Status: "success"}}
-	return NewModelProbeService(groups, access, gateway, runner), groups, access, gateway, runner
+	return NewModelProbeService(groups, access, gateway, runner, groups), groups, access, gateway, runner
 }
 func TestModelProbeDeniedBeforeCatalogOrSelection(t *testing.T) {
 	svc, g, a, gw, _ := modelProbeFixture()
@@ -130,5 +150,63 @@ func TestModelProbeCatalogDeduplicatesAndFiltersPrivateLabels(t *testing.T) {
 	v, err := svc.Models(context.Background(), 4, 7)
 	if err != nil || len(v.Items) != 1 || v.Group.Name != "[REDACTED]" {
 		t.Fatalf("unexpected catalog %#v %v", v, err)
+	}
+}
+
+func TestModelProbeGroupsUseOrdinaryUserVisibility(t *testing.T) {
+	svc, g, _, _, _ := modelProbeFixture()
+	hidden := *g.group
+	hidden.ID = 8
+	hidden.Name = "Hidden group"
+	g.all = []Group{*g.group, hidden}
+	g.visibilitySet = true
+	g.visible = []Group{*g.group}
+	got, err := svc.Groups(context.Background(), 4)
+	if err != nil || len(got) != 1 || got[0].ID != 7 {
+		t.Fatalf("ordinary-user scope expected only group7, got %#v %v", got, err)
+	}
+	if len(g.actors) != 1 || g.actors[0] != 4 {
+		t.Fatalf("visibility must use current actor, got %v", g.actors)
+	}
+}
+func TestModelProbeInvisibleGroupIDCannotReadModelsOrRun(t *testing.T) {
+	svc, g, _, gw, r := modelProbeFixture()
+	g.visibilitySet = true
+	g.visible = []Group{}
+	if _, err := svc.Models(context.Background(), 4, 7); !errors.Is(err, ErrModelProbeInvalid) {
+		t.Fatalf("invisible catalog must be invalid, got %v", err)
+	}
+	if _, err := svc.Run(context.Background(), 4, 7, "public-model"); !errors.Is(err, ErrModelProbeInvalid) {
+		t.Fatalf("invisible run must be invalid, got %v", err)
+	}
+	if gw.catalogCalls != 0 || gw.selected != 0 || r.account != 0 {
+		t.Fatal("invisible ID touched model catalog or upstream")
+	}
+}
+func TestModelProbeVisibilityRecheckedAfterGrantRevoked(t *testing.T) {
+	svc, g, _, gw, _ := modelProbeFixture()
+	if _, err := svc.Models(context.Background(), 4, 7); err != nil {
+		t.Fatal(err)
+	}
+	g.visibilitySet = true
+	g.visible = []Group{}
+	if _, err := svc.Run(context.Background(), 4, 7, "public-model"); !errors.Is(err, ErrModelProbeInvalid) {
+		t.Fatalf("revoked group must not run, got %v", err)
+	}
+	if gw.selected != 0 {
+		t.Fatal("stale visibility selected an account")
+	}
+}
+func TestModelProbeVisibilityLookupFailureFailsClosed(t *testing.T) {
+	svc, g, _, gw, _ := modelProbeFixture()
+	g.visibilityErr = errors.New("private repository error")
+	if _, err := svc.Groups(context.Background(), 4); !errors.Is(err, ErrUserSupportUnavailable) {
+		t.Fatalf("visibility lookup must fail closed, got %v", err)
+	}
+	if _, err := svc.Run(context.Background(), 4, 7, "public-model"); !errors.Is(err, ErrUserSupportUnavailable) {
+		t.Fatalf("visibility lookup must fail closed, got %v", err)
+	}
+	if gw.catalogCalls != 0 || gw.selected != 0 {
+		t.Fatal("failed scope lookup touched infrastructure")
 	}
 }
