@@ -216,9 +216,9 @@ func TestModelProbeVisibilityLookupFailureFailsClosed(t *testing.T) {
 }
 
 func TestModelProbeMissingPolicyDefaultsClosed(t *testing.T) {
-	svc, groups, access, gateway, runner := modelProbeFixture()
+	_, groups, access, gateway, runner := modelProbeFixture()
 	// A fresh service with no policy dependency must never inherit all models.
-	svc = NewModelProbeService(groups, access, gateway, runner, groups, probeSettingsFor(), probeRoot())
+	svc := NewModelProbeService(groups, access, gateway, runner, groups, probeSettingsFor(), probeRoot())
 	got, err := svc.Groups(context.Background(), 4)
 	if err != nil || len(got) != 0 {
 		t.Fatalf("missing configuration must expose no groups, got %#v %v", got, err)
