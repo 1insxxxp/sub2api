@@ -305,7 +305,7 @@ func (s *ModelProbeService) SaveConfigs(ctx context.Context, actor int64, change
 			return nil, ErrUserSupportUnavailable
 		}
 		values[modelProbePolicyKey(change.GroupID)] = string(value)
-		out = append(out, ModelProbeConfigResult{GroupID: change.GroupID, Enabled: change.Enabled})
+		out = append(out, change)
 	}
 	if err := s.authorizeConfig(ctx, actor); err != nil {
 		return nil, err
