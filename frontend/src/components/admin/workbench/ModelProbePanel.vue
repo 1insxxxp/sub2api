@@ -31,12 +31,14 @@
       </div>
       <div v-if="running || completed" class="probe-progress-track" role="progressbar" :aria-label="t('modelProbes.progress')" :aria-valuenow="completed" :aria-valuemin="0" :aria-valuemax="rows.length"><span :style="{ width: `${completed / rows.length * 100}%` }" /></div>
       <div class="probe-list" :aria-label="t('modelProbes.models')">
-        <div class="probe-list-heading" aria-hidden="true"><span>{{ t('modelProbes.model') }}</span><span>{{ t('modelProbes.result') }}</span><span>{{ t('modelProbes.duration') }}</span><span /></div>
         <article v-for="row in rows" :key="row.id" data-test="probe-row" :data-probe-status="row.status" class="probe-row">
           <div class="probe-model"><span class="probe-model-id">{{ row.display_name || row.id }}</span><span v-if="row.display_name && row.display_name !== row.id" class="probe-model-alias">{{ row.id }}</span></div>
-          <div class="probe-result"><span class="probe-state" :class="`probe-state-${row.status}`"><span class="probe-state-dot" :class="{ 'motion-safe:animate-pulse': row.status === 'testing' }" />{{ t(`modelProbes.status.${row.status}`) }}</span><p v-if="isFailure(row.status)" class="probe-reason">{{ t(`modelProbes.reasons.${row.status}`) }}</p></div>
-          <span class="probe-duration tabular-nums">{{ row.duration_ms !== undefined ? `${Math.max(0, Math.round(row.duration_ms))} ms` : '—' }}</span>
-          <button type="button" :data-test="`probe-single-${row.id}`" class="probe-row-action min-h-11" :disabled="running || denied" :aria-label="`${t(isFailure(row.status) || row.status === 'cancelled' ? 'modelProbes.retry' : 'modelProbes.probe')} ${row.id}`" @click="start([row])"><Icon name="refresh" size="sm" /><span>{{ t(isFailure(row.status) || row.status === 'cancelled' ? 'modelProbes.retry' : 'modelProbes.probe') }}</span></button>
+          <p v-if="isFailure(row.status)" class="probe-reason">{{ t(`modelProbes.reasons.${row.status}`) }}</p>
+          <div class="probe-result">
+            <span class="probe-state" :class="`probe-state-${row.status}`"><span class="probe-state-dot" :class="{ 'motion-safe:animate-pulse': row.status === 'testing' }" />{{ t(`modelProbes.status.${row.status}`) }}</span>
+            <span class="probe-duration tabular-nums" :aria-label="t('modelProbes.duration')">{{ row.duration_ms !== undefined ? `${Math.max(0, Math.round(row.duration_ms))} ms` : '—' }}</span>
+          </div>
+          <button type="button" :data-test="`probe-single-${row.id}`" class="probe-row-action min-h-11" :disabled="running || denied" :aria-label="`${t(isFailure(row.status) || row.status === 'cancelled' ? 'modelProbes.retry' : 'modelProbes.probe')} ${row.id}`" :title="`${t(isFailure(row.status) || row.status === 'cancelled' ? 'modelProbes.retry' : 'modelProbes.probe')} ${row.id}`" @click="start([row])"><Icon name="refresh" size="sm" /></button>
         </article>
       </div>
     </template>
@@ -277,7 +279,7 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.model-probe-panel { color: var(--workspace-ink); }
+.model-probe-panel { container: model-probes / inline-size; color: var(--workspace-ink); }
 .probe-toolbar { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 12px; }
 .probe-group-field { flex: 1 1 280px; max-width: 480px; }
 .probe-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
@@ -291,38 +293,35 @@ onBeforeUnmount(() => {
 .probe-success-text { color: rgb(5 150 105); }
 .probe-progress-track { height: 2px; margin-bottom: 8px; overflow: hidden; background: var(--workspace-rule); border-radius: 2px; }
 .probe-progress-track span { display: block; height: 100%; background: rgb(var(--brand-rgb)); transition: width 150ms ease; }
-.probe-list { display: grid; gap: 6px; }
-.probe-list-heading, .probe-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(150px, .5fr) 90px 76px; align-items: center; gap: 16px; }
-.probe-list-heading { padding: 7px 14px; font-size: 11px; color: var(--workspace-muted); }
-.probe-row { min-width: 0; padding: 7px 14px; border: 1px solid var(--workspace-rule); border-radius: 7px; background: linear-gradient(125deg, var(--workspace-highlight), transparent 65%), var(--workspace-surface); box-shadow: inset 0 1px 0 var(--workspace-highlight), 0 2px 5px rgb(0 0 0 / .025); }
-.probe-model { min-width: 0; display: grid; gap: 3px; }
-.probe-model-id { font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
-.probe-model-alias, .probe-reason { font-size: 11px; color: var(--workspace-muted); overflow-wrap: anywhere; }
-.probe-reason { margin: 4px 0 0; line-height: 1.5; }
-.probe-state { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--workspace-muted); }
+.probe-list { display: grid; grid-template-columns: minmax(0, 1fr); align-items: stretch; gap: 6px; }
+.probe-row { display: grid; grid-template-columns: minmax(0, 1fr) 44px; grid-template-rows: auto 1fr auto; gap: 4px 8px; min-width: 0; padding: 8px 10px; border: 1px solid var(--workspace-rule); border-radius: 7px; background: linear-gradient(125deg, var(--workspace-highlight), transparent 65%), var(--workspace-surface); box-shadow: inset 0 1px 0 var(--workspace-highlight), 0 2px 5px rgb(0 0 0 / .025); }
+.probe-model { grid-column: 1; grid-row: 1; min-width: 0; display: grid; gap: 2px; }
+.probe-model-id { font-size: 13px; font-weight: 500; line-height: 1.4; overflow-wrap: anywhere; }
+.probe-model-alias, .probe-reason { font-size: 11px; line-height: 1.4; color: var(--workspace-muted); overflow-wrap: anywhere; }
+.probe-result { grid-column: 1; grid-row: 3; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-width: 0; }
+.probe-reason { grid-column: 1; grid-row: 2; margin: 0; }
+.probe-state { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; line-height: 1.4; color: var(--workspace-muted); }
 .probe-state-dot { height: 5px; width: 5px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
 .probe-state-success { color: rgb(5 150 105); }
 .probe-state-failed { color: rgb(220 38 38); }
 .probe-state-timeout, .probe-state-unsupported { color: rgb(180 83 9); }
 .probe-state-testing { color: rgb(var(--brand-rgb)); }
-.probe-duration { font-size: 12px; color: var(--workspace-muted); }
-.probe-row-action { display: inline-flex; align-items: center; justify-content: center; gap: 5px; border-radius: 5px; color: rgb(var(--brand-rgb)); font-size: 12px; }
+.probe-duration { font-size: 11px; line-height: 1.4; color: var(--workspace-muted); }
+.probe-row-action { grid-column: 2; grid-row: 1 / -1; display: inline-flex; align-self: center; align-items: center; justify-content: center; width: 44px; border-radius: 5px; color: rgb(var(--brand-rgb)); }
 .probe-row-action:hover:not(:disabled) { background: var(--workspace-hover); }
 .probe-row-action:focus-visible { outline: 2px solid rgb(var(--brand-rgb)); outline-offset: 2px; }
 .probe-row-action:disabled { opacity: .4; cursor: not-allowed; }
 :global(.dark .model-probe-panel .probe-error), :global(.dark .model-probe-panel .probe-state-failed) { color: rgb(248 113 113); }
 :global(.dark .model-probe-panel .probe-state-success), :global(.dark .model-probe-panel .probe-success-text) { color: rgb(52 211 153); }
 :global(.dark .model-probe-panel .probe-state-timeout), :global(.dark .model-probe-panel .probe-state-unsupported) { color: rgb(251 191 36); }
+:global(.dark .model-probe-panel .probe-row-action), :global(.dark .model-probe-panel .probe-state-testing) { color: #93b8ef; }
+@container model-probes (min-width: 580px) { .probe-list { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 1fr; } }
+@container model-probes (min-width: 900px) { .probe-list { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@container model-probes (min-width: 1240px) { .probe-list { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (max-width: 639px) {
   .probe-group-field { flex-basis: 100%; max-width: none; }
   .probe-actions { width: 100%; }
   .probe-actions > button { flex: 1 1 auto; padding-inline: 10px; font-size: 12px; }
-  .probe-list-heading { display: none; }
-  .probe-row { grid-template-columns: minmax(0, 1fr) auto; gap: 7px 12px; padding: 10px 12px; }
-  .probe-model { grid-column: 1; }
-  .probe-result { grid-column: 1; grid-row: 2; }
-  .probe-duration { grid-column: 1; grid-row: 3; font-size: 11px; }
-  .probe-row-action { grid-column: 2; grid-row: 1 / 4; min-width: 44px; padding-inline: 8px; }
   .probe-summary { gap: 7px 14px; }
 }
 @media (prefers-reduced-motion: reduce) { .probe-progress-track span { transition: none; } }
