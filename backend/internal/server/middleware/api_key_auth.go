@@ -507,7 +507,8 @@ func validateAPIKeyGroupAllowed(apiKey *service.APIKey) bool {
 		return true
 	}
 	group := apiKey.Group
-	if group.IsSubscriptionType() {
+	if group.IsSubscriptionType() || group.IsCategoryDefault {
+		// Category entries derive admission from current source permissions at resolution.
 		return true
 	}
 	return apiKey.User.CanBindGroup(group.ID, group.IsExclusive)

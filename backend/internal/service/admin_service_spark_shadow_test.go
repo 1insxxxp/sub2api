@@ -195,7 +195,9 @@ func TestCreateShadowInheritsParentEffectiveOpenAILongContextBillingValue(t *tes
 func TestCreateShadow_BindGroups(t *testing.T) {
 	ctx := context.Background()
 	repo := newSparkShadowRepoStub()
-	svc := &adminServiceImpl{accountRepo: repo}
+	svc := &adminServiceImpl{accountRepo: repo, groupRepo: &groupRepoStubForAdmin{getByIDByID: map[int64]*Group{
+		42: {ID: 42, Platform: PlatformOpenAI, Status: StatusActive, SubscriptionType: SubscriptionTypeStandard, Hydrated: true},
+	}}}
 
 	parent := &Account{
 		Name:     "parent",

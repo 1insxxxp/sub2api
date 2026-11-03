@@ -130,6 +130,11 @@ func SourceGroupID(v int64) predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldEQ(FieldSourceGroupID, v))
 }
 
+// CategoryDefaultGroupID applies equality check predicate on the "category_default_group_id" field. It's identical to CategoryDefaultGroupIDEQ.
+func CategoryDefaultGroupID(v int64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEQ(FieldCategoryDefaultGroupID, v))
+}
+
 // CustomGroupID applies equality check predicate on the "custom_group_id" field. It's identical to CustomGroupIDEQ.
 func CustomGroupID(v int64) predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldEQ(FieldCustomGroupID, v))
@@ -1073,6 +1078,56 @@ func SourceGroupIDIsNil() predicate.UsageLog {
 // SourceGroupIDNotNil applies the NotNil predicate on the "source_group_id" field.
 func SourceGroupIDNotNil() predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldNotNull(FieldSourceGroupID))
+}
+
+// CategoryDefaultGroupIDEQ applies the EQ predicate on the "category_default_group_id" field.
+func CategoryDefaultGroupIDEQ(v int64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEQ(FieldCategoryDefaultGroupID, v))
+}
+
+// CategoryDefaultGroupIDNEQ applies the NEQ predicate on the "category_default_group_id" field.
+func CategoryDefaultGroupIDNEQ(v int64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNEQ(FieldCategoryDefaultGroupID, v))
+}
+
+// CategoryDefaultGroupIDIn applies the In predicate on the "category_default_group_id" field.
+func CategoryDefaultGroupIDIn(vs ...int64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldIn(FieldCategoryDefaultGroupID, vs...))
+}
+
+// CategoryDefaultGroupIDNotIn applies the NotIn predicate on the "category_default_group_id" field.
+func CategoryDefaultGroupIDNotIn(vs ...int64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNotIn(FieldCategoryDefaultGroupID, vs...))
+}
+
+// CategoryDefaultGroupIDGT applies the GT predicate on the "category_default_group_id" field.
+func CategoryDefaultGroupIDGT(v int64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldGT(FieldCategoryDefaultGroupID, v))
+}
+
+// CategoryDefaultGroupIDGTE applies the GTE predicate on the "category_default_group_id" field.
+func CategoryDefaultGroupIDGTE(v int64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldGTE(FieldCategoryDefaultGroupID, v))
+}
+
+// CategoryDefaultGroupIDLT applies the LT predicate on the "category_default_group_id" field.
+func CategoryDefaultGroupIDLT(v int64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldLT(FieldCategoryDefaultGroupID, v))
+}
+
+// CategoryDefaultGroupIDLTE applies the LTE predicate on the "category_default_group_id" field.
+func CategoryDefaultGroupIDLTE(v int64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldLTE(FieldCategoryDefaultGroupID, v))
+}
+
+// CategoryDefaultGroupIDIsNil applies the IsNil predicate on the "category_default_group_id" field.
+func CategoryDefaultGroupIDIsNil() predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldIsNull(FieldCategoryDefaultGroupID))
+}
+
+// CategoryDefaultGroupIDNotNil applies the NotNil predicate on the "category_default_group_id" field.
+func CategoryDefaultGroupIDNotNil() predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNotNull(FieldCategoryDefaultGroupID))
 }
 
 // CustomGroupIDEQ applies the EQ predicate on the "custom_group_id" field.

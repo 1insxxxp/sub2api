@@ -62,6 +62,8 @@ type Group struct {
 	SubscriptionType string `json:"subscription_type,omitempty"`
 	// 是否启用系统级自定义模型路由
 	SystemCustomRoutingEnabled bool `json:"system_custom_routing_enabled,omitempty"`
+	// 分类默认入口；使用独立已发布模型路由
+	IsCategoryDefault bool `json:"is_category_default,omitempty"`
 	// DailyLimitUsd holds the value of the "daily_limit_usd" field.
 	DailyLimitUsd *float64 `json:"daily_limit_usd,omitempty"`
 	// WeeklyLimitUsd holds the value of the "weekly_limit_usd" field.
@@ -339,7 +341,7 @@ func (*Group) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case group.FieldI18n, group.FieldVideoModelPrices, group.FieldModelPricing, group.FieldModelAliases, group.FieldModelRouting, group.FieldSupportedModelScopes, group.FieldMessagesDispatchModelConfig, group.FieldModelAllowlist, group.FieldModelStatusVisibility, group.FieldCodexModelsManifestConfig, group.FieldReasoningEffortMappings:
 			values[i] = new([]byte)
-		case group.FieldEmptyResponseCompensationEnabled, group.FieldGeminiInputCountingEnabled, group.FieldPeakRateEnabled, group.FieldIsExclusive, group.FieldSystemCustomRoutingEnabled, group.FieldAllowImageGeneration, group.FieldAllowBatchImageGeneration, group.FieldImageCountBilling, group.FieldImageRateIndependent, group.FieldVideoRateIndependent, group.FieldLongContextPricingEnabled, group.FieldClaudeCodeOnly, group.FieldModelRoutingEnabled, group.FieldMcpXMLInject, group.FieldAllowMessagesDispatch, group.FieldAllowLive, group.FieldForceOpenaiFast, group.FieldFreeOpenaiFast, group.FieldRequireOauthOnly, group.FieldRequirePrivacySet, group.FieldSimulateClaudeMaxEnabled, group.FieldProfitControlEnabled:
+		case group.FieldEmptyResponseCompensationEnabled, group.FieldGeminiInputCountingEnabled, group.FieldPeakRateEnabled, group.FieldIsExclusive, group.FieldSystemCustomRoutingEnabled, group.FieldIsCategoryDefault, group.FieldAllowImageGeneration, group.FieldAllowBatchImageGeneration, group.FieldImageCountBilling, group.FieldImageRateIndependent, group.FieldVideoRateIndependent, group.FieldLongContextPricingEnabled, group.FieldClaudeCodeOnly, group.FieldModelRoutingEnabled, group.FieldMcpXMLInject, group.FieldAllowMessagesDispatch, group.FieldAllowLive, group.FieldForceOpenaiFast, group.FieldFreeOpenaiFast, group.FieldRequireOauthOnly, group.FieldRequirePrivacySet, group.FieldSimulateClaudeMaxEnabled, group.FieldProfitControlEnabled:
 			values[i] = new(sql.NullBool)
 		case group.FieldRateMultiplier, group.FieldPeakRateMultiplier, group.FieldDailyLimitUsd, group.FieldWeeklyLimitUsd, group.FieldMonthlyLimitUsd, group.FieldImageRateMultiplier, group.FieldImagePrice1k, group.FieldImagePrice2k, group.FieldImagePrice4k, group.FieldBatchImageDiscountMultiplier, group.FieldBatchImageHoldMultiplier, group.FieldVideoRateMultiplier, group.FieldVideoPrice480p, group.FieldVideoPrice720p, group.FieldVideoPrice1080p, group.FieldWebSearchPricePerCall, group.FieldSearchPricePer1k, group.FieldAudioRealtimePricePerMin, group.FieldAudioTtsPricePerMillionChars, group.FieldAudioSttPricePerHour, group.FieldProfitMinMargin, group.FieldProfitSafetyBuffer:
 			values[i] = new(sql.NullFloat64)
@@ -500,6 +502,12 @@ func (_m *Group) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field system_custom_routing_enabled", values[i])
 			} else if value.Valid {
 				_m.SystemCustomRoutingEnabled = value.Bool
+			}
+		case group.FieldIsCategoryDefault:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field is_category_default", values[i])
+			} else if value.Valid {
+				_m.IsCategoryDefault = value.Bool
 			}
 		case group.FieldDailyLimitUsd:
 			if value, ok := values[i].(*sql.NullFloat64); !ok {
@@ -1048,6 +1056,9 @@ func (_m *Group) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("system_custom_routing_enabled=")
 	builder.WriteString(fmt.Sprintf("%v", _m.SystemCustomRoutingEnabled))
+	builder.WriteString(", ")
+	builder.WriteString("is_category_default=")
+	builder.WriteString(fmt.Sprintf("%v", _m.IsCategoryDefault))
 	builder.WriteString(", ")
 	if v := _m.DailyLimitUsd; v != nil {
 		builder.WriteString("daily_limit_usd=")

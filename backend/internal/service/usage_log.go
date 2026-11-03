@@ -150,10 +150,13 @@ type UsageLog struct {
 	// UpstreamRequestID is the provider request identifier returned by the upstream.
 	UpstreamRequestID *string
 
-	GroupID        *int64
-	SourceGroupID  *int64
-	CustomGroupID  *int64
-	SubscriptionID *int64
+	GroupID       *int64
+	SourceGroupID *int64
+	// CategoryDefaultGroupID records the published entry used for this request;
+	// GroupID remains the actual source whose prices and limits were applied.
+	CategoryDefaultGroupID *int64
+	CustomGroupID          *int64
+	SubscriptionID         *int64
 
 	InputTokens  int
 	OutputTokens int

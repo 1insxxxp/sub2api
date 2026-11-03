@@ -25489,6 +25489,7 @@ type GroupMutation struct {
 	platform                                *string
 	subscription_type                       *string
 	system_custom_routing_enabled           *bool
+	is_category_default                     *bool
 	daily_limit_usd                         *float64
 	adddaily_limit_usd                      *float64
 	weekly_limit_usd                        *float64
@@ -26558,6 +26559,42 @@ func (m *GroupMutation) OldSystemCustomRoutingEnabled(ctx context.Context) (v bo
 // ResetSystemCustomRoutingEnabled resets all changes to the "system_custom_routing_enabled" field.
 func (m *GroupMutation) ResetSystemCustomRoutingEnabled() {
 	m.system_custom_routing_enabled = nil
+}
+
+// SetIsCategoryDefault sets the "is_category_default" field.
+func (m *GroupMutation) SetIsCategoryDefault(b bool) {
+	m.is_category_default = &b
+}
+
+// IsCategoryDefault returns the value of the "is_category_default" field in the mutation.
+func (m *GroupMutation) IsCategoryDefault() (r bool, exists bool) {
+	v := m.is_category_default
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIsCategoryDefault returns the old "is_category_default" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldIsCategoryDefault(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIsCategoryDefault is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIsCategoryDefault requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIsCategoryDefault: %w", err)
+	}
+	return oldValue.IsCategoryDefault, nil
+}
+
+// ResetIsCategoryDefault resets all changes to the "is_category_default" field.
+func (m *GroupMutation) ResetIsCategoryDefault() {
+	m.is_category_default = nil
 }
 
 // SetDailyLimitUsd sets the "daily_limit_usd" field.
@@ -30078,7 +30115,7 @@ func (m *GroupMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GroupMutation) Fields() []string {
-	fields := make([]string, 0, 78)
+	fields := make([]string, 0, 79)
 	if m.created_at != nil {
 		fields = append(fields, group.FieldCreatedAt)
 	}
@@ -30141,6 +30178,9 @@ func (m *GroupMutation) Fields() []string {
 	}
 	if m.system_custom_routing_enabled != nil {
 		fields = append(fields, group.FieldSystemCustomRoutingEnabled)
+	}
+	if m.is_category_default != nil {
+		fields = append(fields, group.FieldIsCategoryDefault)
 	}
 	if m.daily_limit_usd != nil {
 		fields = append(fields, group.FieldDailyLimitUsd)
@@ -30363,6 +30403,8 @@ func (m *GroupMutation) Field(name string) (ent.Value, bool) {
 		return m.SubscriptionType()
 	case group.FieldSystemCustomRoutingEnabled:
 		return m.SystemCustomRoutingEnabled()
+	case group.FieldIsCategoryDefault:
+		return m.IsCategoryDefault()
 	case group.FieldDailyLimitUsd:
 		return m.DailyLimitUsd()
 	case group.FieldWeeklyLimitUsd:
@@ -30528,6 +30570,8 @@ func (m *GroupMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldSubscriptionType(ctx)
 	case group.FieldSystemCustomRoutingEnabled:
 		return m.OldSystemCustomRoutingEnabled(ctx)
+	case group.FieldIsCategoryDefault:
+		return m.OldIsCategoryDefault(ctx)
 	case group.FieldDailyLimitUsd:
 		return m.OldDailyLimitUsd(ctx)
 	case group.FieldWeeklyLimitUsd:
@@ -30797,6 +30841,13 @@ func (m *GroupMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetSystemCustomRoutingEnabled(v)
+		return nil
+	case group.FieldIsCategoryDefault:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIsCategoryDefault(v)
 		return nil
 	case group.FieldDailyLimitUsd:
 		v, ok := value.(float64)
@@ -31782,6 +31833,9 @@ func (m *GroupMutation) ResetField(name string) error {
 		return nil
 	case group.FieldSystemCustomRoutingEnabled:
 		m.ResetSystemCustomRoutingEnabled()
+		return nil
+	case group.FieldIsCategoryDefault:
+		m.ResetIsCategoryDefault()
 		return nil
 	case group.FieldDailyLimitUsd:
 		m.ResetDailyLimitUsd()
@@ -58481,6 +58535,8 @@ type UsageLogMutation struct {
 	model_mapping_chain          *string
 	billing_tier                 *string
 	billing_mode                 *string
+	category_default_group_id    *int64
+	addcategory_default_group_id *int64
 	input_tokens                 *int
 	addinput_tokens              *int
 	output_tokens                *int
@@ -59344,6 +59400,76 @@ func (m *UsageLogMutation) SourceGroupIDCleared() bool {
 func (m *UsageLogMutation) ResetSourceGroupID() {
 	m.source_group = nil
 	delete(m.clearedFields, usagelog.FieldSourceGroupID)
+}
+
+// SetCategoryDefaultGroupID sets the "category_default_group_id" field.
+func (m *UsageLogMutation) SetCategoryDefaultGroupID(i int64) {
+	m.category_default_group_id = &i
+	m.addcategory_default_group_id = nil
+}
+
+// CategoryDefaultGroupID returns the value of the "category_default_group_id" field in the mutation.
+func (m *UsageLogMutation) CategoryDefaultGroupID() (r int64, exists bool) {
+	v := m.category_default_group_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCategoryDefaultGroupID returns the old "category_default_group_id" field's value of the UsageLog entity.
+// If the UsageLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageLogMutation) OldCategoryDefaultGroupID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCategoryDefaultGroupID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCategoryDefaultGroupID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCategoryDefaultGroupID: %w", err)
+	}
+	return oldValue.CategoryDefaultGroupID, nil
+}
+
+// AddCategoryDefaultGroupID adds i to the "category_default_group_id" field.
+func (m *UsageLogMutation) AddCategoryDefaultGroupID(i int64) {
+	if m.addcategory_default_group_id != nil {
+		*m.addcategory_default_group_id += i
+	} else {
+		m.addcategory_default_group_id = &i
+	}
+}
+
+// AddedCategoryDefaultGroupID returns the value that was added to the "category_default_group_id" field in this mutation.
+func (m *UsageLogMutation) AddedCategoryDefaultGroupID() (r int64, exists bool) {
+	v := m.addcategory_default_group_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearCategoryDefaultGroupID clears the value of the "category_default_group_id" field.
+func (m *UsageLogMutation) ClearCategoryDefaultGroupID() {
+	m.category_default_group_id = nil
+	m.addcategory_default_group_id = nil
+	m.clearedFields[usagelog.FieldCategoryDefaultGroupID] = struct{}{}
+}
+
+// CategoryDefaultGroupIDCleared returns if the "category_default_group_id" field was cleared in this mutation.
+func (m *UsageLogMutation) CategoryDefaultGroupIDCleared() bool {
+	_, ok := m.clearedFields[usagelog.FieldCategoryDefaultGroupID]
+	return ok
+}
+
+// ResetCategoryDefaultGroupID resets all changes to the "category_default_group_id" field.
+func (m *UsageLogMutation) ResetCategoryDefaultGroupID() {
+	m.category_default_group_id = nil
+	m.addcategory_default_group_id = nil
+	delete(m.clearedFields, usagelog.FieldCategoryDefaultGroupID)
 }
 
 // SetCustomGroupID sets the "custom_group_id" field.
@@ -61491,7 +61617,7 @@ func (m *UsageLogMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UsageLogMutation) Fields() []string {
-	fields := make([]string, 0, 51)
+	fields := make([]string, 0, 52)
 	if m.user != nil {
 		fields = append(fields, usagelog.FieldUserID)
 	}
@@ -61536,6 +61662,9 @@ func (m *UsageLogMutation) Fields() []string {
 	}
 	if m.source_group != nil {
 		fields = append(fields, usagelog.FieldSourceGroupID)
+	}
+	if m.category_default_group_id != nil {
+		fields = append(fields, usagelog.FieldCategoryDefaultGroupID)
 	}
 	if m.custom_group != nil {
 		fields = append(fields, usagelog.FieldCustomGroupID)
@@ -61683,6 +61812,8 @@ func (m *UsageLogMutation) Field(name string) (ent.Value, bool) {
 		return m.GroupID()
 	case usagelog.FieldSourceGroupID:
 		return m.SourceGroupID()
+	case usagelog.FieldCategoryDefaultGroupID:
+		return m.CategoryDefaultGroupID()
 	case usagelog.FieldCustomGroupID:
 		return m.CustomGroupID()
 	case usagelog.FieldSubscriptionID:
@@ -61794,6 +61925,8 @@ func (m *UsageLogMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldGroupID(ctx)
 	case usagelog.FieldSourceGroupID:
 		return m.OldSourceGroupID(ctx)
+	case usagelog.FieldCategoryDefaultGroupID:
+		return m.OldCategoryDefaultGroupID(ctx)
 	case usagelog.FieldCustomGroupID:
 		return m.OldCustomGroupID(ctx)
 	case usagelog.FieldSubscriptionID:
@@ -61979,6 +62112,13 @@ func (m *UsageLogMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetSourceGroupID(v)
+		return nil
+	case usagelog.FieldCategoryDefaultGroupID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCategoryDefaultGroupID(v)
 		return nil
 	case usagelog.FieldCustomGroupID:
 		v, ok := value.(int64)
@@ -62243,6 +62383,9 @@ func (m *UsageLogMutation) AddedFields() []string {
 	if m.addchannel_id != nil {
 		fields = append(fields, usagelog.FieldChannelID)
 	}
+	if m.addcategory_default_group_id != nil {
+		fields = append(fields, usagelog.FieldCategoryDefaultGroupID)
+	}
 	if m.addinput_tokens != nil {
 		fields = append(fields, usagelog.FieldInputTokens)
 	}
@@ -62319,6 +62462,8 @@ func (m *UsageLogMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
 	case usagelog.FieldChannelID:
 		return m.AddedChannelID()
+	case usagelog.FieldCategoryDefaultGroupID:
+		return m.AddedCategoryDefaultGroupID()
 	case usagelog.FieldInputTokens:
 		return m.AddedInputTokens()
 	case usagelog.FieldOutputTokens:
@@ -62378,6 +62523,13 @@ func (m *UsageLogMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddChannelID(v)
+		return nil
+	case usagelog.FieldCategoryDefaultGroupID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCategoryDefaultGroupID(v)
 		return nil
 	case usagelog.FieldInputTokens:
 		v, ok := value.(int)
@@ -62571,6 +62723,9 @@ func (m *UsageLogMutation) ClearedFields() []string {
 	if m.FieldCleared(usagelog.FieldSourceGroupID) {
 		fields = append(fields, usagelog.FieldSourceGroupID)
 	}
+	if m.FieldCleared(usagelog.FieldCategoryDefaultGroupID) {
+		fields = append(fields, usagelog.FieldCategoryDefaultGroupID)
+	}
 	if m.FieldCleared(usagelog.FieldCustomGroupID) {
 		fields = append(fields, usagelog.FieldCustomGroupID)
 	}
@@ -62656,6 +62811,9 @@ func (m *UsageLogMutation) ClearField(name string) error {
 		return nil
 	case usagelog.FieldSourceGroupID:
 		m.ClearSourceGroupID()
+		return nil
+	case usagelog.FieldCategoryDefaultGroupID:
+		m.ClearCategoryDefaultGroupID()
 		return nil
 	case usagelog.FieldCustomGroupID:
 		m.ClearCustomGroupID()
@@ -62751,6 +62909,9 @@ func (m *UsageLogMutation) ResetField(name string) error {
 		return nil
 	case usagelog.FieldSourceGroupID:
 		m.ResetSourceGroupID()
+		return nil
+	case usagelog.FieldCategoryDefaultGroupID:
+		m.ResetCategoryDefaultGroupID()
 		return nil
 	case usagelog.FieldCustomGroupID:
 		m.ResetCustomGroupID()

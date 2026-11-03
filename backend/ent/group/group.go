@@ -58,6 +58,8 @@ const (
 	FieldSubscriptionType = "subscription_type"
 	// FieldSystemCustomRoutingEnabled holds the string denoting the system_custom_routing_enabled field in the database.
 	FieldSystemCustomRoutingEnabled = "system_custom_routing_enabled"
+	// FieldIsCategoryDefault holds the string denoting the is_category_default field in the database.
+	FieldIsCategoryDefault = "is_category_default"
 	// FieldDailyLimitUsd holds the string denoting the daily_limit_usd field in the database.
 	FieldDailyLimitUsd = "daily_limit_usd"
 	// FieldWeeklyLimitUsd holds the string denoting the weekly_limit_usd field in the database.
@@ -313,6 +315,7 @@ var Columns = []string{
 	FieldPlatform,
 	FieldSubscriptionType,
 	FieldSystemCustomRoutingEnabled,
+	FieldIsCategoryDefault,
 	FieldDailyLimitUsd,
 	FieldWeeklyLimitUsd,
 	FieldMonthlyLimitUsd,
@@ -453,6 +456,8 @@ var (
 	SubscriptionTypeValidator func(string) error
 	// DefaultSystemCustomRoutingEnabled holds the default value on creation for the "system_custom_routing_enabled" field.
 	DefaultSystemCustomRoutingEnabled bool
+	// DefaultIsCategoryDefault holds the default value on creation for the "is_category_default" field.
+	DefaultIsCategoryDefault bool
 	// DefaultDefaultValidityDays holds the default value on creation for the "default_validity_days" field.
 	DefaultDefaultValidityDays int
 	// DefaultAllowImageGeneration holds the default value on creation for the "allow_image_generation" field.
@@ -653,6 +658,11 @@ func BySubscriptionType(opts ...sql.OrderTermOption) OrderOption {
 // BySystemCustomRoutingEnabled orders the results by the system_custom_routing_enabled field.
 func BySystemCustomRoutingEnabled(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSystemCustomRoutingEnabled, opts...).ToFunc()
+}
+
+// ByIsCategoryDefault orders the results by the is_category_default field.
+func ByIsCategoryDefault(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIsCategoryDefault, opts...).ToFunc()
 }
 
 // ByDailyLimitUsd orders the results by the daily_limit_usd field.

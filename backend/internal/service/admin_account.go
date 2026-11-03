@@ -1639,7 +1639,7 @@ func (s *adminServiceImpl) validateGroupIDsExist(ctx context.Context, groupIDs [
 // ValidateAccountGroupBindings is the shared fail-closed policy boundary for
 // every account path that accepts explicit group bindings.
 func (s *adminServiceImpl) ValidateAccountGroupBindings(ctx context.Context, groupIDs []int64) error {
-	if len(groupIDs) == 0 || s.cfg == nil || s.cfg.RunMode != config.RunModeSimple {
+	if len(groupIDs) == 0 {
 		return nil
 	}
 	if s.groupRepo == nil {
@@ -1658,7 +1658,10 @@ func (s *adminServiceImpl) ValidateAccountGroupBindings(ctx context.Context, gro
 		if err != nil {
 			return fmt.Errorf("get group: %w", err)
 		}
-		if !IsGroupBindableInSimpleMode(group) {
+		if group.IsCategoryDefault {
+			return ErrCategoryDefaultManagedOnly
+		}
+		if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple && !IsGroupBindableInSimpleMode(group) {
 			return infraerrors.BadRequest("SIMPLE_MODE_GROUP_NOT_BINDABLE", "composite groups cannot be bound in simple mode")
 		}
 	}

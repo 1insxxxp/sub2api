@@ -155,6 +155,11 @@ func SystemCustomRoutingEnabled(v bool) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldSystemCustomRoutingEnabled, v))
 }
 
+// IsCategoryDefault applies equality check predicate on the "is_category_default" field. It's identical to IsCategoryDefaultEQ.
+func IsCategoryDefault(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldIsCategoryDefault, v))
+}
+
 // DailyLimitUsd applies equality check predicate on the "daily_limit_usd" field. It's identical to DailyLimitUsdEQ.
 func DailyLimitUsd(v float64) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldDailyLimitUsd, v))
@@ -1328,6 +1333,16 @@ func SystemCustomRoutingEnabledEQ(v bool) predicate.Group {
 // SystemCustomRoutingEnabledNEQ applies the NEQ predicate on the "system_custom_routing_enabled" field.
 func SystemCustomRoutingEnabledNEQ(v bool) predicate.Group {
 	return predicate.Group(sql.FieldNEQ(FieldSystemCustomRoutingEnabled, v))
+}
+
+// IsCategoryDefaultEQ applies the EQ predicate on the "is_category_default" field.
+func IsCategoryDefaultEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldIsCategoryDefault, v))
+}
+
+// IsCategoryDefaultNEQ applies the NEQ predicate on the "is_category_default" field.
+func IsCategoryDefaultNEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldIsCategoryDefault, v))
 }
 
 // DailyLimitUsdEQ applies the EQ predicate on the "daily_limit_usd" field.

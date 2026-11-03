@@ -311,6 +311,20 @@ func (_c *GroupCreate) SetNillableSystemCustomRoutingEnabled(v *bool) *GroupCrea
 	return _c
 }
 
+// SetIsCategoryDefault sets the "is_category_default" field.
+func (_c *GroupCreate) SetIsCategoryDefault(v bool) *GroupCreate {
+	_c.mutation.SetIsCategoryDefault(v)
+	return _c
+}
+
+// SetNillableIsCategoryDefault sets the "is_category_default" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableIsCategoryDefault(v *bool) *GroupCreate {
+	if v != nil {
+		_c.SetIsCategoryDefault(*v)
+	}
+	return _c
+}
+
 // SetDailyLimitUsd sets the "daily_limit_usd" field.
 func (_c *GroupCreate) SetDailyLimitUsd(v float64) *GroupCreate {
 	_c.mutation.SetDailyLimitUsd(v)
@@ -1337,6 +1351,10 @@ func (_c *GroupCreate) defaults() error {
 		v := group.DefaultSystemCustomRoutingEnabled
 		_c.mutation.SetSystemCustomRoutingEnabled(v)
 	}
+	if _, ok := _c.mutation.IsCategoryDefault(); !ok {
+		v := group.DefaultIsCategoryDefault
+		_c.mutation.SetIsCategoryDefault(v)
+	}
 	if _, ok := _c.mutation.DefaultValidityDays(); !ok {
 		v := group.DefaultDefaultValidityDays
 		_c.mutation.SetDefaultValidityDays(v)
@@ -1585,6 +1603,9 @@ func (_c *GroupCreate) check() error {
 	}
 	if _, ok := _c.mutation.SystemCustomRoutingEnabled(); !ok {
 		return &ValidationError{Name: "system_custom_routing_enabled", err: errors.New(`ent: missing required field "Group.system_custom_routing_enabled"`)}
+	}
+	if _, ok := _c.mutation.IsCategoryDefault(); !ok {
+		return &ValidationError{Name: "is_category_default", err: errors.New(`ent: missing required field "Group.is_category_default"`)}
 	}
 	if _, ok := _c.mutation.DefaultValidityDays(); !ok {
 		return &ValidationError{Name: "default_validity_days", err: errors.New(`ent: missing required field "Group.default_validity_days"`)}
@@ -1852,6 +1873,10 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.SystemCustomRoutingEnabled(); ok {
 		_spec.SetField(group.FieldSystemCustomRoutingEnabled, field.TypeBool, value)
 		_node.SystemCustomRoutingEnabled = value
+	}
+	if value, ok := _c.mutation.IsCategoryDefault(); ok {
+		_spec.SetField(group.FieldIsCategoryDefault, field.TypeBool, value)
+		_node.IsCategoryDefault = value
 	}
 	if value, ok := _c.mutation.DailyLimitUsd(); ok {
 		_spec.SetField(group.FieldDailyLimitUsd, field.TypeFloat64, value)
@@ -2572,6 +2597,18 @@ func (u *GroupUpsert) SetSystemCustomRoutingEnabled(v bool) *GroupUpsert {
 // UpdateSystemCustomRoutingEnabled sets the "system_custom_routing_enabled" field to the value that was provided on create.
 func (u *GroupUpsert) UpdateSystemCustomRoutingEnabled() *GroupUpsert {
 	u.SetExcluded(group.FieldSystemCustomRoutingEnabled)
+	return u
+}
+
+// SetIsCategoryDefault sets the "is_category_default" field.
+func (u *GroupUpsert) SetIsCategoryDefault(v bool) *GroupUpsert {
+	u.Set(group.FieldIsCategoryDefault, v)
+	return u
+}
+
+// UpdateIsCategoryDefault sets the "is_category_default" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateIsCategoryDefault() *GroupUpsert {
+	u.SetExcluded(group.FieldIsCategoryDefault)
 	return u
 }
 
@@ -3875,6 +3912,20 @@ func (u *GroupUpsertOne) SetSystemCustomRoutingEnabled(v bool) *GroupUpsertOne {
 func (u *GroupUpsertOne) UpdateSystemCustomRoutingEnabled() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateSystemCustomRoutingEnabled()
+	})
+}
+
+// SetIsCategoryDefault sets the "is_category_default" field.
+func (u *GroupUpsertOne) SetIsCategoryDefault(v bool) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetIsCategoryDefault(v)
+	})
+}
+
+// UpdateIsCategoryDefault sets the "is_category_default" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateIsCategoryDefault() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateIsCategoryDefault()
 	})
 }
 
@@ -5503,6 +5554,20 @@ func (u *GroupUpsertBulk) SetSystemCustomRoutingEnabled(v bool) *GroupUpsertBulk
 func (u *GroupUpsertBulk) UpdateSystemCustomRoutingEnabled() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateSystemCustomRoutingEnabled()
+	})
+}
+
+// SetIsCategoryDefault sets the "is_category_default" field.
+func (u *GroupUpsertBulk) SetIsCategoryDefault(v bool) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetIsCategoryDefault(v)
+	})
+}
+
+// UpdateIsCategoryDefault sets the "is_category_default" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateIsCategoryDefault() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateIsCategoryDefault()
 	})
 }
 

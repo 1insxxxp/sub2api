@@ -256,6 +256,9 @@ func (s *adminServiceImpl) requireCompositeGroup(ctx context.Context, groupID in
 	if group.SystemCustomRoutingEnabled {
 		return ErrSystemCustomGroupManagedOnly
 	}
+	if group.IsCategoryDefault {
+		return ErrCategoryDefaultManagedOnly
+	}
 	return nil
 }
 
@@ -841,6 +844,9 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	if group.SystemCustomRoutingEnabled {
 		return nil, ErrSystemCustomGroupManagedOnly
 	}
+	if group.IsCategoryDefault {
+		return nil, ErrCategoryDefaultManagedOnly
+	}
 	var i18n GroupI18n
 	if input.I18n != nil {
 		i18n, err = normalizeGroupI18n(*input.I18n)
@@ -1370,6 +1376,9 @@ func (s *adminServiceImpl) deleteGroup(ctx context.Context, id int64, requireEmp
 	}
 	if group.SystemCustomRoutingEnabled {
 		return ErrSystemCustomGroupManagedOnly
+	}
+	if group.IsCategoryDefault {
+		return ErrCategoryDefaultManagedOnly
 	}
 	var groupKeys []string
 	if s.authCacheInvalidator != nil {

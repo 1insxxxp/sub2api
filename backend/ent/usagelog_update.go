@@ -310,6 +310,33 @@ func (_u *UsageLogUpdate) ClearSourceGroupID() *UsageLogUpdate {
 	return _u
 }
 
+// SetCategoryDefaultGroupID sets the "category_default_group_id" field.
+func (_u *UsageLogUpdate) SetCategoryDefaultGroupID(v int64) *UsageLogUpdate {
+	_u.mutation.ResetCategoryDefaultGroupID()
+	_u.mutation.SetCategoryDefaultGroupID(v)
+	return _u
+}
+
+// SetNillableCategoryDefaultGroupID sets the "category_default_group_id" field if the given value is not nil.
+func (_u *UsageLogUpdate) SetNillableCategoryDefaultGroupID(v *int64) *UsageLogUpdate {
+	if v != nil {
+		_u.SetCategoryDefaultGroupID(*v)
+	}
+	return _u
+}
+
+// AddCategoryDefaultGroupID adds value to the "category_default_group_id" field.
+func (_u *UsageLogUpdate) AddCategoryDefaultGroupID(v int64) *UsageLogUpdate {
+	_u.mutation.AddCategoryDefaultGroupID(v)
+	return _u
+}
+
+// ClearCategoryDefaultGroupID clears the value of the "category_default_group_id" field.
+func (_u *UsageLogUpdate) ClearCategoryDefaultGroupID() *UsageLogUpdate {
+	_u.mutation.ClearCategoryDefaultGroupID()
+	return _u
+}
+
 // SetCustomGroupID sets the "custom_group_id" field.
 func (_u *UsageLogUpdate) SetCustomGroupID(v int64) *UsageLogUpdate {
 	_u.mutation.SetCustomGroupID(v)
@@ -1297,6 +1324,15 @@ func (_u *UsageLogUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.BillingModeCleared() {
 		_spec.ClearField(usagelog.FieldBillingMode, field.TypeString)
 	}
+	if value, ok := _u.mutation.CategoryDefaultGroupID(); ok {
+		_spec.SetField(usagelog.FieldCategoryDefaultGroupID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedCategoryDefaultGroupID(); ok {
+		_spec.AddField(usagelog.FieldCategoryDefaultGroupID, field.TypeInt64, value)
+	}
+	if _u.mutation.CategoryDefaultGroupIDCleared() {
+		_spec.ClearField(usagelog.FieldCategoryDefaultGroupID, field.TypeInt64)
+	}
 	if value, ok := _u.mutation.InputTokens(); ok {
 		_spec.SetField(usagelog.FieldInputTokens, field.TypeInt, value)
 	}
@@ -1995,6 +2031,33 @@ func (_u *UsageLogUpdateOne) SetNillableSourceGroupID(v *int64) *UsageLogUpdateO
 // ClearSourceGroupID clears the value of the "source_group_id" field.
 func (_u *UsageLogUpdateOne) ClearSourceGroupID() *UsageLogUpdateOne {
 	_u.mutation.ClearSourceGroupID()
+	return _u
+}
+
+// SetCategoryDefaultGroupID sets the "category_default_group_id" field.
+func (_u *UsageLogUpdateOne) SetCategoryDefaultGroupID(v int64) *UsageLogUpdateOne {
+	_u.mutation.ResetCategoryDefaultGroupID()
+	_u.mutation.SetCategoryDefaultGroupID(v)
+	return _u
+}
+
+// SetNillableCategoryDefaultGroupID sets the "category_default_group_id" field if the given value is not nil.
+func (_u *UsageLogUpdateOne) SetNillableCategoryDefaultGroupID(v *int64) *UsageLogUpdateOne {
+	if v != nil {
+		_u.SetCategoryDefaultGroupID(*v)
+	}
+	return _u
+}
+
+// AddCategoryDefaultGroupID adds value to the "category_default_group_id" field.
+func (_u *UsageLogUpdateOne) AddCategoryDefaultGroupID(v int64) *UsageLogUpdateOne {
+	_u.mutation.AddCategoryDefaultGroupID(v)
+	return _u
+}
+
+// ClearCategoryDefaultGroupID clears the value of the "category_default_group_id" field.
+func (_u *UsageLogUpdateOne) ClearCategoryDefaultGroupID() *UsageLogUpdateOne {
+	_u.mutation.ClearCategoryDefaultGroupID()
 	return _u
 }
 
@@ -3014,6 +3077,15 @@ func (_u *UsageLogUpdateOne) sqlSave(ctx context.Context) (_node *UsageLog, err 
 	}
 	if _u.mutation.BillingModeCleared() {
 		_spec.ClearField(usagelog.FieldBillingMode, field.TypeString)
+	}
+	if value, ok := _u.mutation.CategoryDefaultGroupID(); ok {
+		_spec.SetField(usagelog.FieldCategoryDefaultGroupID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedCategoryDefaultGroupID(); ok {
+		_spec.AddField(usagelog.FieldCategoryDefaultGroupID, field.TypeInt64, value)
+	}
+	if _u.mutation.CategoryDefaultGroupIDCleared() {
+		_spec.ClearField(usagelog.FieldCategoryDefaultGroupID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.InputTokens(); ok {
 		_spec.SetField(usagelog.FieldInputTokens, field.TypeInt, value)

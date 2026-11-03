@@ -44,6 +44,8 @@ const (
 	FieldGroupID = "group_id"
 	// FieldSourceGroupID holds the string denoting the source_group_id field in the database.
 	FieldSourceGroupID = "source_group_id"
+	// FieldCategoryDefaultGroupID holds the string denoting the category_default_group_id field in the database.
+	FieldCategoryDefaultGroupID = "category_default_group_id"
 	// FieldCustomGroupID holds the string denoting the custom_group_id field in the database.
 	FieldCustomGroupID = "custom_group_id"
 	// FieldSubscriptionID holds the string denoting the subscription_id field in the database.
@@ -201,6 +203,7 @@ var Columns = []string{
 	FieldBillingMode,
 	FieldGroupID,
 	FieldSourceGroupID,
+	FieldCategoryDefaultGroupID,
 	FieldCustomGroupID,
 	FieldSubscriptionID,
 	FieldInputTokens,
@@ -407,6 +410,11 @@ func ByGroupID(opts ...sql.OrderTermOption) OrderOption {
 // BySourceGroupID orders the results by the source_group_id field.
 func BySourceGroupID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSourceGroupID, opts...).ToFunc()
+}
+
+// ByCategoryDefaultGroupID orders the results by the category_default_group_id field.
+func ByCategoryDefaultGroupID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCategoryDefaultGroupID, opts...).ToFunc()
 }
 
 // ByCustomGroupID orders the results by the custom_group_id field.

@@ -14,6 +14,7 @@ type AdminHandlers struct {
 	WorkbenchAccess        *admin.AdminWorkbenchAccessHandler
 	Group                  *admin.GroupHandler
 	SystemCustomGroup      *admin.SystemCustomGroupHandler
+	CategoryDefaultGroup   *admin.CategoryDefaultGroupHandler
 	Account                *admin.AccountHandler
 	Announcement           *admin.AnnouncementHandler
 	DataManagement         *admin.DataManagementHandler

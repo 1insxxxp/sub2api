@@ -21,7 +21,11 @@
     </div>
     <div data-test="group-option-meta" class="group-option-meta mt-auto ml-[34px] flex min-h-5 flex-wrap items-center gap-x-3 gap-y-1.5 pt-2">
       <span v-if="subscriptionType === 'subscription'" class="inline-flex items-center gap-1 text-xs text-cyan-700 dark:text-cyan-400"><Icon name="badge" size="xs" />{{ t('groups.subscription') }}</span>
-      <span v-if="rateMultiplier !== undefined" data-test="group-option-rate" class="inline-flex items-baseline gap-1.5 whitespace-nowrap text-xs">
+      <template v-if="isCategoryDefault">
+        <span class="text-xs text-gray-600 dark:text-gray-300">{{ t('categoryDefaults.modelCount', { count: availableModelCount ?? 0 }) }}</span>
+        <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('categoryDefaults.sourcePricing') }}</span>
+      </template>
+      <span v-else-if="rateMultiplier !== undefined" data-test="group-option-rate" class="inline-flex items-baseline gap-1.5 whitespace-nowrap text-xs">
         <span class="text-gray-400 dark:text-gray-500">{{ t('admin.groups.rateLabel') }}</span>
         <span class="font-semibold tabular-nums text-gray-800 dark:text-gray-200">
           <template v-if="hasCustomRate">
@@ -69,6 +73,8 @@ interface Props {
   description?: string | null
   selected?: boolean
   showCheckmark?: boolean
+  isCategoryDefault?: boolean
+  availableModelCount?: number
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -92,7 +98,7 @@ const hasCustomRate = computed(() => {
 const appStore = useAppStore()
 
 const hasPeakRate = computed(() => {
-  return Boolean(props.peakRateEnabled && props.peakStart && props.peakEnd)
+  return Boolean(!props.isCategoryDefault && props.peakRateEnabled && props.peakStart && props.peakEnd)
 })
 
 const peakRateText = computed(() => {

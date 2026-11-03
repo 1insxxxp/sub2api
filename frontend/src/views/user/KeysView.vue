@@ -315,6 +315,7 @@
                 <GroupBadge
                   v-if="row.group"
                   :name="row.group.name"
+                  :is-category-default="row.group.is_category_default"
                   :platform="row.group.platform"
                   :subscription-type="row.group.subscription_type"
                   :rate-multiplier="row.group.rate_multiplier"
@@ -785,7 +786,7 @@
             id="key-form-group"
             :aria-label="t('keys.groupLabel')"
             v-model="formData.group_id"
-            @update:modelValue="formData.custom_group_id = null"
+            @update:modelValue="markCreateGroupSelection"
             :options="formGroupOptions"
             :placeholder="t('keys.selectGroup')"
             :empty-text="t('common.noGroupsAvailable')"
@@ -797,6 +798,7 @@
               <GroupBadge
                 v-if="option"
                 :name="(option as unknown as GroupOption).label"
+                :is-category-default="(option as unknown as GroupOption).isCategoryDefault"
                 :platform="(option as unknown as GroupOption).platform"
                 :subscription-type="(option as unknown as GroupOption).subscriptionType"
                 :rate-multiplier="(option as unknown as GroupOption).rate"
@@ -813,6 +815,7 @@
                 :tag="(option as unknown as GroupOption).tag"
                 :tag-color="(option as unknown as GroupOption).tag_color"
                 :name="(option as unknown as GroupOption).label"
+                :is-category-default="(option as unknown as GroupOption).isCategoryDefault"
                 :platform="(option as unknown as GroupOption).platform"
                 :subscription-type="(option as unknown as GroupOption).subscriptionType"
                 :rate-multiplier="(option as unknown as GroupOption).rate"
@@ -822,6 +825,7 @@
                 :peak-end="(option as unknown as GroupOption).peakEnd"
                 :peak-rate-multiplier="(option as unknown as GroupOption).peakRateMultiplier"
                 :description="(option as unknown as GroupOption).description"
+                :available-model-count="(option as unknown as GroupOption).availableModelCount"
                 :selected="selected"
               />
             </template>
@@ -1346,9 +1350,10 @@
       :show="showUseKeyModal"
       :api-key="selectedKey?.key || ''"
       :base-url="publicSettings?.api_base_url || ''"
-      :platform="selectedKey?.group?.platform || null"
+      :platform="getCategoryDefaultGuidePlatform(selectedKey?.group)"
+      :category-default="selectedKey?.group?.is_category_default || false"
       :claude-code-only="selectedKey?.group?.claude_code_only || false"
-      :allow-messages-dispatch="selectedKey?.group?.allow_messages_dispatch || false"
+      :allow-messages-dispatch="selectedKey?.group?.is_category_default || selectedKey?.group?.allow_messages_dispatch || false"
       @close="closeUseKeyModal"
     />
 
@@ -1527,6 +1532,8 @@
               :tag="option.tag"
               :tag-color="option.tag_color"
               :name="option.label"
+              :is-category-default="option.isCategoryDefault"
+              :available-model-count="option.availableModelCount"
               :platform="option.platform"
               :subscription-type="option.subscriptionType"
               :rate-multiplier="option.rate"
@@ -1588,6 +1595,7 @@ import { maskApiKey } from '@/utils/maskApiKey'
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
 import { platformBadgeLightClass } from '@/utils/platformColors'
 import { KEY_GROUP_PROVIDERS, KEY_GROUP_PROVIDER_ICONS, getKeyGroupProvider, type KeyGroupProvider } from '@/utils/keyGroupProviders'
+import { chooseCategoryDefaultGroup, getCategoryDefaultGuidePlatform, sortCategoryDefaultsFirst } from '@/utils/categoryDefaultGroups'
 import {
   CC_SWITCH_USAGE_SCRIPT,
   buildCcSwitchImportDeeplink,
@@ -1605,6 +1613,8 @@ interface GroupOption {
   tag?: Group['tag']
   tag_color?: string
   key_display_category?: Group['key_display_category']
+  isCategoryDefault?: boolean
+  availableModelCount?: number
   value: number
   label: string
   description: string | null
@@ -1999,13 +2009,15 @@ const onStatusFilterChange = (value: string | number | boolean | null) => {
 
 // Convert groups to Select options format with rate multiplier and subscription type
 const groupOptions = computed(() =>
-  groups.value.map((group) => ({
+  sortCategoryDefaultsFirst(groups.value).map((group) => ({
     value: group.id,
     label: group.name,
     description: group.description,
     tag: group.tag,
     tag_color: group.tag_color,
     key_display_category: group.key_display_category,
+    isCategoryDefault: group.is_category_default,
+    availableModelCount: group.available_model_count,
     rate: group.rate_multiplier,
     userRate: userGroupRates.value[group.id] ?? null,
     peakRateEnabled: group.peak_rate_enabled,
@@ -2026,6 +2038,11 @@ const customGroupOptions = computed(() => [
 ])
 
 const createProvider = ref<KeyGroupProvider>('anthropic')
+const createGroupSelectionTouched = ref(false)
+const markCreateGroupSelection = () => {
+  if (showCreateModal.value) createGroupSelectionTouched.value = true
+  formData.value.custom_group_id = null
+}
 const createProviderOptions = computed(() => KEY_GROUP_PROVIDERS.map((value) => ({
   value,
   label: t(`keys.providers.${value}`),
@@ -2040,18 +2057,21 @@ const formGroupOptions = computed(() => showEditModal.value
 const selectCreateProvider = (provider: KeyGroupProvider) => {
   if (createProvider.value === provider) return
   createProvider.value = provider
-  formData.value.group_id = null
+  createGroupSelectionTouched.value = false
+  formData.value.group_id = chooseCategoryDefaultGroup(groups.value, provider, null, !formData.value.custom_group_id)
 }
 
 // Also handles groups arriving after the create dialog has already opened.
 watch([showCreateModal, createProviderOptions], ([isOpen, providers], [wasOpen]) => {
   if (!isOpen) return
+  if (!wasOpen) createGroupSelectionTouched.value = false
   if (!wasOpen || !providers.some((provider) => provider.value === createProvider.value && provider.count > 0)) {
     selectCreateProvider(providers.find((provider) => provider.count > 0)?.value ?? 'anthropic')
   }
-  if (!formGroupOptions.value.some((group) => group.value === formData.value.group_id)) {
-    formData.value.group_id = null
-  }
+  formData.value.group_id = chooseCategoryDefaultGroup(
+    groups.value, createProvider.value, formData.value.group_id,
+    !createGroupSelectionTouched.value && !formData.value.custom_group_id
+  )
 })
 
 // Group dropdown search

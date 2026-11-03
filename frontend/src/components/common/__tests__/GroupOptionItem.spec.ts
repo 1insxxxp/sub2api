@@ -66,6 +66,13 @@ const mountActualOption = (props: Record<string, unknown> = {}) =>
   })
 
 describe('GroupOptionItem', () => {
+  it('shows source pricing and model count instead of a container multiplier for category defaults', () => {
+    const wrapper = mountActualOption({ isCategoryDefault: true, availableModelCount: 7, rateMultiplier: 1, userRateMultiplier: 0.5, peakRateEnabled: true, peakStart: '08:00', peakEnd: '12:00' })
+    expect(wrapper.text()).toContain('categoryDefaults.sourcePricing')
+    expect(wrapper.text()).toContain('categoryDefaults.modelCount')
+    expect(wrapper.find('[data-test="group-option-rate"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('0.5x')
+  })
   it.each(['chat', 'image', 'airp'])('shows the configured %s tag without replacing the group name', (tag) => {
     const wrapper = mountOption({ tag })
     const badge = wrapper.get('[data-test="group-tag"]')

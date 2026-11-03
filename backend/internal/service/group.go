@@ -27,7 +27,11 @@ type Group struct {
 	Platform    string
 	// KeyDisplayCategory changes only API key selection display; empty follows Platform.
 	KeyDisplayCategory string
-	RateMultiplier     float64
+	// IsCategoryDefault identifies a published category entry, never a direct account pool.
+	IsCategoryDefault bool
+	// AvailableModelCount is a user-scoped projection, not persistence metadata.
+	AvailableModelCount int
+	RateMultiplier      float64
 	// EmptyResponseCompensationEnabled controls whether users in this group may
 	// submit self-service empty-response claims. It defaults to false.
 	EmptyResponseCompensationEnabled bool

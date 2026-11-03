@@ -121,6 +121,16 @@
               class="groups-list-create-actions"
             >
               <button
+                v-if="authStore.isAdmin && !authStore.isSimpleMode"
+                data-testid="category-default-configure"
+                @click="openCategoryDefault()"
+                class="btn btn-secondary groups-create-button"
+                :title="t('categoryDefaults.manageAction')"
+              >
+                <Icon name="grid" size="md" />
+                <span>{{ t('categoryDefaults.manageAction') }}</span>
+              </button>
+              <button
                 data-testid="system-custom-create"
                 @click="openSystemCustomGroup(null)"
                 class="btn btn-secondary groups-create-button"
@@ -222,6 +232,7 @@
               >
                 {{ t("admin.groups.systemCustom.typeBadge") }}
               </span>
+              <span v-if="row.is_category_default" class="inline-flex items-center rounded-md border border-gray-200 px-2 py-0.5 text-xs font-medium text-gray-600 dark:border-dark-600 dark:text-gray-300">{{ t('categoryDefaults.badge') }}</span>
               <!-- Type Badge -->
               <span
                 :class="[
@@ -315,8 +326,9 @@
             </div>
           </template>
 
-          <template #cell-rate_multiplier="{ value }">
-            <span class="text-sm text-gray-700 dark:text-gray-300"
+          <template #cell-rate_multiplier="{ value, row }">
+            <span v-if="row.is_category_default" class="text-xs text-gray-500 dark:text-gray-400">{{ t('categoryDefaults.sourcePricing') }}</span>
+            <span v-else class="text-sm text-gray-700 dark:text-gray-300"
               >{{ value }}x</span
             >
           </template>
@@ -435,8 +447,12 @@
 
           <template #cell-actions="{ row }">
             <div class="groups-row-actions flex flex-wrap items-center gap-1">
+              <button v-if="row.is_category_default" type="button" data-testid="category-default-manage" class="admin-inline-action" @click="openCategoryDefault(row.key_display_category)">
+                <Icon name="grid" size="sm" />
+                <span class="text-xs">{{ t('categoryDefaults.manageAction') }}</span>
+              </button>
               <button
-                v-if="!isSystemCustomGroup(row)"
+                v-if="!isSystemCustomGroup(row) && !row.is_category_default"
                 @click="handleEdit(row)"
                 class="admin-inline-action"
               >
@@ -444,7 +460,7 @@
                 <span class="text-xs">{{ t("common.edit") }}</span>
               </button>
               <button
-                v-if="!authStore.isSimpleMode && !isSystemCustomGroup(row)"
+                v-if="!authStore.isSimpleMode && !isSystemCustomGroup(row) && !row.is_category_default"
                 data-testid="group-duplicate"
                 :title="
                   duplicatingGroupIds.has(row.id)
@@ -468,7 +484,7 @@
               v-if="
                 !authStore.isSimpleMode &&
                 row.platform === 'composite' &&
-                !isSystemCustomGroup(row)
+                !isSystemCustomGroup(row) && !row.is_category_default
               "
                 data-testid="group-composite-routes"
                 @click="handleCompositeRoutes(row)"
@@ -491,7 +507,7 @@
                 }}</span>
               </button>
               <button
-                v-if="!authStore.isSimpleMode"
+                v-if="!authStore.isSimpleMode && !row.is_category_default"
                 data-testid="group-rate-multipliers"
                 @click="handleRateMultipliers(row)"
                 class="admin-inline-action"
@@ -502,7 +518,7 @@
                 }}</span>
               </button>
               <button
-                v-if="!authStore.isSimpleMode"
+                v-if="!authStore.isSimpleMode && !row.is_category_default"
                 data-testid="group-rpm-overrides"
                 @click="handleRPMOverrides(row)"
                 class="admin-inline-action admin-inline-action-warning"
@@ -513,7 +529,7 @@
                 }}</span>
               </button>
               <button
-                v-if="authStore.isAdmin && !isSystemCustomGroup(row)"
+                v-if="authStore.isAdmin && !isSystemCustomGroup(row) && !row.is_category_default"
                 data-testid="group-account-user-exclusions"
                 type="button"
                 @click="handleAccountUserExclusions(row)"
@@ -523,7 +539,7 @@
                 <span class="text-xs">{{ t("admin.groups.accountUserExclusions.action") }}</span>
               </button>
               <button
-                v-if="!isSystemCustomGroup(row)"
+                v-if="!isSystemCustomGroup(row) && !row.is_category_default"
                 @click="handleDelete(row)"
                 class="admin-inline-action admin-inline-action-danger"
               >
@@ -556,6 +572,14 @@
       </template>
       </TablePageLayout>
     </div>
+
+    <CategoryDefaultGroupDialog
+      v-if="authStore.isAdmin"
+      :show="showCategoryDefaultDialog"
+      :initial-category="categoryDefaultCategory"
+      @close="showCategoryDefaultDialog = false"
+      @saved="handleCategoryDefaultSaved"
+    />
 
     <SystemCustomGroupDialog
       :show="showSystemCustomDialog"
@@ -4747,6 +4771,8 @@ import GroupAccountUserExclusionsModal from "@/components/admin/group/GroupAccou
 import GroupCapacityBadge from "@/components/common/GroupCapacityBadge.vue";
 import ReasoningEffortPolicyFields from "@/components/admin/group/ReasoningEffortPolicyFields.vue";
 import SystemCustomGroupDialog from "@/components/admin/groups/SystemCustomGroupDialog.vue";
+import CategoryDefaultGroupDialog from "@/components/admin/groups/CategoryDefaultGroupDialog.vue";
+import { CATEGORY_DEFAULT_CATEGORIES, type CategoryDefaultCategory } from "@/utils/categoryDefaultGroups";
 import PricingEntryCard from "@/components/admin/channel/PricingEntryCard.vue";
 import type { PricingFormEntry } from "@/components/admin/channel/types";
 import {
@@ -5324,6 +5350,14 @@ let abortController: AbortController | null = null;
 
 const showCreateModal = ref(false);
 const showEditModal = ref(false);
+const showCategoryDefaultDialog = ref(false);
+const categoryDefaultCategory = ref<CategoryDefaultCategory>("anthropic");
+const openCategoryDefault = (category?: string) => {
+  if (!authStore.isAdmin) return;
+  categoryDefaultCategory.value = CATEGORY_DEFAULT_CATEGORIES.find((value) => value === category) ?? "anthropic";
+  showCategoryDefaultDialog.value = true;
+};
+const handleCategoryDefaultSaved = () => { void loadGroups(); };
 const showSystemCustomDialog = ref(false);
 const systemCustomGroupID = ref<number | null>(null);
 const showDeleteDialog = ref(false);

@@ -35,6 +35,14 @@ describe('GroupSelector simple-mode binding policy', () => {
     expect(wrapper.text()).toContain('Composite')
   })
 
+  it('excludes published category entries from account source bindings while preserving ordinary composite groups', async () => {
+    const wrapper = mountSelector()
+    await wrapper.setProps({ groups: [...groups, { id: 3, name: 'Gemini Default', platform: 'composite', status: 'active', is_category_default: true }] as any })
+    expect(wrapper.text()).toContain('Composite')
+    expect(wrapper.text()).not.toContain('Gemini Default')
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+  })
+
   it('cleans hidden historical composite IDs while preserving visible selections', () => {
     authState.isSimpleMode = true
     const wrapper = mountSelector([1, 2])

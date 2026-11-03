@@ -95,6 +95,8 @@ func (Group) Fields() []ent.Field {
 		field.Bool("system_custom_routing_enabled").
 			Default(false).
 			Comment("是否启用系统级自定义模型路由"),
+		field.Bool("is_category_default").Default(false).
+			Comment("分类默认入口；使用独立已发布模型路由"),
 		field.Float("daily_limit_usd").
 			Optional().
 			Nillable().

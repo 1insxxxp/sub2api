@@ -297,6 +297,7 @@ type APIKeyService struct {
 	customGroupRepo           UserCustomGroupRepository
 	systemCustomGroupRepo     SystemCustomGroupRepository
 	systemCustomModelCatalog  SystemCustomGroupRuntimeModelCatalog
+	categoryDefaultGroups     categoryDefaultGroupResolver
 	userSubRepo               UserSubscriptionRepository
 	userGroupRateRepo         UserGroupRateRepository
 	cache                     APIKeyCache
@@ -500,6 +501,13 @@ func (s *APIKeyService) incrementAPIKeyErrorCount(ctx context.Context, userID in
 // 对于订阅类型分组：检查用户是否有有效订阅
 // 对于标准类型分组：使用原有的 AllowedGroups 和 IsExclusive 逻辑
 func (s *APIKeyService) canUserBindGroup(ctx context.Context, user *User, group *Group) bool {
+	if group.IsCategoryDefault {
+		if s.categoryDefaultGroups == nil {
+			return false
+		}
+		allowed, err := s.categoryDefaultGroups.CanBind(ctx, group.ID, user)
+		return err == nil && allowed
+	}
 	// 订阅类型分组：需要有效订阅
 	if group.IsSubscriptionType() {
 		_, err := s.userSubRepo.GetActiveByUserIDAndGroupID(ctx, user.ID, group.ID)
@@ -1359,6 +1367,20 @@ func (s *APIKeyService) GetAvailableGroups(ctx context.Context, userID int64) ([
 	// 过滤出用户有权限的分组
 	availableGroups := make([]Group, 0)
 	for _, group := range allGroups {
+		if group.IsCategoryDefault {
+			if s.categoryDefaultGroups == nil {
+				continue
+			}
+			models, err := s.categoryDefaultGroups.ModelsForUser(ctx, group.ID, user, "")
+			if err != nil {
+				return nil, err
+			}
+			if len(models) > 0 {
+				group.AvailableModelCount = len(models)
+				availableGroups = append(availableGroups, group)
+			}
+			continue
+		}
 		if s.canUserBindGroupInternal(user, &group, subscribedGroupIDs) {
 			availableGroups = append(availableGroups, group)
 		}

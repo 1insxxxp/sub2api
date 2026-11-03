@@ -634,6 +634,29 @@ x-api-key: admin-xxx
 
 ---
 
+### 分类默认分组（2026-11-03，本地实现）
+
+- 仅完整管理员可管理六类入口：`anthropic/openai/gemini/grok/domestic/other`。入口为真实、稳定的余额 `group_id`，标识 `is_category_default`；不与系统自定义订阅容器混用，不直接绑定账号。
+- `GET /api/v1/admin/category-default-groups` 读取六类配置；`GET /api/v1/admin/category-default-groups/:category/candidates` 读取同分类可关联来源。
+- `POST .../:category/sync-preview` 接受 `source_group_ids: number[]`，返回 `revision`、`preview_hash`、新增/修改/移除及冲突清单。`POST .../:category/sync-apply` 接受相同来源集合、`expected_revision`、`preview_hash`，服务端事务重新校验；过期或重名返回 409，保留旧发布版本。
+- `PUT .../:category/status` 接受 `enabled: boolean`；首次发布启用，后续发布保留启停状态。入口已关闭时保留现有密钥绑定并拒绝调用。
+- 客户调用名跨来源按 trim + 忽略大小写唯一。仅已发布、当前声明有效且用户有来源权限的模型可调用；配置变更历史防止映射改回或来源停启后自动恢复。管理员重新授予某用户来源权限视为该用户的恢复确认，不让单用户撤权影响其他人。
+- 请求内解析到来源后应用来源白名单、RPM、价格、用户倍率、高峰倍率和 Gemini 输入优惠；`usage_logs.group_id` 仍记实际来源，`category_default_group_id` 单独记入口。原密钥身份、额度和数据库绑定不变，禁止跨来源回退。
+- 发布需迁移 260/261、认证缓存 v30 和含入口审计的 outbox v4。全部运行实例与消费者升级后才配置启用；回退先关闭入口，再回退应用。历史配置快照仅保存模型声明白名单字段，不保存凭据或上游地址。
+- 常规文本 HTTP、流式、计数、模型目录及 Codex HTTP 已接入。特殊会话、WebSocket、实时与异步任务要求选择具体分组。
+
+示例（认证变量沿用本节约定，不写入实际密钥）：
+
+```bash
+curl -fsS -X POST "${BASE}/api/v1/admin/category-default-groups/gemini/sync-preview" \
+  -H "x-api-key: ${KEY}" -H 'Content-Type: application/json' \
+  --data '{"source_group_ids":[101,102]}'
+# 从预览读取 revision 和 preview_hash；按原来源集合确认发布。
+curl -fsS -X POST "${BASE}/api/v1/admin/category-default-groups/gemini/sync-apply" \
+  -H "x-api-key: ${KEY}" -H 'Content-Type: application/json' \
+  --data '{"source_group_ids":[101,102],"expected_revision":0,"preview_hash":"<preview_hash>"}'
+```
+
 ### Ent 输入计数可选策略（2026-11-01，本地实现）
 
 - 默认关闭。在管理员“分组管理”的新建/编辑表单，通过“Gemini 输入 Token 优惠”控制指定 Gemini/普通 composite 分组，持久化字段为 `gemini_input_counting_enabled`。按认证时冻结的实际计费分组生效，不随组合来源分组、故障切换或共享账号串组；该分组关闭时，账号级旧配置不能绕过。仅实际 Gemini API-key 账号及安全的最终上游模型路径适用，不按账号名称或分组名猜测。

@@ -198,6 +198,20 @@ func (_c *UsageLogCreate) SetNillableSourceGroupID(v *int64) *UsageLogCreate {
 	return _c
 }
 
+// SetCategoryDefaultGroupID sets the "category_default_group_id" field.
+func (_c *UsageLogCreate) SetCategoryDefaultGroupID(v int64) *UsageLogCreate {
+	_c.mutation.SetCategoryDefaultGroupID(v)
+	return _c
+}
+
+// SetNillableCategoryDefaultGroupID sets the "category_default_group_id" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillableCategoryDefaultGroupID(v *int64) *UsageLogCreate {
+	if v != nil {
+		_c.SetCategoryDefaultGroupID(*v)
+	}
+	return _c
+}
+
 // SetCustomGroupID sets the "custom_group_id" field.
 func (_c *UsageLogCreate) SetCustomGroupID(v int64) *UsageLogCreate {
 	_c.mutation.SetCustomGroupID(v)
@@ -1088,6 +1102,10 @@ func (_c *UsageLogCreate) createSpec() (*UsageLog, *sqlgraph.CreateSpec) {
 		_spec.SetField(usagelog.FieldBillingMode, field.TypeString, value)
 		_node.BillingMode = &value
 	}
+	if value, ok := _c.mutation.CategoryDefaultGroupID(); ok {
+		_spec.SetField(usagelog.FieldCategoryDefaultGroupID, field.TypeInt64, value)
+		_node.CategoryDefaultGroupID = &value
+	}
 	if value, ok := _c.mutation.InputTokens(); ok {
 		_spec.SetField(usagelog.FieldInputTokens, field.TypeInt, value)
 		_node.InputTokens = value
@@ -1638,6 +1656,30 @@ func (u *UsageLogUpsert) UpdateSourceGroupID() *UsageLogUpsert {
 // ClearSourceGroupID clears the value of the "source_group_id" field.
 func (u *UsageLogUpsert) ClearSourceGroupID() *UsageLogUpsert {
 	u.SetNull(usagelog.FieldSourceGroupID)
+	return u
+}
+
+// SetCategoryDefaultGroupID sets the "category_default_group_id" field.
+func (u *UsageLogUpsert) SetCategoryDefaultGroupID(v int64) *UsageLogUpsert {
+	u.Set(usagelog.FieldCategoryDefaultGroupID, v)
+	return u
+}
+
+// UpdateCategoryDefaultGroupID sets the "category_default_group_id" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdateCategoryDefaultGroupID() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldCategoryDefaultGroupID)
+	return u
+}
+
+// AddCategoryDefaultGroupID adds v to the "category_default_group_id" field.
+func (u *UsageLogUpsert) AddCategoryDefaultGroupID(v int64) *UsageLogUpsert {
+	u.Add(usagelog.FieldCategoryDefaultGroupID, v)
+	return u
+}
+
+// ClearCategoryDefaultGroupID clears the value of the "category_default_group_id" field.
+func (u *UsageLogUpsert) ClearCategoryDefaultGroupID() *UsageLogUpsert {
+	u.SetNull(usagelog.FieldCategoryDefaultGroupID)
 	return u
 }
 
@@ -2606,6 +2648,34 @@ func (u *UsageLogUpsertOne) UpdateSourceGroupID() *UsageLogUpsertOne {
 func (u *UsageLogUpsertOne) ClearSourceGroupID() *UsageLogUpsertOne {
 	return u.Update(func(s *UsageLogUpsert) {
 		s.ClearSourceGroupID()
+	})
+}
+
+// SetCategoryDefaultGroupID sets the "category_default_group_id" field.
+func (u *UsageLogUpsertOne) SetCategoryDefaultGroupID(v int64) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetCategoryDefaultGroupID(v)
+	})
+}
+
+// AddCategoryDefaultGroupID adds v to the "category_default_group_id" field.
+func (u *UsageLogUpsertOne) AddCategoryDefaultGroupID(v int64) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.AddCategoryDefaultGroupID(v)
+	})
+}
+
+// UpdateCategoryDefaultGroupID sets the "category_default_group_id" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdateCategoryDefaultGroupID() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateCategoryDefaultGroupID()
+	})
+}
+
+// ClearCategoryDefaultGroupID clears the value of the "category_default_group_id" field.
+func (u *UsageLogUpsertOne) ClearCategoryDefaultGroupID() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearCategoryDefaultGroupID()
 	})
 }
 
@@ -3846,6 +3916,34 @@ func (u *UsageLogUpsertBulk) UpdateSourceGroupID() *UsageLogUpsertBulk {
 func (u *UsageLogUpsertBulk) ClearSourceGroupID() *UsageLogUpsertBulk {
 	return u.Update(func(s *UsageLogUpsert) {
 		s.ClearSourceGroupID()
+	})
+}
+
+// SetCategoryDefaultGroupID sets the "category_default_group_id" field.
+func (u *UsageLogUpsertBulk) SetCategoryDefaultGroupID(v int64) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetCategoryDefaultGroupID(v)
+	})
+}
+
+// AddCategoryDefaultGroupID adds v to the "category_default_group_id" field.
+func (u *UsageLogUpsertBulk) AddCategoryDefaultGroupID(v int64) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.AddCategoryDefaultGroupID(v)
+	})
+}
+
+// UpdateCategoryDefaultGroupID sets the "category_default_group_id" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdateCategoryDefaultGroupID() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateCategoryDefaultGroupID()
+	})
+}
+
+// ClearCategoryDefaultGroupID clears the value of the "category_default_group_id" field.
+func (u *UsageLogUpsertBulk) ClearCategoryDefaultGroupID() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearCategoryDefaultGroupID()
 	})
 }
 

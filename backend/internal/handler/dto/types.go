@@ -106,6 +106,8 @@ type Group struct {
 	Tag                              string            `json:"tag"`
 	TagColor                         string            `json:"tag_color"`
 	KeyDisplayCategory               string            `json:"key_display_category"`
+	IsCategoryDefault                bool              `json:"is_category_default"`
+	AvailableModelCount              int               `json:"available_model_count,omitempty"`
 	Platform                         string            `json:"platform"`
 	RateMultiplier                   float64           `json:"rate_multiplier"`
 	EmptyResponseCompensationEnabled bool              `json:"empty_response_compensation_enabled"`
@@ -729,6 +731,9 @@ type AdminUsageLog struct {
 	// SourceGroupID is the direct source group selected behind a system custom
 	// subscription route. Nil for ordinary and historical usage rows.
 	SourceGroupID *int64 `json:"source_group_id,omitempty"`
+	// CategoryDefaultGroupID identifies the published entry while GroupID is
+	// the actual pricing source. Kept on the administrator audit projection.
+	CategoryDefaultGroupID *int64 `json:"category_default_group_id,omitempty"`
 
 	// UpstreamModel is the actual model sent to the upstream provider after mapping.
 	// Omitted when no mapping was applied (requested model was used as-is).

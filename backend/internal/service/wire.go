@@ -887,6 +887,14 @@ func ProvideAPIKeyService(
 	return svc
 }
 
+// ProvideCategoryDefaultGroupService attaches the source resolver after the
+// API-key service exists, avoiding a resolver/cache-invalidator dependency cycle.
+func ProvideCategoryDefaultGroupService(repo CategoryDefaultGroupRepository, invalidator APIKeyAuthCacheInvalidator, apiKeys *APIKeyService) *CategoryDefaultGroupService {
+	svc := NewCategoryDefaultGroupService(repo, invalidator)
+	apiKeys.SetCategoryDefaultGroupService(svc)
+	return svc
+}
+
 func ProvideImageStudioService(
 	repo UserImageRepository,
 	taskRepo UserImageTaskRepository,
@@ -954,6 +962,7 @@ var ProviderSet = wire.NewSet(
 	ProvideUsagePersistenceWorker,
 	NewGroupService,
 	NewSystemCustomGroupServiceWithCacheInvalidation,
+	ProvideCategoryDefaultGroupService,
 	wire.Bind(new(SystemCustomGroupModelCatalog), new(*GatewayService)),
 	NewUserCustomGroupService,
 	NewCompositeRouteResolver,

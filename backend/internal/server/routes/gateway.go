@@ -44,6 +44,7 @@ func RegisterGatewayRoutes(
 	compositeTarget := compositeTargetPlatformMiddleware(compositeResolver)
 	systemTarget := systemCustomGroupTargetMiddleware(apiKeyService)
 	systemGeminiTarget := systemCustomGroupGeminiTargetMiddleware(apiKeyService)
+	categoryTarget := categoryDefaultGroupTargetMiddleware(apiKeyService)
 	customTarget := customGroupTargetMiddleware(apiKeyService)
 	customGeminiTarget := customGroupGeminiTargetMiddleware(apiKeyService)
 	compositeGeminiTarget := compositeGeminiTargetPlatformMiddleware(compositeResolver)
@@ -75,6 +76,10 @@ func RegisterGatewayRoutes(
 	}
 	codexModelsHandler := func(c *gin.Context) {
 		apiKey, ok := middleware.GetAPIKeyFromContext(c)
+		if ok && apiKey != nil && apiKey.Group != nil && apiKey.Group.IsCategoryDefault {
+			h.Gateway.CategoryDefaultCodexModels(c)
+			return
+		}
 		if ok && apiKey != nil && apiKey.Group != nil && apiKey.Group.IsSystemCustomRouteGroup() {
 			h.Gateway.SystemCustomCodexModels(c)
 			return
@@ -205,6 +210,7 @@ func RegisterGatewayRoutes(
 	// Live/WebSocket establish identity outside the JSON request model path and
 	// batch image settles directly against balance. Keep system custom monthly
 	// keys fail-closed until those flows have dedicated end-to-end support.
+	gateway.Use(categoryTarget)
 	gateway.Use(groupModelAllowlist)
 	gateway.Use(systemUnsupportedOpenAI)
 	gateway.Use(systemTarget)
@@ -367,6 +373,8 @@ func RegisterGatewayRoutes(
 		relay.Use(endpointNorm)
 		relay.Use(relayMode)
 		relay.Use(gin.HandlerFunc(apiKeyAuth))
+		relay.Use(categoryTarget)
+		relay.Use(groupModelAllowlist)
 		relay.Use(systemUnsupportedOpenAI)
 		relay.Use(systemTarget)
 		relay.Use(customTarget)
@@ -405,6 +413,7 @@ func RegisterGatewayRoutes(
 	gemini.Use(opsErrorLogger)
 	gemini.Use(endpointNorm)
 	gemini.Use(middleware.APIKeyAuthWithSubscriptionGoogle(apiKeyService, subscriptionService, cfg))
+	gemini.Use(categoryTarget)
 	gemini.Use(groupModelAllowlist)
 	gemini.Use(systemGeminiTarget)
 	gemini.Use(customGeminiTarget)
@@ -433,7 +442,7 @@ func RegisterGatewayRoutes(
 		h.Gateway.Responses(c)
 	}
 	rootRoute := func(method, path string, limit gin.HandlerFunc, handler gin.HandlerFunc) {
-		r.Handle(method, path, limit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), systemUnsupportedOpenAI, groupModelAllowlist, compositeTarget, requireGroupAnthropic, handler)
+		r.Handle(method, path, limit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), categoryTarget, systemUnsupportedOpenAI, groupModelAllowlist, compositeTarget, requireGroupAnthropic, handler)
 	}
 	for _, prefix := range []string{"/api/v3", "/v3", "/v1", ""} {
 		rootRoute(http.MethodPost, prefix+"/contents/generations/tasks", bodyLimit, h.OpenAIGateway.SeedanceTasks)
@@ -451,7 +460,7 @@ func RegisterGatewayRoutes(
 	rootRoute(http.MethodPost, "/messages/count_tokens", bodyLimit, countTokensHandler)
 	codexDirect := r.Group("/backend-api/codex")
 	// codexDirect.Use(bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), groupModelAllowlist, compositeTarget, requireGroupAnthropic)
-	codexDirect.Use(bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), systemUnsupportedOpenAI, groupModelAllowlist, compositeTarget, requireGroupAnthropic)
+	codexDirect.Use(bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), categoryTarget, systemUnsupportedOpenAI, groupModelAllowlist, compositeTarget, requireGroupAnthropic)
 	{
 		codexDirect.POST("/realtime/calls", h.OpenAIGateway.Live)
 		codexDirect.GET("/:call_id", h.OpenAIGateway.LiveSideband)
@@ -555,7 +564,7 @@ func RegisterGatewayRoutes(
 	})
 
 	// Antigravity 模型列表
-	r.GET("/antigravity/models", gin.HandlerFunc(apiKeyAuth), systemUnsupportedAnthropic, requireGroupAnthropic, h.Gateway.AntigravityModels)
+	r.GET("/antigravity/models", gin.HandlerFunc(apiKeyAuth), categoryTarget, systemUnsupportedAnthropic, requireGroupAnthropic, h.Gateway.AntigravityModels)
 
 	// Antigravity 专用路由（仅使用 antigravity 账户，不混合调度）
 	antigravityV1 := r.Group("/antigravity/v1")
@@ -567,6 +576,7 @@ func RegisterGatewayRoutes(
 	antigravityV1.Use(gin.HandlerFunc(apiKeyAuth))
 	// Forced-platform routes ignore per-model source selection, so they cannot
 	// safely consume a system custom key before dedicated routing support exists.
+	antigravityV1.Use(categoryTarget)
 	antigravityV1.Use(groupModelAllowlist)
 	antigravityV1.Use(systemUnsupportedAnthropic)
 	antigravityV1.Use(requireGroupAnthropic)
@@ -584,6 +594,7 @@ func RegisterGatewayRoutes(
 	antigravityV1Beta.Use(endpointNorm)
 	antigravityV1Beta.Use(middleware.ForcePlatform(service.PlatformAntigravity))
 	antigravityV1Beta.Use(middleware.APIKeyAuthWithSubscriptionGoogle(apiKeyService, subscriptionService, cfg))
+	antigravityV1Beta.Use(categoryTarget)
 	antigravityV1Beta.Use(groupModelAllowlist)
 	antigravityV1Beta.Use(systemUnsupportedGoogle)
 	antigravityV1Beta.Use(requireGroupGoogle)
@@ -655,6 +666,9 @@ func compositeTargetPlatformMiddleware(resolver *service.CompositeRouteResolver)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"type": "server_error", "message": "Failed to resolve composite model route"}})
 				c.Abort()
+				return
+			}
+			if rejectCategoryDefaultCompositeAmbiguity(c, apiKey, decision) {
 				return
 			}
 			// 含 OAuth 账号的跨平台歧义是分组配置错误：拒绝而不是放行。否则未解析的
@@ -1174,13 +1188,16 @@ func compositeGeminiTargetPlatformMiddleware(resolver *service.CompositeRouteRes
 	}
 	return func(c *gin.Context) {
 		apiKey, ok := middleware.GetAPIKeyFromContext(c)
-		if ok && apiKey != nil && apiKey.Group != nil && apiKey.Group.Platform == service.PlatformComposite {
+		if ok && apiKey != nil && apiKey.Group != nil && apiKey.Group.Platform == service.PlatformComposite && !apiKey.Group.IsCategoryDefault {
 			model := compositeGeminiModelFromParams(c)
 			if model != "" {
 				decision, err := resolver.Resolve(c.Request.Context(), apiKey.Group.ID, model, service.CompositeRouteEndpointGemini)
 				if err != nil {
 					c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"type": "server_error", "message": "Failed to resolve composite model route"}})
 					c.Abort()
+					return
+				}
+				if rejectCategoryDefaultCompositeAmbiguity(c, apiKey, decision) {
 					return
 				}
 				if decision.Matched {

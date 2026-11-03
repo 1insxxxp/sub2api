@@ -1770,6 +1770,7 @@ func (s *GatewayService) buildRecordUsageLog(
 	usageLog := &UsageLog{
 		UserID:                   user.ID,
 		APIKeyID:                 apiKey.ID,
+		CategoryDefaultGroupID:   apiKey.CategoryDefaultGroupID,
 		AccountID:                account.ID,
 		RequestID:                requestID,
 		UpstreamRequestID:        usageUpstreamRequestIDForResult(account, result),

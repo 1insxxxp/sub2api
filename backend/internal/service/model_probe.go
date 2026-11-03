@@ -62,17 +62,51 @@ type modelProbeRunner interface {
 	RunModelProbe(context.Context, int64, string) (ModelProbeExecution, error)
 }
 type ModelProbeService struct {
-	groups   modelProbeGroups
-	access   modelProbeAccess
-	gateway  ModelProbeGateway
-	runner   modelProbeRunner
-	visible  modelProbeGroupVisibility
-	settings modelProbeSettings
-	users    modelProbeUsers
+	groups           modelProbeGroups
+	access           modelProbeAccess
+	gateway          ModelProbeGateway
+	runner           modelProbeRunner
+	visible          modelProbeGroupVisibility
+	settings         modelProbeSettings
+	users            modelProbeUsers
+	categoryDefaults *CategoryDefaultGroupService
 }
 
 func NewModelProbeService(groups modelProbeGroups, access modelProbeAccess, gateway ModelProbeGateway, runner modelProbeRunner, visible modelProbeGroupVisibility, settings modelProbeSettings, users modelProbeUsers) *ModelProbeService {
 	return &ModelProbeService{groups: groups, access: access, gateway: gateway, runner: runner, visible: visible, settings: settings, users: users}
+}
+
+func (s *ModelProbeService) SetCategoryDefaultGroupService(defaults *CategoryDefaultGroupService) {
+	s.categoryDefaults = defaults
+}
+
+func (s *ModelProbeService) categoryDefaultActor(ctx context.Context, actor int64) (*User, error) {
+	if s.users == nil || s.categoryDefaults == nil {
+		return nil, ErrUserSupportUnavailable
+	}
+	user, err := s.users.GetByID(ctx, actor)
+	if err != nil || user == nil || user.ID != actor || user.Status != StatusActive || user.DeletedAt != nil {
+		return nil, ErrUserSupportForbidden
+	}
+	return user, nil
+}
+
+func (s *ModelProbeService) categoryDefaultCatalog(ctx context.Context, actor int64, group *Group) ([]ModelProbeModel, error) {
+	user, err := s.categoryDefaultActor(ctx, actor)
+	if err != nil {
+		return nil, err
+	}
+	models, err := s.categoryDefaults.ModelsForUser(ctx, group.ID, user, "")
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ModelProbeModel, 0, len(models))
+	for _, model := range models {
+		if validProbeModel(model) {
+			out = append(out, ModelProbeModel{ID: model})
+		}
+	}
+	return out, nil
 }
 func (s *ModelProbeService) authorize(ctx context.Context, id int64) error {
 	if s == nil || s.access == nil || id <= 0 {
@@ -153,7 +187,12 @@ func (s *ModelProbeService) catalog(ctx context.Context, actor, id int64) (*Grou
 	if err != nil {
 		return nil, nil, err
 	}
-	models, err := s.publicCatalog(ctx, g)
+	var models []ModelProbeModel
+	if g.IsCategoryDefault {
+		models, err = s.categoryDefaultCatalog(ctx, actor, g)
+	} else {
+		models, err = s.publicCatalog(ctx, g)
+	}
 	if err != nil {
 		return nil, nil, err
 	}
@@ -185,10 +224,25 @@ func (s *ModelProbeService) Run(ctx context.Context, actor, id int64, model stri
 	if err := s.requireEnabledGroup(ctx, id); err != nil {
 		return nil, err
 	}
+	probeModel := model
+	if group.IsCategoryDefault {
+		user, err := s.categoryDefaultActor(ctx, actor)
+		if err != nil {
+			return nil, err
+		}
+		route, err := s.categoryDefaults.ResolveForUser(ctx, id, user, model)
+		if err != nil {
+			return nil, err
+		}
+		if route == nil || route.SourceGroup == nil {
+			return nil, ErrModelProbeInvalid
+		}
+		group, probeModel = route.SourceGroup, route.SourceModel
+	}
 	started := time.Now()
 	out := &ModelProbeResult{GroupID: id, Model: model, Status: "failed", StartedAt: started, ErrorCode: "probe_unavailable"}
 	defer func() { out.DurationMs = time.Since(started).Milliseconds(); setProbeContextOutcome(ctx, out) }()
-	selected, err := s.gateway.SelectForProbe(ctx, group, model)
+	selected, err := s.gateway.SelectForProbe(ctx, group, probeModel)
 	if err != nil || selected == nil || selected.AccountID <= 0 {
 		if selected != nil && selected.Release != nil {
 			selected.Release()
@@ -254,6 +308,8 @@ func setProbeContextOutcome(ctx context.Context, out *ModelProbeResult) {
 }
 
 // Concrete provider keeps small interfaces testable while Wire resolves existing services.
-func ProvideModelProbeService(groups GroupRepository, access *UserSupportService, gateway ModelProbeGateway, runner *AccountTestService, apiKeys *APIKeyService, settings SettingRepository, users UserRepository) *ModelProbeService {
-	return NewModelProbeService(groups, access, gateway, runner, apiKeys, settings, users)
+func ProvideModelProbeService(groups GroupRepository, access *UserSupportService, gateway ModelProbeGateway, runner *AccountTestService, apiKeys *APIKeyService, settings SettingRepository, users UserRepository, defaults *CategoryDefaultGroupService) *ModelProbeService {
+	svc := NewModelProbeService(groups, access, gateway, runner, apiKeys, settings, users)
+	svc.SetCategoryDefaultGroupService(defaults)
+	return svc
 }

@@ -19,7 +19,11 @@ vi.mock('@/api/admin', () => ({
       list,
       getModelsListCandidates,
       getUsageSummary,
-      getCapacitySummary
+      getCapacitySummary,
+      getAllIncludingInactive: vi.fn().mockResolvedValue([]),
+      getLiveCapability: vi.fn().mockResolvedValue({ supported: false }),
+      getModelAllowlistCandidates: vi.fn().mockResolvedValue([]),
+      getById: vi.fn()
     },
     accounts: {
       list: vi.fn(),
@@ -35,6 +39,7 @@ vi.mock('@/stores/app', () => ({
 vi.mock('@/stores/onboarding', () => ({
   useOnboardingStore: () => ({ nextStep: vi.fn() })
 }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ isAdmin: true, isSimpleMode: false }) }))
 
 vi.mock('vue-i18n', async () => {
   const actual = await vi.importActual<typeof import('vue-i18n')>('vue-i18n')
@@ -97,6 +102,7 @@ function mountView() {
           template:
             '<section><slot name="filters"/><slot name="table"/><slot name="pagination"/></section>'
         },
+        AdminListToolbar: false,
         DataTable: {
           props: ['data'],
           template:
@@ -120,6 +126,21 @@ function mountView() {
 }
 
 describe('GroupsView system custom rows', () => {
+  it('manages category defaults through their dedicated dialog and hides direct group actions', async () => {
+    list.mockResolvedValue({ items: [{ ...ordinaryComposite, id: 92, name: 'Gemini 默认分组', key_display_category: 'gemini', is_category_default: true }], total: 1, page: 1, page_size: 20, pages: 1 })
+    const wrapper = mountView()
+    await flushPromises()
+    const row = wrapper.get('[data-row-id="92"]')
+    expect(row.text()).toContain('categoryDefaults.badge')
+    expect(row.find('[data-testid="group-duplicate"]').exists()).toBe(false)
+    expect(row.find('[data-testid="group-composite-routes"]').exists()).toBe(false)
+    expect(row.find('[data-testid="group-rate-multipliers"]').exists()).toBe(false)
+    await row.get('[data-testid="category-default-manage"]').trigger('click')
+    const dialog = wrapper.findComponent({ name: 'CategoryDefaultGroupDialog' })
+    expect(dialog.props('show')).toBe(true)
+    expect(dialog.props('initialCategory')).toBe('gemini')
+    wrapper.unmount()
+  })
   beforeEach(() => {
     vi.clearAllMocks()
     list.mockResolvedValue({
@@ -168,21 +189,17 @@ describe('GroupsView system custom rows', () => {
     await flushPromises()
 
     const toolbar = wrapper.get('[data-testid="groups-toolbar"]')
-    expect(toolbar.classes()).toEqual(
-      expect.arrayContaining(['lg:flex-col', 'lg:items-stretch', '2xl:flex-row', '2xl:items-center'])
-    )
+    expect(toolbar.classes()).toContain('admin-list-toolbar')
 
     const actions = wrapper.get('[data-testid="groups-toolbar-actions"]')
-    expect(actions.classes()).toEqual(
-      expect.arrayContaining(['lg:w-full', '2xl:w-auto', '2xl:flex-none'])
-    )
+    expect(actions.classes()).toContain('groups-list-actions')
 
     const createActions = wrapper.get('[data-testid="groups-create-actions"]')
     expect(createActions.get('[data-testid="system-custom-create"]').classes()).toContain(
-      'whitespace-nowrap'
+      'groups-create-button'
     )
     expect(createActions.get('[data-tour="groups-create-btn"]').classes()).toContain(
-      'whitespace-nowrap'
+      'groups-create-button'
     )
   })
 

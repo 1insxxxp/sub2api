@@ -74,7 +74,10 @@ func (s *duplicateAccountRepoStub) FindByExtraField(_ context.Context, key strin
 func TestDuplicateAccountCopiesConfigurationAndResetsRuntimeState(t *testing.T) {
 	ctx := context.Background()
 	repo := newDuplicateAccountRepoStub()
-	svc := &adminServiceImpl{accountRepo: repo, accountDuplicateRepo: repo}
+	svc := &adminServiceImpl{accountRepo: repo, accountDuplicateRepo: repo, groupRepo: &groupRepoStubForAdmin{getByIDByID: map[int64]*Group{
+		3: {ID: 3, Platform: PlatformAnthropic, Status: StatusActive, SubscriptionType: SubscriptionTypeStandard, Hydrated: true},
+		7: {ID: 7, Platform: PlatformAnthropic, Status: StatusActive, SubscriptionType: SubscriptionTypeStandard, Hydrated: true},
+	}}}
 
 	notes := "keep this note"
 	proxyID := int64(17)
@@ -292,7 +295,9 @@ func TestDuplicateAccountSimpleModeRejectsCompositeGroupBinding(t *testing.T) {
 func TestDuplicateAccountAtomicCreateFailureLeavesNoOrphan(t *testing.T) {
 	ctx := context.Background()
 	repo := newDuplicateAccountRepoStub()
-	svc := &adminServiceImpl{accountRepo: repo, accountDuplicateRepo: repo}
+	svc := &adminServiceImpl{accountRepo: repo, accountDuplicateRepo: repo, groupRepo: &groupRepoStubForAdmin{getByIDByID: map[int64]*Group{
+		7: {ID: 7, Platform: PlatformAnthropic, Status: StatusActive, SubscriptionType: SubscriptionTypeStandard, Hydrated: true},
+	}}}
 	source := &Account{
 		Name:          "source",
 		Platform:      PlatformAnthropic,

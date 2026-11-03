@@ -14,7 +14,7 @@ import (
 	"github.com/dgraph-io/ristretto"
 )
 
-const apiKeyAuthSnapshotVersion = 29 // v29: preserve group-scoped Gemini input counting policy
+const apiKeyAuthSnapshotVersion = 30 // v30: distinguish category default routing from ordinary composite groups
 
 type apiKeyAuthCacheConfig struct {
 	l1Size        int
@@ -392,6 +392,7 @@ func (s *APIKeyService) snapshotFromAPIKey(ctx context.Context, apiKey *APIKey) 
 			IsExclusive:                     apiKey.Group.IsExclusive,
 			Status:                          apiKey.Group.Status,
 			SubscriptionType:                apiKey.Group.SubscriptionType,
+			IsCategoryDefault:               apiKey.Group.IsCategoryDefault,
 			SystemCustomRoutingEnabled:      apiKey.Group.SystemCustomRoutingEnabled,
 			RateMultiplier:                  apiKey.Group.RateMultiplier,
 			DailyLimitUSD:                   apiKey.Group.DailyLimitUSD,
@@ -507,6 +508,7 @@ func (s *APIKeyService) snapshotToAPIKey(key string, snapshot *APIKeyAuthSnapsho
 			Status:                          snapshot.Group.Status,
 			Hydrated:                        true,
 			SubscriptionType:                snapshot.Group.SubscriptionType,
+			IsCategoryDefault:               snapshot.Group.IsCategoryDefault,
 			SystemCustomRoutingEnabled:      snapshot.Group.SystemCustomRoutingEnabled,
 			RateMultiplier:                  snapshot.Group.RateMultiplier,
 			DailyLimitUSD:                   snapshot.Group.DailyLimitUSD,

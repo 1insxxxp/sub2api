@@ -284,7 +284,9 @@ func TestAdminServiceBulkUpdateAccounts_ResolvesIDsFromFilters(t *testing.T) {
 		},
 		listResult: &pagination.PaginationResult{Total: 2},
 	}
-	svc := &adminServiceImpl{accountRepo: repo}
+	svc := &adminServiceImpl{accountRepo: repo, groupRepo: &groupRepoStubForAdmin{getByIDByID: map[int64]*Group{
+		12: {ID: 12, Platform: PlatformOpenAI, Status: StatusActive, SubscriptionType: SubscriptionTypeStandard, Hydrated: true},
+	}}}
 
 	schedulable := true
 	input := &BulkUpdateAccountsInput{

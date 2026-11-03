@@ -667,6 +667,8 @@ export interface Group {
   tag?: GroupTag
   tag_color?: string
   key_display_category?: KeyDisplayCategory
+  is_category_default?: boolean
+  available_model_count?: number
   platform: GroupPlatform
   rate_multiplier: number
   empty_response_compensation_enabled: boolean

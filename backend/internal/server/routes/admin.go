@@ -79,6 +79,9 @@ func RegisterAdminRoutes(
 		if adminHandlers.SystemCustomGroup != nil {
 			registerSystemCustomGroupRoutes(admin, h)
 		}
+		if adminHandlers.CategoryDefaultGroup != nil {
+			registerCategoryDefaultGroupRoutes(admin, h)
+		}
 
 		// 账号管理
 		if adminHandlers.Account != nil {
@@ -299,6 +302,15 @@ func registerSystemCustomGroupRoutes(admin *gin.RouterGroup, h *handler.Handlers
 		groups.GET("/:id/sync-preview", h.Admin.SystemCustomGroup.SyncPreview)
 		groups.DELETE("/:id", h.Admin.SystemCustomGroup.Delete)
 	}
+}
+
+func registerCategoryDefaultGroupRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	groups := admin.Group("/category-default-groups")
+	groups.GET("", h.Admin.CategoryDefaultGroup.List)
+	groups.GET("/:category/candidates", h.Admin.CategoryDefaultGroup.Candidates)
+	groups.POST("/:category/sync-preview", h.Admin.CategoryDefaultGroup.SyncPreview)
+	groups.POST("/:category/sync-apply", h.Admin.CategoryDefaultGroup.SyncApply)
+	groups.PUT("/:category/status", h.Admin.CategoryDefaultGroup.SetStatus)
 }
 
 func registerCheckinRoutes(admin *gin.RouterGroup, h *handler.Handlers) {

@@ -50,6 +50,9 @@ func TestMain(m *testing.M) {
 		log.Printf("failed to init timezone: %v", err)
 		os.Exit(1)
 	}
+	if dsn := os.Getenv("SUB2API_TEST_POSTGRES_DSN"); dsn != "" {
+		os.Exit(runLocalIntegrationHarness(m, dsn, os.Getenv("SUB2API_TEST_REDIS_ADDR")))
+	}
 
 	if !dockerIsAvailable(ctx) {
 		// In CI we expect Docker to be available so integration tests should fail loudly.

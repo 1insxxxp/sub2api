@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -53,6 +54,24 @@ func (h *GatewayHandler) KeyBillingInfo(c *gin.Context) {
 	if apiKey.Group == nil {
 		h.errorResponse(c, http.StatusInternalServerError, "api_error", "Billing information is unavailable")
 		return
+	}
+
+	if apiKey.Group.IsCategoryDefault {
+		model := strings.TrimSpace(c.Query("model"))
+		if model == "" {
+			h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "默认分组按来源分组计费，请通过 model 查询参数指定模型")
+			return
+		}
+		if h.apiKeyService == nil {
+			h.errorResponse(c, http.StatusServiceUnavailable, "service_unavailable_error", "默认分组暂不可用")
+			return
+		}
+		resolution, err := h.apiKeyService.ResolveCategoryDefaultGroupModel(c.Request.Context(), apiKey, model)
+		if err != nil || resolution == nil || resolution.APIKey == nil {
+			h.errorResponse(c, http.StatusForbidden, "permission_error", "此模型尚未发布或当前账号无权使用")
+			return
+		}
+		apiKey = resolution.APIKey
 	}
 
 	resolvedRate, ok := h.resolveKeyBillingRate(c, apiKey)

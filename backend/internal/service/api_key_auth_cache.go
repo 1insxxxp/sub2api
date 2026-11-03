@@ -80,6 +80,7 @@ type APIKeyAuthGroupSnapshot struct {
 	IsExclusive                     bool                          `json:"is_exclusive"`
 	Status                          string                        `json:"status"`
 	SubscriptionType                string                        `json:"subscription_type"`
+	IsCategoryDefault               bool                          `json:"is_category_default"`
 	SystemCustomRoutingEnabled      bool                          `json:"system_custom_routing_enabled"`
 	RateMultiplier                  float64                       `json:"rate_multiplier"`
 	GeminiInputCountingEnabled      bool                          `json:"gemini_input_counting_enabled"`

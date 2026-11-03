@@ -114,6 +114,7 @@ func createGroupRecord(ctx context.Context, client *dbent.Client, groupIn *servi
 		SetStatus(groupIn.Status).
 		SetSubscriptionType(groupIn.SubscriptionType).
 		SetSystemCustomRoutingEnabled(groupIn.SystemCustomRoutingEnabled).
+		SetIsCategoryDefault(groupIn.IsCategoryDefault).
 		SetNillableDailyLimitUsd(groupIn.DailyLimitUSD).
 		SetNillableWeeklyLimitUsd(groupIn.WeeklyLimitUSD).
 		SetNillableMonthlyLimitUsd(groupIn.MonthlyLimitUSD).
@@ -319,6 +320,7 @@ func (r *groupRepository) Update(ctx context.Context, groupIn *service.Group) er
 		SetStatus(groupIn.Status).
 		SetSubscriptionType(groupIn.SubscriptionType).
 		SetSystemCustomRoutingEnabled(groupIn.SystemCustomRoutingEnabled).
+		SetIsCategoryDefault(groupIn.IsCategoryDefault).
 		SetNillableDailyLimitUsd(groupIn.DailyLimitUSD).
 		SetNillableWeeklyLimitUsd(groupIn.WeeklyLimitUSD).
 		SetNillableMonthlyLimitUsd(groupIn.MonthlyLimitUSD).

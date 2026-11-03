@@ -212,6 +212,13 @@ func (s *adminServiceImpl) DuplicateGroup(ctx context.Context, id int64, actorSc
 	if err := s.ValidateSimpleModeGroupOperation(AdminGroupOperationDuplicate); err != nil {
 		return nil, err
 	}
+	source, err := s.groupRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if source.IsCategoryDefault {
+		return nil, ErrCategoryDefaultManagedOnly
+	}
 	existing, err := s.RecoverDuplicateGroup(ctx, id, actorScope, operationKey)
 	if err != nil {
 		return nil, err
@@ -220,10 +227,6 @@ func (s *adminServiceImpl) DuplicateGroup(ctx context.Context, id int64, actorSc
 		return existing, nil
 	}
 
-	source, err := s.groupRepo.GetByID(ctx, id)
-	if err != nil {
-		return nil, err
-	}
 	if s.groupDuplicateRepo == nil {
 		return nil, errors.New("group duplicate repository is not configured")
 	}

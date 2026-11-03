@@ -13,11 +13,13 @@ import manager from './manager'
 import modelStatus from './modelStatus'
 import userSupport from './userSupport'
 import modelProbes from './modelProbes'
+import categoryDefaults from './categoryDefaults'
 
 export default mergeMessages({
   adminAccessKeys,
   userSupport,
   modelProbes,
+  categoryDefaults,
   ...landing,
   ...common,
   ...dashboard,

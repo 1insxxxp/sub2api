@@ -35,6 +35,20 @@ function readBlobAsText(blob: Blob): Promise<string> {
 }
 
 describe('UseKeyModal', () => {
+  it('keeps HTTP client guidance while hiding unsupported WebSocket setup for category defaults', async () => {
+    const wrapper = mount(UseKeyModal, {
+      props: { show: true, apiKey: 'sk-default-test', baseUrl: 'https://example.com', platform: 'openai', categoryDefault: true },
+      global: { stubs: { BaseDialog: { template: '<div><slot /><slot name="footer" /></div>' }, Icon: true } },
+    })
+    const tabs = wrapper.get('nav[aria-label="Client"]').text()
+    expect(tabs).toContain('keys.useKeyModal.cliTabs.codexCli')
+    expect(tabs).not.toContain('keys.useKeyModal.cliTabs.codexCliWs')
+    expect(wrapper.text()).toContain('categoryDefaults.protocolHint')
+    expect(wrapper.findAll('pre code').map(code => code.text()).join('\n')).toContain('supports_websockets = false')
+    await wrapper.setProps({ platform: 'gemini' })
+    expect(wrapper.get('nav[aria-label="Client"]').text()).toContain('keys.useKeyModal.cliTabs.geminiCli')
+    wrapper.unmount()
+  })
   afterEach(() => {
     vi.unstubAllGlobals()
     saveAsMock.mockClear()

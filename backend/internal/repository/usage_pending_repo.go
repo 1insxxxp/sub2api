@@ -76,8 +76,8 @@ func (r *usageLogRepository) upsertPendingUsage(ctx context.Context, sqlq sqlExe
 	if requestedModel == "" {
 		requestedModel = log.Model
 	}
-	columns := []string{"request_id", "user_id", "api_key_id", "account_id", "model", "requested_model", "upstream_model", "group_id", "source_group_id", "custom_group_id", "subscription_id", "input_tokens", "output_tokens", "input_tokens_source", "output_tokens_source", "cache_creation_tokens", "cache_read_tokens", "cache_creation_5m_tokens", "cache_creation_1h_tokens", "image_output_tokens", "billing_type", "stream", "duration_ms", "first_token_ms", "user_agent", "ip_address", "inbound_endpoint", "upstream_endpoint", "upstream_request_id", "session_id", "channel_id", "model_mapping_chain", "service_tier", "reasoning_effort", "requested_reasoning_effort", "created_at"}
-	args := []any{log.RequestID, log.UserID, log.APIKeyID, log.AccountID, log.Model, requestedModel, log.UpstreamModel, log.GroupID, log.SourceGroupID, log.CustomGroupID, log.SubscriptionID, input, output, inputSource, outputSource, cacheCreate, cacheRead, cache5m, cache1h, imageOutput, log.BillingType, log.Stream, log.DurationMs, log.FirstTokenMs, log.UserAgent, log.IPAddress, log.InboundEndpoint, log.UpstreamEndpoint, log.UpstreamRequestID, log.SessionID, log.ChannelID, log.ModelMappingChain, log.ServiceTier, log.ReasoningEffort, log.RequestedReasoningEffort, createdAt}
+	columns := []string{"request_id", "user_id", "api_key_id", "account_id", "model", "requested_model", "upstream_model", "group_id", "source_group_id", "custom_group_id", "subscription_id", "input_tokens", "output_tokens", "input_tokens_source", "output_tokens_source", "cache_creation_tokens", "cache_read_tokens", "cache_creation_5m_tokens", "cache_creation_1h_tokens", "image_output_tokens", "billing_type", "stream", "duration_ms", "first_token_ms", "user_agent", "ip_address", "inbound_endpoint", "upstream_endpoint", "upstream_request_id", "session_id", "channel_id", "model_mapping_chain", "service_tier", "reasoning_effort", "requested_reasoning_effort", "created_at", "category_default_group_id"}
+	args := []any{log.RequestID, log.UserID, log.APIKeyID, log.AccountID, log.Model, requestedModel, log.UpstreamModel, log.GroupID, log.SourceGroupID, log.CustomGroupID, log.SubscriptionID, input, output, inputSource, outputSource, cacheCreate, cacheRead, cache5m, cache1h, imageOutput, log.BillingType, log.Stream, log.DurationMs, log.FirstTokenMs, log.UserAgent, log.IPAddress, log.InboundEndpoint, log.UpstreamEndpoint, log.UpstreamRequestID, log.SessionID, log.ChannelID, log.ModelMappingChain, log.ServiceTier, log.ReasoningEffort, log.RequestedReasoningEffort, createdAt, log.CategoryDefaultGroupID}
 	placeholders := make([]string, len(args))
 	updates := make([]string, 0, len(columns))
 	for i, column := range columns {
@@ -86,7 +86,7 @@ func (r *usageLogRepository) upsertPendingUsage(ctx context.Context, sqlq sqlExe
 		// from a comparison/assignment for the very same parameter.
 		columnType := "varchar"
 		switch column {
-		case "user_id", "api_key_id", "account_id", "group_id", "source_group_id", "custom_group_id", "subscription_id", "channel_id":
+		case "user_id", "api_key_id", "account_id", "group_id", "source_group_id", "custom_group_id", "subscription_id", "channel_id", "category_default_group_id":
 			columnType = "bigint"
 		case "input_tokens", "output_tokens", "cache_creation_tokens", "cache_read_tokens", "cache_creation_5m_tokens", "cache_creation_1h_tokens", "image_output_tokens", "duration_ms", "first_token_ms":
 			columnType = "integer"
@@ -139,7 +139,7 @@ func (r *usageLogRepository) upsertPendingUsage(ctx context.Context, sqlq sqlExe
 // rows. Financial columns are intentionally absent from the pending store.
 func pendingUsageSelectColumns() string {
 	values := make(map[string]string)
-	for _, column := range strings.Fields("user_id api_key_id account_id request_id model requested_model upstream_model group_id source_group_id custom_group_id subscription_id input_tokens output_tokens cache_creation_tokens cache_read_tokens cache_creation_5m_tokens cache_creation_1h_tokens image_output_tokens billing_type stream duration_ms first_token_ms user_agent ip_address inbound_endpoint upstream_endpoint upstream_request_id session_id channel_id model_mapping_chain service_tier reasoning_effort requested_reasoning_effort created_at") {
+	for _, column := range strings.Fields("user_id api_key_id account_id request_id model requested_model upstream_model group_id source_group_id custom_group_id subscription_id input_tokens output_tokens cache_creation_tokens cache_read_tokens cache_creation_5m_tokens cache_creation_1h_tokens image_output_tokens billing_type stream duration_ms first_token_ms user_agent ip_address inbound_endpoint upstream_endpoint upstream_request_id session_id channel_id model_mapping_chain service_tier reasoning_effort requested_reasoning_effort created_at category_default_group_id") {
 		values[column] = "p." + column
 	}
 	for _, column := range strings.Fields("image_input_tokens image_count video_count") {

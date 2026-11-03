@@ -1212,6 +1212,10 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 // Falls back to default models if no whitelist is configured
 func (h *GatewayHandler) Models(c *gin.Context) {
 	apiKey, _ := middleware2.GetAPIKeyFromContext(c)
+	if apiKey != nil && apiKey.Group != nil && apiKey.Group.IsCategoryDefault {
+		h.categoryDefaultModels(c, apiKey, false)
+		return
+	}
 	if apiKey != nil && apiKey.Group != nil && apiKey.Group.IsSystemCustomRouteGroup() {
 		if h.apiKeyService == nil {
 			h.errorResponse(c, http.StatusServiceUnavailable, "service_unavailable_error", "System custom group is unavailable")

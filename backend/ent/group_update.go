@@ -322,6 +322,20 @@ func (_u *GroupUpdate) SetNillableSystemCustomRoutingEnabled(v *bool) *GroupUpda
 	return _u
 }
 
+// SetIsCategoryDefault sets the "is_category_default" field.
+func (_u *GroupUpdate) SetIsCategoryDefault(v bool) *GroupUpdate {
+	_u.mutation.SetIsCategoryDefault(v)
+	return _u
+}
+
+// SetNillableIsCategoryDefault sets the "is_category_default" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableIsCategoryDefault(v *bool) *GroupUpdate {
+	if v != nil {
+		_u.SetIsCategoryDefault(*v)
+	}
+	return _u
+}
+
 // SetDailyLimitUsd sets the "daily_limit_usd" field.
 func (_u *GroupUpdate) SetDailyLimitUsd(v float64) *GroupUpdate {
 	_u.mutation.ResetDailyLimitUsd()
@@ -2011,6 +2025,9 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.SystemCustomRoutingEnabled(); ok {
 		_spec.SetField(group.FieldSystemCustomRoutingEnabled, field.TypeBool, value)
 	}
+	if value, ok := _u.mutation.IsCategoryDefault(); ok {
+		_spec.SetField(group.FieldIsCategoryDefault, field.TypeBool, value)
+	}
 	if value, ok := _u.mutation.DailyLimitUsd(); ok {
 		_spec.SetField(group.FieldDailyLimitUsd, field.TypeFloat64, value)
 	}
@@ -3154,6 +3171,20 @@ func (_u *GroupUpdateOne) SetSystemCustomRoutingEnabled(v bool) *GroupUpdateOne 
 func (_u *GroupUpdateOne) SetNillableSystemCustomRoutingEnabled(v *bool) *GroupUpdateOne {
 	if v != nil {
 		_u.SetSystemCustomRoutingEnabled(*v)
+	}
+	return _u
+}
+
+// SetIsCategoryDefault sets the "is_category_default" field.
+func (_u *GroupUpdateOne) SetIsCategoryDefault(v bool) *GroupUpdateOne {
+	_u.mutation.SetIsCategoryDefault(v)
+	return _u
+}
+
+// SetNillableIsCategoryDefault sets the "is_category_default" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableIsCategoryDefault(v *bool) *GroupUpdateOne {
+	if v != nil {
+		_u.SetIsCategoryDefault(*v)
 	}
 	return _u
 }
@@ -4876,6 +4907,9 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if value, ok := _u.mutation.SystemCustomRoutingEnabled(); ok {
 		_spec.SetField(group.FieldSystemCustomRoutingEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.IsCategoryDefault(); ok {
+		_spec.SetField(group.FieldIsCategoryDefault, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.DailyLimitUsd(); ok {
 		_spec.SetField(group.FieldDailyLimitUsd, field.TypeFloat64, value)

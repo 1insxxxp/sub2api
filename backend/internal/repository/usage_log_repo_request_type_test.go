@@ -107,6 +107,7 @@ func TestUsageLogRepositoryCreateSyncRequestTypeAndLegacyFields(t *testing.T) {
 			sqlmock.AnyArg(), // session_id
 			log.NativeCompactionV2,
 			createdAt,
+			nil, // category_default_group_id for an ordinary group
 		).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at"}).AddRow(int64(99), createdAt))
 
@@ -206,6 +207,7 @@ func TestUsageLogRepositoryCreate_PersistsServiceTier(t *testing.T) {
 			sqlmock.AnyArg(), // session_id
 			log.NativeCompactionV2,
 			createdAt,
+			nil, // category_default_group_id for an ordinary group
 		).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at"}).AddRow(int64(100), createdAt))
 
@@ -286,8 +288,9 @@ func TestPrepareUsageLogInsert_PersistsNativeCompactionV2WithoutChangingRequestT
 	prepared := prepareUsageLogInsert(log)
 
 	require.Len(t, prepared.args, len(usageLogInsertArgTypes))
-	require.Equal(t, "boolean", usageLogInsertArgTypes[len(usageLogInsertArgTypes)-2])
-	require.Equal(t, true, prepared.args[len(prepared.args)-2])
+	require.Equal(t, "boolean", usageLogInsertArgTypes[len(usageLogInsertArgTypes)-3])
+	require.Equal(t, true, prepared.args[len(prepared.args)-3])
+	require.Equal(t, sql.NullInt64{}, prepared.args[len(prepared.args)-1])
 	require.Equal(t, int16(service.RequestTypeStream), prepared.args[34])
 	require.Equal(t, service.RequestTypeStream, log.RequestType)
 	require.True(t, log.Stream)
@@ -1006,8 +1009,10 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullString{},
 			false, // native_compaction_v2
 			now,
+			sql.NullInt64{}, // category_default_group_id
 		}})
 		require.NoError(t, err)
+		require.Nil(t, log.CategoryDefaultGroupID)
 		require.Equal(t, 0.125, log.ThresholdExemptCost)
 		require.Equal(t, 2, log.ImageCount)
 		require.NotNil(t, log.ImageSize)
@@ -1092,8 +1097,10 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullString{},  // session_id
 			false,             // native_compaction_v2
 			now,
+			sql.NullInt64{}, // category_default_group_id
 		}})
 		require.NoError(t, err)
+		require.Nil(t, log.CategoryDefaultGroupID)
 		require.NotNil(t, log.ServiceTier)
 		require.Equal(t, "priority", *log.ServiceTier)
 		require.Equal(t, 0.25, log.ThresholdExemptCost)
@@ -1159,8 +1166,10 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullString{},  // session_id
 			true,              // native_compaction_v2
 			now,
+			sql.NullInt64{}, // category_default_group_id
 		}})
 		require.NoError(t, err)
+		require.Nil(t, log.CategoryDefaultGroupID)
 		require.NotNil(t, log.ServiceTier)
 		require.Equal(t, "flex", *log.ServiceTier)
 		require.Equal(t, service.RequestTypeStream, log.RequestType)
@@ -1225,8 +1234,10 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullString{},  // session_id
 			false,             // native_compaction_v2
 			now,
+			sql.NullInt64{}, // category_default_group_id
 		}})
 		require.NoError(t, err)
+		require.Nil(t, log.CategoryDefaultGroupID)
 		require.NotNil(t, log.ServiceTier)
 		require.Equal(t, "priority", *log.ServiceTier)
 	})

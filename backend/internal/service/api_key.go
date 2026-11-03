@@ -34,9 +34,11 @@ type APIKey struct {
 	Name          string
 	GroupID       *int64
 	CustomGroupID *int64
-	Status        string
-	IPWhitelist   []string
-	IPBlacklist   []string
+	// CategoryDefaultGroupID is request-scoped audit identity, never a persisted key binding.
+	CategoryDefaultGroupID *int64 `json:"-"`
+	Status                 string
+	IPWhitelist            []string
+	IPBlacklist            []string
 	// 预编译的 IP 规则，用于认证热路径避免重复 ParseIP/ParseCIDR。
 	CompiledIPWhitelist *ip.CompiledIPRules `json:"-"`
 	CompiledIPBlacklist *ip.CompiledIPRules `json:"-"`

@@ -16,7 +16,8 @@
       {{ name }}
     </span>
     <!-- Right side label -->
-    <span v-if="showLabel" :class="[labelClass, wrapName && 'shrink-0 whitespace-nowrap']">
+    <span v-if="isCategoryDefault" class="shrink-0 whitespace-nowrap text-[10px] font-medium opacity-70">{{ t('categoryDefaults.badge') }}</span>
+    <span v-else-if="showLabel" :class="[labelClass, wrapName && 'shrink-0 whitespace-nowrap']">
       <template v-if="hasCustomRate">
         <!-- 原倍率删除线 + 专属倍率高亮 -->
         <span class="line-through opacity-50 mr-0.5">{{ formatVisibleRateMultiplier(rateMultiplier) }}x</span>
@@ -62,6 +63,7 @@ interface Props {
   alwaysShowRate?: boolean
   /** Allow long names to wrap on mobile while retaining compact desktop truncation. */
   wrapName?: boolean
+  isCategoryDefault?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -91,7 +93,7 @@ const hasCustomRate = computed(() => {
 const appStore = useAppStore()
 
 const hasPeakRate = computed(() => {
-  return Boolean(props.showRate && props.peakRateEnabled && props.peakStart && props.peakEnd)
+  return Boolean(!props.isCategoryDefault && props.showRate && props.peakRateEnabled && props.peakStart && props.peakEnd)
 })
 
 const peakRateText = computed(() => {

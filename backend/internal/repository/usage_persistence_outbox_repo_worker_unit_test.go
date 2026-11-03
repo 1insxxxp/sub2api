@@ -194,6 +194,9 @@ func TestUsagePersistencePayload_RoundTripsEveryInsertFieldWithoutDomainRelation
 	domain.InputTokensSource = service.UsageTokenSourceUnreported
 	domain.OutputTokensSource = service.UsageTokenSourceEstimated
 	domain.RequestType = service.RequestTypeStream
+	// This is the existing ordinary/subscription snapshot fixture. Category
+	// entry snapshots cannot carry a subscription and have separate v4 coverage.
+	domain.CategoryDefaultGroupID = nil
 	domain.Outcome = &service.ResponseOutcome{HTTPStatus: 200, UpstreamStatus: 200, HasText: true, HasToolCall: true, HasReasoning: true, HasMedia: true, OutputBytes: 33, EventCount: 3, StreamCompleted: true, FinishReason: "stop", DisconnectSource: service.DisconnectSourceNone, UpstreamErrorKind: service.UpstreamErrorNone, CollectorVersion: 1}
 	domain.User = &service.User{Email: "do-not-persist@example.invalid"}
 	domain.APIKey = &service.APIKey{Key: "do-not-persist-key"}
@@ -208,6 +211,7 @@ func TestUsagePersistencePayload_RoundTripsEveryInsertFieldWithoutDomainRelation
 	require.Equal(t, domain.OutputTokensSource, restored.OutputTokensSource)
 	require.Equal(t, domain.Outcome, restored.Outcome)
 	require.Equal(t, domain.AntiTruncationRounds, restored.AntiTruncationRounds)
+	require.Nil(t, restored.CategoryDefaultGroupID)
 	require.Nil(t, restored.User)
 	require.Nil(t, restored.APIKey)
 	require.Nil(t, restored.Account)

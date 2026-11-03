@@ -74,6 +74,7 @@ func (UsageLog) Fields() []ent.Field {
 		field.Int64("source_group_id").
 			Optional().
 			Nillable(),
+		field.Int64("category_default_group_id").Optional().Nillable(),
 		field.Int64("custom_group_id").
 			Optional().
 			Nillable(),

@@ -15,9 +15,10 @@ import (
 )
 
 const (
-	usagePersistencePayloadVersion           = 3
-	usagePersistencePayloadProvenanceVersion = 2
-	usagePersistencePayloadLegacyVersion     = 1
+	usagePersistencePayloadVersion                = 3
+	usagePersistencePayloadProvenanceVersion      = 2
+	usagePersistencePayloadLegacyVersion          = 1
+	usagePersistencePayloadCategoryDefaultVersion = 4
 )
 const usagePersistencePayloadMaxBytes = 256 * 1024
 
@@ -40,6 +41,7 @@ type usagePersistenceUsage struct {
 	UpstreamModelMismatch     *bool                    `json:"upstream_model_mismatch"`
 	GroupID                   *int64                   `json:"group_id"`
 	SourceGroupID             *int64                   `json:"source_group_id"`
+	CategoryDefaultGroupID    *int64                   `json:"category_default_group_id,omitempty"`
 	CustomGroupID             *int64                   `json:"custom_group_id"`
 	SubscriptionID            *int64                   `json:"subscription_id"`
 	InputTokens               int                      `json:"input_tokens"`
@@ -142,6 +144,7 @@ func encodeUsagePersistencePayload(cmd *service.UsageBillingCommand, thresholdEx
 		UpstreamModelMismatch:     log.UpstreamModelMismatch,
 		GroupID:                   log.GroupID,
 		SourceGroupID:             log.SourceGroupID,
+		CategoryDefaultGroupID:    log.CategoryDefaultGroupID,
 		CustomGroupID:             log.CustomGroupID,
 		SubscriptionID:            log.SubscriptionID,
 		InputTokens:               log.InputTokens,
@@ -230,6 +233,12 @@ func encodeUsagePersistencePayload(cmd *service.UsageBillingCommand, thresholdEx
 			InputTokenPolicyCount: log.Outcome.InputTokenPolicyCount,
 		}
 	}
+	if log.CategoryDefaultGroupID != nil {
+		if *log.CategoryDefaultGroupID <= 0 || log.GroupID == nil || *log.GroupID <= 0 || *log.GroupID == *log.CategoryDefaultGroupID || log.SubscriptionID != nil {
+			return nil, errors.New("invalid category default usage billing identity")
+		}
+		payload.Version = usagePersistencePayloadCategoryDefaultVersion
+	}
 	raw, err := json.Marshal(payload)
 	if err != nil {
 		return nil, errors.New("usage persistence snapshot cannot be encoded")
@@ -262,10 +271,25 @@ func decodeUsagePersistencePayload(raw []byte, requestID string, apiKeyID int64)
 	if err := decoder.Decode(new(any)); err != io.EOF {
 		return nil, errors.New("invalid trailing usage persistence snapshot")
 	}
-	if payload.Version != usagePersistencePayloadLegacyVersion && payload.Version != usagePersistencePayloadProvenanceVersion && payload.Version != usagePersistencePayloadVersion {
+	if payload.Version != usagePersistencePayloadLegacyVersion && payload.Version != usagePersistencePayloadProvenanceVersion && payload.Version != usagePersistencePayloadVersion && payload.Version != usagePersistencePayloadCategoryDefaultVersion {
 		return nil, errors.New("unsupported usage persistence snapshot version")
 	}
 	usage := payload.Usage
+	if payload.Version < usagePersistencePayloadCategoryDefaultVersion {
+		var legacy struct {
+			Usage map[string]json.RawMessage `json:"usage"`
+		}
+		if err := json.Unmarshal(raw, &legacy); err != nil {
+			return nil, errors.New("invalid legacy usage persistence snapshot")
+		}
+		for key := range legacy.Usage {
+			if strings.EqualFold(key, "category_default_group_id") {
+				return nil, errors.New("legacy usage persistence snapshot contains v4 metadata")
+			}
+		}
+	} else if usage.CategoryDefaultGroupID == nil || *usage.CategoryDefaultGroupID <= 0 || usage.GroupID == nil || *usage.GroupID <= 0 || *usage.GroupID == *usage.CategoryDefaultGroupID || usage.SubscriptionID != nil {
+		return nil, errors.New("invalid category default usage billing identity")
+	}
 	if payload.Version < usagePersistencePayloadVersion {
 		// Keep deployed v1/v2 contracts strict, including explicitly null audit
 		// values that a pointer field alone cannot distinguish from absence.
@@ -319,6 +343,7 @@ func decodeUsagePersistencePayload(raw []byte, requestID string, apiKeyID int64)
 		UpstreamModelMismatch:     usage.UpstreamModelMismatch,
 		GroupID:                   usage.GroupID,
 		SourceGroupID:             usage.SourceGroupID,
+		CategoryDefaultGroupID:    usage.CategoryDefaultGroupID,
 		CustomGroupID:             usage.CustomGroupID,
 		SubscriptionID:            usage.SubscriptionID,
 		InputTokens:               usage.InputTokens,

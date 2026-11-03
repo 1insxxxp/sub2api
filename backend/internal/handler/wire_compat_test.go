@@ -56,6 +56,7 @@ func TestProvideAdminHandlersPreservesLegacyConstructor(t *testing.T) {
 	ollamaCloudUsage := &service.OllamaCloudUsageService{}
 
 	modelProbeHandler := &admin.ModelProbeHandler{}
+	categoryDefaultHandler := &admin.CategoryDefaultGroupHandler{}
 	got := ProvideAdminHandlers(
 		dashboardHandler,
 		userHandler,
@@ -64,6 +65,7 @@ func TestProvideAdminHandlersPreservesLegacyConstructor(t *testing.T) {
 		&admin.AdminWorkbenchAccessHandler{},
 		groupHandler,
 		systemCustomGroupHandler,
+		categoryDefaultHandler,
 		accountHandler,
 		announcementHandler,
 		dataManagementHandler,
@@ -112,6 +114,7 @@ func TestProvideAdminHandlersPreservesLegacyConstructor(t *testing.T) {
 	require.Same(t, userHandler, got.User)
 	require.Same(t, groupHandler, got.Group)
 	require.Same(t, systemCustomGroupHandler, got.SystemCustomGroup)
+	require.Same(t, categoryDefaultHandler, got.CategoryDefaultGroup)
 	require.Same(t, accountHandler, got.Account)
 	require.Same(t, announcementHandler, got.Announcement)
 	require.Same(t, dataManagementHandler, got.DataManagement)

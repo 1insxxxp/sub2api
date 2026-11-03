@@ -27,6 +27,7 @@
         <p class="text-sm text-gray-600 dark:text-gray-400">
           {{ platformDescription }}
         </p>
+        <p v-if="categoryDefault" class="text-xs leading-5 text-gray-500 dark:text-gray-400">{{ t('categoryDefaults.protocolHint') }}</p>
 
         <!-- Client Tabs -->
         <div v-if="clientTabs.length" class="overflow-x-auto border-b border-gray-200 dark:border-dark-700">
@@ -289,6 +290,7 @@ interface Props {
   platform: GroupPlatform | null
   claudeCodeOnly?: boolean
   allowMessagesDispatch?: boolean
+  categoryDefault?: boolean
 }
 
 interface Emits {
@@ -373,7 +375,7 @@ const defaultClientTab = computed(() => {
   }
 })
 
-watch(() => [props.platform, props.claudeCodeOnly], () => {
+watch(() => [props.platform, props.claudeCodeOnly, props.categoryDefault], () => {
   activeTab.value = 'unix'
   activeClientTab.value = defaultClientTab.value
   codexAuthMode.value = 'legacy'
@@ -470,8 +472,8 @@ const clientTabs = computed((): TabConfig[] => {
     case 'openai': {
       const tabs: TabConfig[] = [
         { id: 'codex', label: t('keys.useKeyModal.cliTabs.codexCli'), icon: TerminalIcon },
-        { id: 'codex-ws', label: t('keys.useKeyModal.cliTabs.codexCliWs'), icon: TerminalIcon },
       ]
+      if (!props.categoryDefault) tabs.push({ id: 'codex-ws', label: t('keys.useKeyModal.cliTabs.codexCliWs'), icon: TerminalIcon })
       if (props.allowMessagesDispatch) {
         tabs.push({ id: 'claude', label: t('keys.useKeyModal.cliTabs.claudeCode'), icon: TerminalIcon })
       }
@@ -535,7 +537,7 @@ const openaiTabs: TabConfig[] = [
 const showShellTabs = computed(() => activeClientTab.value !== 'opencode')
 
 const showCodexAuthMode = computed(() =>
-  props.platform === 'openai' &&
+  props.platform === 'openai' && !props.categoryDefault &&
   (activeClientTab.value === 'codex' || activeClientTab.value === 'codex-ws')
 )
 
@@ -785,6 +787,7 @@ const currentFiles = computed((): FileConfig[] => {
       if (activeClientTab.value === 'codex-ws') {
         return generateOpenAIWsFiles(apiBase, apiKey)
       }
+      if (props.categoryDefault) return generateRoutedCodexFiles(apiBase, apiKey, 'openai')
       // Codex appends /responses directly and does not add /v1.
       return generateOpenAIFiles(apiBase, apiKey)
     case 'gemini':

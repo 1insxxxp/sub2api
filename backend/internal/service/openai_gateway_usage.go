@@ -404,6 +404,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	usageLog := &UsageLog{
 		UserID:                   user.ID,
 		APIKeyID:                 apiKey.ID,
+		CategoryDefaultGroupID:   apiKey.CategoryDefaultGroupID,
 		AccountID:                account.ID,
 		RequestID:                requestID,
 		UpstreamRequestID:        openAIChatUsageUpstreamRequestID(account, result),

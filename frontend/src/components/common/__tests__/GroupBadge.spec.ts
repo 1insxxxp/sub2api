@@ -35,6 +35,13 @@ const mountBadge = (props: Record<string, unknown>) =>
   })
 
 describe('GroupBadge', () => {
+  it('never shows a uniform multiplier or peak rate for a category default group', () => {
+    const wrapper = mountBadge({ isCategoryDefault: true, rateMultiplier: 1, userRateMultiplier: 0.5, peakRateEnabled: true, peakStart: '08:00', peakEnd: '12:00' })
+    expect(wrapper.text()).toContain('categoryDefaults.badge')
+    expect(wrapper.text()).not.toContain('1x')
+    expect(wrapper.text()).not.toContain('0.5x')
+    expect(wrapper.find('.group-badge-peak').exists()).toBe(false)
+  })
   it('sources platform colors from the shared visual theme', () => {
     const componentDirectory = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 

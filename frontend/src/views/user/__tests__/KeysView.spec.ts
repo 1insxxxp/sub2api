@@ -912,6 +912,26 @@ describe('user KeysView column settings', () => {
   })
 
   describe('create provider selection', () => {
+    it('automatically selects each category default, keeps a manual choice, and leaves existing keys untouched', async () => {
+      const defaults = [
+        { id: 90, name: 'Anthropic 默认分组', platform: 'composite', key_display_category: 'anthropic', is_category_default: true },
+        { id: 91, name: 'Gemini 默认分组', platform: 'composite', key_display_category: 'gemini', is_category_default: true },
+      ]
+      getAvailableGroups.mockResolvedValue([...availableGroups, ...defaults])
+      const wrapper = await openCreate()
+      expect(groupSelect(wrapper).props('modelValue')).toBe(90)
+      expect(optionIds(wrapper)[0]).toBe(90)
+      groupSelect(wrapper).vm.$emit('update:modelValue', 1)
+      await nextTick()
+      expect(groupSelect(wrapper).props('modelValue')).toBe(1)
+      await chooseProvider(wrapper, 'gemini')
+      expect(groupSelect(wrapper).props('modelValue')).toBe(91)
+      await wrapper.get('[data-test="close-dialog"]').trigger('click')
+      await getButtonByText(wrapper, 'common.edit').trigger('click')
+      expect(groupSelect(wrapper).props('modelValue')).toBeNull()
+      expect(updateKey).not.toHaveBeenCalled()
+      wrapper.unmount()
+    })
     const platforms = ['anthropic', 'openai', 'kimi', 'zhipu', 'deepseek', 'minimax', 'gemini', 'grok', 'antigravity', 'composite', 'opencode_go', 'typesafe']
     const availableGroups = [
       ...platforms.map((platform, index) => ({

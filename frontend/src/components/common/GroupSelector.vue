@@ -92,9 +92,10 @@ const isSearchable = computed(() => {
 
 // Filter groups by platform if specified
 const filteredGroups = computed(() => {
+  const sources = props.groups.filter((group) => !group.is_category_default)
   let result = authStore.isSimpleMode
-    ? props.groups.filter((g) => g.platform !== 'composite')
-    : props.groups
+    ? sources.filter((g) => g.platform !== 'composite')
+    : sources
   if (props.platform) {
     // antigravity 账户启用混合调度后，可选择 anthropic/gemini 分组
     if (props.platform === 'antigravity' && props.mixedScheduling) {
