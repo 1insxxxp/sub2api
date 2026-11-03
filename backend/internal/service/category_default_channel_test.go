@@ -44,9 +44,13 @@ func TestCategoryDefaultChannelEffectiveDeclarationRequiresRepublish(t *testing.
 			case "channel":
 				store.sources[0].Channel.ModelMapping[PlatformOpenAI]["public-model"] = "public-model"
 			case "account":
-				store.sources[0].Accounts[0].Credentials["model_mapping"].(map[string]any)["channel-target"] = "gpt-5-nano"
+				mapping, ok := store.sources[0].Accounts[0].Credentials["model_mapping"].(map[string]any)
+				require.True(t, ok)
+				mapping["channel-target"] = "gpt-5-nano"
 			case "compact":
-				store.sources[0].Accounts[0].Credentials["compact_model_mapping"].(map[string]any)["channel-target"] = "gpt-5-mini"
+				mapping, ok := store.sources[0].Accounts[0].Credentials["compact_model_mapping"].(map[string]any)
+				require.True(t, ok)
+				mapping["channel-target"] = "gpt-5-mini"
 			}
 			_, err = svc.ResolveForUser(ctx, 100, user, "public-model")
 			require.ErrorIs(t, err, ErrCategoryDefaultPendingSync)
@@ -65,7 +69,9 @@ func TestCategoryDefaultCompositeChannelUsesResolvedPlatformAndRouteModel(t *tes
 	store.sources[0].Channel.ModelMapping[PlatformGemini]["route-target"] = "changed-unrelated-gemini"
 	_, err := svc.ResolveForUser(context.Background(), 100, user, "public-model")
 	require.NoError(t, err)
-	store.sources[0].Accounts[0].Credentials["model_mapping"].(map[string]any)["channel-target"] = "gpt-5-nano"
+	mapping, ok := store.sources[0].Accounts[0].Credentials["model_mapping"].(map[string]any)
+	require.True(t, ok)
+	mapping["channel-target"] = "gpt-5-nano"
 	_, err = svc.ResolveForUser(context.Background(), 100, user, "public-model")
 	require.ErrorIs(t, err, ErrCategoryDefaultPendingSync)
 }

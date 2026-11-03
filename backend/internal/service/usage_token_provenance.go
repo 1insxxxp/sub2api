@@ -29,6 +29,18 @@ func (u *UsageLog) HasResponseMetadata() bool {
 // recordedOutputTokensSource mirrors recordedOutputTokens' selection, not a
 // comparison of numeric values: an estimate may happen to equal a measurement.
 func recordedOutputTokensSource(result *ForwardResult) UsageTokenSource {
+	if result != nil && len(result.ContinuationResults) > 0 {
+		source := UsageTokenSourceUnknown
+		for _, round := range result.ContinuationResults {
+			next := recordedOutputTokensSource(round)
+			if round.DeliveredOutputTokens != nil && (continuationRoundFailedWithoutOutput(round.Outcome, round.DeliveredOutputTokens) || round.ClientDisconnect || round.Outcome != nil && !round.Outcome.StreamCompleted) {
+				next = UsageTokenSourceEstimated
+			}
+			source = mergeOpenAIChatTokenSource(source, next)
+		}
+		return source
+	}
+
 	if result == nil {
 		return UsageTokenSourceUnknown
 	}

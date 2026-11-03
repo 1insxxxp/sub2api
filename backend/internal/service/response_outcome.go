@@ -34,19 +34,20 @@ const (
 // ResponseOutcome is a privacy-safe summary of the response delivered for one
 // request. It deliberately contains no prompt, response, or tool argument data.
 type ResponseOutcome struct {
-	HTTPStatus        int               `json:"http_status"`
-	UpstreamStatus    int               `json:"upstream_status"`
-	HasText           bool              `json:"has_text"`
-	HasToolCall       bool              `json:"has_tool_call"`
-	HasReasoning      bool              `json:"has_reasoning"`
-	HasMedia          bool              `json:"has_media"`
-	OutputBytes       int64             `json:"output_bytes"`
-	EventCount        int               `json:"event_count"`
-	StreamCompleted   bool              `json:"stream_completed"`
-	FinishReason      string            `json:"finish_reason"`
-	DisconnectSource  DisconnectSource  `json:"disconnect_source"`
-	UpstreamErrorKind UpstreamErrorKind `json:"upstream_error_kind"`
-	CollectorVersion  int               `json:"collector_version"`
+	ContinuationUsage []ContinuationUsageAudit `json:"-"`
+	HTTPStatus        int                      `json:"http_status"`
+	UpstreamStatus    int                      `json:"upstream_status"`
+	HasText           bool                     `json:"has_text"`
+	HasToolCall       bool                     `json:"has_tool_call"`
+	HasReasoning      bool                     `json:"has_reasoning"`
+	HasMedia          bool                     `json:"has_media"`
+	OutputBytes       int64                    `json:"output_bytes"`
+	EventCount        int                      `json:"event_count"`
+	StreamCompleted   bool                     `json:"stream_completed"`
+	FinishReason      string                   `json:"finish_reason"`
+	DisconnectSource  DisconnectSource         `json:"disconnect_source"`
+	UpstreamErrorKind UpstreamErrorKind        `json:"upstream_error_kind"`
+	CollectorVersion  int                      `json:"collector_version"`
 	// Counting-policy audit is internal accounting evidence. Public evidence
 	// DTOs may marshal this struct directly; only the durable snapshot DTO
 	// explicitly serializes these scalar values.

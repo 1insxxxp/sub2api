@@ -15,10 +15,11 @@ import (
 )
 
 const (
+	usagePersistencePayloadCategoryDefaultVersion = 4
+	usagePersistenceContinuationVersion           = 5
 	usagePersistencePayloadVersion                = 3
 	usagePersistencePayloadProvenanceVersion      = 2
 	usagePersistencePayloadLegacyVersion          = 1
-	usagePersistencePayloadCategoryDefaultVersion = 4
 )
 const usagePersistencePayloadMaxBytes = 256 * 1024
 
@@ -104,22 +105,23 @@ type usagePersistenceUsage struct {
 }
 
 type usagePersistenceOutcome struct {
-	HTTPStatus            int                       `json:"http_status"`
-	UpstreamStatus        int                       `json:"upstream_status"`
-	HasText               bool                      `json:"has_text"`
-	HasToolCall           bool                      `json:"has_tool_call"`
-	HasReasoning          bool                      `json:"has_reasoning"`
-	HasMedia              bool                      `json:"has_media"`
-	OutputBytes           int64                     `json:"output_bytes"`
-	EventCount            int                       `json:"event_count"`
-	StreamCompleted       bool                      `json:"stream_completed"`
-	FinishReason          string                    `json:"finish_reason"`
-	DisconnectSource      service.DisconnectSource  `json:"disconnect_source"`
-	UpstreamErrorKind     service.UpstreamErrorKind `json:"upstream_error_kind"`
-	CollectorVersion      int                       `json:"collector_version"`
-	UpstreamInputTokens   *int                      `json:"upstream_input_tokens,omitempty"`
-	InputTokenPolicy      string                    `json:"input_token_policy,omitempty"`
-	InputTokenPolicyCount *int                      `json:"input_token_policy_count,omitempty"`
+	ContinuationUsage     []service.ContinuationUsageAudit `json:"continuation_usage,omitempty"`
+	HTTPStatus            int                              `json:"http_status"`
+	UpstreamStatus        int                              `json:"upstream_status"`
+	HasText               bool                             `json:"has_text"`
+	HasToolCall           bool                             `json:"has_tool_call"`
+	HasReasoning          bool                             `json:"has_reasoning"`
+	HasMedia              bool                             `json:"has_media"`
+	OutputBytes           int64                            `json:"output_bytes"`
+	EventCount            int                              `json:"event_count"`
+	StreamCompleted       bool                             `json:"stream_completed"`
+	FinishReason          string                           `json:"finish_reason"`
+	DisconnectSource      service.DisconnectSource         `json:"disconnect_source"`
+	UpstreamErrorKind     service.UpstreamErrorKind        `json:"upstream_error_kind"`
+	CollectorVersion      int                              `json:"collector_version"`
+	UpstreamInputTokens   *int                             `json:"upstream_input_tokens,omitempty"`
+	InputTokenPolicy      string                           `json:"input_token_policy,omitempty"`
+	InputTokenPolicyCount *int                             `json:"input_token_policy_count,omitempty"`
 }
 
 func encodeUsagePersistencePayload(cmd *service.UsageBillingCommand, thresholdExemptCost float64) ([]byte, error) {
@@ -214,7 +216,14 @@ func encodeUsagePersistencePayload(cmd *service.UsageBillingCommand, thresholdEx
 		if responseOutcomeHasInputCountingAudit(log.Outcome) {
 			payload.Version = usagePersistencePayloadVersion
 		}
+		if len(log.Outcome.ContinuationUsage) > 0 {
+			if err := service.ValidateContinuationUsageAudit(log.Outcome.ContinuationUsage); err != nil {
+				return nil, err
+			}
+			payload.Version = usagePersistenceContinuationVersion
+		}
 		payload.Usage.Outcome = &usagePersistenceOutcome{
+			ContinuationUsage:     log.Outcome.ContinuationUsage,
 			HTTPStatus:            log.Outcome.HTTPStatus,
 			UpstreamStatus:        log.Outcome.UpstreamStatus,
 			HasText:               log.Outcome.HasText,
@@ -237,7 +246,7 @@ func encodeUsagePersistencePayload(cmd *service.UsageBillingCommand, thresholdEx
 		if *log.CategoryDefaultGroupID <= 0 || log.GroupID == nil || *log.GroupID <= 0 || *log.GroupID == *log.CategoryDefaultGroupID || log.SubscriptionID != nil {
 			return nil, errors.New("invalid category default usage billing identity")
 		}
-		payload.Version = usagePersistencePayloadCategoryDefaultVersion
+		payload.Version = max(payload.Version, usagePersistencePayloadCategoryDefaultVersion)
 	}
 	raw, err := json.Marshal(payload)
 	if err != nil {
@@ -271,7 +280,7 @@ func decodeUsagePersistencePayload(raw []byte, requestID string, apiKeyID int64)
 	if err := decoder.Decode(new(any)); err != io.EOF {
 		return nil, errors.New("invalid trailing usage persistence snapshot")
 	}
-	if payload.Version != usagePersistencePayloadLegacyVersion && payload.Version != usagePersistencePayloadProvenanceVersion && payload.Version != usagePersistencePayloadVersion && payload.Version != usagePersistencePayloadCategoryDefaultVersion {
+	if payload.Version != usagePersistencePayloadLegacyVersion && payload.Version != usagePersistencePayloadProvenanceVersion && payload.Version != usagePersistencePayloadVersion && payload.Version != usagePersistencePayloadCategoryDefaultVersion && payload.Version != usagePersistenceContinuationVersion {
 		return nil, errors.New("unsupported usage persistence snapshot version")
 	}
 	usage := payload.Usage
@@ -287,8 +296,35 @@ func decodeUsagePersistencePayload(raw []byte, requestID string, apiKeyID int64)
 				return nil, errors.New("legacy usage persistence snapshot contains v4 metadata")
 			}
 		}
-	} else if usage.CategoryDefaultGroupID == nil || *usage.CategoryDefaultGroupID <= 0 || usage.GroupID == nil || *usage.GroupID <= 0 || *usage.GroupID == *usage.CategoryDefaultGroupID || usage.SubscriptionID != nil {
-		return nil, errors.New("invalid category default usage billing identity")
+	} else {
+		// v4 is a category-entry snapshot. v5 also supports ordinary-account
+		// continuations, so its category identity is optional but never unchecked.
+		if payload.Version == usagePersistencePayloadCategoryDefaultVersion && usage.CategoryDefaultGroupID == nil {
+			return nil, errors.New("invalid category default usage billing identity")
+		}
+		if usage.CategoryDefaultGroupID != nil && (*usage.CategoryDefaultGroupID <= 0 || usage.GroupID == nil || *usage.GroupID <= 0 || *usage.GroupID == *usage.CategoryDefaultGroupID || usage.SubscriptionID != nil) {
+			return nil, errors.New("invalid category default usage billing identity")
+		}
+	}
+	if payload.Version < usagePersistenceContinuationVersion {
+		var old struct {
+			Usage struct {
+				Outcome map[string]json.RawMessage `json:"outcome"`
+			} `json:"usage"`
+		}
+		if err := json.Unmarshal(raw, &old); err != nil {
+			return nil, errors.New("invalid legacy continuation snapshot")
+		}
+		for key := range old.Usage.Outcome {
+			if strings.EqualFold(key, "continuation_usage") {
+				return nil, errors.New("legacy usage snapshot contains v5 metadata")
+			}
+		}
+	}
+	if usage.Outcome != nil {
+		if err := service.ValidateContinuationUsageAudit(usage.Outcome.ContinuationUsage); err != nil {
+			return nil, err
+		}
 	}
 	if payload.Version < usagePersistencePayloadVersion {
 		// Keep deployed v1/v2 contracts strict, including explicitly null audit
@@ -405,6 +441,7 @@ func decodeUsagePersistencePayload(raw []byte, requestID string, apiKeyID int64)
 	}
 	if usage.Outcome != nil {
 		log.Outcome = &service.ResponseOutcome{
+			ContinuationUsage:     usage.Outcome.ContinuationUsage,
 			HTTPStatus:            usage.Outcome.HTTPStatus,
 			UpstreamStatus:        usage.Outcome.UpstreamStatus,
 			HasText:               usage.Outcome.HasText,

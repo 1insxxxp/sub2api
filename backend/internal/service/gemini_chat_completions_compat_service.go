@@ -28,6 +28,13 @@ func (s *GeminiMessagesCompatService) ForwardAsChatCompletions(
 	account *Account,
 	body []byte,
 ) (*ForwardResult, error) {
+	if accountContinuationShouldManage(ctx, account) {
+		return runForwardWithAccountContinuation(ctx, c, account, body, AccountContinuationChat, accountContinuationBodyModel(body), accountContinuationBodyStream(body),
+			func(roundCtx context.Context, roundBody []byte) (*ForwardResult, error) {
+				return s.ForwardAsChatCompletions(roundCtx, c, account, roundBody)
+			})
+	}
+
 	startTime := time.Now()
 
 	var ccReq apicompat.ChatCompletionsRequest

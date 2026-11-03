@@ -61,6 +61,13 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 	promptCacheKey string,
 	defaultMappedModel string,
 ) (*OpenAIForwardResult, error) {
+	if accountContinuationShouldManage(ctx, account) {
+		return runOpenAIWithAccountContinuation(ctx, c, account, body, AccountContinuationChat, accountContinuationBodyModel(body), accountContinuationBodyStream(body),
+			func(roundCtx context.Context, roundBody []byte) (*OpenAIForwardResult, error) {
+				return s.ForwardAsChatCompletions(roundCtx, c, account, roundBody, promptCacheKey, defaultMappedModel)
+			})
+	}
+
 	return s.forwardAsChatCompletions(ctx, c, account, body, promptCacheKey, defaultMappedModel, false)
 }
 

@@ -107,6 +107,10 @@ RETURNING id
 func applyGroupModelAllowlistRepair(ctx context.Context, t *testing.T, tx *sql.Tx) {
 	t.Helper()
 
+	// This replay runs in a transaction that also seeds fixtures against the
+	// latest schema. Flush deferred events before the historical migration's DDL.
+	_, err := tx.ExecContext(ctx, "SET CONSTRAINTS ALL IMMEDIATE")
+	require.NoError(t, err)
 	migrationSQL, err := dbmigrations.FS.ReadFile(groupModelAllowlistRepairMigration)
 	require.NoError(t, err)
 	_, err = tx.ExecContext(ctx, string(migrationSQL))

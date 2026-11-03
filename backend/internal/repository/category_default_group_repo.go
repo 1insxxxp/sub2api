@@ -154,9 +154,10 @@ func categoryDefaultLoadSources(ctx context.Context, client *dbent.Client, ids [
 	for _, entity := range groups {
 		g := groupEntityToService(entity)
 		platforms := []string{g.Platform}
-		if g.Platform == service.PlatformComposite {
+		switch g.Platform {
+		case service.PlatformComposite:
 			platforms = domain.ConcretePlatformIDs()
-		} else if g.Platform == service.PlatformAnthropic || g.Platform == service.PlatformGemini {
+		case service.PlatformAnthropic, service.PlatformGemini:
 			platforms = append(platforms, service.PlatformAntigravity)
 		}
 		accounts, err := ar.ListModelAvailabilityCandidates(ctx, &g.ID, platforms, false)
@@ -188,7 +189,7 @@ func categoryDefaultLoadSourceChannel(ctx context.Context, client *dbent.Client,
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	if !rows.Next() {
 		return nil, rows.Err()
 	}

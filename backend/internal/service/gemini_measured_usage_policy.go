@@ -16,6 +16,17 @@ var ErrUsageMeasurementIncomplete = errors.New("upstream usage measurement incom
 // measured zero. A finalized fallback is resolved without claiming measured
 // completeness. It applies to normal and interrupted Gemini text responses.
 func NeedsUsageMeasurementReview(result *ForwardResult) bool {
+	if validateForwardContinuationResults(result) != nil {
+		return true
+	}
+	if result != nil && len(result.ContinuationResults) > 0 {
+		for _, round := range result.ContinuationResults {
+			if NeedsUsageMeasurementReview(round) {
+				return true
+			}
+		}
+		return false
+	}
 	return result != nil && result.RequireMeasuredUsage && !result.MeasuredUsageComplete && !result.GeminiUsageFinalized
 }
 

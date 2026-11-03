@@ -613,7 +613,10 @@ type AudioUsage struct {
 }
 
 type ForwardResult struct {
-	RequestID string
+	// ContinuationResults contains independent provider calls for one logical
+	// response. Billing must price/recover these leaves before aggregation.
+	ContinuationResults []*ForwardResult `json:"-"`
+	RequestID           string
 	// UpstreamHeaders contains headers returned by the direct upstream response.
 	// It is used to extract provider-specific request identifiers for usage logs.
 	UpstreamHeaders http.Header

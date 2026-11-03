@@ -1973,6 +1973,8 @@
         <ProxySelector v-model="form.proxy_id" :proxies="proxies" />
       </div>
 
+      <AccountAntiTruncationEditor :key="account.id" v-model="accountAntiTruncation" :models="antiTruncationModels" />
+
       <UpstreamRequestIdHeaderField
         v-model="upstreamRequestIdHeader"
         :platform="account.platform"
@@ -3494,6 +3496,8 @@ import ProxyAdBanner from '@/components/common/ProxyAdBanner.vue'
 import GroupSelector from '@/components/common/GroupSelector.vue'
 import ModelWhitelistSelector from '@/components/account/ModelWhitelistSelector.vue'
 import ModelMappingBulkActions from '@/components/account/ModelMappingBulkActions.vue'
+import AccountAntiTruncationEditor from '@/components/account/AccountAntiTruncationEditor.vue'
+import { accountAntiTruncationFromExtra, mergeAccountAntiTruncationExtra, validateAccountAntiTruncation, type AccountAntiTruncationPolicy } from '@/utils/accountAntiTruncation'
 import GrokModelDiagnosticsPanel from '@/components/account/GrokModelDiagnosticsPanel.vue'
 import QuotaLimitCard from '@/components/account/QuotaLimitCard.vue'
 import GrokBaseUrlPresets from '@/components/account/GrokBaseUrlPresets.vue'
@@ -3915,6 +3919,8 @@ const isBedrockAPIKeyMode = computed(() =>
   (props.account?.credentials as Record<string, unknown>)?.auth_mode === 'apikey'
 )
 const modelMappings = ref<ModelMapping[]>([])
+const accountAntiTruncation = ref<AccountAntiTruncationPolicy | null>(null)
+const antiTruncationModels = computed(() => [...allowedModels.value, ...modelMappings.value.map(row => row.from), ...antigravityModelMappings.value.map(row => row.from)])
 interface ModelSystemPromptRow {
   id: number
   model: string
@@ -4742,6 +4748,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
 	mixedScheduling.value = extra?.mixed_scheduling === true
 	allowOverages.value = extra?.allow_overages === true
 	upstreamRequestIdHeader.value = readUpstreamRequestIdHeader(extra)
+  accountAntiTruncation.value = accountAntiTruncationFromExtra(extra)
 	openAIImagesUrlToB64JsonEnabled.value = extra?.images_url_to_b64_json === true
 	autoPause5hThreshold.value = typeof extra?.auto_pause_5h_threshold === 'number' ? extra.auto_pause_5h_threshold * 100 : null
 	autoPause7dThreshold.value = typeof extra?.auto_pause_7d_threshold === 'number' ? extra.auto_pause_7d_threshold * 100 : null
@@ -5845,6 +5852,11 @@ const submitUpdateAccount = async (accountID: number, updatePayload: Record<stri
 }
 
 const handleSubmit = async () => {
+  const policyError = validateAccountAntiTruncation(accountAntiTruncation.value)
+  if (policyError) {
+    appStore.showError(t(`admin.accounts.antiTruncation.${policyError}`))
+    return
+  }
   if (!props.account) return
   const accountID = props.account.id
 
@@ -6615,6 +6627,11 @@ const handleSubmit = async () => {
         delete newExtra.upstream_request_id_header
       }
       updatePayload.extra = newExtra
+    }
+
+    if (accountAntiTruncation.value !== null) {
+      const currentExtra = (updatePayload.extra as Record<string, unknown>) || (props.account.extra as Record<string, unknown>) || {}
+      updatePayload.extra = mergeAccountAntiTruncationExtra(currentExtra, accountAntiTruncation.value)
     }
 
     const canContinue = await ensureAntigravityMixedChannelConfirmed(async () => {

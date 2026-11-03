@@ -89,6 +89,21 @@ func sleepWithContext(ctx context.Context, d time.Duration) error {
 
 // Forward 转发请求到Claude API
 func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *Account, parsed *ParsedRequest) (result *ForwardResult, err error) {
+	if accountContinuationShouldManage(ctx, account) && parsed != nil && parsed.Body != nil {
+		first := true
+		return runForwardWithAccountContinuation(ctx, c, account, parsed.Body.Bytes(), AccountContinuationMessages, parsed.Model, parsed.Stream,
+			func(roundCtx context.Context, body []byte) (*ForwardResult, error) {
+				roundParsed, cloneErr := parsed.CloneForBody(body)
+				if cloneErr != nil {
+					return nil, cloneErr
+				}
+				if first {
+					roundParsed.OnUpstreamAccepted = parsed.OnUpstreamAccepted
+					first = false
+				}
+				return s.Forward(roundCtx, c, account, roundParsed)
+			})
+	}
 	ctx, outcomeCollector := WithResponseOutcomeCollector(ctx, 0, 0)
 	defer func() {
 		if result != nil {

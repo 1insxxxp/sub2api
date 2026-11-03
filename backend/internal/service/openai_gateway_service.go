@@ -234,6 +234,9 @@ type OpenAIUsage struct {
 
 // OpenAIForwardResult represents the result of forwarding
 type OpenAIForwardResult struct {
+	// ContinuationResults preserves independent contexts and usage evidence.
+	ContinuationResults                   []*OpenAIForwardResult   `json:"-"`
+	ContinuationPublicResponseID          string                   `json:"-"`
 	ChatUsage                             *OpenAIChatUsageEvidence `json:"-"`
 	InputTokensSource, OutputTokensSource UsageTokenSource
 

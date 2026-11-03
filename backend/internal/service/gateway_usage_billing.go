@@ -1042,6 +1042,9 @@ func logResponseModelBillingApplied(component string, account *Account, requestI
 // recordUsageCore is shared by normal and legacy-long-context usage recording.
 func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsageCoreInput, opts *recordUsageOpts) error {
 	result := input.Result
+	if err := validateForwardContinuationResults(result); err != nil {
+		return err
+	}
 	if NeedsUsageMeasurementReview(result) {
 		return ErrUsageMeasurementIncomplete
 	}
@@ -1056,32 +1059,45 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	if shouldSkipPureGeminiUsageFailure(result) {
 		return nil
 	}
-	applyMissingInputTokenEstimate(ctx, result, account)
-	ApplyForwardImageBillingResolution(result)
-	logServiceTierBillingDowngrade("service.gateway", account, result.RequestID, ApplyForwardServiceTierBillingResolution(result))
-
-	// 强制缓存计费：将 input_tokens 转为 cache_read_input_tokens
-	// 用于粘性会话切换时的特殊计费处理
-	// Gemini 实测模式必须保留上游输入与缓存分类，换号不能伪造缓存命中。
-	if input.ForceCacheBilling && !result.RequireMeasuredUsage && result.Usage.InputTokens > 0 {
-		logger.LegacyPrintf("service.gateway", "force_cache_billing: %d input_tokens → cache_read_input_tokens (account=%d)",
-			result.Usage.InputTokens, account.ID)
-		result.Usage.CacheReadInputTokens += result.Usage.InputTokens
-		result.Usage.InputTokens = 0
-	}
-
-	// Cache TTL Override: 确保计费时 token 分类与账号设置一致。
-	// 账号级设置优先；全局 1h 请求注入开启时，默认把 usage 计费归回 5m。
-	claudeMaxOutcome := applyClaudeMaxCacheBillingPolicyToUsage(&result.Usage, input.ParsedRequest, apiKey.Group, result.Model, account.ID)
 	cacheTTLOverridden := false
-	if !claudeMaxOutcome.SkipTTLOverride {
-		if overrideTarget, ok := s.resolveCacheTTLUsageOverrideTarget(ctx, account); ok {
-			applyCacheTTLOverride(&result.Usage, overrideTarget)
-			cacheTTLOverridden = (result.Usage.CacheCreation5mTokens + result.Usage.CacheCreation1hTokens) > 0
-		}
+	rounds := result.ContinuationResults
+	if len(rounds) == 0 {
+		rounds = []*ForwardResult{result}
 	}
-	if !claudeMaxOutcome.SkipTTLOverride && !cacheTTLOverridden && result.CacheCreationTTLTarget != "" {
-		applyCacheTTLHintForAggregateCreation(&result.Usage, result.CacheCreationTTLTarget)
+	for _, round := range rounds {
+		result := round
+		applyMissingInputTokenEstimate(ctx, result, account)
+		ApplyForwardImageBillingResolution(result)
+		logServiceTierBillingDowngrade("service.gateway", account, result.RequestID, ApplyForwardServiceTierBillingResolution(result))
+
+		// 强制缓存计费：将 input_tokens 转为 cache_read_input_tokens
+		// 用于粘性会话切换时的特殊计费处理
+		// Gemini 实测模式必须保留上游输入与缓存分类，换号不能伪造缓存命中。
+		if input.ForceCacheBilling && !result.RequireMeasuredUsage && result.Usage.InputTokens > 0 {
+			logger.LegacyPrintf("service.gateway", "force_cache_billing: %d input_tokens → cache_read_input_tokens (account=%d)",
+				result.Usage.InputTokens, account.ID)
+			result.Usage.CacheReadInputTokens += result.Usage.InputTokens
+			result.Usage.InputTokens = 0
+		}
+
+		// Cache TTL Override: 确保计费时 token 分类与账号设置一致。
+		// 账号级设置优先；全局 1h 请求注入开启时，默认把 usage 计费归回 5m。
+		claudeMaxOutcome := applyClaudeMaxCacheBillingPolicyToUsage(&result.Usage, input.ParsedRequest, apiKey.Group, result.Model, account.ID)
+		roundTTLOverridden := false
+		if !claudeMaxOutcome.SkipTTLOverride {
+			if overrideTarget, ok := s.resolveCacheTTLUsageOverrideTarget(ctx, account); ok {
+				applyCacheTTLOverride(&result.Usage, overrideTarget)
+				roundTTLOverridden = (result.Usage.CacheCreation5mTokens + result.Usage.CacheCreation1hTokens) > 0
+			}
+		}
+		if !claudeMaxOutcome.SkipTTLOverride && !roundTTLOverridden && result.CacheCreationTTLTarget != "" {
+			applyCacheTTLHintForAggregateCreation(&result.Usage, result.CacheCreationTTLTarget)
+		}
+
+		cacheTTLOverridden = cacheTTLOverridden || roundTTLOverridden
+	}
+	if len(result.ContinuationResults) > 0 {
+		refreshForwardContinuationUsage(result)
 	}
 
 	// 获取费率倍数（优先级：用户专属 > 分组默认 > 系统默认）
@@ -1143,11 +1159,11 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	if err := ValidateUsageBillingActualCost(cost.ActualCost); err != nil {
 		return err
 	}
-	// A customer counting discount must not discount account costs or account
-	// quota. Re-run the same pricing selection with original upstream usage.
+	// Customer counting and delivery projections must not discount account
+	// costs or account quota. Re-run with the original upstream usage.
 	accountTotalCost := cost.TotalCost
 	var accountQuotaTotalCost *float64
-	if billingResult.Usage.InputTokens != result.Usage.InputTokens {
+	if billingResult.Usage != result.Usage {
 		rawCost, rawErr := s.calculateRecordUsageCostWithResponseModel(ctx, input, result, billingModel, multiplier, imageMultiplier, pricingAt, opts, false)
 		if rawErr != nil {
 			return rawErr
@@ -1186,7 +1202,11 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 
 	// 计算账号统计定价费用（使用最终上游模型匹配自定义规则）。纯存储费不是一次模型请求，
 	// 账号统计成本回落 total_cost（官方存储价）。
-	if apiKey.GroupID != nil && !isCacheStorageOnlyResult(result) {
+	if apiKey.GroupID != nil && len(result.ContinuationResults) > 0 {
+		if err := s.applyForwardContinuationAccountStatsCost(ctx, usageLog, input, result, billingModel, multiplier, imageMultiplier, pricingAt, opts); err != nil {
+			return err
+		}
+	} else if apiKey.GroupID != nil && !isCacheStorageOnlyResult(result) {
 		applyAccountStatsCost(ctx, usageLog, s.channelService, s.billingService,
 			account.ID, *apiKey.GroupID, result.UpstreamModel, result.Model,
 			// Anthropic's input_tokens excludes cache_read and cache_creation (billed separately);
@@ -1377,6 +1397,20 @@ func (s *GatewayService) calculateRecordUsageCostWithResponseModel(
 	ctx context.Context, input *recordUsageCoreInput, result *ForwardResult, billingModel string,
 	multiplier, imageMultiplier float64, pricingAt time.Time, opts *recordUsageOpts, logApplied bool,
 ) (*CostBreakdown, error) {
+	if err := validateForwardContinuationResults(result); err != nil {
+		return nil, err
+	}
+	if len(result.ContinuationResults) > 0 {
+		total := &CostBreakdown{}
+		for _, round := range result.ContinuationResults {
+			cost, err := s.calculateRecordUsageCostWithResponseModel(ctx, input, round, billingModel, multiplier, imageMultiplier, pricingAt, opts, logApplied)
+			if err != nil {
+				return nil, err
+			}
+			addContinuationCost(total, cost)
+		}
+		return total, nil
+	}
 	apiKey := input.APIKey
 	cost, err := s.calculateRecordUsageCostChecked(ctx, result, apiKey, billingModel, multiplier, imageMultiplier, pricingAt, opts)
 	if err != nil {
@@ -1411,6 +1445,16 @@ func (s *GatewayService) calculateRecordUsageCost(
 	pricingAt time.Time,
 	opts ...*recordUsageOpts,
 ) *CostBreakdown {
+	if len(result.ContinuationResults) > 0 {
+		if validateForwardContinuationResults(result) != nil {
+			return &CostBreakdown{}
+		}
+		total := &CostBreakdown{}
+		for _, round := range result.ContinuationResults {
+			addContinuationCost(total, s.calculateRecordUsageCost(ctx, round, apiKey, billingModel, multiplier, imageMultiplier, pricingAt, opts...))
+		}
+		return total
+	}
 	var recordOpts *recordUsageOpts
 	if len(opts) > 0 {
 		recordOpts = opts[0]
@@ -1490,6 +1534,12 @@ func (s *GatewayService) calculateRecordUsageCostChecked(
 ) (*CostBreakdown, error) {
 	if result == nil {
 		return nil, fmt.Errorf("calculate usage cost: nil forward result")
+	}
+	if err := validateForwardContinuationResults(result); err != nil {
+		return nil, err
+	}
+	if result.Usage == (ClaudeUsage{}) && continuationRoundFailedWithoutOutput(result.Outcome, result.DeliveredOutputTokens) {
+		return &CostBreakdown{}, nil
 	}
 	if result.ImageCount <= 0 || !apiKeyHasConfiguredImagePrice(apiKey, NormalizeImageBillingTierOrDefault(result.ImageSize)) {
 		var groupID *int64
@@ -1751,9 +1801,9 @@ func (s *GatewayService) buildRecordUsageLog(
 			"selected_response_model", strings.TrimSpace(result.UpstreamResponseModel),
 		)
 	}
-	usageOutcome := ensureResponseOutcomeForUsageLog(result.Outcome, result.AntiTruncationRounds)
+	usageOutcome := withContinuationAudit(ensureResponseOutcomeForUsageLog(result.Outcome, result.AntiTruncationRounds), forwardContinuationAudit(result, account))
 	customerResult := customerBillingForwardResultForAccount(result, account)
-	if customerResult.Usage.InputTokens != result.Usage.InputTokens {
+	if customerResult.Usage.InputTokens != result.Usage.InputTokens && result.GeminiInputCounting != nil {
 		// Keep the captured provider outcome immutable. A missing collector stays
 		// at version zero so scalar audit does not invent a completion status.
 		var audit ResponseOutcome

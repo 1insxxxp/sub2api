@@ -18,6 +18,28 @@ var ErrOpenAIChatUsageOutOfRange = errors.New("chat usage token count is outside
 // FinalizeOpenAIChatUsage resolves usage for each raw Chat Completions round.
 // Financial effects remain in RecordUsage and its existing request dedup.
 func (s *OpenAIGatewayService) FinalizeOpenAIChatUsage(ctx context.Context, input *OpenAIRecordUsageInput) {
+	if input != nil && input.Result != nil && len(input.Result.ContinuationResults) > 0 {
+		if validateOpenAIContinuationResults(input.Result) != nil {
+			return
+		}
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		sharedCtx, cancel := context.WithTimeout(ctx, geminiUsageRecoveryTimeout)
+		defer cancel()
+		for _, round := range input.Result.ContinuationResults {
+			child := *input
+			child.Result = round
+			// The legacy finalizer clears delivery estimates once provider usage
+			// is resolved. Managed continuations still need the actual downstream
+			// evidence to bill an interrupted leaf independently of its raw cost.
+			delivered := cloneContinuationPointer(round.DeliveredOutputTokens)
+			s.FinalizeOpenAIChatUsage(sharedCtx, &child)
+			round.DeliveredOutputTokens = delivered
+		}
+		refreshOpenAIContinuationUsage(input.Result)
+		return
+	}
 	if input == nil || input.Result == nil || input.Result.ChatUsage == nil {
 		return
 	}
@@ -269,6 +291,17 @@ func mergeOpenAIChatTokenSource(current, next UsageTokenSource) UsageTokenSource
 }
 
 func openAIChatUsageNeverAccepted(result *OpenAIForwardResult) bool {
+	if result != nil && len(result.ContinuationResults) > 0 {
+		if validateOpenAIContinuationResults(result) != nil {
+			return false
+		}
+		for _, round := range result.ContinuationResults {
+			if !openAIChatUsageNeverAccepted(round) {
+				return false
+			}
+		}
+		return true
+	}
 	if result == nil || result.ChatUsage == nil || !result.ChatUsage.Finalized {
 		return false
 	}
@@ -292,6 +325,17 @@ func openAIChatUsageHasTokens(usage OpenAIUsage) bool {
 // otherwise finite multi-round sum above MaxInt32. Also check the original
 // rounds with bounded additions so a machine-int overflow cannot hide the error.
 func validateOpenAIChatUsageAggregate(result *OpenAIForwardResult) error {
+	if err := validateOpenAIContinuationResults(result); err != nil {
+		return err
+	}
+	if result != nil && len(result.ContinuationResults) > 0 {
+		for _, round := range result.ContinuationResults {
+			if err := validateOpenAIChatUsageAggregate(round); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 	if result == nil || result.ChatUsage == nil {
 		return nil
 	}

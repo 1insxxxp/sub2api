@@ -10,7 +10,7 @@ import (
 	"github.com/tidwall/sjson"
 )
 
-// stripMessageCacheControl 移除 $.messages[*].content[*].cache_control。
+// stripMessageCacheControl 移除消息内容及嵌套工具结果中的 cache_control。
 // 与 Parrot _strip_message_cache_control 语义一致。
 //
 // 旧策略为什么整体清空：客户端（特别是 Claude Code）经常把 cache_control 打在
@@ -25,17 +25,11 @@ func stripMessageCacheControl(body []byte) []byte {
 	msgIdx := -1
 	messages.ForEach(func(_, msg gjson.Result) bool {
 		msgIdx++
-		content := msg.Get("content")
-		if !content.IsArray() {
-			return true
-		}
-		blockIdx := -1
-		content.ForEach(func(_, block gjson.Result) bool {
-			blockIdx++
+		visitAnthropicContentBlocks(msg.Get("content"), fmt.Sprintf("messages.%d.content", msgIdx), func(blockPath string, block gjson.Result) bool {
 			if !block.Get("cache_control").Exists() {
 				return true
 			}
-			path := fmt.Sprintf("messages.%d.content.%d.cache_control", msgIdx, blockIdx)
+			path := blockPath + ".cache_control"
 			if next, err := sjson.DeleteBytes(body, path); err == nil {
 				body = next
 			}

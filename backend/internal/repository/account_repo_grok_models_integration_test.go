@@ -90,11 +90,12 @@ func TestGrokCatalogCASTreatsNullMissingAndKeyOrderAsSameValue(t *testing.T) {
 	t.Run("sql null", func(t *testing.T) {
 		tx := testEntTx(t)
 		repo := newAccountRepositoryWithSQL(tx.Client(), tx, nil)
-		account := mustCreateGrokCatalogAccount(t, tx.Client(), "grok-cas-sql-null")
 		// The column is NOT NULL today. Drop it only inside this rolled-back
 		// transaction so the COALESCE(extra, '{}') branch is actually executed.
+		// Run DDL before inserting the account queues deferred trigger events.
 		_, err := tx.ExecContext(ctx, `ALTER TABLE accounts ALTER COLUMN extra DROP NOT NULL`)
 		require.NoError(t, err)
+		account := mustCreateGrokCatalogAccount(t, tx.Client(), "grok-cas-sql-null")
 		_, err = tx.ExecContext(ctx, `UPDATE accounts SET extra = NULL WHERE id = $1`, account.ID)
 		require.NoError(t, err)
 		applied, err := repo.CompareAndSwapGrokObservedModels(ctx, account.ID, json.RawMessage(" \t"), json.RawMessage(`{"models":["from-sql-null"]}`))

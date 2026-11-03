@@ -42,6 +42,13 @@ func WithForwardGeminiSession(groupID int64, sessionHash string) ForwardGeminiOp
 }
 
 func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Context, account *Account, originalModel string, action string, stream bool, body []byte, isStickySession bool, options ...ForwardGeminiOption) (*ForwardResult, error) {
+	if accountContinuationShouldManage(ctx, account) && (action == "generateContent" || action == "streamGenerateContent") {
+		return runForwardWithAccountContinuation(ctx, c, account, body, AccountContinuationGemini, originalModel, stream,
+			func(roundCtx context.Context, roundBody []byte) (*ForwardResult, error) {
+				return s.ForwardGemini(roundCtx, c, account, originalModel, action, stream, roundBody, isStickySession, options...)
+			})
+	}
+
 	beginUpstreamResponseModelObservation(c)
 	startTime := time.Now()
 	forwardOpts := forwardGeminiOptions{}

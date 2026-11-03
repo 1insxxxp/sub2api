@@ -877,34 +877,37 @@ func ValidateClaudeOAuthSystemPromptBlocksConfig(raw string) error {
 	return nil
 }
 
-func extractSystemTextAndCacheControl(system any) (string, any) {
-	switch v := system.(type) {
-	case string:
-		return strings.TrimSpace(v), nil
-	case []any:
-		var parts []string
-		var cacheControl any
-		for _, item := range v {
-			m, ok := item.(map[string]any)
-			if !ok {
-				continue
-			}
-			text, ok := m["text"].(string)
-			if !ok || strings.TrimSpace(text) == "" {
-				continue
-			}
-			parts = append(parts, text)
-			// system blocks are collapsed into one messages text block below.
-			// Preserve the last original breakpoint as the closest equivalent
-			// boundary, including its client-selected TTL.
-			if cc, exists := m["cache_control"]; exists && cc != nil {
-				cacheControl = cc
-			}
-		}
-		return strings.Join(parts, "\n\n"), cacheControl
-	default:
-		return "", nil
+// extractSystemTextAndCacheBlocks keeps the legacy joined text for identity
+// checks, and returns separate blocks only when a client cache boundary exists.
+func extractSystemTextAndCacheBlocks(system any) (string, []map[string]any) {
+	if text, ok := system.(string); ok {
+		return strings.TrimSpace(text), nil
 	}
+	items, _ := system.([]any)
+	var parts []string
+	var blocks []map[string]any
+	hasCacheControl := false
+	for _, item := range items {
+		m, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		text, ok := m["text"].(string)
+		if !ok || strings.TrimSpace(text) == "" {
+			continue
+		}
+		parts = append(parts, text)
+		block := map[string]any{"type": "text", "text": text}
+		if cc := m["cache_control"]; cc != nil {
+			block["cache_control"] = cc
+			hasCacheControl = true
+		}
+		blocks = append(blocks, block)
+	}
+	if !hasCacheControl {
+		blocks = nil
+	}
+	return strings.Join(parts, "\n\n"), blocks
 }
 
 func rewriteSystemForNonClaudeCodeWithPromptBlocks(body []byte, system any, expansionPrompt string, blocksConfig string) []byte {
@@ -912,7 +915,7 @@ func rewriteSystemForNonClaudeCodeWithPromptBlocks(body []byte, system any, expa
 	expansionPrompt = defaultClaudeOAuthExpansionPrompt(expansionPrompt)
 
 	// 1. 提取原始 system prompt 文本及其缓存断点
-	originalSystemText, originalSystemCacheControl := extractSystemTextAndCacheControl(system)
+	originalSystemText, instructionBlocks := extractSystemTextAndCacheBlocks(system)
 
 	// 2. 构造 system 数组，对齐真实 Claude Code CLI 的 3-block 形态：
 	//    [0] billing attribution block（cc_version={cliVer}.{fp}; cc_entrypoint=cli;）
@@ -945,18 +948,16 @@ func rewriteSystemForNonClaudeCodeWithPromptBlocks(body []byte, system any, expa
 	//    模型仍通过 messages 接收完整指令，保留客户端功能
 	ccPromptTrimmed := strings.TrimSpace(claudeCodeSystemPrompt)
 	if originalSystemText != "" && originalSystemText != ccPromptTrimmed && !hasClaudeCodePrefix(originalSystemText) {
-		instructionBlock := map[string]any{
-			"type": "text",
-			"text": "[System Instructions]\n" + originalSystemText,
+		if len(instructionBlocks) == 0 {
+			instructionBlocks = []map[string]any{{"type": "text", "text": originalSystemText}}
 		}
-		if originalSystemCacheControl != nil {
-			instructionBlock["cache_control"] = originalSystemCacheControl
-		}
+		// Prefix only the first block; a cached prefix must not absorb a later
+		// unmarked suffix or another independently marked block.
+		firstText, _ := instructionBlocks[0]["text"].(string)
+		instructionBlocks[0]["text"] = "[System Instructions]\n" + firstText
 		instrMsg, err1 := json.Marshal(map[string]any{
-			"role": "user",
-			"content": []map[string]any{
-				instructionBlock,
-			},
+			"role":    "user",
+			"content": instructionBlocks,
 		})
 		ackMsg, err2 := json.Marshal(map[string]any{
 			"role": "assistant",
@@ -992,6 +993,29 @@ type cacheControlPath struct {
 	log  string
 }
 
+// Walk only protocol content blocks, never tool input or document payloads.
+// A nested tool-result prefix precedes a breakpoint on the whole result.
+func visitAnthropicContentBlocks(content gjson.Result, path string, visit func(string, gjson.Result) bool) bool {
+	if !content.IsArray() {
+		return true
+	}
+	keepGoing := true
+	index := 0
+	content.ForEach(func(_, block gjson.Result) bool {
+		blockPath := fmt.Sprintf("%s.%d", path, index)
+		index++
+		if block.Get("type").String() == "tool_result" {
+			keepGoing = visitAnthropicContentBlocks(block.Get("content"), blockPath+".content", visit)
+			if !keepGoing {
+				return false
+			}
+		}
+		keepGoing = visit(blockPath, block)
+		return keepGoing
+	})
+	return keepGoing
+}
+
 func collectCacheControlPaths(body []byte) (invalidThinking []cacheControlPath, messagePaths []string, toolPaths []string, systemPaths []string) {
 	system := gjson.GetBytes(body, "system")
 	if system.IsArray() {
@@ -1017,25 +1041,20 @@ func collectCacheControlPaths(body []byte) (invalidThinking []cacheControlPath, 
 	if messages.IsArray() {
 		msgIndex := 0
 		messages.ForEach(func(_, msg gjson.Result) bool {
-			content := msg.Get("content")
-			if content.IsArray() {
-				contentIndex := 0
-				content.ForEach(func(_, item gjson.Result) bool {
-					if item.Get("cache_control").Exists() {
-						path := fmt.Sprintf("messages.%d.content.%d.cache_control", msgIndex, contentIndex)
-						if item.Get("type").String() == "thinking" {
-							invalidThinking = append(invalidThinking, cacheControlPath{
-								path: path,
-								log:  fmt.Sprintf("[Warning] Removed illegal cache_control from thinking block in messages[%d].content[%d]", msgIndex, contentIndex),
-							})
-						} else {
-							messagePaths = append(messagePaths, path)
-						}
+			visitAnthropicContentBlocks(msg.Get("content"), fmt.Sprintf("messages.%d.content", msgIndex), func(blockPath string, item gjson.Result) bool {
+				if item.Get("cache_control").Exists() {
+					path := blockPath + ".cache_control"
+					if item.Get("type").String() == "thinking" {
+						invalidThinking = append(invalidThinking, cacheControlPath{
+							path: path,
+							log:  fmt.Sprintf("[Warning] Removed illegal cache_control from thinking block at %s", blockPath),
+						})
+					} else {
+						messagePaths = append(messagePaths, path)
 					}
-					contentIndex++
-					return true
-				})
-			}
+				}
+				return true
+			})
 			msgIndex++
 			return true
 		})
@@ -1220,12 +1239,9 @@ func cacheTTLTargetFromAnthropicRequestBody(body []byte) (string, bool) {
 		if !items.IsArray() {
 			return visitBlock(items)
 		}
-		keepGoing := true
-		items.ForEach(func(_, item gjson.Result) bool {
-			keepGoing = visitBlock(item)
-			return keepGoing
+		return visitAnthropicContentBlocks(items, "", func(_ string, item gjson.Result) bool {
+			return visitBlock(item)
 		})
-		return keepGoing
 	}
 
 	if !visitCacheControl(gjson.GetBytes(body, "cache_control")) {
@@ -1294,14 +1310,8 @@ func forceEphemeralCacheControlTTL(body []byte, ttl string) []byte {
 		msgIdx := -1
 		messages.ForEach(func(_, msg gjson.Result) bool {
 			msgIdx++
-			content := msg.Get("content")
-			if !content.IsArray() {
-				return true
-			}
-			contentIdx := -1
-			content.ForEach(func(_, block gjson.Result) bool {
-				contentIdx++
-				addPath(fmt.Sprintf("messages.%d.content.%d", msgIdx, contentIdx), block)
+			visitAnthropicContentBlocks(msg.Get("content"), fmt.Sprintf("messages.%d.content", msgIdx), func(path string, block gjson.Result) bool {
+				addPath(path, block)
 				return true
 			})
 			return true

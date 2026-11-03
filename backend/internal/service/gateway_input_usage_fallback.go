@@ -33,6 +33,16 @@ func anthropicInputUsageMissing(usage ClaudeUsage) bool {
 // generation has been observed. Gemini uses its separate ledger/count/semantic
 // fallback path; this legacy character-based fallback must not overwrite it.
 func applyMissingInputTokenEstimate(ctx context.Context, result *ForwardResult, account *Account) {
+	if result != nil && len(result.ContinuationResults) > 0 {
+		if validateForwardContinuationResults(result) != nil {
+			return
+		}
+		for _, round := range result.ContinuationResults {
+			applyMissingInputTokenEstimate(ctx, round, account)
+		}
+		refreshForwardContinuationUsage(result)
+		return
+	}
 	if result == nil || !anthropicInputUsageMissing(result.Usage) {
 		return
 	}

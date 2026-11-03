@@ -33,11 +33,12 @@ func ResponsesToAnthropicRequestWithDefaultMaxTokens(req *ResponsesRequest, defa
 	}
 
 	out := &AnthropicRequest{
-		Model:       req.Model,
-		Messages:    messages,
-		Temperature: req.Temperature,
-		TopP:        req.TopP,
-		Stream:      req.Stream,
+		CacheControl: req.CacheControl,
+		Model:        req.Model,
+		Messages:     messages,
+		Temperature:  req.Temperature,
+		TopP:         req.TopP,
+		Stream:       req.Stream,
 	}
 
 	if len(system) > 0 {
@@ -197,8 +198,10 @@ func mapResponsesEffortToAnthropic(effort string) string {
 // (for Anthropic's polymorphic system field) and a list of Anthropic messages.
 func convertResponsesInputToAnthropic(instructions string, inputRaw json.RawMessage, preserveThinking bool) (json.RawMessage, []AnthropicMessage, error) {
 	var systemParts []string
+	var systemBlocks []AnthropicContentBlock
 	if strings.TrimSpace(instructions) != "" {
 		systemParts = append(systemParts, strings.TrimSpace(instructions))
+		systemBlocks = append(systemBlocks, AnthropicContentBlock{Type: "text", Text: strings.TrimSpace(instructions)})
 	}
 
 	// Try as plain string input.
@@ -224,11 +227,15 @@ func convertResponsesInputToAnthropic(instructions string, inputRaw json.RawMess
 	var messages []AnthropicMessage
 
 	for _, item := range items {
+		if err := validateContentCacheControls(item.Content); err != nil {
+			return nil, nil, err
+		}
 		switch {
 		case item.Role == "system" || item.Role == "developer":
 			text := extractTextFromContent(item.Content)
 			if text != "" {
 				systemParts = append(systemParts, text)
+				systemBlocks = append(systemBlocks, responsesSystemCacheBlocks(item.Content)...)
 			}
 
 		case item.Type == "function_call":
@@ -251,7 +258,10 @@ func convertResponsesInputToAnthropic(instructions string, inputRaw json.RawMess
 
 		case item.Type == "function_call_output":
 			// function_call_output → user message with tool_result block
-			contentJSON := responsesFunctionOutputToAnthropicContent(item)
+			contentJSON, err := responsesFunctionOutputToAnthropicContent(item)
+			if err != nil {
+				return nil, nil, err
+			}
 			block := AnthropicContentBlock{
 				Type:      "tool_result",
 				ToolUseID: resolveCallID(item.CallID, outputIDOccurrence),
@@ -349,7 +359,11 @@ func convertResponsesInputToAnthropic(instructions string, inputRaw json.RawMess
 
 	var system json.RawMessage
 	if len(systemParts) > 0 {
-		system, _ = json.Marshal(strings.Join(systemParts, "\n\n"))
+		var err error
+		system, err = marshalAnthropicSystemWithCacheControl(systemParts, systemBlocks)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
 	return system, messages, nil
@@ -388,14 +402,17 @@ func newResponsesAnthropicCallIDResolver(items []ResponsesInputItem) func(string
 	}
 }
 
-func responsesFunctionOutputToAnthropicContent(item ResponsesInputItem) json.RawMessage {
+func responsesFunctionOutputToAnthropicContent(item ResponsesInputItem) (json.RawMessage, error) {
 	if len(item.outputRaw) == 0 {
 		output := item.Output
 		if output == "" {
 			output = "(empty)"
 		}
 		content, _ := json.Marshal(output)
-		return content
+		return content, nil
+	}
+	if err := validateContentCacheControls(item.outputRaw); err != nil {
+		return nil, err
 	}
 
 	var parts []ResponsesContentPart
@@ -405,26 +422,29 @@ func responsesFunctionOutputToAnthropicContent(item ResponsesInputItem) json.Raw
 			switch part.Type {
 			case "input_text", "output_text", "text":
 				if part.Text != "" {
-					blocks = append(blocks, AnthropicContentBlock{Type: "text", Text: part.Text})
+					blocks = append(blocks, AnthropicContentBlock{Type: "text", Text: part.Text, CacheControl: part.CacheControl})
 				}
 			case "input_image":
 				if source := dataURIToAnthropicImageSource(part.ImageURL); source != nil {
-					blocks = append(blocks, AnthropicContentBlock{Type: "image", Source: source})
+					blocks = append(blocks, AnthropicContentBlock{Type: "image", Source: source, CacheControl: part.CacheControl})
 				}
 			}
 		}
 		if len(blocks) > 0 {
-			content, _ := json.Marshal(blocks)
-			return content
+			compacted, err := compactMarkedAnthropicTextBlocks(blocks)
+			if err != nil {
+				return nil, err
+			}
+			return json.Marshal(compacted)
 		}
 		if len(parts) == 0 {
 			content, _ := json.Marshal("(empty)")
-			return content
+			return content, nil
 		}
 	}
 
 	content, _ := json.Marshal(item.Output)
-	return content
+	return content, nil
 }
 
 // normalizeAnthropicToolPairing rebuilds the message sequence so it satisfies
@@ -619,24 +639,27 @@ func convertResponsesUserToAnthropicContent(raw json.RawMessage) (json.RawMessag
 		case "input_text", "text":
 			if p.Text != "" {
 				blocks = append(blocks, AnthropicContentBlock{
-					Type: "text",
-					Text: p.Text,
+					CacheControl: p.CacheControl,
+					Type:         "text",
+					Text:         p.Text,
 				})
 			}
 		case "input_image":
 			src := dataURIToAnthropicImageSource(p.ImageURL)
 			if src != nil {
 				blocks = append(blocks, AnthropicContentBlock{
-					Type:   "image",
-					Source: src,
+					CacheControl: p.CacheControl,
+					Type:         "image",
+					Source:       src,
 				})
 			}
 		case "input_file":
 			src := dataURIToAnthropicFileSource(p.FileData)
 			if src != nil {
 				blocks = append(blocks, AnthropicContentBlock{
-					Type:   "document",
-					Source: src,
+					CacheControl: p.CacheControl,
+					Type:         "document",
+					Source:       src,
 				})
 			}
 		}
@@ -645,7 +668,11 @@ func convertResponsesUserToAnthropicContent(raw json.RawMessage) (json.RawMessag
 	if len(blocks) == 0 {
 		return json.Marshal("")
 	}
-	return json.Marshal(blocks)
+	compacted, err := compactMarkedAnthropicTextBlocks(blocks)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(compacted)
 }
 
 // convertResponsesAssistantToAnthropicContent converts a Responses assistant
@@ -673,8 +700,9 @@ func convertResponsesAssistantToAnthropicContent(raw json.RawMessage) (json.RawM
 		case "output_text", "text":
 			if p.Text != "" {
 				blocks = append(blocks, AnthropicContentBlock{
-					Type: "text",
-					Text: p.Text,
+					CacheControl: p.CacheControl,
+					Type:         "text",
+					Text:         p.Text,
 				})
 			}
 		}
@@ -683,7 +711,11 @@ func convertResponsesAssistantToAnthropicContent(raw json.RawMessage) (json.RawM
 	if len(blocks) == 0 {
 		blocks = append(blocks, AnthropicContentBlock{Type: "text", Text: ""})
 	}
-	return json.Marshal(blocks)
+	compacted, err := compactMarkedAnthropicTextBlocks(blocks)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(compacted)
 }
 
 // fromResponsesCallIDToAnthropic converts an OpenAI function call ID back to
@@ -778,28 +810,32 @@ func convertResponsesToAnthropicTools(tools []ResponsesTool) []AnthropicTool {
 		switch t.Type {
 		case "web_search", "google_search", "web_search_20250305":
 			out = append(out, AnthropicTool{
-				Type: "web_search_20250305",
-				Name: "web_search",
+				CacheControl: t.CacheControl,
+				Type:         "web_search_20250305",
+				Name:         "web_search",
 			})
 		case "function":
 			out = append(out, AnthropicTool{
-				Name:        t.Name,
-				Description: t.Description,
-				InputSchema: normalizeAnthropicInputSchema(t.Parameters),
+				CacheControl: t.CacheControl,
+				Name:         t.Name,
+				Description:  t.Description,
+				InputSchema:  normalizeAnthropicInputSchema(t.Parameters),
 			})
 		case "custom":
 			out = append(out, AnthropicTool{
-				Name:        t.Name,
-				Description: t.Description,
-				InputSchema: normalizeAnthropicInputSchema(t.Parameters),
+				CacheControl: t.CacheControl,
+				Name:         t.Name,
+				Description:  t.Description,
+				InputSchema:  normalizeAnthropicInputSchema(t.Parameters),
 			})
 		default:
 			// Pass through unknown tool types
 			out = append(out, AnthropicTool{
-				Type:        t.Type,
-				Name:        t.Name,
-				Description: t.Description,
-				InputSchema: normalizeAnthropicInputSchema(t.Parameters),
+				CacheControl: t.CacheControl,
+				Type:         t.Type,
+				Name:         t.Name,
+				Description:  t.Description,
+				InputSchema:  normalizeAnthropicInputSchema(t.Parameters),
 			})
 		}
 	}

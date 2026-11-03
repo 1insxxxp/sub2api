@@ -9,6 +9,18 @@ import (
 // never changes a reported zero or labels an estimate as a provider measurement.
 // Financial effects remain exclusively in RecordUsage and its original dedup.
 func (s *GatewayService) FinalizeGeminiUsageFallback(ctx context.Context, input *RecordUsageInput) {
+	if input != nil && input.Result != nil && len(input.Result.ContinuationResults) > 0 {
+		if validateForwardContinuationResults(input.Result) != nil {
+			return
+		}
+		for _, round := range input.Result.ContinuationResults {
+			child := *input
+			child.Result = round
+			s.FinalizeGeminiUsageFallback(ctx, &child)
+		}
+		refreshForwardContinuationUsage(input.Result)
+		return
+	}
 	if input == nil || input.Result == nil || !input.Result.RequireMeasuredUsage {
 		return
 	}

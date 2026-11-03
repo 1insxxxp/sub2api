@@ -130,6 +130,12 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		}
 		switch ingressMode {
 		case OpenAIWSIngressModePassthrough:
+			// A matched safe continuation needs managed turn boundaries while
+			// retaining native WS transport and the same account/credentials.
+			if accountContinuationWSAllowed(ctx, account, firstClientMessage, gjson.GetBytes(firstClientMessage, "model").String()) {
+				ingressMode = OpenAIWSIngressModeCtxPool
+				break
+			}
 			if wsDecision.Transport != OpenAIUpstreamTransportResponsesWebsocketV2 {
 				return fmt.Errorf("websocket ingress requires ws_v2 transport, got=%s", wsDecision.Transport)
 			}
@@ -237,6 +243,11 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			return openAIWSClientPayload{}, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, "invalid websocket request payload", errors.New("invalid json"))
 		}
 
+		resolved, aliasErr := s.resolveWSContinuationAlias(ctx, c, trimmed)
+		if aliasErr != nil {
+			return openAIWSClientPayload{}, NewOpenAIWSClientCloseError(coderws.StatusInternalError, "Unable to resolve previous response", aliasErr)
+		}
+		trimmed = resolved
 		values := gjson.GetManyBytes(trimmed, "type", "model", "prompt_cache_key", "previous_response_id")
 		eventType := strings.TrimSpace(values[0].String())
 		normalized := trimmed
@@ -618,7 +629,6 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 				}
 			}
 			bridgePayloadRaw := currentBridgePayload.payloadRaw
-			bridgePayloadBytes := currentBridgePayload.payloadBytes
 			toolOutputCoverage := AnalyzeToolCallOutputContextCoverageBytes(currentBridgePayload.payloadRaw)
 			needsBridgeReplay := currentBridgePayload.previousResponseID != "" ||
 				(toolOutputCoverage.HasFunctionCallOutput && !toolOutputCoverage.ContextCoversAllCallIDs)
@@ -653,7 +663,6 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 					return fmt.Errorf("set websocket http bridge replay input: %w", setInputErr)
 				}
 				bridgePayloadRaw = updatedPayload
-				bridgePayloadBytes = len(updatedPayload)
 				logOpenAIWSModeInfo(
 					"ingress_ws_http_bridge_replay_input account_id=%d turn=%d input_items=%d previous_response_id_present=%v has_tool_output=%v",
 					account.ID,
@@ -676,21 +685,23 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 					return fmt.Errorf("resolve Grok websocket cache identity: %w", err)
 				}
 			}
-			result, bridgeErr := s.proxyOpenAIWSHTTPBridgeTurn(
-				ctx,
-				c,
-				account,
-				token,
-				bridgePayloadRaw,
-				bridgePayloadBytes,
-				currentBridgePayload.originalModel,
-				currentBridgePayload.imageBillingModel,
-				currentBridgePayload.imageSizeTier,
-				currentBridgePayload.imageInputSize,
-				grokCacheIdentity,
-				turn,
-				writeClientMessage,
-			)
+			result, bridgeErr := s.runAccountContinuationWSTurn(ctx, c, account, bridgePayloadRaw, currentBridgePayload.originalModel, &writeClientMessage, func(roundPayload []byte) (*OpenAIForwardResult, error) {
+				return s.proxyOpenAIWSHTTPBridgeTurn(
+					ctx,
+					c,
+					account,
+					token,
+					roundPayload,
+					len(roundPayload),
+					currentBridgePayload.originalModel,
+					currentBridgePayload.imageBillingModel,
+					currentBridgePayload.imageSizeTier,
+					currentBridgePayload.imageInputSize,
+					grokCacheIdentity,
+					turn,
+					writeClientMessage,
+				)
+			})
 			if bridgeErr != nil && isOpenAIWSSessionPreempted(ctx) {
 				return errOpenAIWSSessionPreempted
 			}
@@ -963,6 +974,10 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		}
 		turnStart := time.Now()
 		wroteDownstream := false
+		var continuationOutcome *ResponseOutcomeCollector
+		if managed, _ := c.Request.Context().Value(accountContinuationManagedKey{}).(bool); managed {
+			continuationOutcome = NewResponseOutcomeCollector(http.StatusOK, http.StatusOK)
+		}
 		if err := lease.WriteJSONWithContextTimeout(ctx, json.RawMessage(payload), s.openAIWSWriteTimeout()); err != nil {
 			return nil, wrapOpenAIWSIngressTurnError(
 				"write_upstream",
@@ -1014,7 +1029,21 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			upstreamMessage, readErr := lease.ReadMessageWithContextTimeout(ctx, s.openAIWSReadTimeout())
 			if readErr != nil {
 				lease.MarkBroken()
-				return nil, wrapOpenAIWSIngressTurnError(
+				var partial *OpenAIForwardResult
+				if continuationOutcome != nil && (wroteDownstream || usage.InputTokens > 0 || usage.OutputTokens > 0) {
+					continuationOutcome.MarkStreamError(readErr, clientDisconnected || ctx.Err() != nil)
+					outcome := continuationOutcome.Snapshot()
+					partial = &OpenAIForwardResult{RequestID: responseID, ResponseID: responseID, Usage: usage, Model: originalModel, UpstreamModel: mappedModel, Stream: true, OpenAIWSMode: true, ResponseHeaders: lease.HandshakeHeaders(), Duration: time.Since(turnStart), FirstTokenMs: firstTokenMs,
+						UpstreamResponseModel:         responseModelObserver.Model(),
+						UpstreamResponseModelConflict: responseModelObserver.Conflict(),
+						UpstreamResponseServiceTier:   responseModelObserver.ServiceTier(),
+						ServiceTier:                   resolvedOpenAIUpstreamServiceTierFromObserver(responseModelObserver, extractOpenAIServiceTierFromBody(payload)),
+						ReasoningEffort:               ApplyThinkingEnabledFallback(extractOpenAIReasoningEffortFromBody(payload, mappedModel, originalModel), payload, mappedModel),
+						RequestedReasoningEffort:      requestedReasoningEffort,
+						ClientDisconnect:              clientDisconnected || ctx.Err() != nil,
+						Outcome:                       &outcome}
+				}
+				return partial, wrapOpenAIWSIngressTurnError(
 					"read_upstream",
 					fmt.Errorf("read upstream websocket event: %w", readErr),
 					wroteDownstream,
@@ -1206,6 +1235,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 					}
 				} else {
 					wroteDownstream = true
+					continuationOutcome.ObserveOpenAISSEData(string(clientMessage))
 					markOpenAIWSClientVisibleFailure(c, eventType, upstreamMessage)
 				}
 			}
@@ -1239,6 +1269,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 				imageCount := imageCounter.Count()
 				result := &OpenAIForwardResult{
 					RequestID:                     responseID,
+					ResponseID:                    responseID,
 					Usage:                         usage,
 					Model:                         originalModel,
 					UpstreamModel:                 mappedModel,
@@ -1278,7 +1309,6 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 	currentImageBillingModel := firstPayload.imageBillingModel
 	currentImageSizeTier := firstPayload.imageSizeTier
 	currentImageInputSize := firstPayload.imageInputSize
-	currentPayloadBytes := firstPayload.payloadBytes
 	currentRequestedReasoningEffort := firstPayload.requestedReasoningEffort
 	isStrictAffinityTurn := func(payload []byte) bool {
 		if !storeDisabled {
@@ -1430,7 +1460,6 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			truncateOpenAIWSLogValue(connID, openAIWSIDValueMaxLen),
 		)
 		currentPayload = updatedWithInput
-		currentPayloadBytes = len(updatedWithInput)
 		resetSessionLease(true)
 		skipBeforeTurn = true
 		return true
@@ -1481,7 +1510,6 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			)
 			if strippedCount > 0 {
 				currentPayload = strippedPayload
-				currentPayloadBytes = len(strippedPayload)
 			}
 			if lastTurnReplayInputExists {
 				lastTurnReplayInput, _ = stripOpenAIInvalidEncryptedContentFromReplayItems(lastTurnReplayInput, invalidDigests)
@@ -1496,7 +1524,6 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		}
 		if contextWindowBoundary.Changed {
 			currentPayload = boundaryPayload
-			currentPayloadBytes = len(boundaryPayload)
 			logOpenAIWSModeInfo(
 				"ingress_ws_context_window_changed account_id=%d turn=%d conn_id=%s action=break_previous_response_chain previous_window_id=%s current_window_id=%s previous_response_id_removed=%v",
 				account.ID,
@@ -1545,7 +1572,6 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 				)
 			} else {
 				currentPayload = updatedPayload
-				currentPayloadBytes = len(updatedPayload)
 				currentPreviousResponseID = expectedPrev
 				logOpenAIWSModeInfo(
 					"ingress_ws_function_call_output_prev_infer account_id=%d turn=%d conn_id=%s action=set_previous_response_id previous_response_id=%s",
@@ -1648,7 +1674,6 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 						)
 					} else {
 						currentPayload = updatedWithInput
-						currentPayloadBytes = len(updatedWithInput)
 						logOpenAIWSModeInfo(
 							"ingress_ws_prev_response_strict_eval account_id=%d turn=%d conn_id=%s action=drop_previous_response_id_full_create reason=%s previous_response_id=%s expected_previous_response_id=%s has_function_call_output=%v",
 							account.ID,
@@ -1743,7 +1768,6 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 								)
 								turnPrevRecoveryTried = true
 								currentPayload = updatedWithInput
-								currentPayloadBytes = len(updatedWithInput)
 								resetSessionLease(true)
 								skipBeforeTurn = true
 								continue
@@ -1808,7 +1832,9 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			)
 		}
 
-		result, relayErr := sendAndRelay(turn, sessionLease, currentPayload, currentPayloadBytes, currentOriginalModel, currentImageBillingModel, currentImageSizeTier, currentImageInputSize, currentRequestedReasoningEffort)
+		result, relayErr := s.runAccountContinuationWSTurn(ctx, c, account, currentPayload, currentOriginalModel, &writeClientMessage, func(roundPayload []byte) (*OpenAIForwardResult, error) {
+			return sendAndRelay(turn, sessionLease, roundPayload, len(roundPayload), currentOriginalModel, currentImageBillingModel, currentImageSizeTier, currentImageInputSize, currentRequestedReasoningEffort)
+		})
 		if relayErr != nil {
 			lastTurnClean = false
 			if isOpenAIWSSessionPreempted(ctx) {
@@ -1818,7 +1844,6 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			var rejectedFieldErr *openAIWSRejectedFieldRetryError
 			if errors.As(relayErr, &rejectedFieldErr) && rejectedFieldErr != nil && len(rejectedFieldErr.body) > 0 {
 				currentPayload = append([]byte(nil), rejectedFieldErr.body...)
-				currentPayloadBytes = len(currentPayload)
 				skipBeforeTurn = true
 				continue
 			}
@@ -1833,7 +1858,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 				finalErr = unwrapped
 			}
 			if hooks != nil && hooks.AfterTurn != nil {
-				hooks.AfterTurn(turn, nil, finalErr)
+				hooks.AfterTurn(turn, result, finalErr)
 			}
 			sessionLease.MarkBroken()
 			return finalErr
@@ -1977,7 +2002,6 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		currentImageBillingModel = nextPayload.imageBillingModel
 		currentImageSizeTier = nextPayload.imageSizeTier
 		currentImageInputSize = nextPayload.imageInputSize
-		currentPayloadBytes = nextPayload.payloadBytes
 		currentRequestedReasoningEffort = nextPayload.requestedReasoningEffort
 		rejectedFieldRetryState = newOpenAIResponsesRejectedFieldRetryState(currentPayload)
 		storeDisabled = s.isOpenAIWSStoreDisabledInRequestRaw(currentPayload, account)

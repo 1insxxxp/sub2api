@@ -91,6 +91,17 @@ func ApplyOpenAIServiceTierBillingResolution(account *Account, result *OpenAIFor
 	if result == nil {
 		return ServiceTierBillingResolution{}
 	}
+	if len(result.ContinuationResults) > 0 {
+		if validateOpenAIContinuationResults(result) != nil {
+			return ServiceTierBillingResolution{}
+		}
+		var resolved ServiceTierBillingResolution
+		for _, round := range result.ContinuationResults {
+			resolved = ApplyOpenAIServiceTierBillingResolution(account, round)
+		}
+		result.ServiceTier = result.ContinuationResults[len(result.ContinuationResults)-1].ServiceTier
+		return resolved
+	}
 	resolution := ResolveOpenAIServiceTierBilling(account, optionalStringValue(result.ServiceTier), result.UpstreamResponseServiceTier)
 	if resolution.Downgraded {
 		billing := resolution.Billing
@@ -104,6 +115,17 @@ func ApplyOpenAIServiceTierBillingResolution(account *Account, result *OpenAIFor
 func ApplyForwardServiceTierBillingResolution(result *ForwardResult) ServiceTierBillingResolution {
 	if result == nil {
 		return ServiceTierBillingResolution{}
+	}
+	if len(result.ContinuationResults) > 0 {
+		if validateForwardContinuationResults(result) != nil {
+			return ServiceTierBillingResolution{}
+		}
+		var resolved ServiceTierBillingResolution
+		for _, round := range result.ContinuationResults {
+			resolved = ApplyForwardServiceTierBillingResolution(round)
+		}
+		result.ServiceTier = result.ContinuationResults[len(result.ContinuationResults)-1].ServiceTier
+		return resolved
 	}
 	resolution := ResolveBillingServiceTier(optionalStringValue(result.ServiceTier), result.UpstreamResponseServiceTier)
 	if resolution.Downgraded {

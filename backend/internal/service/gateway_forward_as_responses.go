@@ -35,6 +35,13 @@ func (s *GatewayService) ForwardAsResponses(
 	body []byte,
 	parsed *ParsedRequest,
 ) (*ForwardResult, error) {
+	if accountContinuationShouldManage(ctx, account) {
+		return runForwardWithAccountContinuation(ctx, c, account, body, AccountContinuationResponses, accountContinuationBodyModel(body), accountContinuationBodyStream(body),
+			func(roundCtx context.Context, roundBody []byte) (*ForwardResult, error) {
+				return s.ForwardAsResponses(roundCtx, c, account, roundBody, parsed)
+			})
+	}
+
 	startTime := time.Now()
 
 	normalizedBody, normalized, err := normalizeOpenAIResponsesLegacyIngressWithConfig(s.cfg, body)

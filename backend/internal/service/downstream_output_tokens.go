@@ -507,6 +507,13 @@ func ApplyDeliveredOpenAIOutputTokens(result *OpenAIForwardResult, collector *Do
 }
 
 func recordedOutputTokens(result *ForwardResult) int {
+	if result != nil && len(result.ContinuationResults) > 0 {
+		total := 0
+		for _, round := range result.ContinuationResults {
+			total += continuationRecordedOutputTokens(round)
+		}
+		return total
+	}
 	if result == nil {
 		return 0
 	}
@@ -523,6 +530,15 @@ func recordedOutputTokens(result *ForwardResult) int {
 }
 
 func recordedOpenAIOutputTokens(result *OpenAIForwardResult) int {
+	if result != nil && len(result.ContinuationResults) > 0 {
+		total := 0
+		for _, round := range result.ContinuationResults {
+			if !continuationRoundFailedWithoutOutput(round.Outcome, round.DeliveredOutputTokens) {
+				total += recordedOpenAIOutputTokens(round)
+			}
+		}
+		return total
+	}
 	if result == nil {
 		return 0
 	}
@@ -554,6 +570,15 @@ func deliveredOutputTokens(delivered *int) int {
 }
 
 func customerBillingForwardResult(result *ForwardResult) *ForwardResult {
+	if result != nil && len(result.ContinuationResults) > 0 {
+		clone := *result
+		clone.ContinuationResults = make([]*ForwardResult, 0, len(result.ContinuationResults))
+		for _, round := range result.ContinuationResults {
+			clone.ContinuationResults = append(clone.ContinuationResults, continuationCustomerForwardLeaf(round, nil, false))
+		}
+		refreshForwardContinuationUsage(&clone)
+		return &clone
+	}
 	if result == nil {
 		return nil
 	}
@@ -576,6 +601,15 @@ func customerBillingForwardResult(result *ForwardResult) *ForwardResult {
 // Billing workers must verify the attempt's account identity independently of
 // the protocol adapters, which already scope their own client projections.
 func customerBillingForwardResultForAccount(result *ForwardResult, account *Account) *ForwardResult {
+	if result != nil && len(result.ContinuationResults) > 0 {
+		clone := *result
+		clone.ContinuationResults = make([]*ForwardResult, 0, len(result.ContinuationResults))
+		for _, round := range result.ContinuationResults {
+			clone.ContinuationResults = append(clone.ContinuationResults, continuationCustomerForwardLeaf(round, account, true))
+		}
+		refreshForwardContinuationUsage(&clone)
+		return &clone
+	}
 	if result != nil && result.GeminiInputCounting != nil && (account == nil || account.ID != result.GeminiInputCounting.AccountID) {
 		clone := *result
 		clone.GeminiInputCounting = nil

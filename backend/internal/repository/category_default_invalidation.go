@@ -22,7 +22,7 @@ func categoryDefaultLockSourceClocks(ctx context.Context, client *dbent.Client, 
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	count := 0
 	for rows.Next() {
 		count++
@@ -41,7 +41,7 @@ func categoryDefaultSourceEpoch(ctx context.Context, client *dbent.Client, id in
 	if err != nil {
 		return 0, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	if !rows.Next() {
 		if err := rows.Err(); err != nil {
 			return 0, err
@@ -127,7 +127,7 @@ func categoryDefaultLoadInvalidations(ctx context.Context, client *dbent.Client,
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	invalid := make(map[string]bool)
 	for rows.Next() {
 		var sourceID int64

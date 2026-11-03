@@ -95,7 +95,9 @@ type OpenAIWSStateStore interface {
 }
 
 type defaultOpenAIWSStateStore struct {
-	cache GatewayCache
+	continuationAliasMu sync.Mutex
+	continuationAliases map[string]openAIContinuationAliasBinding
+	cache               GatewayCache
 
 	responseToAccountMu  sync.RWMutex
 	responseToAccount    map[string]openAIWSAccountBinding

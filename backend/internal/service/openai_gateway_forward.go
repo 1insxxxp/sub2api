@@ -19,6 +19,14 @@ import (
 
 // Forward forwards request to OpenAI API
 func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, account *Account, body []byte) (*OpenAIForwardResult, error) {
+	if accountContinuationShouldManage(ctx, account) {
+		result, continuationErr := runOpenAIWithAccountContinuation(ctx, c, account, body, AccountContinuationResponses, accountContinuationBodyModel(body), accountContinuationBodyStream(body),
+			func(roundCtx context.Context, roundBody []byte) (*OpenAIForwardResult, error) {
+				return s.Forward(roundCtx, c, account, roundBody)
+			})
+		return result, errors.Join(continuationErr, s.bindOpenAIContinuationAlias(ctx, c, account, result))
+	}
+
 	beginUpstreamResponseModelObservation(c)
 	ClearActualOpenAIUpstreamEndpoint(c)
 	if shouldForwardOpenAIResponsesViaRawChatCompletions(account) {

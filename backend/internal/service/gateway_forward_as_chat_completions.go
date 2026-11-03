@@ -35,6 +35,13 @@ func (s *GatewayService) ForwardAsChatCompletions(
 	body []byte,
 	parsed *ParsedRequest,
 ) (*ForwardResult, error) {
+	if accountContinuationShouldManage(ctx, account) {
+		return runForwardWithAccountContinuation(ctx, c, account, body, AccountContinuationChat, accountContinuationBodyModel(body), accountContinuationBodyStream(body),
+			func(roundCtx context.Context, roundBody []byte) (*ForwardResult, error) {
+				return s.ForwardAsChatCompletions(roundCtx, c, account, roundBody, parsed)
+			})
+	}
+
 	startTime := time.Now()
 
 	// 1. Parse Chat Completions request
@@ -56,7 +63,7 @@ func (s *GatewayService) ForwardAsChatCompletions(
 	}
 
 	// 2. Convert CC → Responses → Anthropic (chained conversion)
-	responsesReq, err := apicompat.ChatCompletionsToResponsesWithMinOutputTokens(&ccReq, 0)
+	responsesReq, err := apicompat.ChatCompletionsToResponsesForAnthropic(&ccReq)
 	if err != nil {
 		return nil, fmt.Errorf("convert chat completions to responses: %w", err)
 	}

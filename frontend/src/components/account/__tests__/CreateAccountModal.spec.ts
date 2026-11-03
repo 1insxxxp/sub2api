@@ -188,18 +188,57 @@ async function submitApiKeyAccount(
   return wrapper
 }
 
-async function openCodexImportStep(toggleClicks = 0) {
+async function configureContinuationRule(wrapper: ReturnType<typeof mountModal>, model = 'long-text') {
+  await wrapper.get('[data-testid="anti-truncation-account-enabled"]').setValue(true)
+  await wrapper.get('[data-testid="anti-truncation-add-rule"]').trigger('click')
+  await wrapper.get('[data-testid="anti-truncation-model-0"]').setValue(model)
+}
+
+async function openCodexImportStep(toggleClicks = 0, continuation = false) {
   const wrapper = mountModal()
   await selectButtonByText(wrapper, 'OpenAI')
   for (let click = 0; click < toggleClicks; click += 1) {
     await wrapper.get('[data-testid="openai-long-context-billing-toggle"]').trigger('click')
   }
+  if (continuation) await configureContinuationRule(wrapper)
   await wrapper.get('form#create-account-form input[type="text"]').setValue('Codex import')
   await wrapper.get('form#create-account-form').trigger('submit.prevent')
   return wrapper
 }
 
 describe('CreateAccountModal OpenAI long-context billing', () => {
+  it('does not take over legacy anti-truncation rules unless the administrator configures the account', async () => {
+    await submitApiKeyAccount('openai')
+    expect(createAccountMock.mock.calls[0]?.[0]?.extra).not.toHaveProperty('anti_truncation')
+  })
+
+  it('saves account continuation rules for Anthropic API keys', async () => {
+    const wrapper = mountModal()
+    await selectButtonByText(wrapper, 'admin.accounts.claudeConsole')
+    await wrapper.get('form#create-account-form input[type="text"]').setValue('anthropic')
+    await wrapper.get('form#create-account-form input[type="password"]').setValue('test-key')
+    await configureContinuationRule(wrapper)
+    await wrapper.get('form#create-account-form').trigger('submit.prevent')
+    await flushPromises()
+    expect(createAccountMock.mock.calls[0]?.[0]?.extra?.anti_truncation?.rules[0]?.model).toBe('long-text')
+  })
+
+  it('saves account-specific anti-truncation rules alongside existing extra', async () => {
+    const wrapper = mountModal()
+    await selectButtonByText(wrapper, 'OpenAI')
+    await selectButtonByText(wrapper, 'API Key')
+    await wrapper.get('form#create-account-form input[type="text"]').setValue('account')
+    await wrapper.get('form#create-account-form input[type="password"]').setValue('test-key')
+    await wrapper.get('[data-testid="anti-truncation-account-enabled"]').setValue(true)
+    await wrapper.get('[data-testid="anti-truncation-add-rule"]').trigger('click')
+    await wrapper.get('[data-testid="anti-truncation-model-0"]').setValue('long-gemini')
+    await wrapper.get('form#create-account-form').trigger('submit.prevent')
+    await flushPromises()
+    expect(createAccountMock.mock.calls[0]?.[0]?.extra).toMatchObject({
+      openai_long_context_billing_enabled: false,
+      anti_truncation: { version: 1, rules: [{ model: 'long-gemini', enabled: true, max_output_tokens: 0 }] }
+    })
+  })
   beforeEach(() => {
     authIsSimpleMode.value = true
     createAccountMock.mockReset().mockResolvedValue({ id: 42, platform: 'openai', type: 'apikey' })
@@ -854,6 +893,20 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
     expect(importCodexSessionMock.mock.calls[0]?.[0]?.extra?.openai_long_context_billing_enabled).toBeUndefined()
   })
 
+  it('carries account rules through Codex session import', async () => {
+    const wrapper = await openCodexImportStep(0, true)
+    await wrapper.get('[data-testid="import-codex-session"]').trigger('click')
+    await flushPromises()
+    expect(importCodexSessionMock.mock.calls[0]?.[0]?.extra?.anti_truncation?.rules[0]?.model).toBe('long-text')
+  })
+
+  it('carries account rules through Codex PAT import', async () => {
+    const wrapper = await openCodexImportStep(0, true)
+    await wrapper.get('[data-testid="import-codex-pat"]').trigger('click')
+    await flushPromises()
+    expect(createOpenAICodexPATMock.mock.calls[0]?.[0]?.extra?.anti_truncation?.rules[0]?.model).toBe('long-text')
+  })
+
   it('leaves Codex PAT import billing ownership to the backend', async () => {
     const wrapper = await openCodexImportStep()
     await wrapper.get('[data-testid="import-codex-pat"]').trigger('click')
@@ -902,6 +955,18 @@ describe('CreateAccountModal gemini explicit cache upstream switch', () => {
     createAccountMock.mockReset().mockResolvedValue({ id: 43, platform: 'gemini', type: 'apikey' })
     probeUpstreamBillingMock.mockReset().mockResolvedValue({})
     syncUpstreamModelsMock.mockReset().mockResolvedValue({ models: [], metadata: {} })
+  })
+
+  it('saves account continuation rules for Gemini API keys', async () => {
+    const wrapper = mountModal()
+    await selectButtonByText(wrapper, 'Gemini')
+    await selectButtonByText(wrapper, 'admin.accounts.gemini.accountType.apiKeyTitle')
+    await wrapper.get('form#create-account-form input[type="text"]').setValue('gemini')
+    await wrapper.get('form#create-account-form input[type="password"]').setValue('test-key')
+    await configureContinuationRule(wrapper)
+    await wrapper.get('form#create-account-form').trigger('submit.prevent')
+    await flushPromises()
+    expect(createAccountMock.mock.calls[0]?.[0]?.extra?.anti_truncation?.rules[0]?.model).toBe('long-text')
   })
 
   it('only offers the switch for a custom base url and sends it on create', async () => {
@@ -1018,6 +1083,14 @@ describe('CreateAccountModal Vertex API key auth', () => {
       location: 'global',
       tier_id: 'vertex'
     })
+  })
+
+  it('saves account continuation rules for Vertex service accounts', async () => {
+    const wrapper = await openGeminiVertexApiKeyForm()
+    await configureContinuationRule(wrapper)
+    await wrapper.get('form#create-account-form').trigger('submit.prevent')
+    await flushPromises()
+    expect(createAccountMock.mock.calls[0]?.[0]?.extra?.anti_truncation?.rules[0]?.model).toBe('long-text')
   })
 
   it('sends the project id when an API key account targets a project endpoint', async () => {

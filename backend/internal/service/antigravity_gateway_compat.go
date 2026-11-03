@@ -57,6 +57,13 @@ func (s *AntigravityGatewayService) ForwardAsChatCompletions(
 	body []byte,
 	_ *ParsedRequest,
 ) (*ForwardResult, error) {
+	if accountContinuationShouldManage(ctx, account) {
+		return runForwardWithAccountContinuation(ctx, c, account, body, AccountContinuationChat, accountContinuationBodyModel(body), accountContinuationBodyStream(body),
+			func(roundCtx context.Context, roundBody []byte) (*ForwardResult, error) {
+				return s.ForwardAsChatCompletions(roundCtx, c, account, roundBody, nil)
+			})
+	}
+
 	if err := s.validateAntigravityCompatAccount(c, account); err != nil {
 		return nil, err
 	}
@@ -104,6 +111,13 @@ func (s *AntigravityGatewayService) ForwardAsResponses(
 	body []byte,
 	_ *ParsedRequest,
 ) (*ForwardResult, error) {
+	if accountContinuationShouldManage(ctx, account) {
+		return runForwardWithAccountContinuation(ctx, c, account, body, AccountContinuationResponses, accountContinuationBodyModel(body), accountContinuationBodyStream(body),
+			func(roundCtx context.Context, roundBody []byte) (*ForwardResult, error) {
+				return s.ForwardAsResponses(roundCtx, c, account, roundBody, nil)
+			})
+	}
+
 	if err := s.validateAntigravityCompatAccount(c, account); err != nil {
 		return nil, err
 	}

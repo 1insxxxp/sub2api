@@ -24,15 +24,30 @@ func ChatCompletionsToResponses(req *ChatCompletionsRequest) (*ResponsesRequest,
 // ChatCompletionsToResponsesWithMinOutputTokens converts a Chat Completions
 // request using the supplied max_output_tokens floor.
 func ChatCompletionsToResponsesWithMinOutputTokens(req *ChatCompletionsRequest, minOutputTokens int) (*ResponsesRequest, error) {
+	return chatCompletionsToResponses(req, minOutputTokens, false)
+}
+
+// ChatCompletionsToResponsesForAnthropic retains explicit Anthropic cache
+// controls in the intermediate representation. Only Anthropic forwarding uses
+// this entry point: ordinary Responses/Gemini requests must not acquire these
+// provider-specific fields. Anthropic applies its own output-token default.
+func ChatCompletionsToResponsesForAnthropic(req *ChatCompletionsRequest) (*ResponsesRequest, error) {
+	return chatCompletionsToResponses(req, 0, true)
+}
+
+func chatCompletionsToResponses(req *ChatCompletionsRequest, minOutputTokens int, preserveCacheControl bool) (*ResponsesRequest, error) {
 	if err := openai.ValidateGPT61SolReasoningEffort(req.Model, req.ReasoningEffort); err != nil {
 		return nil, err
 	}
-	input, err := convertChatMessagesToResponsesInput(req.Messages)
+	input, err := convertChatMessagesToResponsesInput(req.Messages, preserveCacheControl)
 	if err != nil {
 		return nil, err
 	}
 
 	inputJSON, err := json.Marshal(input)
+	if preserveCacheControl {
+		inputJSON, err = marshalAnthropicBridgeInput(input)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -46,6 +61,9 @@ func ChatCompletionsToResponsesWithMinOutputTokens(req *ChatCompletionsRequest, 
 		ServiceTier:        req.ServiceTier,
 		PromptCacheOptions: req.PromptCacheOptions,
 		ParallelToolCalls:  req.ParallelToolCalls,
+	}
+	if preserveCacheControl {
+		out.CacheControl = req.CacheControl
 	}
 
 	// Reasoning models (gpt-5.x) do not accept sampling parameters.
@@ -88,7 +106,7 @@ func ChatCompletionsToResponsesWithMinOutputTokens(req *ChatCompletionsRequest, 
 
 	// tools[] and legacy functions[] → ResponsesTool[]
 	if len(req.Tools) > 0 || len(req.Functions) > 0 {
-		out.Tools = convertChatToolsToResponses(req.Tools, req.Functions)
+		out.Tools = convertChatToolsToResponses(req.Tools, req.Functions, preserveCacheControl)
 	}
 
 	// tool_choice: strings and Responses-shaped objects pass through; a named
@@ -109,7 +127,7 @@ func ChatCompletionsToResponsesWithMinOutputTokens(req *ChatCompletionsRequest, 
 
 // convertChatMessagesToResponsesInput converts the Chat Completions messages
 // array into a Responses API input items array.
-func convertChatMessagesToResponsesInput(msgs []ChatMessage) ([]ResponsesInputItem, error) {
+func convertChatMessagesToResponsesInput(msgs []ChatMessage, preserveCacheControl bool) ([]ResponsesInputItem, error) {
 	var out []ResponsesInputItem
 	legacyIDs := legacyFunctionCallIDs{msgs: msgs}
 	for _, m := range msgs {
@@ -123,7 +141,7 @@ func convertChatMessagesToResponsesInput(msgs []ChatMessage) ([]ResponsesInputIt
 		case m.Role == "function" && m.ToolCallID == "":
 			m.ToolCallID = legacyIDs.claim(m.Name)
 		}
-		items, err := chatMessageToResponsesItems(m)
+		items, err := chatMessageToResponsesItems(m, preserveCacheControl)
 		if err != nil {
 			return nil, err
 		}
@@ -279,32 +297,32 @@ func (ids *legacyFunctionCallIDs) claim(name string) string {
 
 // chatMessageToResponsesItems converts a single ChatMessage into one or more
 // ResponsesInputItem values.
-func chatMessageToResponsesItems(m ChatMessage) ([]ResponsesInputItem, error) {
+func chatMessageToResponsesItems(m ChatMessage, preserveCacheControl bool) ([]ResponsesInputItem, error) {
 	switch m.Role {
 	case "system", "developer":
-		return chatSystemToResponses(m)
+		return chatSystemToResponses(m, preserveCacheControl)
 	case "user":
-		return chatUserToResponses(m)
+		return chatUserToResponses(m, preserveCacheControl)
 	case "assistant":
-		return chatAssistantToResponses(m)
+		return chatAssistantToResponses(m, preserveCacheControl)
 	case "tool":
-		return chatToolToResponses(m)
+		return chatToolToResponses(m, preserveCacheControl)
 	case "function":
-		return chatFunctionToResponses(m)
+		return chatFunctionToResponses(m, preserveCacheControl)
 	default:
-		return chatUserToResponses(m)
+		return chatUserToResponses(m, preserveCacheControl)
 	}
 }
 
 // chatSystemToResponses converts a system or developer message, keeping its
 // role: the Responses API accepts both, and developer must not be demoted to
 // a user turn.
-func chatSystemToResponses(m ChatMessage) ([]ResponsesInputItem, error) {
+func chatSystemToResponses(m ChatMessage, preserveCacheControl bool) ([]ResponsesInputItem, error) {
 	parsed, err := parseChatMessageContent(m.Content)
 	if err != nil {
 		return nil, err
 	}
-	content, err := marshalChatInputContent(parsed)
+	content, err := marshalChatInputContent(parsed, preserveCacheControl)
 	if err != nil {
 		return nil, err
 	}
@@ -313,12 +331,12 @@ func chatSystemToResponses(m ChatMessage) ([]ResponsesInputItem, error) {
 
 // chatUserToResponses converts a user message, handling both plain strings and
 // multi-modal content arrays.
-func chatUserToResponses(m ChatMessage) ([]ResponsesInputItem, error) {
+func chatUserToResponses(m ChatMessage, preserveCacheControl bool) ([]ResponsesInputItem, error) {
 	parsed, err := parseChatMessageContent(m.Content)
 	if err != nil {
 		return nil, fmt.Errorf("parse user content: %w", err)
 	}
-	content, err := marshalChatInputContent(parsed)
+	content, err := marshalChatInputContent(parsed, preserveCacheControl)
 	if err != nil {
 		return nil, err
 	}
@@ -329,7 +347,7 @@ func chatUserToResponses(m ChatMessage) ([]ResponsesInputItem, error) {
 // text content and tool_calls, the text is emitted as an assistant message
 // first, then each tool_call becomes a function_call item. If the content is
 // empty/nil and there are tool_calls, only function_call items are emitted.
-func chatAssistantToResponses(m ChatMessage) ([]ResponsesInputItem, error) {
+func chatAssistantToResponses(m ChatMessage, preserveCacheControl bool) ([]ResponsesInputItem, error) {
 	var items []ResponsesInputItem
 	content := ""
 
@@ -353,6 +371,13 @@ func chatAssistantToResponses(m ChatMessage) ([]ResponsesInputItem, error) {
 
 	if content != "" {
 		parts := []ResponsesContentPart{{Type: "output_text", Text: content}}
+		if preserveCacheControl {
+			var err error
+			parts, err = chatAssistantPartsWithCacheControl(m, parts)
+			if err != nil {
+				return nil, err
+			}
+		}
 		partsJSON, err := json.Marshal(parts)
 		if err != nil {
 			return nil, err
@@ -449,7 +474,23 @@ func parseAssistantContent(raw json.RawMessage) (string, error) {
 
 // chatToolToResponses converts a tool result message (role=tool) into a
 // function_call_output item.
-func chatToolToResponses(m ChatMessage) ([]ResponsesInputItem, error) {
+func chatToolToResponses(m ChatMessage, preserveCacheControl bool) ([]ResponsesInputItem, error) {
+	if preserveCacheControl {
+		parsed, err := parseChatMessageContent(m.Content)
+		if err != nil {
+			return nil, err
+		}
+		for _, part := range parsed.Parts {
+			if part.CacheControl == nil {
+				continue
+			}
+			content, err := marshalChatInputContent(parsed, true)
+			if err != nil {
+				return nil, err
+			}
+			return []ResponsesInputItem{{Type: "function_call_output", CallID: m.ToolCallID, Output: string(content), outputRaw: content}}, nil
+		}
+	}
 	output, err := parseChatContent(m.Content)
 	if err != nil {
 		return nil, err
@@ -468,23 +509,11 @@ func chatToolToResponses(m ChatMessage) ([]ResponsesInputItem, error) {
 // (role=function) into a function_call_output item. ToolCallID holds the ID
 // assigned to the matching legacy call (see legacyFunctionCallIDs); without a
 // matching call the Name field is used as call_id.
-func chatFunctionToResponses(m ChatMessage) ([]ResponsesInputItem, error) {
-	output, err := parseChatContent(m.Content)
-	if err != nil {
-		return nil, err
+func chatFunctionToResponses(m ChatMessage, preserveCacheControl bool) ([]ResponsesInputItem, error) {
+	if m.ToolCallID == "" {
+		m.ToolCallID = m.Name
 	}
-	if output == "" {
-		output = "(empty)"
-	}
-	callID := m.ToolCallID
-	if callID == "" {
-		callID = m.Name
-	}
-	return []ResponsesInputItem{{
-		Type:   "function_call_output",
-		CallID: callID,
-		Output: output,
-	}}, nil
+	return chatToolToResponses(m, preserveCacheControl)
 }
 
 // parseChatContent returns the string value of a ChatMessage Content field.
@@ -519,11 +548,11 @@ func parseChatMessageContent(raw json.RawMessage) (chatMessageContent, error) {
 	return chatMessageContent{}, fmt.Errorf("parse content as string or parts array")
 }
 
-func marshalChatInputContent(content chatMessageContent) (json.RawMessage, error) {
+func marshalChatInputContent(content chatMessageContent, preserveCacheControl bool) (json.RawMessage, error) {
 	if content.Text != nil {
 		return json.Marshal(*content.Text)
 	}
-	parts := convertChatContentPartsToResponses(content.Parts)
+	parts := convertChatContentPartsToResponses(content.Parts, preserveCacheControl)
 	if len(parts) == 0 {
 		// A nil slice marshals to JSON null, which the upstream Responses API
 		// rejects ("expected an array of objects or string, but got null").
@@ -533,13 +562,18 @@ func marshalChatInputContent(content chatMessageContent) (json.RawMessage, error
 	return json.Marshal(parts)
 }
 
-func convertChatContentPartsToResponses(parts []ChatContentPart) []ResponsesContentPart {
+func convertChatContentPartsToResponses(parts []ChatContentPart, preserveCacheControl bool) []ResponsesContentPart {
 	var responseParts []ResponsesContentPart
 	for _, p := range parts {
+		var cacheControl *AnthropicCacheControl
+		if preserveCacheControl {
+			cacheControl = p.CacheControl
+		}
 		switch p.Type {
 		case "text":
 			if p.Text != "" || len(p.PromptCacheBreakpoint) > 0 {
 				responseParts = append(responseParts, ResponsesContentPart{
+					CacheControl:          cacheControl,
 					PromptCacheBreakpoint: p.PromptCacheBreakpoint,
 					Type:                  "input_text",
 					Text:                  p.Text,
@@ -548,6 +582,7 @@ func convertChatContentPartsToResponses(parts []ChatContentPart) []ResponsesCont
 		case "image_url":
 			if p.ImageURL != nil && p.ImageURL.URL != "" && !isEmptyBase64DataURI(p.ImageURL.URL) {
 				responseParts = append(responseParts, ResponsesContentPart{
+					CacheControl:          cacheControl,
 					PromptCacheBreakpoint: p.PromptCacheBreakpoint,
 					Type:                  "input_image",
 					ImageURL:              p.ImageURL.URL,
@@ -556,6 +591,7 @@ func convertChatContentPartsToResponses(parts []ChatContentPart) []ResponsesCont
 		case "file":
 			if p.File != nil && (p.File.FileData != "" || p.File.FileID != "") {
 				responseParts = append(responseParts, ResponsesContentPart{
+					CacheControl:          cacheControl,
 					PromptCacheBreakpoint: p.PromptCacheBreakpoint,
 					Type:                  "input_file",
 					Filename:              p.File.Filename,
@@ -600,10 +636,14 @@ func stringPtr(s string) *string {
 
 // convertChatToolsToResponses maps Chat Completions tool definitions and legacy
 // function definitions to Responses API tool definitions.
-func convertChatToolsToResponses(tools []ChatTool, functions []ChatFunction) []ResponsesTool {
+func convertChatToolsToResponses(tools []ChatTool, functions []ChatFunction, preserveCacheControl bool) []ResponsesTool {
 	var out []ResponsesTool
 
 	for _, t := range tools {
+		var cacheControl *AnthropicCacheControl
+		if preserveCacheControl {
+			cacheControl = t.CacheControl
+		}
 		toolType := strings.ToLower(strings.TrimSpace(t.Type))
 		if toolType == "x_search" {
 			out = append(out, ResponsesTool{
@@ -618,18 +658,19 @@ func convertChatToolsToResponses(tools []ChatTool, functions []ChatFunction) []R
 			continue
 		}
 		if toolType == "web_search" || toolType == "code_execution" {
-			out = append(out, ResponsesTool{Type: toolType})
+			out = append(out, ResponsesTool{Type: toolType, CacheControl: cacheControl})
 			continue
 		}
 		if t.Type != "function" || t.Function == nil {
 			continue
 		}
 		rt := ResponsesTool{
-			Type:        "function",
-			Name:        t.Function.Name,
-			Description: t.Function.Description,
-			Parameters:  t.Function.Parameters,
-			Strict:      defaultStrictFalse(t.Function.Strict),
+			CacheControl: cacheControl,
+			Type:         "function",
+			Name:         t.Function.Name,
+			Description:  t.Function.Description,
+			Parameters:   t.Function.Parameters,
+			Strict:       defaultStrictFalse(t.Function.Strict),
 		}
 		out = append(out, rt)
 	}

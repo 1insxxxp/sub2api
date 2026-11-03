@@ -689,6 +689,13 @@ func (s *GeminiMessagesCompatService) SelectAccountForAIStudioEndpoints(ctx cont
 }
 
 func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Context, account *Account, body []byte) (result *ForwardResult, returnErr error) {
+	if accountContinuationShouldManage(ctx, account) {
+		return runForwardWithAccountContinuation(ctx, c, account, body, AccountContinuationMessages, accountContinuationBodyModel(body), accountContinuationBodyStream(body),
+			func(roundCtx context.Context, roundBody []byte) (*ForwardResult, error) {
+				return s.Forward(roundCtx, c, account, roundBody)
+			})
+	}
+
 	beginUpstreamResponseModelObservation(c)
 	beginGeminiImageOutputObservation(c)
 	startTime := time.Now()
@@ -1311,6 +1318,13 @@ func isGeminiSignatureRelatedError(respBody []byte) bool {
 }
 
 func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.Context, account *Account, originalModel string, action string, stream bool, body []byte) (result *ForwardResult, returnErr error) {
+	if accountContinuationShouldManage(ctx, account) && (action == "generateContent" || action == "streamGenerateContent") {
+		return runForwardWithAccountContinuation(ctx, c, account, body, AccountContinuationGemini, originalModel, stream,
+			func(roundCtx context.Context, roundBody []byte) (*ForwardResult, error) {
+				return s.ForwardNative(roundCtx, c, account, originalModel, action, stream, roundBody)
+			})
+	}
+
 	beginUpstreamResponseModelObservation(c)
 	beginGeminiImageOutputObservation(c)
 	startTime := time.Now()

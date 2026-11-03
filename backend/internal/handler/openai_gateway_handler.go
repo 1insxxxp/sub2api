@@ -30,6 +30,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 	"go.uber.org/zap"
 )
 
@@ -561,6 +562,28 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 			reqLog.Warn("openai.request_validation_failed", zap.String("reason", "previous_response_owner_mismatch"))
 			h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "previous_response_id is not available for this user")
 			return
+		}
+	}
+	// Authorization above always uses the client-visible logical response ID.
+	// Only after owner validation may routing use the final continuation ID.
+	if previousResponseID != "" {
+		groupID := int64(0)
+		if apiKey.GroupID != nil {
+			groupID = *apiKey.GroupID
+		}
+		resolved, aliasErr := h.gatewayService.ResolveOpenAIContinuationAlias(c.Request.Context(), groupID, subject.UserID, previousResponseID)
+		if aliasErr != nil {
+			h.errorResponse(c, http.StatusServiceUnavailable, "server_error", "Unable to resolve previous response")
+			return
+		}
+		if resolved != previousResponseID {
+			updated, mutationErr := sjson.SetBytes(body, "previous_response_id", resolved)
+			if mutationErr != nil {
+				h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Invalid previous response")
+				return
+			}
+			body = updated
+			previousResponseID = resolved
 		}
 	}
 	service.SetOpenAIHTTPResponseOwner(c, subject.UserID, apiKey.ID)
@@ -3211,7 +3234,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 					turnErr,
 				)
 				if turnErr != nil {
-					if result == nil || result.ImageCount <= 0 {
+					if !openAIWSInterruptedTurnHasBillableOutput(result) {
 						return
 					}
 					// cyber 命中时该 turn 的用量已由 recordCyberPolicyIfMarked(forwardErrored=true)
@@ -3416,6 +3439,13 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		}
 	}
 
+}
+
+func openAIWSInterruptedTurnHasBillableOutput(result *service.OpenAIForwardResult) bool {
+	if result == nil {
+		return false
+	}
+	return result.ImageCount > 0 || len(result.ContinuationResults) > 0 && result.DeliveredOutputTokens != nil && *result.DeliveredOutputTokens > 0
 }
 
 func (h *OpenAIGatewayHandler) recoverResponsesPanic(c *gin.Context, streamStarted *bool) {

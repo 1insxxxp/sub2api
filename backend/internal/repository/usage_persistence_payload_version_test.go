@@ -88,7 +88,7 @@ func TestUsagePersistencePayloadVersion1RejectsNewMetadata(t *testing.T) {
 }
 
 func TestUsagePersistencePayloadUnsupportedVersionIsNotAcknowledged(t *testing.T) {
-	for _, version := range []int{0, 4, 99} {
+	for _, version := range []int{0, 4, 6, 99} {
 		t.Run(fmt.Sprint(version), func(t *testing.T) {
 			raw := []byte(fmt.Sprintf(`{"version":%d,"usage":{"request_id":"future","api_key_id":2,"user_id":1,"account_id":3,"created_at":"2026-10-26T00:00:00Z"}}`, version))
 			_, err := decodeUsagePersistencePayload(raw, "future", 2)

@@ -193,6 +193,18 @@
         </p>
       </div>
 
+      <section class="space-y-3 border-t border-gray-200 pt-4 dark:border-dark-600">
+        <label class="block">
+          <span class="input-label">{{ t('admin.accounts.antiTruncation.title') }}</span>
+          <select v-model="antiTruncationMode" class="input" data-testid="anti-truncation-bulk-mode">
+            <option value="unchanged">{{ t('admin.accounts.antiTruncation.bulkUnchanged') }}</option>
+            <option value="set">{{ t('admin.accounts.antiTruncation.bulkSet') }}</option>
+            <option value="disable">{{ t('admin.accounts.antiTruncation.bulkDisable') }}</option>
+          </select>
+        </label>
+        <AccountAntiTruncationEditor v-if="antiTruncationMode === 'set'" v-model="accountAntiTruncation" :models="antiTruncationModels" />
+      </section>
+
       <!-- Base URL (API Key only) -->
       <div class="border-t border-gray-200 pt-4 dark:border-dark-600">
         <div class="mb-3 flex items-center justify-between">
@@ -1474,6 +1486,8 @@
 </template>
 
 <script setup lang="ts">
+import AccountAntiTruncationEditor from '@/components/account/AccountAntiTruncationEditor.vue'
+import { validateAccountAntiTruncation, type AccountAntiTruncationPolicy } from '@/utils/accountAntiTruncation'
 import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
@@ -1553,6 +1567,9 @@ const allTargetsGrok = computed(
     targetSelectedPlatforms.value.length > 0 &&
     targetSelectedPlatforms.value.every((p) => p === 'grok')
 )
+const antiTruncationMode = ref<'unchanged' | 'set' | 'disable'>('unchanged')
+const accountAntiTruncation = ref<AccountAntiTruncationPolicy | null>({ version: 1, rules: [] })
+const antiTruncationModels = computed(() => [...allowedModels.value, ...modelMappings.value.map(row => row.from)])
 const isMixedPlatform = computed(() => targetSelectedPlatforms.value.length > 1)
 
 const allOpenAIPassthroughCapable = computed(() => {
@@ -2121,6 +2138,12 @@ const buildUpdatePayload = (): Record<string, unknown> | null => {
     credentialsChanged = true
   }
 
+  if (antiTruncationMode.value !== 'unchanged') {
+    ensureExtra().anti_truncation = antiTruncationMode.value === 'disable'
+      ? { version: 1, rules: [] }
+      : JSON.parse(JSON.stringify(accountAntiTruncation.value || { version: 1, rules: [] }))
+  }
+
   // RPM limit settings (写入 extra 字段)
   if (enableRpmLimit.value) {
     const extra = ensureExtra()
@@ -2196,12 +2219,18 @@ const preCheckMixedChannelRisk = async (built: Record<string, unknown>): Promise
 }
 
 const handleSubmit = async () => {
+  const policyError = antiTruncationMode.value === 'set' ? validateAccountAntiTruncation(accountAntiTruncation.value) : null
+  if (policyError) {
+    appStore.showError(t(`admin.accounts.antiTruncation.${policyError}`))
+    return
+  }
   if (targetMode.value === 'selected' && props.accountIds.length === 0) {
     appStore.showError(t('admin.accounts.bulkEdit.noSelection'))
     return
   }
 
   const hasAnyFieldEnabled =
+    antiTruncationMode.value !== 'unchanged' ||
     enableBaseUrl.value ||
     enableOpenAIPassthrough.value ||
     enableOpenAIFlattenNamespaces.value ||
@@ -2352,6 +2381,8 @@ watch(
   () => props.show,
   (newShow) => {
     if (!newShow) {
+      antiTruncationMode.value = 'unchanged'
+      accountAntiTruncation.value = { version: 1, rules: [] }
       // Reset all enable flags
       enableBaseUrl.value = false
       enableModelRestriction.value = false

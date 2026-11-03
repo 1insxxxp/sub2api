@@ -81,6 +81,33 @@ function mountModal(extraProps: Record<string, unknown> = {}) {
 }
 
 describe('BulkEditAccountModal', () => {
+  it('explicitly disables anti-truncation for all selected accounts', async () => {
+    const wrapper = mountModal()
+    await wrapper.get('[data-testid="anti-truncation-bulk-mode"]').setValue('disable')
+    await wrapper.get('form').trigger('submit.prevent')
+    await flushPromises()
+    expect(vi.mocked(adminAPI.accounts.bulkUpdate).mock.calls[0]?.[1]).toMatchObject({ extra: { anti_truncation: { version: 1, rules: [] } } })
+  })
+
+  it('keeps anti-truncation unchanged by default when another setting is updated', async () => {
+    const wrapper = mountModal()
+    await wrapper.get('#bulk-edit-priority-enabled').setValue(true)
+    await wrapper.get('form').trigger('submit.prevent')
+    await flushPromises()
+    expect(vi.mocked(adminAPI.accounts.bulkUpdate).mock.calls[0]?.[1]).not.toHaveProperty('extra.anti_truncation')
+  })
+
+  it('bulk sets exact per-model rules without rewriting model mappings', async () => {
+    const wrapper = mountModal()
+    await wrapper.get('[data-testid="anti-truncation-bulk-mode"]').setValue('set')
+    await wrapper.get('[data-testid="anti-truncation-add-rule"]').trigger('click')
+    await wrapper.get('[data-testid="anti-truncation-model-0"]').setValue('long-gemini')
+    await wrapper.get('form').trigger('submit.prevent')
+    await flushPromises()
+    const payload = vi.mocked(adminAPI.accounts.bulkUpdate).mock.calls[0]?.[1] as any
+    expect(payload?.credentials).toBeUndefined()
+    expect(payload?.extra?.anti_truncation?.rules).toEqual([{ model: 'long-gemini', enabled: true, max_rounds: 1, max_output_tokens: 0, max_duration_seconds: 180 }])
+  })
   beforeEach(() => {
     vi.mocked(adminAPI.accounts.bulkUpdate).mockReset()
     vi.mocked(adminAPI.accounts.checkMixedChannelRisk).mockReset()

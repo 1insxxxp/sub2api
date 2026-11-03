@@ -330,6 +330,32 @@ function mountModal(account = buildAccount(), renderGroupSelector = false) {
 }
 
 describe('EditAccountModal', () => {
+  it('takes over anti-truncation on explicit editing without changing mappings', async () => {
+    const account = buildAccount()
+    updateAccountMock.mockReset().mockResolvedValue(account)
+    checkMixedChannelRiskMock.mockReset().mockResolvedValue({ has_risk: false })
+    const wrapper = mountModal(account)
+    await wrapper.get('[data-testid="anti-truncation-account-enabled"]').setValue(true)
+    await wrapper.get('[data-testid="anti-truncation-add-rule"]').trigger('click')
+    await wrapper.get('[data-testid="anti-truncation-model-0"]').setValue('long-public')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.anti_truncation).toEqual({
+      version: 1, rules: [{ model: 'long-public', enabled: true, max_rounds: 1, max_output_tokens: 0, max_duration_seconds: 180 }]
+    })
+    expect(updateAccountMock.mock.calls[0]?.[1]?.credentials?.model_mapping).toEqual(account.credentials.model_mapping)
+  })
+
+  it('retains explicit empty account ownership when all rules are removed', async () => {
+    const account = buildAccount()
+    account.extra.anti_truncation = { version: 1, rules: [{ model: 'long-public', enabled: true }] }
+    updateAccountMock.mockReset().mockResolvedValue(account)
+    checkMixedChannelRiskMock.mockReset().mockResolvedValue({ has_risk: false })
+    const wrapper = mountModal(account)
+    await wrapper.get('[data-testid="anti-truncation-remove-rule-0"]').trigger('click')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.anti_truncation).toEqual({ version: 1, rules: [] })
+    expect(account.extra.anti_truncation.rules).toHaveLength(1)
+  })
   beforeEach(() => {
     authIsSimpleMode.value = true
   })

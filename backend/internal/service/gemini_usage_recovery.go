@@ -60,6 +60,29 @@ func geminiUsageLedgerOrigin(rawURL string) (string, bool) {
 // RecoverGeminiUsage fills missing provider measurements without changing any
 // wallet, quota, dedup, or stored usage row.
 func (s *GatewayService) RecoverGeminiUsage(ctx context.Context, input *RecordUsageInput) (bool, error) {
+	if input != nil && input.Result != nil && len(input.Result.ContinuationResults) > 0 {
+		if err := validateForwardContinuationResults(input.Result); err != nil {
+			return false, err
+		}
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		sharedCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), geminiUsageRecoveryTimeout)
+		defer cancel()
+		recovered := false
+		var firstErr error
+		for _, round := range input.Result.ContinuationResults {
+			child := *input
+			child.Result = round
+			ok, err := s.RecoverGeminiUsage(sharedCtx, &child)
+			recovered = recovered || ok
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
+		refreshForwardContinuationUsage(input.Result)
+		return recovered, firstErr
+	}
 	if input == nil || input.Account == nil || !NeedsUsageMeasurementReview(input.Result) {
 		return false, nil
 	}

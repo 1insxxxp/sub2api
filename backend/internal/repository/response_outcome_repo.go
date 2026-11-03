@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -35,10 +36,13 @@ func (r *usageLogRepository) upsertResponseOutcome(ctx context.Context, log *ser
 	}
 	// Preserve the legacy default for collector snapshots, but scalar-only
 	// counting audit does not prove that any response evidence was collected.
-	if log.Outcome != nil && outcome.CollectorVersion <= 0 && !responseOutcomeHasInputCountingAudit(&outcome) {
+	if log.Outcome != nil && outcome.CollectorVersion <= 0 && !responseOutcomeHasInputCountingAudit(&outcome) && len(outcome.ContinuationUsage) == 0 {
 		outcome.CollectorVersion = service.ResponseOutcomeCollectorVersion
 	}
 
+	if err := service.ValidateContinuationUsageAudit(outcome.ContinuationUsage); err != nil {
+		return err
+	}
 	query := `
 		INSERT INTO usage_response_outcomes (
 			usage_log_id, request_id, api_key_id, user_id, account_id, group_id,
@@ -115,6 +119,16 @@ func (r *usageLogRepository) upsertResponseOutcome(ctx context.Context, log *ser
 	}
 	if affected == 0 {
 		return fmt.Errorf("usage log not found for response outcome request_id=%q api_key_id=%d", requestID, log.APIKeyID)
+	}
+	if len(outcome.ContinuationUsage) > 0 {
+		raw, err := json.Marshal(outcome.ContinuationUsage)
+		if err != nil {
+			return fmt.Errorf("encode continuation audit: %w", err)
+		}
+		_, err = r.sql.ExecContext(ctx, `UPDATE usage_response_outcomes SET continuation_usage=$3::jsonb WHERE request_id=$1 AND api_key_id=$2`, requestID, log.APIKeyID, string(raw))
+		if err != nil {
+			return fmt.Errorf("persist continuation audit: %w", err)
+		}
 	}
 	return nil
 }
