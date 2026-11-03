@@ -10,7 +10,7 @@
       {{ t('admin.accounts.antiTruncation.title') }}
     </label>
     <p class="input-hint">{{ t('admin.accounts.antiTruncation.hint') }}</p>
-    <p v-if="modelValue === null" class="input-hint">{{ t('admin.accounts.antiTruncation.legacyHint') }}</p>
+    <p v-if="modelValue === null" class="input-hint">{{ t('admin.accounts.antiTruncation.unconfiguredHint') }}</p>
     <template v-if="accountEnabled">
       <p class="input-hint">{{ t('admin.accounts.antiTruncation.scopeHint') }}</p>
       <div v-for="(rule, index) in modelValue?.rules || []" :key="index" class="space-y-3 rounded-lg border border-gray-200 bg-gray-50/40 p-3 dark:border-dark-600 dark:bg-dark-800/40">

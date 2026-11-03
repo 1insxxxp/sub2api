@@ -15,8 +15,7 @@ export function accountAntiTruncationFromExtra(extra: unknown): AccountAntiTrunc
   if (!extra || typeof extra !== 'object' || !('anti_truncation' in extra)) return null
   const raw = extra.anti_truncation
   if (!raw || typeof raw !== 'object' || !('version' in raw) || raw.version !== 1 || !('rules' in raw) || !Array.isArray(raw.rules)) {
-    // Existing malformed policy is fail-closed on the server. Keep ownership
-    // when displayed rather than silently falling back to legacy group rules.
+    // Display malformed saved rules as disabled, matching server behavior.
     return { version: 1, rules: [] }
   }
   if (Object.keys(raw).some(key => !['version', 'rules'].includes(key)) || raw.rules.some(rule =>

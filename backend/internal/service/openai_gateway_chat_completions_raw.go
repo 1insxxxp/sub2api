@@ -83,10 +83,6 @@ func (s *OpenAIGatewayService) forwardAsRawChatCompletionsWithStartTime(
 		return nil, fmt.Errorf("missing model in request")
 	}
 	clientStream := gjson.GetBytes(body, "stream").Bool()
-	antiTruncationPolicy, antiTruncationEnabled := RawChatAntiTruncationPolicyFromContext(ctx)
-	if antiTruncationEnabled {
-		antiTruncationPolicy.MaxOutputTokens = effectiveRawChatOutputBudget(body, antiTruncationPolicy.MaxOutputTokens)
-	}
 
 	// 2. Resolve model mapping (same as ForwardAsChatCompletions)
 	billingModel := resolveOpenAIForwardModel(account, originalModel, defaultMappedModel)
@@ -182,12 +178,6 @@ func (s *OpenAIGatewayService) forwardAsRawChatCompletionsWithStartTime(
 		if usageErr != nil {
 			return nil, fmt.Errorf("enable stream usage: %w", usageErr)
 		}
-		if antiTruncationEnabled {
-			upstreamBody, usageErr = clampRawChatOutputTokens(upstreamBody, antiTruncationPolicy.MaxOutputTokens)
-			if usageErr != nil {
-				return nil, fmt.Errorf("clamp anti-truncation output tokens: %w", usageErr)
-			}
-		}
 	}
 	if account.Platform == PlatformGrok {
 		upstreamBody, err = stripGrokChatPromptCacheKey(upstreamBody)
@@ -239,9 +229,6 @@ func (s *OpenAIGatewayService) forwardAsRawChatCompletionsWithStartTime(
 	chatCapture.evidence.ExtraUsage = bridgeUsage
 	c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), openAIChatCaptureKey{}, chatCapture))
 	upstreamCtx, releaseUpstreamCtx := detachUpstreamContext(ctx)
-	if antiTruncationEnabled && clientStream && rawChatContinuationAllowed(upstreamBody) {
-		upstreamCtx, releaseUpstreamCtx = withRawChatContinuationDeadline(ctx, antiTruncationPolicy, startTime)
-	}
 	defer releaseUpstreamCtx()
 	resp, err := s.sendCCUpstreamRequest(upstreamCtx, c, account, targetURL, upstreamBody, clientStream, token, customUA, grokCacheIdentity)
 	if err != nil {
@@ -320,17 +307,7 @@ func (s *OpenAIGatewayService) forwardAsRawChatCompletionsWithStartTime(
 	// 8. Forward response
 	var forwardErr error
 	if clientStream {
-		var continueRequest func(context.Context, string, int) (*http.Response, error)
-		if antiTruncationEnabled && rawChatContinuationAllowed(upstreamBody) {
-			continueRequest = func(continuationCtx context.Context, assistantText string, remainingOutputTokens int) (*http.Response, error) {
-				continuedBody, buildErr := buildRawChatContinuationBody(upstreamBody, assistantText, remainingOutputTokens)
-				if buildErr != nil {
-					return nil, fmt.Errorf("build continuation request: %w", buildErr)
-				}
-				return s.sendCCUpstreamRequest(continuationCtx, c, account, targetURL, continuedBody, true, token, customUA, grokCacheIdentity)
-			}
-		}
-		result, forwardErr = s.streamRawChatCompletions(c, resp, account, originalModel, billingModel, upstreamModel, reasoningEffort, serviceTier, startTime, len(body), antiTruncationPolicy, continueRequest)
+		result, forwardErr = s.streamRawChatCompletions(c, resp, account, originalModel, billingModel, upstreamModel, reasoningEffort, serviceTier, startTime, len(body), domain.AntiTruncationPolicy{}, nil)
 	} else {
 		result, forwardErr = s.bufferRawChatCompletions(c, resp, account, originalModel, billingModel, upstreamModel, reasoningEffort, serviceTier, startTime)
 	}

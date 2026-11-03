@@ -3,7 +3,7 @@
     <div class="flex items-start justify-between gap-3">
       <div>
         <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('admin.groups.form.modelAliases') }}</h4>
-        <p class="input-hint">{{ t('admin.accounts.antiTruncation.groupHint') }}</p>
+        <p class="input-hint">{{ t('admin.groups.form.modelAliasesHint') }}</p>
       </div>
       <button type="button" class="btn btn-secondary shrink-0" @click="addAlias">{{ t('admin.groups.form.addModelAlias') }}</button>
     </div>
@@ -19,7 +19,6 @@
         </div>
         <button type="button" class="btn btn-secondary self-end" :aria-label="t('admin.groups.form.removeModelAlias')" @click="removeAlias(index)">{{ t('admin.groups.form.removeModelAlias') }}</button>
       </div>
-      <p v-if="row.anti_truncation.enabled" class="input-hint">{{ t('admin.accounts.antiTruncation.groupLegacyHint') }}</p>
     </div>
   </section>
 </template>

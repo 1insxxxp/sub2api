@@ -11,7 +11,7 @@ import (
 
 func TestGroupModelAliasesAuthSnapshotRoundTrip(t *testing.T) {
 	svc := &APIKeyService{}
-	aliases := []domain.ModelAlias{{Alias: "claude-long", UpstreamModel: "claude-opus-4-6", AntiTruncation: domain.AntiTruncationPolicy{Enabled: true, MaxRounds: 2, MaxDurationSeconds: 180}}}
+	aliases := []domain.ModelAlias{{Alias: "claude-long", UpstreamModel: "claude-opus-4-6"}}
 	key := &APIKey{ID: 1, UserID: 2, User: &User{ID: 2}, Group: &Group{ID: 3, ModelAliases: aliases}}
 	snapshot := svc.snapshotFromAPIKey(context.Background(), key)
 	raw, err := json.Marshal(snapshot)

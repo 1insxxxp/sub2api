@@ -76,13 +76,16 @@ func TestGatewayChatContinuationFailureRetainsPartialUsageOnce(t *testing.T) {
 			groupID := int64(9700)
 			group := &service.Group{
 				ID: groupID, Hydrated: true, Platform: service.PlatformAnthropic, Status: service.StatusActive, RateMultiplier: 1,
-				ModelAliases: []domain.ModelAlias{{Alias: "story-continue", UpstreamModel: "claude-sonnet-4-5", AntiTruncation: domain.AntiTruncationPolicy{Enabled: true, MaxRounds: 1, MaxDurationSeconds: 30}}},
+				ModelAliases: []domain.ModelAlias{{Alias: "story-continue", UpstreamModel: "claude-sonnet-4-5"}},
 			}
 			account := &service.Account{
 				ID: 9701, Platform: service.PlatformAnthropic, Type: service.AccountTypeAPIKey,
 				Status: service.StatusActive, Schedulable: true, Concurrency: 1,
 				Credentials:   map[string]any{"api_key": "local-test-only", "base_url": "https://api.anthropic.com"},
 				AccountGroups: []service.AccountGroup{{AccountID: 9701, GroupID: groupID}},
+				Extra: map[string]any{service.AccountExtraAntiTruncation: map[string]any{"version": 1, "rules": []any{
+					map[string]any{"model": "story-continue", "enabled": true, "max_rounds": 1, "max_duration_seconds": 30},
+				}}},
 			}
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()

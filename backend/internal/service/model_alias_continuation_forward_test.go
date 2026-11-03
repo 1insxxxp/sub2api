@@ -10,11 +10,34 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/domain"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/openai_compat"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 )
+
+func rawChatCompletionsTestAccount() *Account {
+	return &Account{
+		ID:          101,
+		Name:        "raw-openai-apikey",
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeAPIKey,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"api_key":  "sk-test",
+			"base_url": "http://upstream.example",
+		},
+	}
+}
+
+func forceChatMessagesFallbackAccount() *Account {
+	account := rawChatCompletionsTestAccount()
+	account.Extra = map[string]any{
+		openai_compat.ExtraKeyResponsesMode: string(openai_compat.ResponsesSupportModeForceChatCompletions),
+	}
+	return account
+}
 
 // Exercise the full outbound HTTP pipeline, including credentials and model
 // rewriting, rather than only invoking the continuation parser callback.
@@ -55,17 +78,21 @@ func TestModelAliasContinuationFullHTTPForward(t *testing.T) {
 			}))
 			defer upstream.Close()
 
-			group := &Group{ModelAliases: []domain.ModelAlias{{Alias: "story-continue", UpstreamModel: "gpt-5.4", AntiTruncation: domain.AntiTruncationPolicy{Enabled: true, MaxRounds: 1, MaxDurationSeconds: 30}}}}
-			account := &Account{ID: 101, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Concurrency: 1, Credentials: map[string]any{"api_key": "test-local-only", "base_url": upstream.URL}}
+			group := &Group{ModelAliases: []domain.ModelAlias{{Alias: "story-continue", UpstreamModel: "gpt-5.4"}}}
+			account := forceChatMessagesFallbackAccount()
+			account.ID = 101
+			account.Credentials = map[string]any{"api_key": "test-local-only", "base_url": upstream.URL}
+			configureContinuationBudgetTestAccount(account, "story-continue", 0)
 			transport := &aliasContinuationHTTPTransport{}
 			svc := &OpenAIGatewayService{cfg: &config.Config{Security: config.SecurityConfig{URLAllowlist: config.URLAllowlistConfig{AllowInsecureHTTP: true, AllowPrivateHosts: true}}}, httpUpstream: transport}
 			body := []byte(`{"model":"` + requestedModel + `","stream":true,"max_tokens":100000,"messages":[{"role":"user","content":"question"}]}`)
 			recorder := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(recorder)
 			c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(body))
-			ctx := WithGroupAliasRawChatAntiTruncationPolicy(c.Request.Context(), group, requestedModel)
-			target, _ := group.ResolveModelAlias(requestedModel)
-			result, err := svc.forwardAsRawChatCompletions(ctx, c, account, body, target)
+			ctx := WithGatewayPublicModel(c.Request.Context(), requestedModel)
+			target, matched := group.ResolveModelAlias(requestedModel)
+			require.Equal(t, requestedModel == "story-continue", matched)
+			result, err := svc.ForwardAsChatCompletions(ctx, c, account, body, "", target)
 			require.NoError(t, err)
 			require.Equal(t, http.StatusOK, recorder.Code)
 			require.Equal(t, requestedModel, result.Model)
@@ -123,16 +150,18 @@ func TestModelAliasContinuationNeverExceedsClientOutputBudget(t *testing.T) {
 			}))
 			defer upstream.Close()
 
-			group := &Group{ModelAliases: []domain.ModelAlias{{Alias: "story-continue", UpstreamModel: "gpt-5.4", AntiTruncation: domain.AntiTruncationPolicy{Enabled: true, MaxRounds: 1, MaxOutputTokens: policyCap, MaxDurationSeconds: 30}}}}
-			account := &Account{ID: 101, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Concurrency: 1, Credentials: map[string]any{"api_key": "test-local-only", "base_url": upstream.URL}}
+			account := forceChatMessagesFallbackAccount()
+			account.ID = 101
+			account.Credentials = map[string]any{"api_key": "test-local-only", "base_url": upstream.URL}
+			configureContinuationBudgetTestAccount(account, "story-continue", policyCap)
 			transport := &aliasContinuationHTTPTransport{}
 			svc := &OpenAIGatewayService{cfg: &config.Config{Security: config.SecurityConfig{URLAllowlist: config.URLAllowlistConfig{AllowInsecureHTTP: true, AllowPrivateHosts: true}}}, httpUpstream: transport}
 			body := []byte(`{"model":"story-continue","stream":true,"max_tokens":20,"messages":[{"role":"user","content":"question"}]}`)
 			recorder := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(recorder)
 			c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(body))
-			ctx := WithGroupAliasRawChatAntiTruncationPolicy(c.Request.Context(), group, "story-continue")
-			result, err := svc.forwardAsRawChatCompletions(ctx, c, account, body, "gpt-5.4")
+			ctx := WithGatewayPublicModel(c.Request.Context(), "story-continue")
+			result, err := svc.ForwardAsChatCompletions(ctx, c, account, body, "", "gpt-5.4")
 			require.NoError(t, err)
 			require.Equal(t, 1, result.AntiTruncationRounds)
 			require.Len(t, bodies, 2)

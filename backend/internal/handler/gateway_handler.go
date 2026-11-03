@@ -195,7 +195,6 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		reqStream = parsedReq.Stream
 	}
 	publicModel, routeModel := resolveGroupModelRoute(apiKey.Group, reqModel)
-	c.Request = c.Request.WithContext(service.WithGroupAliasRawChatAntiTruncationPolicy(c.Request.Context(), apiKey.Group, reqModel))
 	if routeModel != publicModel {
 		c.Request = c.Request.WithContext(service.WithGatewayPublicModel(c.Request.Context(), publicModel))
 	}
@@ -1103,7 +1102,6 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 						currentAPIKey = fallbackAPIKey
 						currentSubscription = nil
 						publicModel, routeModel = resolveGroupModelRoute(fallbackGroup, reqModel)
-						c.Request = c.Request.WithContext(service.WithGroupAliasRawChatAntiTruncationPolicy(c.Request.Context(), fallbackGroup, reqModel))
 						channelMapping, _ = h.gatewayService.ResolveChannelMappingAndRestrict(c.Request.Context(), currentAPIKey.GroupID, routeModel)
 						c.Request = c.Request.WithContext(service.WithGatewayPublicModel(c.Request.Context(), publicModel))
 						fallbackUsed = true

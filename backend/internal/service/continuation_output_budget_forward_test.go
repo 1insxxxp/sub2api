@@ -1,7 +1,6 @@
 package service
 
 import (
-	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -9,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -52,6 +50,15 @@ func continuationBudgetAnthropicResponse(content, stop string, input, output int
 	return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": {"text/event-stream"}}, Body: io.NopCloser(strings.NewReader(anthropicTextStream(content, stop, input, output)))}
 }
 
+func configureContinuationBudgetTestAccount(account *Account, model string, maxOutputTokens int) {
+	if account.Extra == nil {
+		account.Extra = make(map[string]any)
+	}
+	account.Extra[AccountExtraAntiTruncation] = map[string]any{"version": 1, "rules": []any{
+		map[string]any{"model": model, "enabled": true, "max_rounds": 1, "max_output_tokens": maxOutputTokens, "max_duration_seconds": 30},
+	}}
+}
+
 func TestChatToAnthropicContinuationHonorsOriginalClientOutputBudget(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	for _, policyCap := range []int{0, 100} {
@@ -67,7 +74,8 @@ func TestChatToAnthropicContinuationHonorsOriginalClientOutputBudget(t *testing.
 			recorder := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(recorder)
 			c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(string(body)))
-			ctx := WithRawChatAntiTruncationPolicy(context.Background(), domain.AntiTruncationPolicy{Enabled: true, MaxRounds: 1, MaxOutputTokens: policyCap})
+			configureContinuationBudgetTestAccount(account, "claude-sonnet-4-5", policyCap)
+			ctx := c.Request.Context()
 			result, err := svc.ForwardAsChatCompletions(ctx, c, account, body, nil)
 			require.NoError(t, err)
 			require.Equal(t, 1, result.AntiTruncationRounds)
@@ -91,7 +99,8 @@ func TestChatToAnthropicDoesNotTreatConvertedDefaultAsClientCumulativeCap(t *tes
 	recorder := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(recorder)
 	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(string(body)))
-	ctx := WithRawChatAntiTruncationPolicy(context.Background(), domain.AntiTruncationPolicy{Enabled: true, MaxRounds: 1})
+	configureContinuationBudgetTestAccount(account, "claude-sonnet-4-5", 0)
+	ctx := c.Request.Context()
 	result, err := svc.ForwardAsChatCompletions(ctx, c, account, body, nil)
 	require.NoError(t, err)
 	require.Equal(t, 1, result.AntiTruncationRounds)
@@ -110,12 +119,12 @@ func TestAnthropicMessagesChatFallbackContinuationHonorsOriginalClientOutputBudg
 			}}
 			cfg := &config.Config{Security: config.SecurityConfig{URLAllowlist: config.URLAllowlistConfig{AllowInsecureHTTP: true, AllowPrivateHosts: true}}}
 			svc := &OpenAIGatewayService{cfg: cfg, httpUpstream: upstream}
-			account := &Account{ID: 101, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Concurrency: 1, Credentials: map[string]any{"api_key": "test-local-only", "base_url": "https://api.openai.com"}}
-			group := &Group{ModelAliases: []domain.ModelAlias{{Alias: "public-alias", UpstreamModel: "gpt-5.4", AntiTruncation: domain.AntiTruncationPolicy{Enabled: true, MaxRounds: 1, MaxOutputTokens: policyCap}}}}
+			account := forceChatMessagesFallbackAccount()
+			configureContinuationBudgetTestAccount(account, "public-alias", policyCap)
 			c, _ := gin.CreateTestContext(httptest.NewRecorder())
 			c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(`{"model":"public-alias","max_tokens":20,"stream":true,"messages":[{"role":"user","content":"question"}]}`))
-			c.Set("api_key", &APIKey{Group: group})
-			result, err := svc.forwardAnthropicViaRawChatCompletions(c.Request.Context(), c, account, []byte(`{"model":"public-alias","max_tokens":20,"stream":true,"messages":[{"role":"user","content":"question"}]}`), "gpt-5.4")
+			ctx := WithGatewayPublicModel(c.Request.Context(), "public-alias")
+			result, err := svc.ForwardAsAnthropic(ctx, c, account, []byte(`{"model":"public-alias","max_tokens":20,"stream":true,"messages":[{"role":"user","content":"question"}]}`), "", "gpt-5.4")
 			require.NoError(t, err)
 			require.Equal(t, 1, result.AntiTruncationRounds)
 			require.Len(t, upstream.bodies, 2)

@@ -2,9 +2,11 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
 
 func anthropicTextStream(text, stopReason string, inputTokens, outputTokens int) string {
@@ -148,4 +151,52 @@ func TestHandleCCStreamingFromAnthropicUsesTextEstimateForOutputBudgetWithoutUsa
 		require.False(t, called)
 		require.Zero(t, result.AntiTruncationRounds)
 	})
+}
+
+func buildAnthropicChatContinuationBody(body []byte, assistantText string, remainingOutputTokens int) ([]byte, error) {
+	messages := gjson.GetBytes(body, "messages").Array()
+	assistant, err := json.Marshal(map[string]any{"role": "assistant", "content": assistantText})
+	if err != nil {
+		return nil, err
+	}
+	updated, err := sjson.SetRawBytes(body, "messages."+strconv.Itoa(len(messages)), assistant)
+	if err != nil {
+		return nil, err
+	}
+	user, err := json.Marshal(map[string]any{
+		"role":    "user",
+		"content": "Continue the response from where you left off. Do not repeat any earlier text.",
+	})
+	if err != nil {
+		return nil, err
+	}
+	updated, err = sjson.SetRawBytes(updated, "messages."+strconv.Itoa(len(messages)+1), user)
+	if err != nil {
+		return nil, err
+	}
+	if remainingOutputTokens > 0 {
+		updated, err = sjson.SetBytes(updated, "max_tokens", continuationRoundOutputLimit(body, "max_tokens", remainingOutputTokens))
+	}
+	return updated, err
+}
+
+func anthropicChatContinuationAllowed(body []byte) bool {
+	if !rawChatContinuationAllowed(body) || len(gjson.GetBytes(body, "tools").Array()) > 0 || len(gjson.GetBytes(body, "functions").Array()) > 0 {
+		return false
+	}
+	for _, message := range gjson.GetBytes(body, "messages").Array() {
+		content := message.Get("content")
+		if content.Type == gjson.String || !content.Exists() || content.Type == gjson.Null {
+			continue
+		}
+		if !content.IsArray() {
+			return false
+		}
+		for _, part := range content.Array() {
+			if part.Get("type").String() != "text" {
+				return false
+			}
+		}
+	}
+	return true
 }

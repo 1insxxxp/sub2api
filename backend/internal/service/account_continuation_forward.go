@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
 )
@@ -27,7 +26,7 @@ func accountContinuationShouldManage(ctx context.Context, account *Account) bool
 			return false
 		}
 	}
-	_, configured := account.Extra["anti_truncation"]
+	_, configured := account.Extra[AccountExtraAntiTruncation]
 	return configured
 }
 
@@ -82,16 +81,12 @@ func runAccountContinuation[T any](
 	if managed, _ := ctx.Value(accountContinuationManagedKey{}).(bool); managed || c == nil || c.Request == nil {
 		return forward(ctx, body)
 	}
-	legacy, _ := RawChatAntiTruncationPolicyFromContext(ctx)
 	requestedModel := gatewayPublicModel(ctx, routeModel)
-	policy, configured := ResolveAccountAntiTruncationPolicy(account, requestedModel, routeModel, legacy)
+	policy, configured := ResolveAccountAntiTruncationPolicy(account, requestedModel, routeModel)
 	if !configured {
-		// Existing group policies retain their exact established behavior until
-		// an administrator explicitly switches this account to versioned rules.
 		return forward(ctx, body)
 	}
 	ctx = context.WithValue(ctx, accountContinuationManagedKey{}, true)
-	ctx = WithRawChatAntiTruncationPolicy(ctx, domain.AntiTruncationPolicy{})
 	originalRequest := c.Request
 	c.Request = c.Request.WithContext(ctx)
 	defer func() { c.Request = originalRequest }()

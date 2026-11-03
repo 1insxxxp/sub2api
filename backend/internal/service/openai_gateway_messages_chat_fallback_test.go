@@ -18,14 +18,6 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-func forceChatMessagesFallbackAccount() *Account {
-	account := rawChatCompletionsTestAccount()
-	account.Extra = map[string]any{
-		openai_compat.ExtraKeyResponsesMode: string(openai_compat.ResponsesSupportModeForceChatCompletions),
-	}
-	return account
-}
-
 // errTailReader yields the given data, then returns err instead of io.EOF,
 // simulating an upstream connection that breaks mid-stream.
 type errTailReader struct {

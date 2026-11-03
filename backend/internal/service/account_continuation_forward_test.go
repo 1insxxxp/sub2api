@@ -12,7 +12,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
@@ -175,33 +174,6 @@ func TestAccountContinuationForwardChatCombinesRounds(t *testing.T) {
 	require.Equal(t, 1, strings.Count(recorder.Body.String(), "[DONE]"))
 	require.Contains(t, recorder.Body.String(), "alpha")
 	require.Contains(t, recorder.Body.String(), "beta")
-}
-
-func TestAccountContinuationForwardExplicitDisableOverridesLegacy(t *testing.T) {
-	c, _ := accountContinuationTestContext()
-	ctx := WithRawChatAntiTruncationPolicy(c.Request.Context(), domain.AntiTruncationPolicy{Enabled: true})
-	c.Request = c.Request.WithContext(ctx)
-	_, err := runForwardWithAccountContinuation(ctx, c, accountContinuationTestAccount(false), []byte(`{"model":"long-text","stream":true,"messages":[]}`), AccountContinuationChat, "long-text", true,
-		func(ctx context.Context, _ []byte) (*ForwardResult, error) {
-			_, enabled := RawChatAntiTruncationPolicyFromContext(ctx)
-			require.False(t, enabled)
-			_, enabled = RawChatAntiTruncationPolicyFromContext(c.Request.Context())
-			require.False(t, enabled)
-			return &ForwardResult{}, nil
-		})
-	require.NoError(t, err)
-}
-
-func TestAccountContinuationForwardLeavesLegacyPathUntouched(t *testing.T) {
-	c, _ := accountContinuationTestContext()
-	ctx := WithRawChatAntiTruncationPolicy(c.Request.Context(), domain.AntiTruncationPolicy{Enabled: true})
-	_, err := runForwardWithAccountContinuation(ctx, c, &Account{ID: 51}, []byte(`{"model":"long-text","messages":[]}`), AccountContinuationChat, "long-text", false,
-		func(ctx context.Context, _ []byte) (*ForwardResult, error) {
-			_, enabled := RawChatAntiTruncationPolicyFromContext(ctx)
-			require.True(t, enabled)
-			return &ForwardResult{}, nil
-		})
-	require.NoError(t, err)
 }
 
 func TestAccountContinuationForwardGeminiBufferedCombinesBeforeJSON(t *testing.T) {

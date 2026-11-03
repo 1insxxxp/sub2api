@@ -2,6 +2,7 @@ package domain
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -27,7 +28,7 @@ func TestNormalizeModelAliasesRejectsDuplicateAndResolves(t *testing.T) {
 }
 
 func TestModelAliasesJSONRoundTripAndResolve(t *testing.T) {
-	in := []ModelAlias{{Alias: "fast", UpstreamModel: "claude-sonnet", AntiTruncation: AntiTruncationPolicy{Enabled: true, MaxRounds: 2}}}
+	in := []ModelAlias{{Alias: "fast", UpstreamModel: "claude-sonnet"}}
 	raw, err := json.Marshal(in)
 	if err != nil {
 		t.Fatal(err)
@@ -36,7 +37,7 @@ func TestModelAliasesJSONRoundTripAndResolve(t *testing.T) {
 	if err := json.Unmarshal(raw, &out); err != nil {
 		t.Fatal(err)
 	}
-	if out[0].AntiTruncation.MaxRounds != 2 {
+	if len(out) != 1 || out[0] != in[0] {
 		t.Fatalf("round trip failed: %#v", out)
 	}
 	resolved, ok := ResolveModelAlias(out, "FAST")
@@ -45,21 +46,15 @@ func TestModelAliasesJSONRoundTripAndResolve(t *testing.T) {
 	}
 }
 
-func TestModelAliasesRejectUnsafeNamesAndInvalidLimits(t *testing.T) {
+func TestModelAliasesRejectUnsafeNames(t *testing.T) {
 	for _, alias := range []ModelAlias{
 		{Alias: "same", UpstreamModel: "SAME"},
 		{Alias: "with space", UpstreamModel: "model"},
 		{Alias: "public", UpstreamModel: "bad\nmodel"},
-		{Alias: "public", UpstreamModel: "model", AntiTruncation: AntiTruncationPolicy{MaxRounds: 4}},
-		{Alias: "public", UpstreamModel: "model", AntiTruncation: AntiTruncationPolicy{MaxDurationSeconds: 301}},
 	} {
 		if _, err := NormalizeModelAliases([]ModelAlias{alias}); err == nil {
 			t.Fatalf("expected invalid alias: %#v", alias)
 		}
-	}
-	aliases, err := NormalizeModelAliases([]ModelAlias{{Alias: "public", UpstreamModel: "model", AntiTruncation: AntiTruncationPolicy{Enabled: true}}})
-	if err != nil || aliases[0].AntiTruncation.MaxOutputTokens != 0 {
-		t.Fatalf("zero output budget must not impose a cap: %#v, %v", aliases, err)
 	}
 }
 
@@ -70,5 +65,28 @@ func TestModelAliasesRejectAliasTargetChains(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("alias targets must remain real upstream names, not another alias")
+	}
+}
+
+func TestModelAliasesIgnoreStoredGroupContinuationPolicy(t *testing.T) {
+	var aliases []ModelAlias
+	err := json.Unmarshal([]byte(`[{"alias":" Fast ","upstream_model":" claude-sonnet ","anti_truncation":{"enabled":true,"max_rounds":4}}]`), &aliases)
+	if err != nil {
+		t.Fatal(err)
+	}
+	aliases, err = NormalizeModelAliases(aliases)
+	if err != nil {
+		t.Fatalf("retired continuation policy must not invalidate alias: %v", err)
+	}
+	resolved, ok := ResolveModelAlias(aliases, "FAST")
+	if !ok || resolved != "claude-sonnet" {
+		t.Fatalf("resolve = %q, %v", resolved, ok)
+	}
+	raw, err := json.Marshal(aliases)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), "anti_truncation") {
+		t.Fatalf("retired continuation policy must not be re-encoded: %s", raw)
 	}
 }

@@ -77,14 +77,14 @@ func ValidateAccountAntiTruncationExtra(extra map[string]any) error {
 
 // ResolveAccountAntiTruncationPolicy resolves against the selected account on
 // each attempt. configured reports whether the account owns the policy, even
-// when malformed or unmatched (both fail closed rather than using legacy).
-func ResolveAccountAntiTruncationPolicy(account *Account, requestedModel, routeModel string, legacy domain.AntiTruncationPolicy) (policy domain.AntiTruncationPolicy, configured bool) {
+// when malformed or unmatched (both fail closed).
+func ResolveAccountAntiTruncationPolicy(account *Account, requestedModel, routeModel string) (policy domain.AntiTruncationPolicy, configured bool) {
 	if account == nil {
-		return legacy, false
+		return domain.AntiTruncationPolicy{}, false
 	}
 	raw, exists := account.Extra[AccountExtraAntiTruncation]
 	if !exists {
-		return legacy, false
+		return domain.AntiTruncationPolicy{}, false
 	}
 	config, err := parseAccountAntiTruncation(raw)
 	if err != nil {

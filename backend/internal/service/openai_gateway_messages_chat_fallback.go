@@ -54,9 +54,15 @@ func (s *OpenAIGatewayService) forwardAnthropicViaRawChatCompletions(
 	clientStream := anthropicReq.Stream
 
 	// 2. Anthropic → Chat Completions (direct, no Responses intermediary)
+	minOutputTokens := configuredMinOutputTokens(s.cfg)
+	if _, continuationRound := c.Writer.(*AccountContinuationRoundWriter); continuationRound {
+		// The continuation wrapper budgets across rounds and may leave less
+		// than the compatibility floor. Forward the exact request limit.
+		minOutputTokens = 0
+	}
 	chatReq, err := apicompat.AnthropicToChatCompletionsRequestWithMinOutputTokens(
 		&anthropicReq,
-		configuredMinOutputTokens(s.cfg),
+		minOutputTokens,
 	)
 	if err != nil {
 		writeAnthropicError(c, http.StatusBadRequest, "invalid_request_error", err.Error())
@@ -82,23 +88,6 @@ func (s *OpenAIGatewayService) forwardAnthropicViaRawChatCompletions(
 	}
 
 	serviceTier := extractOpenAIServiceTierFromBody(body)
-	var antiTruncationPolicy domain.AntiTruncationPolicy
-	requestCtx := ctx
-	var cancelRequest context.CancelFunc
-	if clientStream {
-		if key := getAPIKeyFromContext(c); key != nil {
-			policyCtx := WithGroupAliasRawChatAntiTruncationPolicy(ctx, key.Group, originalModel)
-			antiTruncationPolicy, _ = RawChatAntiTruncationPolicyFromContext(policyCtx)
-		}
-		if antiTruncationPolicy.Enabled {
-			antiTruncationPolicy.MaxOutputTokens = effectiveRawChatOutputBudget(body, antiTruncationPolicy.MaxOutputTokens)
-		}
-		if antiTruncationPolicy.Enabled {
-			requestCtx, cancelRequest = withRawChatContinuationDeadline(ctx, antiTruncationPolicy, startTime)
-			defer cancelRequest()
-		}
-	}
-
 	chatBody, err := json.Marshal(chatReq)
 	if err != nil {
 		return nil, fmt.Errorf("marshal chat completions request: %w", err)
@@ -124,14 +113,6 @@ func (s *OpenAIGatewayService) forwardAnthropicViaRawChatCompletions(
 			chatBody = policyBody
 		}
 	}
-	continuationEligible := antiTruncationPolicy.Enabled && clientStream && len(anthropicReq.Tools) == 0 && rawChatContinuationAllowed(chatBody)
-	if continuationEligible {
-		chatBody, err = clampRawChatOutputTokens(chatBody, antiTruncationPolicy.MaxOutputTokens)
-		if err != nil {
-			return nil, fmt.Errorf("clamp anti-truncation output tokens: %w", err)
-		}
-	}
-
 	// Provider normalization and policy caps can both change the converted effort.
 	// Use the final outbound value for usage logs and billing.
 	reasoningEffort := extractOpenAIReasoningEffortFromBody(chatBody, upstreamModel, billingModel, originalModel)
@@ -154,7 +135,7 @@ func (s *OpenAIGatewayService) forwardAnthropicViaRawChatCompletions(
 	if err != nil {
 		return nil, err
 	}
-	resp, err := s.sendCCUpstreamRequest(requestCtx, c, account, targetURL, chatBody, clientStream, apiKey, account.GetOpenAIUserAgent(), "")
+	resp, err := s.sendCCUpstreamRequest(ctx, c, account, targetURL, chatBody, clientStream, apiKey, account.GetOpenAIUserAgent(), "")
 	if err != nil {
 		return nil, err
 	}
@@ -173,17 +154,7 @@ func (s *OpenAIGatewayService) forwardAnthropicViaRawChatCompletions(
 
 	// 5. Convert response
 	if clientStream {
-		var continueRequest func(string, int) (*http.Response, error)
-		if continuationEligible {
-			continueRequest = func(assistantText string, remaining int) (*http.Response, error) {
-				continuedBody, buildErr := buildRawChatContinuationBody(chatBody, assistantText, remaining)
-				if buildErr != nil {
-					return nil, fmt.Errorf("build continuation request: %w", buildErr)
-				}
-				return s.sendCCUpstreamRequest(requestCtx, c, account, targetURL, continuedBody, true, apiKey, account.GetOpenAIUserAgent(), "")
-			}
-		}
-		return s.streamChatCompletionsAsAnthropic(c, resp, originalModel, billingModel, upstreamModel, reasoningEffort, serviceTier, startTime, antiTruncationPolicy, continueRequest)
+		return s.streamChatCompletionsAsAnthropic(c, resp, originalModel, billingModel, upstreamModel, reasoningEffort, serviceTier, startTime, domain.AntiTruncationPolicy{}, nil)
 	}
 	return s.bufferChatCompletionsAsAnthropic(c, resp, originalModel, billingModel, upstreamModel, reasoningEffort, serviceTier, startTime)
 }

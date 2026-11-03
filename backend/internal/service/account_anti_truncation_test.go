@@ -40,15 +40,14 @@ func antiTruncationExtraForTest(t *testing.T, policy string) map[string]any {
 }
 
 func TestAccountAntiTruncationPolicyResolution(t *testing.T) {
-	legacy := domain.AntiTruncationPolicy{Enabled: true, MaxRounds: 3}
 	tests := []struct {
 		name, policy, requested, route string
 		want                           domain.AntiTruncationPolicy
 		managed                        bool
 	}{
-		{name: "missing policy retains legacy", want: legacy},
-		{name: "explicit empty disables legacy", policy: `{"version":1,"rules":[]}`, managed: true},
-		{name: "unmatched rule disables legacy", policy: `{"version":1,"rules":[{"model":"other","enabled":true}]}`, requested: "public", route: "route", managed: true},
+		{name: "missing policy is off"},
+		{name: "explicit empty is off", policy: `{"version":1,"rules":[]}`, managed: true},
+		{name: "unmatched rule is off", policy: `{"version":1,"rules":[{"model":"other","enabled":true}]}`, requested: "public", route: "route", managed: true},
 		{name: "original alias takes precedence", policy: `{"version":1,"rules":[{"model":"route","enabled":true,"max_rounds":3},{"model":"public","enabled":true,"max_rounds":2}]}`, requested: "public", route: "route", want: domain.AntiTruncationPolicy{Enabled: true, MaxRounds: 2}, managed: true},
 		{name: "explicit original alias off wins", policy: `{"version":1,"rules":[{"model":"route","enabled":true},{"model":"public","enabled":false}]}`, requested: "public", route: "route", managed: true},
 		{name: "route model fallback", policy: `{"version":1,"rules":[{"model":"route","enabled":true,"max_output_tokens":100}]}`, requested: "public", route: "route", want: domain.AntiTruncationPolicy{Enabled: true, MaxOutputTokens: 100}, managed: true},
@@ -64,7 +63,7 @@ func TestAccountAntiTruncationPolicyResolution(t *testing.T) {
 			if tt.policy != "" {
 				a.Extra = antiTruncationExtraForTest(t, tt.policy)
 			}
-			got, managed := ResolveAccountAntiTruncationPolicy(a, tt.requested, tt.route, legacy)
+			got, managed := ResolveAccountAntiTruncationPolicy(a, tt.requested, tt.route)
 			require.Equal(t, tt.want, got)
 			require.Equal(t, tt.managed, managed)
 		})
@@ -122,7 +121,7 @@ func TestAccountAntiTruncationAdminRoundTripAndOmittedUpdate(t *testing.T) {
 	updated, err = svc.UpdateAccount(context.Background(), created.ID, &UpdateAccountInput{Extra: disabled})
 	require.NoError(t, err)
 	require.Equal(t, disabled[AccountExtraAntiTruncation], updated.Extra[AccountExtraAntiTruncation])
-	policy, owned := ResolveAccountAntiTruncationPolicy(updated, "public", "public", domain.AntiTruncationPolicy{Enabled: true})
+	policy, owned := ResolveAccountAntiTruncationPolicy(updated, "public", "public")
 	require.True(t, owned)
 	require.False(t, policy.Enabled)
 }

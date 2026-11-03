@@ -14,7 +14,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
 
 	"github.com/gin-gonic/gin"
@@ -350,22 +349,35 @@ func TestRawChatEvidenceContinuationRoundIsolationAndFailure(t *testing.T) {
 				{StatusCode: status, Header: http.Header{"X-Oneapi-Request-Id": []string{"round-2"}}, Body: io.NopCloser(strings.NewReader(second))},
 			}}
 			svc := &OpenAIGatewayService{cfg: rawChatCompletionsTestConfig(), httpUpstream: upstream}
-			ctx := WithRawChatAntiTruncationPolicy(context.Background(), domain.AntiTruncationPolicy{Enabled: true, MaxRounds: 1, MaxDurationSeconds: 30})
-			result, err := svc.forwardAsRawChatCompletions(ctx, c, rawChatCompletionsTestAccount(), body, "")
+			account := rawChatCompletionsTestAccount()
+			account.Extra = antiTruncationExtraForTest(t, `{"version":1,"rules":[{"model":"gemini-4-argon","enabled":true,"max_rounds":1,"max_duration_seconds":30}]}`)
+			result, err := runOpenAIWithAccountContinuation(c.Request.Context(), c, account, body, AccountContinuationChat, "gemini-4-argon", true,
+				func(ctx context.Context, roundBody []byte) (*OpenAIForwardResult, error) {
+					return svc.forwardAsRawChatCompletions(ctx, c, account, roundBody, "")
+				})
 			require.NotNil(t, result)
-			require.Len(t, result.ChatUsage.Rounds, 2)
-			require.Equal(t, "round-1", result.ChatUsage.Rounds[0].UpstreamRequestID)
-			require.Equal(t, "round-2", result.ChatUsage.Rounds[1].UpstreamRequestID)
-			require.Equal(t, 100, result.ChatUsage.Rounds[0].Usage.InputTokens)
+			require.Len(t, upstream.requests, 2)
+			require.NotEmpty(t, result.ContinuationResults)
+			firstUsage := result.ContinuationResults[0].ChatUsage
+			require.NotNil(t, firstUsage)
+			require.Len(t, firstUsage.Rounds, 1)
+			require.Equal(t, "round-1", firstUsage.Rounds[0].UpstreamRequestID)
+			require.Equal(t, 100, firstUsage.Rounds[0].Usage.InputTokens)
 			require.True(t, result.Outcome.HasText)
 			if failed {
 				require.Error(t, err)
-				require.False(t, result.ChatUsage.Rounds[1].UpstreamAccepted)
+				require.Len(t, result.ContinuationResults, 1)
+				require.Equal(t, 100, result.Usage.InputTokens)
 				require.False(t, result.Outcome.StreamCompleted)
 				require.Equal(t, DisconnectSourceUpstream, result.Outcome.DisconnectSource)
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, 150, result.ChatUsage.Rounds[1].Usage.InputTokens)
+				require.Len(t, result.ContinuationResults, 2)
+				secondUsage := result.ContinuationResults[1].ChatUsage
+				require.NotNil(t, secondUsage)
+				require.Len(t, secondUsage.Rounds, 1)
+				require.Equal(t, "round-2", secondUsage.Rounds[0].UpstreamRequestID)
+				require.Equal(t, 150, secondUsage.Rounds[0].Usage.InputTokens)
 				require.Equal(t, 250, result.Usage.InputTokens)
 				require.True(t, result.Outcome.StreamCompleted)
 			}

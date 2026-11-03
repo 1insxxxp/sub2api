@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
 )
@@ -67,7 +66,7 @@ func (w *accountContinuationWSSink) Write(value []byte) (int, error) {
 }
 
 func accountContinuationWSAllowed(ctx context.Context, account *Account, body []byte, model string) bool {
-	policy, configured := ResolveAccountAntiTruncationPolicy(account, model, model, domain.AntiTruncationPolicy{})
+	policy, configured := ResolveAccountAntiTruncationPolicy(account, model, model)
 	return configured && policy.Enabled && AccountContinuationRequestAllowed(AccountContinuationResponses, body)
 }
 

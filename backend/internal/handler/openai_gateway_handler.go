@@ -1267,7 +1267,6 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 		return
 	}
 	reqModel, routeModel := resolveGroupModelRoute(apiKey.Group, modelResult.String())
-	c.Request = c.Request.WithContext(service.WithGroupAliasRawChatAntiTruncationPolicy(c.Request.Context(), apiKey.Group, reqModel))
 	ensureCompositeTargetPlatform(c, apiKey, reqModel)
 	if !openAICompatibleTextTargetAllowed(c, apiKey, reqModel) {
 		h.anthropicErrorResponse(c, http.StatusBadRequest, "invalid_request_error", "Model is not supported by this OpenAI-compatible endpoint for composite groups")

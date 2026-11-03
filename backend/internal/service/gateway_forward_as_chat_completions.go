@@ -52,11 +52,6 @@ func (s *GatewayService) ForwardAsChatCompletions(
 	routeModel := ccReq.Model
 	originalModel := gatewayPublicModel(c.Request.Context(), routeModel)
 	clientStream := ccReq.Stream
-	antiTruncationPolicy, antiTruncationEnabled := RawChatAntiTruncationPolicyFromContext(ctx)
-	antiTruncationEnabled = antiTruncationEnabled && clientStream && anthropicChatContinuationAllowed(body)
-	if antiTruncationEnabled {
-		antiTruncationPolicy.MaxOutputTokens = effectiveRawChatOutputBudget(body, antiTruncationPolicy.MaxOutputTokens)
-	}
 	var group *Group
 	if parsed != nil {
 		group = s.groupForReasoningEffort(ctx, parsed.GroupID)
@@ -134,12 +129,6 @@ func (s *GatewayService) ForwardAsChatCompletions(
 
 	// 7. Enforce cache_control block limit
 	anthropicBody = enforceCacheControlLimit(anthropicBody)
-	if antiTruncationEnabled {
-		anthropicBody, err = clampAnthropicChatOutputTokens(anthropicBody, antiTruncationPolicy.MaxOutputTokens)
-		if err != nil {
-			return nil, fmt.Errorf("clamp anti-truncation output tokens: %w", err)
-		}
-	}
 
 	// 8. Token acquisition and generation share the caller lifetime.
 	if err := ctx.Err(); err != nil {
@@ -158,9 +147,6 @@ func (s *GatewayService) ForwardAsChatCompletions(
 
 	// 10. Build upstream request
 	upstreamCtx, releaseUpstreamCtx := context.WithCancel(ctx)
-	if antiTruncationEnabled {
-		upstreamCtx, releaseUpstreamCtx = withRawChatContinuationDeadline(ctx, antiTruncationPolicy, startTime)
-	}
 	defer releaseUpstreamCtx()
 	upstreamReq, forwardedBody, err := s.buildUpstreamRequest(upstreamCtx, c, account, anthropicBody, token, tokenType, mappedModel, reqStream, shouldMimicClaudeCode)
 	if err != nil {
@@ -239,21 +225,7 @@ func (s *GatewayService) ForwardAsChatCompletions(
 	var handleErr error
 	if clientStream {
 		writerSizeBeforeStream := c.Writer.Size()
-		var continueRequest func(context.Context, string, int) (*http.Response, error)
-		if antiTruncationEnabled {
-			continueRequest = func(continuationCtx context.Context, assistantText string, remainingOutputTokens int) (*http.Response, error) {
-				continuedBody, buildErr := buildAnthropicChatContinuationBody(forwardedBody, assistantText, remainingOutputTokens)
-				if buildErr != nil {
-					return nil, fmt.Errorf("build Anthropic continuation request: %w", buildErr)
-				}
-				req := upstreamReq.Clone(continuationCtx)
-				req.Body = io.NopCloser(bytes.NewReader(continuedBody))
-				req.ContentLength = int64(len(continuedBody))
-				req.GetBody = func() (io.ReadCloser, error) { return io.NopCloser(bytes.NewReader(continuedBody)), nil }
-				return s.httpUpstream.DoWithTLS(req, proxyURL, account.ID, account.Concurrency, s.tlsFPProfileService.ResolveTLSProfile(account))
-			}
-		}
-		result, handleErr = s.handleCCStreamingFromAnthropicWithContinuation(resp, c, originalModel, mappedModel, cacheCreationTTLTarget, reasoningEffort, startTime, antiTruncationPolicy, continueRequest)
+		result, handleErr = s.handleCCStreamingFromAnthropicWithContinuation(resp, c, originalModel, mappedModel, cacheCreationTTLTarget, reasoningEffort, startTime, domain.AntiTruncationPolicy{}, nil)
 		var sseErr *sseStreamErrorEventError
 		switch {
 		case result == nil && !IsResponseCommitted(c) && errors.As(handleErr, &sseErr):

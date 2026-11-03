@@ -17,6 +17,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
 
 func TestRawChatContinuationDeadlineCancelsInitialHeaderWait(t *testing.T) {
@@ -436,26 +437,110 @@ func TestStreamRawChatContinuationDeadlineClosesStalledCurrentAndNextRounds(t *t
 	})
 }
 
-func TestAntiTruncationPolicyContextRoundTrip(t *testing.T) {
-	policy := domain.AntiTruncationPolicy{Enabled: true, MaxRounds: 2, MaxOutputTokens: 500, MaxDurationSeconds: 20}
-	ctx := WithRawChatAntiTruncationPolicy(t.Context(), policy)
-	got, ok := RawChatAntiTruncationPolicyFromContext(ctx)
-	require.True(t, ok)
-	require.Equal(t, policy, got)
+func withRawChatContinuationDeadline(parent context.Context, policy domain.AntiTruncationPolicy, start time.Time) (context.Context, context.CancelFunc) {
+	if parent == nil {
+		parent = context.Background()
+	}
+	maxDuration := time.Duration(policy.MaxDurationSeconds) * time.Second
+	if maxDuration <= 0 {
+		maxDuration = 180 * time.Second
+	}
+	return context.WithDeadline(parent, start.Add(maxDuration))
 }
 
-func TestGroupAliasAntiTruncationPolicyIsPublicAliasScopedAndCanBeReplacedOnFallback(t *testing.T) {
-	policy := domain.AntiTruncationPolicy{Enabled: true, MaxRounds: 2}
-	group := &Group{ModelAliases: []domain.ModelAlias{{Alias: "fast", UpstreamModel: "gpt-5.4", AntiTruncation: policy}}}
-	ctx := WithGroupAliasRawChatAntiTruncationPolicy(t.Context(), group, "fast")
-	got, ok := RawChatAntiTruncationPolicyFromContext(ctx)
-	require.True(t, ok)
-	require.Equal(t, policy, got)
+// effectiveRawChatOutputBudget treats caller-supplied output limits as a
+// cumulative completion budget while retaining an optional smaller policy cap.
+// It must be called with the original client body, before protocol conversion
+// can synthesize a default token limit.
+func effectiveRawChatOutputBudget(clientBody []byte, policyCap int) int {
+	budget := policyCap
+	for _, path := range []string{"max_tokens", "max_completion_tokens"} {
+		value := gjson.GetBytes(clientBody, path)
+		if !value.Exists() || value.Type != gjson.Number || value.Int() <= 0 {
+			continue
+		}
+		limit := int(value.Int())
+		if budget <= 0 || limit < budget {
+			budget = limit
+		}
+	}
+	return budget
+}
 
-	ctx = WithGroupAliasRawChatAntiTruncationPolicy(ctx, &Group{}, "fast")
-	_, ok = RawChatAntiTruncationPolicyFromContext(ctx)
-	require.False(t, ok)
-	ctx = WithGroupAliasRawChatAntiTruncationPolicy(ctx, group, "gpt-5.4")
-	_, ok = RawChatAntiTruncationPolicyFromContext(ctx)
-	require.False(t, ok)
+func continuationRoundOutputLimit(body []byte, path string, remainingOutputTokens int) int {
+	if remainingOutputTokens <= 0 {
+		return 0
+	}
+	perRoundLimit := gjson.GetBytes(body, path)
+	if perRoundLimit.Exists() && perRoundLimit.Type == gjson.Number && perRoundLimit.Int() > 0 && perRoundLimit.Int() < int64(remainingOutputTokens) {
+		return int(perRoundLimit.Int())
+	}
+	return remainingOutputTokens
+}
+
+func rawChatContinuationAllowed(body []byte) bool {
+	if gjson.GetBytes(body, "response_format").Exists() ||
+		gjson.GetBytes(body, "guided_json").Exists() ||
+		gjson.GetBytes(body, "guided_regex").Exists() ||
+		gjson.GetBytes(body, "grammar").Exists() ||
+		gjson.GetBytes(body, "json_schema").Exists() {
+		return false
+	}
+	if n := gjson.GetBytes(body, "n"); n.Exists() && n.Int() > 1 {
+		return false
+	}
+	for _, message := range gjson.GetBytes(body, "messages").Array() {
+		if message.Get("reasoning_content").Exists() || message.Get("reasoning").Exists() {
+			return false
+		}
+		for _, part := range message.Get("content").Array() {
+			if strings.Contains(strings.ToLower(part.Get("type").String()), "reasoning") {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func buildRawChatContinuationBody(body []byte, assistantText string, remainingOutputTokens int) ([]byte, error) {
+	messages := gjson.GetBytes(body, "messages").Array()
+	updated := body
+	assistant := []byte(`{"role":"assistant","content":""}`)
+	var err error
+	assistant, err = sjson.SetBytes(assistant, "content", assistantText)
+	if err != nil {
+		return nil, err
+	}
+	updated, err = sjson.SetRawBytes(updated, "messages."+itoa(len(messages)), assistant)
+	if err != nil {
+		return nil, err
+	}
+	user := []byte(`{"role":"user","content":"Continue the response from where you left off. Do not repeat any earlier text."}`)
+	updated, err = sjson.SetRawBytes(updated, "messages."+itoa(len(messages)+1), user)
+	if err != nil {
+		return nil, err
+	}
+	tokenPath := "max_tokens"
+	if gjson.GetBytes(body, "max_completion_tokens").Exists() {
+		tokenPath = "max_completion_tokens"
+	}
+	if remainingOutputTokens > 0 {
+		updated, err = sjson.SetBytes(updated, tokenPath, continuationRoundOutputLimit(body, tokenPath, remainingOutputTokens))
+	}
+	return updated, err
+}
+
+func clampRawChatOutputTokens(body []byte, maxOutputTokens int) ([]byte, error) {
+	if maxOutputTokens <= 0 {
+		return body, nil
+	}
+	path := "max_tokens"
+	if gjson.GetBytes(body, "max_completion_tokens").Exists() {
+		path = "max_completion_tokens"
+	}
+	current := gjson.GetBytes(body, path)
+	if current.Exists() && current.Int() <= int64(maxOutputTokens) {
+		return body, nil
+	}
+	return sjson.SetBytes(body, path, maxOutputTokens)
 }

@@ -1,10 +1,9 @@
 export default {
     accounts: {
       antiTruncation: {
-        groupHint: 'Add a new client alias mapped to an upstream model without overriding existing names. Configure continuation per model or alias in account management.',
         title: "Account model continuation",
         hint: "Continues safely truncated text responses only. Normal completion, tool calls and media requests are not replayed. Each round is priced separately before a single settlement.",
-        legacyHint: "No account rules yet; legacy group rules remain compatible. Enabling and saving account rules takes ownership.",
+        unconfiguredHint: "Continuation is disabled until you add and save a model rule.",
         scopeHint: "Matches the exact client model or alias, then the model before account mapping. Unmatched models are disabled. Blank or zero output budget adds no cap; an explicit client limit remains in effect.",
         model: "Model or client alias",
         enabled: "Enable continuation for this model",
@@ -15,8 +14,7 @@ export default {
         durationHint: "Blank or zero rounds and window use the defaults of 1 extra round and 180 seconds. The window starts when continuation is first needed and only controls starting another round; it never interrupts generation.",
         bulkUnchanged: "Leave unchanged",
         bulkSet: "Set model rules",
-        bulkDisable: "Disable all models (override legacy rules)",
-        groupLegacyHint: "Legacy continuation settings are preserved for compatibility. Configure models in account management; saved account rules take ownership.",
+        bulkDisable: "Disable all models",
         modelRequired: "Enter a model or alias",
         modelInvalid: "Use 1–200 characters without whitespace or control characters",
         modelDuplicate: "Model rules must be unique",
