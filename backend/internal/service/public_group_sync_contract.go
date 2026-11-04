@@ -1,7 +1,9 @@
 package service
 
 // PublicGroupSyncSnapshotVersion is the wire version for public group snapshots.
-const PublicGroupSyncSnapshotVersion = 1
+// Version 2 prevents older receivers from applying inherited source prices to
+// their global billing catalog. Deploy a v1/v2 receiver before this producer.
+const PublicGroupSyncSnapshotVersion = 2
 
 // PublicGroupSyncRequest carries a public group's configuration between services.
 type PublicGroupSyncRequest struct {

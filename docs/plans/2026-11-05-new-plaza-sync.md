@@ -17,6 +17,7 @@
 - Prefer a targeted legacy reconciliation over deleting every untagged New channel; legitimate independent New configuration must remain supported.
 - Live credential comparison established that New channel 20 points to Sub custom group 260/source 71, not renamed source 128. Therefore do not retag, migrate or delete channel 20/token 7. Configure a display-only channel-ID exclusion and preserve shared associations exposed by other channels.
 - Keep application version 0.2.19; distinguish builds with commit IDs.
+- Use wire version 2 for inherited source-price semantics. Deploy the New receiver accepting ordinary v1 and v2 before the Sub v2 producer; an old v1 receiver must reject v2 rather than applying source quotes globally.
 
 ## Tasks
 
@@ -28,4 +29,4 @@
 
 ## Rollback
 
-Keep pre-change options and container configuration backups on the server and old containers/images. Restore previous images/routes if validation fails. The exclusion can be reverted by removing its environment variable; channel/token data does not require a migration.
+Keep pre-change options and container configuration backups on the server and old containers/images. Restore previous images/routes if validation fails, rolling back the producer before the receiver. An older receiver safely rejects v2 snapshots. The exclusion can be reverted by removing its environment variable; channel/token data does not require a migration.

@@ -142,7 +142,7 @@ func TestPublicGroupSyncRouteServesSignedSnapshotAndRejectsInvalidSignature(t *t
 	validRecorder := httptest.NewRecorder()
 	router.ServeHTTP(validRecorder, valid)
 	require.Equal(t, http.StatusOK, validRecorder.Code, validRecorder.Body.String())
-	require.Contains(t, validRecorder.Body.String(), `"version":1`)
+	require.Contains(t, validRecorder.Body.String(), `"version":2`)
 	require.Contains(t, validRecorder.Body.String(), `"group_id":1`)
 
 	invalid := httptest.NewRequest(http.MethodGet, path, nil)

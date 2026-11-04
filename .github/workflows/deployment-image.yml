@@ -20,6 +20,13 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - name: Verify public group synchronization
+        working-directory: backend
+        run: go test -tags=unit ./internal/service ./internal/server/routes -run 'TestPublicGroupSync|TestCategoryDefault' -count=1
       - name: Resolve release identity
         id: release
         run: |

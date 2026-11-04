@@ -53,5 +53,5 @@ func (h *PublicGroupSyncHandler) Snapshot(c *gin.Context) {
 		c.Status(http.StatusInternalServerError)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"version": 1, "snapshots": snap})
+	c.JSON(http.StatusOK, gin.H{"version": service.PublicGroupSyncSnapshotVersion, "snapshots": snap})
 }

@@ -32,4 +32,7 @@ func TestPublicGroupSyncRequestJSONRoundTrip(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("round-trip mismatch: got %#v, want %#v", got, want)
 	}
+	if got.Version != 2 {
+		t.Fatalf("source-scoped pricing requires wire version 2, got %d", got.Version)
+	}
 }
