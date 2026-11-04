@@ -376,7 +376,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	handlerLotteryHandler := handler.NewLotteryHandler(lotteryService)
 	dujiaoCredentialVerifier := handler.ProvideDujiaoCredentialVerifier(authService)
 	internalDujiaoAuthHandler := handler.NewInternalDujiaoAuthHandler(configConfig, dujiaoCredentialVerifier)
-	publicGroupSyncService := handler.ProvidePublicGroupSyncService(groupRepository, channelRepository, accountRepository, pricingService)
+	publicGroupSyncService := handler.ProvidePublicGroupSyncService(groupRepository, channelRepository, accountRepository, pricingService, categoryDefaultGroupService, modelPricingResolver)
 	publicGroupSyncHandler := handler.NewPublicGroupSyncHandler(publicGroupSyncService, configConfig)
 	idempotencyCleanupService := service.ProvideIdempotencyCleanupService(idempotencyRepository, configConfig)
 	openAIQuotaAutoResetService := service.ProvideOpenAIQuotaAutoResetService(accountRepository, openAIQuotaService, rateLimitService, idempotencyCoordinator, auditLogService, settingService, leaderLockCache)

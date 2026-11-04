@@ -9,12 +9,14 @@ import (
 func TestPublicGroupSyncRequestJSONRoundTrip(t *testing.T) {
 	input := 0.003
 	output := 0.015
+	sourceRatio := 0.0
 	want := PublicGroupSyncRequest{
 		Version: PublicGroupSyncSnapshotVersion, EventID: "evt-public-group-001", Revision: 7,
 		GroupID: 42, GroupName: "premium", PublicEnabled: true, GroupRatio: 1.25,
 		BillingMode: "token", Models: []string{"claude-sonnet"},
 		ModelMapping: map[string]string{"claude-sonnet": "claude-sonnet-4-20250514"},
 		ModelPricing: map[string]PublicGroupSyncModel{"claude-sonnet": {
+			SourceGroupID: 12, SourceModel: "claude-sonnet", SourceGroupRatio: &sourceRatio,
 			Platform: "anthropic", DisplayName: "claude-sonnet", UpstreamModel: "claude-sonnet-4-20250514",
 			BillingMode: "token", InputPrice: &input, OutputPrice: &output,
 		}},

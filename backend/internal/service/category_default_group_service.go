@@ -223,6 +223,7 @@ type categoryDefaultRuntime struct {
 	conflicts   map[string]bool
 	invalidated map[string]bool
 	groups      map[int64]*Group
+	sources     map[int64]CategoryDefaultSourceSnapshot
 }
 
 func (s *CategoryDefaultGroupService) runtime(ctx context.Context, entryID int64) (*categoryDefaultRuntime, error) {
@@ -238,6 +239,7 @@ func (s *CategoryDefaultGroupService) runtime(ctx context.Context, entryID int64
 		return nil, ErrCategoryDefaultSourceUnavailable.WithCause(err)
 	}
 	runtime := &categoryDefaultRuntime{config: config, current: make(map[string]CategoryDefaultPublishedModel), conflicts: make(map[string]bool), invalidated: categoryDefaultInvalidationSet(config.InvalidatedModels), groups: make(map[int64]*Group)}
+	runtime.sources = make(map[int64]CategoryDefaultSourceSnapshot)
 	valid := make([]CategoryDefaultSourceSnapshot, 0, len(sources))
 	for _, source := range sources {
 		if !categoryDefaultSourceEligible(config.Category, source.Group) {
@@ -252,6 +254,7 @@ func (s *CategoryDefaultGroupService) runtime(ctx context.Context, entryID int64
 		}
 		valid = append(valid, source)
 		runtime.groups[source.Group.ID] = source.Group
+		runtime.sources[source.Group.ID] = source
 	}
 	models, conflicts, err := buildCategoryDefaultCatalog(config.Category, valid)
 	if err != nil {

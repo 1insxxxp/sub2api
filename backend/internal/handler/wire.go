@@ -210,8 +210,12 @@ func ProvidePublicGroupSyncService(
 	channels service.ChannelRepository,
 	accounts service.AccountRepository,
 	pricing *service.PricingService,
+	defaults *service.CategoryDefaultGroupService,
+	resolver *service.ModelPricingResolver,
 ) *service.PublicGroupSyncService {
-	return service.NewPublicGroupSyncService(groups, channels, accounts, pricing)
+	svc := service.NewPublicGroupSyncService(groups, channels, accounts, pricing)
+	svc.SetCategoryDefaults(defaults, resolver)
+	return svc
 }
 
 func ProvideDujiaoCredentialVerifier(authService *service.AuthService) DujiaoCredentialVerifier {

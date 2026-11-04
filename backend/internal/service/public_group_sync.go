@@ -8,10 +8,17 @@ import (
 )
 
 type PublicGroupSyncService struct {
-	groups   GroupRepository
-	channels ChannelRepository
-	accounts AccountRepository
-	pricing  *PricingService
+	groups           GroupRepository
+	channels         ChannelRepository
+	accounts         AccountRepository
+	pricing          *PricingService
+	categoryDefaults *CategoryDefaultGroupService
+	pricingResolver  *ModelPricingResolver
+}
+
+func (s *PublicGroupSyncService) SetCategoryDefaults(defaults *CategoryDefaultGroupService, resolver *ModelPricingResolver) {
+	s.categoryDefaults = defaults
+	s.pricingResolver = resolver
 }
 
 func NewPublicGroupSyncService(groups GroupRepository, channels ChannelRepository, accounts AccountRepository, pricing *PricingService) *PublicGroupSyncService {
@@ -46,6 +53,14 @@ func (s *PublicGroupSyncService) Snapshot(ctx context.Context) ([]PublicGroupSyn
 	out := make([]PublicGroupSyncRequest, 0, len(groups))
 	for _, g := range groups {
 		if g.IsExclusive {
+			continue
+		}
+		if g.IsCategoryDefault {
+			snapshot, err := s.categoryDefaultSnapshot(ctx, g, channelCatalog)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, snapshot)
 			continue
 		}
 		// Channel pricing is shared by every group attached to that channel. Use

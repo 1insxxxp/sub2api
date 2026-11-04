@@ -22,6 +22,11 @@ type PublicGroupSyncRequest struct {
 // PublicGroupSyncModel contains the public display name, upstream mapping and
 // prices needed to reproduce a group's billing behavior.
 type PublicGroupSyncModel struct {
+	// Default entries inherit each published model's source price and rate.
+	// Receivers must keep these prices scoped to the entry, not global models.
+	SourceGroupID    int64    `json:"source_group_id,omitempty"`
+	SourceModel      string   `json:"source_model,omitempty"`
+	SourceGroupRatio *float64 `json:"source_group_ratio,omitempty"`
 	Platform         string   `json:"platform"`
 	DisplayName      string   `json:"display_name"`
 	UpstreamModel    string   `json:"upstream_model"`
