@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"sort"
 	"strings"
 
@@ -158,11 +157,6 @@ func categoryDefaultSourceModels(source CategoryDefaultSourceSnapshot) ([]Catego
 	if len(declared) == 0 && hasWildcard {
 		return nil, ErrCategoryDefaultUnboundedSource
 	}
-	if len(declared) == 0 && len(source.Accounts) == 0 && group.Platform != PlatformComposite {
-		for _, model := range DefaultModelIDsForPlatform(group.Platform) {
-			add(model)
-		}
-	}
 	if len(declared) == 0 {
 		return nil, ErrCategoryDefaultUnboundedSource
 	}
@@ -180,7 +174,13 @@ func categoryDefaultSourceModels(source CategoryDefaultSourceSnapshot) ([]Catego
 		target, aliased := group.ResolveModelAlias(public)
 		declarations := make(map[string]bool)
 		platformSet := make(map[string]bool)
-		geminiNative := false
+		geminiNative := categoryDefaultCollectModelDeclarations(source, public, target, aliased, declarations, platformSet)
+		// A finite candidate retained by an allowlist or alias may have lost its
+		// actual declaration. Omit that candidate without discarding the other
+		// verified names in the same source.
+		if len(declarations) == 0 {
+			continue
+		}
 		if aliased {
 			for _, alias := range group.ModelAliases {
 				if strings.EqualFold(strings.TrimSpace(alias.Alias), public) {
@@ -189,10 +189,6 @@ func categoryDefaultSourceModels(source CategoryDefaultSourceSnapshot) ([]Catego
 					break
 				}
 			}
-		}
-		geminiNative = categoryDefaultCollectModelDeclarations(source, public, target, aliased, declarations, platformSet)
-		if len(declarations) == 0 {
-			return nil, ErrCategoryDefaultUnboundedSource.WithMetadata(map[string]string{"source_group_id": fmt.Sprint(group.ID)})
 		}
 		parts := make([]string, 0, len(declarations))
 		for declaration := range declarations {

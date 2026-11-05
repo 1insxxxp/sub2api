@@ -72,7 +72,7 @@ func TestPublicGroupSyncCategoryDefaultPublishesSourceModelsAndPrices(t *testing
 	require.Empty(t, snapshot.ModelMapping, "entry requests must keep their published call name")
 }
 
-func TestPublicGroupSyncCategoryDefaultFiltersUnpublishedAndInvalidSources(t *testing.T) {
+func TestPublicGroupSyncCategoryDefaultFollowsDeclarationsAndFiltersInvalidSources(t *testing.T) {
 	for _, change := range []string{"exclusive", "disabled", "mapping", "invalidated", "conflict", "unpublished"} {
 		t.Run(change, func(t *testing.T) {
 			svc, store := publicSyncDefaultFixture(t)
@@ -84,13 +84,16 @@ func TestPublicGroupSyncCategoryDefaultFiltersUnpublishedAndInvalidSources(t *te
 				store.sources[0].Group.Status = StatusDisabled
 			case "mapping":
 				store.sources[0].Accounts[0].Credentials["model_mapping"] = map[string]any{"token-model": "changed"}
+				expected = append(expected, "token-model")
 			case "invalidated":
 				store.config.InvalidatedModels = []string{"token-model"}
+				expected = append(expected, "token-model")
 			case "conflict":
 				store.sources[1].Accounts[0].Credentials["model_mapping"] = map[string]any{"request-model": "upstream-b", "token-model": "other"}
 			case "unpublished":
 				store.sources[0].Accounts[0].Credentials["model_mapping"] = map[string]any{"token-model": "upstream-a", "new-model": "new-upstream"}
-				expected = append(expected, "token-model")
+				store.sources[0].Group.ModelPricing = append(store.sources[0].Group.ModelPricing, ChannelModelPricing{Platform: PlatformGemini, Models: []string{"new-model"}, BillingMode: BillingModeToken, InputPrice: ptrFloat64(2e-6), OutputPrice: ptrFloat64(4e-6)})
+				expected = append(expected, "token-model", "new-model")
 			}
 			require.ElementsMatch(t, expected, defaultSyncSnapshot(t, svc).Models)
 		})
@@ -111,9 +114,6 @@ func TestPublicGroupSyncCategoryDefaultUsesLiveSourcePriceAndZeroRate(t *testing
 func TestPublicGroupSyncCategoryDefaultAliasInheritsTargetPrice(t *testing.T) {
 	svc, store := publicSyncDefaultFixture(t)
 	store.sources[0].Group.ModelAliases = []domain.ModelAlias{{Alias: "public-alias", UpstreamModel: "token-model"}}
-	models, _, err := buildCategoryDefaultCatalog("gemini", store.sources)
-	require.NoError(t, err)
-	store.config.Models = models
 	model := defaultSyncSnapshot(t, svc).ModelPricing["public-alias"]
 	require.Equal(t, "public-alias", model.SourceModel)
 	require.NotNil(t, model.InputPrice)
@@ -122,7 +122,7 @@ func TestPublicGroupSyncCategoryDefaultAliasInheritsTargetPrice(t *testing.T) {
 
 type failedCategoryDefaultSyncRepo struct{ *categoryDefaultStoreFake }
 
-func (f failedCategoryDefaultSyncRepo) GetByGroupID(context.Context, int64) (*CategoryDefaultGroupConfig, error) {
+func (f failedCategoryDefaultSyncRepo) Snapshot(context.Context, CategoryDefaultSnapshotRequest) (*CategoryDefaultCatalogSnapshot, error) {
 	return nil, errors.New("database unavailable")
 }
 

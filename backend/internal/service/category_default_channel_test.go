@@ -27,7 +27,7 @@ func categoryDefaultChannelSource() CategoryDefaultSourceSnapshot {
 	return source
 }
 
-func TestCategoryDefaultChannelEffectiveDeclarationRequiresRepublish(t *testing.T) {
+func TestCategoryDefaultChannelEffectiveDeclarationFollowsChanges(t *testing.T) {
 	ctx := context.Background()
 	for _, change := range []string{"channel", "account", "compact"} {
 		t.Run(change, func(t *testing.T) {
@@ -53,7 +53,7 @@ func TestCategoryDefaultChannelEffectiveDeclarationRequiresRepublish(t *testing.
 				mapping["channel-target"] = "gpt-5-mini"
 			}
 			_, err = svc.ResolveForUser(ctx, 100, user, "public-model")
-			require.ErrorIs(t, err, ErrCategoryDefaultPendingSync)
+			require.NoError(t, err)
 		})
 	}
 }
@@ -73,7 +73,7 @@ func TestCategoryDefaultCompositeChannelUsesResolvedPlatformAndRouteModel(t *tes
 	require.True(t, ok)
 	mapping["channel-target"] = "gpt-5-nano"
 	_, err = svc.ResolveForUser(context.Background(), 100, user, "public-model")
-	require.ErrorIs(t, err, ErrCategoryDefaultPendingSync)
+	require.NoError(t, err)
 }
 
 func TestCategoryDefaultChannelNativeCapabilityUsesMappedTarget(t *testing.T) {
@@ -120,7 +120,7 @@ func TestCategoryDefaultMessagesDispatchTracksOnlyEffectiveFallback(t *testing.T
 		store.sources[0].Group.MessagesDispatchModelConfig.SonnetMappedModel = "gpt-5-nano"
 		_, err = svc.ResolveForUser(context.Background(), 100, user, "claude-sonnet-4-5")
 		if len(accountMapping) == 0 {
-			require.ErrorIs(t, err, ErrCategoryDefaultPendingSync)
+			require.NoError(t, err)
 		} else {
 			require.NoError(t, err, "the exact account mapping takes precedence over the unused dispatch fallback")
 		}

@@ -288,7 +288,7 @@
                       type="button"
                       :data-testid="`image-studio-output-format-${item.value}`"
                       :class="{ active: outputFormat === item.value }"
-                      :disabled="submitting || !canUse"
+                      :disabled="submitting || !canUse || (item.value === 'gif' && !gifAvailable)"
                       @click="chooseOutputFormat(item.value)"
                     >
                       <strong>{{ item.label }}</strong>
@@ -313,7 +313,7 @@
                   </div>
                 </div>
 
-                <div class="image-studio-field image-studio-choice-section">
+                <div v-if="!isGIF" class="image-studio-field image-studio-choice-section">
                   <span>{{ t('imageStudio.quality') }}</span>
                   <div class="image-studio-choice-picker image-studio-quality-picker">
                     <button
@@ -332,7 +332,7 @@
                   </div>
                 </div>
 
-                <div class="image-studio-field image-studio-choice-section">
+                <div v-if="!isGIF" class="image-studio-field image-studio-choice-section">
                   <span>{{ t('imageStudio.aspectRatio') }}</span>
                   <div class="image-studio-choice-picker image-studio-ratio-picker">
                     <button
@@ -437,7 +437,7 @@
                     <button
                       type="button"
                       data-testid="image-studio-retry-1k-button"
-                      :disabled="submitting || !canUse || !qualityOptions.some((item) => item.quality === '1K')"
+                      :disabled="submitting || !canUse || isGIF || !qualityOptions.some((item) => item.quality === '1K')"
                       @click="retryAtLowQuality"
                     >
                       <Icon name="sparkles" size="sm" />
@@ -827,7 +827,7 @@ const model = ref('')
 const aspectRatio = ref('1:1')
 const quality = ref('1K')
 type ImageStudioOutputCount = 1 | 2 | 3 | 4
-type ImageStudioOutputFormat = 'png' | 'jpeg' | 'webp'
+type ImageStudioOutputFormat = 'png' | 'jpeg' | 'webp' | 'gif'
 type ImageStudioBackground = 'auto' | 'opaque' | 'transparent'
 const outputCount = ref<ImageStudioOutputCount>(1)
 const outputFormat = ref<ImageStudioOutputFormat>('png')
@@ -865,7 +865,7 @@ const generationFailure = ref<{
   reason?: string
 } | null>(null)
 const outputCountOptions = [1, 2, 3, 4] as const
-const outputFormatOptions: Array<{ value: ImageStudioOutputFormat; label: string }> = [
+const staticOutputFormatOptions: Array<{ value: ImageStudioOutputFormat; label: string }> = [
   { value: 'png', label: 'PNG' },
   { value: 'jpeg', label: 'JPEG' },
   { value: 'webp', label: 'WebP' },
@@ -899,6 +899,12 @@ const modelOptions = computed<ImageStudioModelOption[]>(() =>
   (selectedGroup.value?.models ?? []).filter((item) => item.capabilities.includes(mode.value)),
 )
 const selectedModelOption = computed(() => modelOptions.value.find((item) => item.model === model.value))
+const gifSupported = computed(() => selectedModelOption.value?.output_formats?.includes('gif') === true)
+const gifAvailable = computed(() => gifSupported.value && mode.value === 'generation' && referenceFiles.value.length === 0 && !referenceLoadingImage.value)
+const isGIF = computed(() => outputFormat.value === 'gif')
+const outputFormatOptions = computed(() => gifSupported.value
+  ? [...staticOutputFormatOptions, { value: 'gif' as const, label: 'GIF' }]
+  : staticOutputFormatOptions)
 const hasModelPricing = computed(() =>
   selectedModelOption.value?.qualities !== undefined || selectedModelOption.value?.prices !== undefined,
 )
@@ -953,18 +959,20 @@ const canUse = computed(() =>
 const canSubmit = computed(() => {
   if (submitting.value || loadingConfig.value || !canUse.value) return false
   if (!selectedAPIKeyID.value || !selectedGroup.value?.id || !prompt.value.trim() || !model.value || !aspectRatio.value || !quality.value) return false
+  if (isGIF.value && !gifAvailable.value) return false
   if (mode.value === 'edit' && referenceFiles.value.length === 0) return false
   return true
 })
 const submitLabel = computed(() =>
   mode.value === 'edit' ? t('imageStudio.editButton') : t('imageStudio.generateButton'),
 )
-const selectedUnitCost = computed(() => unitCostForQuality(quality.value))
+const selectedUnitCost = computed(() => isGIF.value ? undefined : unitCostForQuality(quality.value))
 const estimatedCostLabel = computed(() => {
   const cost = selectedUnitCost.value
   return typeof cost === 'number' && Number.isFinite(cost) ? formatCurrency(cost * outputCount.value) : '-'
 })
 const selectedPreviewMeta = computed(() => {
+  if (isGIF.value) return t('imageStudio.gifHint')
   const size = selectedPricePreview.value?.size ?? selectedRatio.value?.size ?? '-'
   const tier =
     selectedPricePreview.value?.billing_tier ??
@@ -1076,6 +1084,10 @@ watch(selectedAPIKeyID, () => {
   quality.value = qualityOptions.value[0]?.quality ?? '1K'
 })
 
+watch([gifAvailable, outputFormat], () => {
+  if (isGIF.value && !gifAvailable.value) outputFormat.value = 'png'
+})
+
 watch([outputFormat, model], () => {
   if (isOutputBackgroundDisabled('transparent') && outputBackground.value === 'transparent') {
     outputBackground.value = 'auto'
@@ -1184,8 +1196,8 @@ async function handleSubmit() {
       group_id: selectedGroup.value?.id ?? null,
       model: model.value,
       prompt: normalizedPrompt,
-      aspect_ratio: aspectRatio.value,
-      quality: quality.value,
+      aspect_ratio: isGIF.value ? 'auto' : aspectRatio.value,
+      ...(isGIF.value ? {} : { quality: quality.value }),
       ...selectedOutputPayload(),
     }
     const batch = await runImageBatch(outputCount.value, async () => {
@@ -1493,7 +1505,7 @@ async function createAndPollGenerationTask(payload: {
   model: string
   prompt: string
   aspect_ratio: string
-  quality: string
+  quality?: string
   output_format?: string
   background?: string
 }): Promise<ImageStudioImage> {
@@ -1592,6 +1604,7 @@ async function retryGeneration() {
 }
 
 async function retryAtLowQuality() {
+  if (isGIF.value) return
   if (!qualityOptions.value.some((item) => item.quality === '1K')) return
   quality.value = '1K'
   await handleSubmit()
@@ -1714,6 +1727,7 @@ function chooseOutputCount(count: number) {
 }
 
 function chooseOutputFormat(format: ImageStudioOutputFormat) {
+  if (format === 'gif' && !gifAvailable.value) return
   outputFormat.value = format
 }
 
@@ -1723,7 +1737,7 @@ function chooseOutputBackground(background: ImageStudioBackground) {
 }
 
 function isOutputBackgroundDisabled(background: ImageStudioBackground) {
-  return background === 'transparent' && (outputFormat.value === 'jpeg' || !supportsTransparentBackground(model.value))
+  return background === 'transparent' && (outputFormat.value === 'jpeg' || isGIF.value || !supportsTransparentBackground(model.value))
 }
 
 function selectedOutputPayload(): Pick<ImageStudioGeneratePayload, 'output_format' | 'background'> {
@@ -1738,7 +1752,7 @@ function selectedOutputPayload(): Pick<ImageStudioGeneratePayload, 'output_forma
 }
 
 function isImageStudioOutputFormat(value: unknown): value is ImageStudioOutputFormat {
-  return value === 'png' || value === 'jpeg' || value === 'webp'
+  return value === 'png' || value === 'jpeg' || value === 'webp' || value === 'gif'
 }
 
 function isImageStudioBackground(value: unknown): value is ImageStudioBackground {

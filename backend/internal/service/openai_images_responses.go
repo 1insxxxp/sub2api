@@ -320,6 +320,8 @@ func openAIImageOutputMIMEType(outputFormat string) string {
 		return "image/jpeg"
 	case "webp":
 		return "image/webp"
+	case "gif":
+		return "image/gif"
 	default:
 		return "image/png"
 	}
@@ -1798,8 +1800,10 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesOAuth(
 	if requestModel == "" {
 		requestModel = "gpt-image-2"
 	}
-	if err := validateOpenAIImagesModel(requestModel); err != nil {
-		return nil, err
+	if studio, _ := ctx.Value(imageStudioImageAliasContextKey{}).(bool); !studio {
+		if err := validateOpenAIImagesModel(requestModel); err != nil {
+			return nil, err
+		}
 	}
 	upstreamModel := account.GetMappedModel(requestModel)
 	if err := validateOpenAIImagesModel(upstreamModel); err != nil {

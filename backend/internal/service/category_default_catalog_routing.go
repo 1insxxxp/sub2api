@@ -95,16 +95,16 @@ func categoryDefaultCollectModelDeclarations(source CategoryDefaultSourceSnapsho
 	cache := categoryDefaultSourceChannelCache(source)
 	native := false
 	for _, path := range categoryDefaultDeclarationPaths(source, public, target, aliased) {
+		pathDeclarations := make(map[string]bool)
 		if path.Route != nil {
 			route := path.Route
 			data, _ := json.Marshal(struct {
 				Public, Match, Platform, Upstream, Endpoint string
 				Priority                                    int
 			}{route.PublicModel, route.MatchType, route.TargetPlatform, route.UpstreamModel, route.Endpoint, route.Priority})
-			declarations["route:"+string(data)] = true
+			pathDeclarations["route:"+string(data)] = true
 		}
-		mappedTarget := categoryDefaultChannelTarget(cache, source.Group.ID, path.Platform, path.Model, declarations)
-		platforms[path.Platform] = true
+		mappedTarget := categoryDefaultChannelTarget(cache, source.Group.ID, path.Platform, path.Model, pathDeclarations)
 		matchedAccount := false
 		for i := range source.Accounts {
 			account := &source.Accounts[i]
@@ -121,19 +121,25 @@ func categoryDefaultCollectModelDeclarations(source CategoryDefaultSourceSnapsho
 				continue
 			}
 			matchedAccount = true
-			declarations["account:"+path.Platform+":"+account.Platform+":"+mapped] = true
+			pathDeclarations["account:"+path.Platform+":"+account.Platform+":"+mapped] = true
 			if account.Platform == PlatformOpenAI {
 				compact := ResolveOpenAIAccountUpstreamModelForRequest(account, mappedTarget, true)
-				declarations["account-compact:"+compact] = true
+				pathDeclarations["account-compact:"+compact] = true
 			}
 			platforms[account.Platform] = true
 			native = native || (path.Native && (account.Platform == PlatformGemini || (account.Platform == PlatformAntigravity && isAntigravityGeminiModel(mapped))))
 		}
-		if !matchedAccount {
-			declarations["native:"+path.Platform+":"+mappedTarget] = true
+		if !matchedAccount && path.Route != nil {
+			pathDeclarations["native:"+path.Platform+":"+mappedTarget] = true
 			native = native || (path.Native && (path.Platform == PlatformGemini || (path.Platform == PlatformAntigravity && isAntigravityGeminiModel(mappedTarget))))
 		}
-		categoryDefaultCollectMessagesDispatchDeclarations(source, path, cache, declarations)
+		if matchedAccount || path.Route != nil {
+			platforms[path.Platform] = true
+			for declaration := range pathDeclarations {
+				declarations[declaration] = true
+			}
+			categoryDefaultCollectMessagesDispatchDeclarations(source, path, cache, declarations)
+		}
 	}
 	return native
 }

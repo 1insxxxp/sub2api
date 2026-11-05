@@ -2,12 +2,15 @@ package service
 
 import (
 	"bytes"
+	"fmt"
 	"image"
 	"image/color"
 	stddraw "image/draw"
+	_ "image/gif"
 	"image/jpeg"
 	"image/png"
 	"math"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -18,7 +21,19 @@ import (
 const imageStudioMaxNormalizedDimension = 8192
 
 func normalizeImageStudioOutputImage(data []byte, mimeType string, outputFormat string, background string, aspectRatio string, size string) ([]byte, string, string, error) {
+	// Animation is opaque output: never decode/reencode or crop a GIF, even
+	// when the provider mislabels its MIME type or the requested format.
+	if imageStudioActualMIMEType(data, "") == "image/gif" {
+		return data, "image/gif", "gif", nil
+	}
 	normalizedFormat := NormalizeImageStudioOutputFormat(outputFormat)
+	if normalizedFormat == "gif" || strings.EqualFold(mimeType, "image/gif") {
+		actual := imageStudioActualMIMEType(data, "")
+		if actual == "image/png" || actual == "image/jpeg" || actual == "image/webp" {
+			return data, actual, imageStudioOutputFormatFromMIMEType(actual), nil
+		}
+		return nil, "", "", fmt.Errorf("GIF response does not contain a supported image")
+	}
 	if normalizedFormat == "webp" {
 		return data, mimeType, outputFormat, nil
 	}
@@ -144,4 +159,11 @@ func imageStudioCenterCropRect(bounds image.Rectangle, targetWidth int, targetHe
 	}
 	top := bounds.Min.Y + (srcHeight-cropHeight)/2
 	return image.Rect(bounds.Min.X, top, bounds.Max.X, top+cropHeight)
+}
+
+func imageStudioActualMIMEType(data []byte, fallback string) string {
+	if detected := http.DetectContentType(data); strings.HasPrefix(detected, "image/") {
+		return detected
+	}
+	return fallback
 }

@@ -7,7 +7,7 @@ import (
 	"sort"
 )
 
-// Public snapshots have no user identity. Only currently valid, published
+// Public snapshots have no user identity. Only currently valid, unique
 // routes to public sources may be advertised. Do not synthesize an admin user
 // or query schedulable accounts: temporary cooling is not publication removal.
 type publicGroupSyncCategoryRoute struct {
@@ -21,15 +21,12 @@ func (s *CategoryDefaultGroupService) publicSyncRoutes(ctx context.Context, entr
 		return nil, err
 	}
 	routes := make([]publicGroupSyncCategoryRoute, 0, len(runtime.config.Models))
-	for _, published := range runtime.config.Models {
-		key := categoryDefaultModelKey(published.PublicModel)
-		group := runtime.groups[published.SourceGroupID]
-		current, exists := runtime.current[key]
-		if group == nil || group.IsExclusive || !exists || runtime.conflicts[key] || runtime.invalidated[key] ||
-			current.SourceGroupID != published.SourceGroupID || current.SourceModel != published.SourceModel || current.Fingerprint != published.Fingerprint {
+	for _, current := range runtime.config.Models {
+		group := runtime.groups[current.SourceGroupID]
+		if group == nil || group.IsExclusive {
 			continue
 		}
-		routes = append(routes, publicGroupSyncCategoryRoute{CategoryDefaultModelRoute: CategoryDefaultModelRoute{EntryGroupID: entryID, SourceGroup: group, PublicModel: published.PublicModel, SourceModel: published.SourceModel, GeminiNative: current.GeminiNative}, Source: runtime.sources[published.SourceGroupID]})
+		routes = append(routes, publicGroupSyncCategoryRoute{CategoryDefaultModelRoute: CategoryDefaultModelRoute{EntryGroupID: entryID, SourceGroup: group, PublicModel: current.PublicModel, SourceModel: current.SourceModel, GeminiNative: current.GeminiNative}, Source: runtime.sources[current.SourceGroupID]})
 	}
 	return routes, nil
 }

@@ -634,13 +634,14 @@ x-api-key: admin-xxx
 
 ---
 
-### 分类默认分组（2026-11-03，本地实现）
+### 分类默认分组（2026-11-06，自动跟随来源）
 
 - 仅完整管理员可管理六类入口：`anthropic/openai/gemini/grok/domestic/other`。入口为真实、稳定的余额 `group_id`，标识 `is_category_default`；不与系统自定义订阅容器混用，不直接绑定账号。
 - `GET /api/v1/admin/category-default-groups` 读取六类配置；`GET /api/v1/admin/category-default-groups/:category/candidates` 读取同分类可关联来源。
 - `POST .../:category/sync-preview` 接受 `source_group_ids: number[]`，返回 `revision`、`preview_hash`、新增/修改/移除及冲突清单。`POST .../:category/sync-apply` 接受相同来源集合、`expected_revision`、`preview_hash`，服务端事务重新校验；过期或重名返回 409，保留旧发布版本。
 - `PUT .../:category/status` 接受 `enabled: boolean`；首次发布启用，后续发布保留启停状态。入口已关闭时保留现有密钥绑定并拒绝调用。
-- 客户调用名跨来源按 trim + 忽略大小写唯一。仅已发布、当前声明有效且用户有来源权限的模型可调用；配置变更历史防止映射改回或来源停启后自动恢复。管理员重新授予某用户来源权限视为该用户的恢复确认，不让单用户撤权影响其他人。
+- 客户调用名跨来源按 trim + 忽略大小写唯一。保存关联后自动跟随来源模型的新增、删除、改名和映射变化；模型目录、实际路由和公共导出使用当前有效声明。来源停用、删除或不符合资格时移除其模型，恢复有效后自动恢复；跨来源重名仅隔离冲突模型，不任意选择来源。用户来源权限仍在每次请求校验，不让单用户撤权影响其他人。
+- 默认入口与关联来源声明在同一个只读一致性快照中读取。历史发布清单用于关联修改预览与审计，不再阻断合法模型变更；变更关联集合仍须预览并在事务中重新校验，不能绕过冲突及过期预览检查。
 - 请求内解析到来源后应用来源白名单、RPM、价格、用户倍率、高峰倍率和 Gemini 输入优惠；`usage_logs.group_id` 仍记实际来源，`category_default_group_id` 单独记入口。原密钥身份、额度和数据库绑定不变，禁止跨来源回退。
 - 发布需迁移 260/261、认证缓存 v30 和含入口审计的 outbox v4。全部运行实例与消费者升级后才配置启用；回退先关闭入口，再回退应用。历史配置快照仅保存模型声明白名单字段，不保存凭据或上游地址。
 - 常规文本 HTTP、流式、计数、模型目录及 Codex HTTP 已接入。特殊会话、WebSocket、实时与异步任务要求选择具体分组。
@@ -656,6 +657,13 @@ curl -fsS -X POST "${BASE}/api/v1/admin/category-default-groups/gemini/sync-appl
   -H "x-api-key: ${KEY}" -H 'Content-Type: application/json' \
   --data '{"source_group_ids":[101,102],"expected_revision":0,"preview_hash":"<preview_hash>"}'
 ```
+
+### Image Studio GIF（2026-11-06）
+
+- GIF 仅对最终账号映射到 `gpt-image-2.6-sunburst` / `gpt-image-2.6-flare` 的 OpenAI API-key 生成线路开放；公开别名可以映射到这两个模型，混合账号池会跳过不支持 GIF 的账号。
+- 使用 `/v1/images/generations`、`output_format: "gif"`、`size: "auto"`，沿用上游默认帧数和间隔；不携带 `response_format`，不开放编辑、参考图、透明背景、分片流式输出或静态图片质量档位。
+- 根据实际图片字节识别 MIME 和扩展名；GIF 原始字节直接保存、预览和下载，不做静态裁剪或转码。上游返回静态图片时记录真实格式，不伪装成 GIF。
+- 模型名称表示兼容能力，不保证上游账号拥有 GIF 预览权限；收费仍由现有实际用量和来源定价处理。
 
 ### Ent 输入计数可选策略（2026-11-01，本地实现）
 

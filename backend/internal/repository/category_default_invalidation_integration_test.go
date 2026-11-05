@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestCategoryDefaultInvalidationHistorySurvivesRestoresAndOnlyRepublishClearsIt(t *testing.T) {
+func TestCategoryDefaultHistoryExpiresSavePreviewWithoutBlockingLiveRestores(t *testing.T) {
 	ctx := context.Background()
 	suffix := time.Now().UnixNano()
 	first := mustCreateGroup(t, integrationEntClient, &service.Group{Name: fmt.Sprintf("history-first-%d", suffix), Platform: service.PlatformGemini, RateMultiplier: 1})
@@ -60,11 +60,6 @@ func TestCategoryDefaultInvalidationHistorySurvivesRestoresAndOnlyRepublishClear
 		_, resolveErr := svc.ResolveForUser(ctx, entryID, user, model)
 		require.NoError(t, resolveErr)
 	}
-	pending := func(model string) {
-		t.Helper()
-		_, resolveErr := svc.ResolveForUser(ctx, entryID, user, model)
-		require.ErrorIs(t, resolveErr, service.ErrCategoryDefaultPendingSync)
-	}
 	updateFoo := func(target string) {
 		t.Helper()
 		_, updateErr := integrationDB.ExecContext(ctx, `UPDATE accounts SET credentials=jsonb_set(credentials,'{model_mapping,foo}',to_jsonb($1::text)) WHERE id=$2`, target, a.ID)
@@ -72,10 +67,10 @@ func TestCategoryDefaultInvalidationHistorySurvivesRestoresAndOnlyRepublishClear
 	}
 	publish()
 	available("foo")
-	// No runtime read occurs while B is configured. Restoring A cannot erase B.
+	// No runtime read occurs while B is configured. History retains B for save validation, while live routes follow restored A.
 	updateFoo("gemini-3-pro")
 	updateFoo("gemini-2.5-flash")
-	pending("foo")
+	available("foo")
 	available("bar")
 	available("baz")
 	config, err := repo.GetByGroupID(ctx, entryID)
@@ -83,7 +78,8 @@ func TestCategoryDefaultInvalidationHistorySurvivesRestoresAndOnlyRepublishClear
 	require.Equal(t, []string{"foo"}, config.InvalidatedModels)
 	preview, err := svc.Preview(ctx, "gemini", ids)
 	require.NoError(t, err)
-	require.Len(t, preview.Modified, 1, "restored fingerprint still needs explicit confirmation")
+	require.Empty(t, preview.Modified, "restored declarations are already current")
+	require.Len(t, preview.Unchanged, 3)
 	// Another unseen B -> A invalidates an earlier preview even when the
 	// blocked model set and current fingerprint have not changed.
 	updateFoo("gemini-3.1-pro")
@@ -94,7 +90,7 @@ func TestCategoryDefaultInvalidationHistorySurvivesRestoresAndOnlyRepublishClear
 	require.NoError(t, err)
 	_, err = svc.SetStatus(ctx, "gemini", true)
 	require.NoError(t, err)
-	pending("foo")
+	available("foo")
 	publish()
 	available("foo")
 	// A source pause/re-enable affects its models; the other source keeps working.
@@ -102,16 +98,16 @@ func TestCategoryDefaultInvalidationHistorySurvivesRestoresAndOnlyRepublishClear
 	require.NoError(t, err)
 	_, err = integrationDB.ExecContext(ctx, `UPDATE groups SET status='active' WHERE id=$1`, first.ID)
 	require.NoError(t, err)
-	pending("foo")
-	pending("bar")
+	available("foo")
+	available("bar")
 	available("baz")
 	publish()
-	// A new duplicate is quarantined even if it disappears before any request.
+	// A duplicate that has been removed no longer quarantines the restored name.
 	_, err = integrationDB.ExecContext(ctx, `UPDATE accounts SET credentials=jsonb_set(credentials,'{model_mapping,foo}','"gemini-3-pro"'::jsonb) WHERE id=$1`, b.ID)
 	require.NoError(t, err)
 	_, err = integrationDB.ExecContext(ctx, `UPDATE accounts SET credentials=credentials #- '{model_mapping,foo}' WHERE id=$1`, b.ID)
 	require.NoError(t, err)
-	pending("foo")
+	available("foo")
 	available("bar")
 	available("baz")
 	publish()
@@ -183,7 +179,7 @@ func TestCategoryDefaultInvalidationHistorySurvivesRestoresAndOnlyRepublishClear
 	require.NoError(t, <-written, "a concurrent source edit must not be a deadlock victim")
 }
 
-func TestCategoryDefaultGrokSettingHistoryIsFrozenAndRestoresNeedPublication(t *testing.T) {
+func TestCategoryDefaultGrokSettingHistoryIsFrozenAndLiveRestoresRecover(t *testing.T) {
 	ctx := context.Background()
 	initialRuntime := xai.RuntimeModelMappingOptions()
 	t.Cleanup(func() { xai.SetRuntimeModelMappingOptions(initialRuntime) })
@@ -247,7 +243,7 @@ func TestCategoryDefaultGrokSettingHistoryIsFrozenAndRestoresNeedPublication(t *
 	set("grok_default_text_model", "grok-4.3")
 	set("grok_default_text_model", "grok-4.6")
 	_, err = svc.ResolveForUser(ctx, entryID, user, "grok")
-	require.ErrorIs(t, err, service.ErrCategoryDefaultPendingSync, "no request observed B, so the journal must retain its frozen settings")
+	require.NoError(t, err, "restored settings must not wait for publication")
 	_, err = svc.ResolveForUser(ctx, entryID, user, "grok-4.7")
 	require.NoError(t, err, "literal model mapping is unaffected by a default-target change")
 	var frozenB bool
@@ -257,7 +253,7 @@ func TestCategoryDefaultGrokSettingHistoryIsFrozenAndRestoresNeedPublication(t *
 	set("grok_cross_client_model_map_enabled", "false")
 	set("grok_cross_client_model_map_enabled", "true")
 	_, err = svc.ResolveForUser(ctx, entryID, user, "gpt-test")
-	require.ErrorIs(t, err, service.ErrCategoryDefaultPendingSync)
+	require.NoError(t, err)
 	_, err = svc.ResolveForUser(ctx, entryID, user, "grok")
 	require.NoError(t, err)
 	publish()

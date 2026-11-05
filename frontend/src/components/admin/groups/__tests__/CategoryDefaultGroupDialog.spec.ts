@@ -38,6 +38,24 @@ describe('CategoryDefaultGroupDialog', () => {
     wrapper.unmount()
   })
 
+  it('shows live conflicts and unavailable sources without requiring another preview or publication', async () => {
+    vi.mocked(categoryDefaultGroupsAPI.list).mockResolvedValue([{
+      ...config,
+      models_count: 0,
+      models: [],
+      conflicts: [{ public_model: 'live-duplicate', source_group_ids: [11, 22], source_group_names: ['Primary Claude', 'Other Claude'] }],
+      unavailable_sources: [{ source_group_id: 33, reason: 'unavailable' }],
+    } as never])
+    const wrapper = mountDialog()
+    await flushPromises()
+    expect(wrapper.get('[data-testid="category-default-live-conflicts"]').text()).toContain('live-duplicate')
+    expect(wrapper.get('[data-testid="category-default-live-conflicts"]').text()).toContain('Other Claude')
+    expect(wrapper.get('[data-testid="category-default-unavailable-sources"]').text()).toContain('#33')
+    expect(categoryDefaultGroupsAPI.preview).not.toHaveBeenCalled()
+    expect(categoryDefaultGroupsAPI.apply).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
   it('shows every conflicting model and its source groups and blocks publication', async () => {
     vi.mocked(categoryDefaultGroupsAPI.preview).mockResolvedValue({ ...preview, conflicts: [{ public_model: 'duplicate-model', source_group_ids: [11, 22], source_group_names: ['Primary Claude', 'Other Claude'] }] })
     const wrapper = mountDialog()

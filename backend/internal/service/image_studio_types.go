@@ -57,12 +57,13 @@ type ImageStudioGroupOption struct {
 }
 
 type ImageStudioModelOption struct {
-	Model        string                        `json:"model"`
-	Label        string                        `json:"label"`
-	MappedModel  string                        `json:"mapped_model,omitempty"`
-	Capabilities []string                      `json:"capabilities"`
-	Qualities    []ImageStudioQualityOption    `json:"qualities,omitempty"`
-	Prices       []ImageStudioPricePreviewItem `json:"prices,omitempty"`
+	Model         string                        `json:"model"`
+	Label         string                        `json:"label"`
+	OutputFormats []string                      `json:"output_formats,omitempty"`
+	MappedModel   string                        `json:"mapped_model,omitempty"`
+	Capabilities  []string                      `json:"capabilities"`
+	Qualities     []ImageStudioQualityOption    `json:"qualities,omitempty"`
+	Prices        []ImageStudioPricePreviewItem `json:"prices,omitempty"`
 }
 
 type ImageStudioQualityOption struct {
@@ -298,7 +299,7 @@ func NormalizeImageStudioOutputFormat(format string) string {
 		return "png"
 	case "jpg":
 		return "jpeg"
-	case "png", "jpeg", "webp":
+	case "png", "jpeg", "webp", "gif":
 		return normalized
 	default:
 		return normalized
@@ -320,7 +321,7 @@ func NormalizeImageStudioBackground(background string) string {
 func ValidateImageStudioOutputOptions(outputFormat string, background string) error {
 	format := NormalizeImageStudioOutputFormat(outputFormat)
 	switch format {
-	case "png", "jpeg", "webp":
+	case "png", "jpeg", "webp", "gif":
 	default:
 		return fmt.Errorf("unsupported image output format: %s", outputFormat)
 	}
@@ -330,8 +331,8 @@ func ValidateImageStudioOutputOptions(outputFormat string, background string) er
 	default:
 		return fmt.Errorf("unsupported image background: %s", background)
 	}
-	if format == "jpeg" && normalizedBackground == "transparent" {
-		return fmt.Errorf("transparent background is not supported for jpeg output")
+	if (format == "jpeg" || format == "gif") && normalizedBackground == "transparent" {
+		return fmt.Errorf("transparent background is not supported for %s output", format)
 	}
 	return nil
 }
@@ -361,6 +362,8 @@ func imageStudioOutputFormatFromMIMEType(mimeType string) string {
 		return "jpeg"
 	case "image/webp":
 		return "webp"
+	case "image/gif":
+		return "gif"
 	case "image/png":
 		return "png"
 	default:

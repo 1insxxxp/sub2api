@@ -17,10 +17,41 @@ func (s *ImageStudioService) SetModelDiscovery(accounts ImageStudioModelAccounts
 }
 
 func (s *ImageStudioService) discoverImageModels(ctx context.Context, group *Group) ([]string, error) {
-	if s.modelAccounts == nil {
-		return imageStudioModelsForGroup(group), nil
+	formats, err := s.discoverImageModelFormats(ctx, group)
+	if err != nil {
+		return nil, err
 	}
-	models := []string{}
+	models := make([]string, 0, len(formats))
+	for model := range formats {
+		models = append(models, model)
+	}
+	sort.Strings(models)
+	return models, nil
+}
+
+// Only the documented generations API models advertise GIF. Resolve aliases
+// through channel/account mappings; public names alone are not capabilities.
+func imageStudioGIFModel(model string) bool {
+	switch strings.ToLower(strings.TrimSpace(model)) {
+	case "gpt-image-2.6-sunburst", "gpt-image-2.6-flare":
+		return true
+	default:
+		return false
+	}
+}
+
+func imageStudioAccountSupportsGIF(account *Account, model string) bool {
+	return account != nil && account.Platform == PlatformOpenAI && account.Type == AccountTypeAPIKey && imageStudioGIFModel(account.GetMappedModel(model))
+}
+
+func (s *ImageStudioService) discoverImageModelFormats(ctx context.Context, group *Group) (map[string][]string, error) {
+	models := make(map[string][]string)
+	if s.modelAccounts == nil {
+		for _, model := range imageStudioModelsForGroup(group) {
+			models[model] = nil
+		}
+		return models, nil
+	}
 	if group == nil || (group.Platform != PlatformOpenAI && group.Platform != PlatformGemini && group.Platform != PlatformGrok) {
 		return models, nil
 	}
@@ -58,7 +89,7 @@ func (s *ImageStudioService) discoverImageModels(ctx context.Context, group *Gro
 			}
 		}
 	}
-	candidates = dedupeImageStudioModelsForGroup(group, candidates)
+	candidates = dedupeImageStudioModelsWithPredicate(candidates, nil)
 	for _, model := range candidates {
 		if strings.Contains(model, "*") {
 			continue
@@ -67,9 +98,6 @@ func (s *ImageStudioService) discoverImageModels(ctx context.Context, group *Gro
 		if s.modelChannels != nil && group.Platform != PlatformGemini {
 			mapping, _ := s.modelChannels.ResolveChannelMappingAndRestrict(ctx, &group.ID, model)
 			requestModel = mapping.MappedModel
-		}
-		if !imageStudioModelSupportedByGroup(group, requestModel) {
-			continue
 		}
 		for i := range accounts {
 			account := &accounts[i]
@@ -81,11 +109,14 @@ func (s *ImageStudioService) discoverImageModels(ctx context.Context, group *Gro
 			if !imageStudioModelSupportedByGroup(group, account.GetMappedModel(requestModel)) {
 				continue
 			}
-			models = append(models, model)
-			break
+			if _, exists := models[model]; !exists {
+				models[model] = nil
+			}
+			if imageStudioAccountSupportsGIF(account, requestModel) {
+				models[model] = []string{"png", "jpeg", "webp", "gif"}
+			}
 		}
 	}
-	sort.Strings(models)
 	return models, nil
 }
 

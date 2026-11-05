@@ -23,6 +23,23 @@ import (
 )
 
 const imageStudioMaxAccountAttempts = 3
+const imageStudioMaxDownloadAttempts = 2
+
+// The provider has already generated this image. Preserve the download cause,
+// but never let task recovery turn a failed GET into another billable POST.
+type imageStudioGeneratedImageDownloadError struct {
+	cause error
+}
+
+func (e *imageStudioGeneratedImageDownloadError) Error() string {
+	return fmt.Sprintf("fetch generated image result: %v", e.cause)
+}
+
+func (e *imageStudioGeneratedImageDownloadError) Unwrap() error { return e.cause }
+
+// Set only by Studio after owned-key policy resolution. The final account
+// mapping is still validated before forwarding; this never accepts public flags.
+type imageStudioImageAliasContextKey struct{}
 
 type ImageStudioAPIKeyProvider interface {
 	GetDefaultImageStudioAPIKey(ctx context.Context, userID int64) (*APIKey, error)
@@ -175,22 +192,39 @@ func (e *ImageStudioGatewayExecutor) execute(ctx context.Context, input imageStu
 	}
 
 	if imageStudioShouldUseGeminiNative(apiKey.Group, input.Model) {
+		if NormalizeImageStudioOutputFormat(input.OutputFormat) == "gif" {
+			return nil, fmt.Errorf("selected model has no supported GIF generation route")
+		}
 		return e.executeGemini(ctx, apiKey, subscription, input)
 	}
 
+	gifOutput := NormalizeImageStudioOutputFormat(input.OutputFormat) == "gif"
+	if gifOutput {
+		if input.Endpoint != openAIImagesGenerationsEndpoint || input.SourceImageCount > 0 || len(input.ReferenceImages) > 0 {
+			return nil, fmt.Errorf("GIF supports generation only")
+		}
+		if err := ValidateImageStudioOutputOptions("gif", input.Background); err != nil {
+			return nil, err
+		}
+	}
+	ctx = context.WithValue(ctx, imageStudioImageAliasContextKey{}, true)
 	ginCtx, recorder := newImageStudioGatewayGinContext(input.Endpoint, input.ContentType, input.Body, input.UserAgent, input.IPAddress)
+	ginCtx.Request = ginCtx.Request.WithContext(ctx)
 	parsed, err := e.gateway.ParseOpenAIImagesRequest(ginCtx, input.Body)
 	if err != nil {
 		return nil, fmt.Errorf("parse image request: %w", err)
 	}
 	channelMapping, _ := e.gateway.ResolveChannelMappingAndRestrict(ctx, apiKey.GroupID, parsed.Model)
+	if gifOutput {
+		parsed.RequiredCapability = OpenAIImagesCapabilityAPIKey
+	}
 
 	requestCtx := WithOpenAIImagesEndpoint(WithOpenAIImageGenerationIntent(ctx))
 	excluded := make(map[int64]struct{})
 	var account *Account
 	var result *OpenAIForwardResult
 	var lastFailoverErr error
-	for attempt := 0; attempt < imageStudioMaxAccountAttempts; attempt++ {
+	for attempt := 0; attempt < imageStudioMaxAccountAttempts; {
 		if err := requestCtx.Err(); err != nil {
 			return nil, err
 		}
@@ -210,6 +244,20 @@ func (e *ImageStudioGatewayExecutor) execute(ctx context.Context, input imageStu
 			return nil, ErrNoAvailableAccounts
 		}
 		account = selection.Account
+		if _, repeated := excluded[account.ID]; repeated {
+			if selection.ReleaseFunc != nil {
+				selection.ReleaseFunc()
+			}
+			return nil, fmt.Errorf("image scheduler returned an excluded account")
+		}
+		if gifOutput && !imageStudioAccountSupportsGIF(account, firstNonEmptyTrimmed(channelMapping.MappedModel, parsed.Model)) {
+			if selection.ReleaseFunc != nil {
+				selection.ReleaseFunc()
+			}
+			excluded[account.ID] = struct{}{}
+			lastFailoverErr = fmt.Errorf("selected account has no supported GIF generation route")
+			continue
+		}
 		ginCtx, recorder = newImageStudioGatewayGinContext(input.Endpoint, input.ContentType, input.Body, input.UserAgent, input.IPAddress)
 		ginCtx.Request = ginCtx.Request.WithContext(requestCtx)
 		result, err = func() (*OpenAIForwardResult, error) {
@@ -218,6 +266,7 @@ func (e *ImageStudioGatewayExecutor) execute(ctx context.Context, input imageStu
 			}
 			return e.gateway.ForwardImages(requestCtx, ginCtx, account, input.Body, parsed, channelMapping.MappedModel)
 		}()
+		attempt++ // Capability exclusions never consume a billable upstream attempt.
 		if err == nil {
 			break
 		}
@@ -230,7 +279,7 @@ func (e *ImageStudioGatewayExecutor) execute(ctx context.Context, input imageStu
 			zap.Int64("account_id", account.ID),
 			zap.String("model", parsed.Model),
 			zap.Int("upstream_status", failoverErr.StatusCode),
-			zap.Int("attempt", attempt+1),
+			zap.Int("attempt", attempt),
 		)
 		// A buffered response can contain an image even when a read failure discards its bytes.
 		switch gjson.GetBytes(failoverErr.ResponseBody, "error.code").String() {
@@ -248,11 +297,14 @@ func (e *ImageStudioGatewayExecutor) execute(ctx context.Context, input imageStu
 		return nil, fmt.Errorf("forward image request: %w", err)
 	}
 	if result == nil {
+		if lastFailoverErr != nil {
+			return nil, lastFailoverErr
+		}
 		return nil, infraerrors.ServiceUnavailable("IMAGE_GENERATION_EMPTY_RESULT", "image provider returned no image")
 	}
 	ApplyOpenAIImageBillingResolution(result)
 
-	imageBytes, mimeType, err := extractImageStudioBytesFromGatewayBody(recorder.Body.Bytes())
+	imageBytes, mimeType, err := e.extractImageStudioGatewayBytes(requestCtx, account, recorder.Body.Bytes())
 	if err != nil {
 		return nil, err
 	}
@@ -412,6 +464,9 @@ func imageStudioGeminiModelForUpstream(model string) string {
 }
 
 func buildImageStudioGenerateBody(input ImageStudioGenerateInput) ([]byte, error) {
+	if err := ValidateImageStudioOutputOptions(input.OutputFormat, input.Background); err != nil {
+		return nil, err
+	}
 	body := map[string]any{
 		"model":           strings.TrimSpace(input.Model),
 		"prompt":          strings.TrimSpace(input.Prompt),
@@ -424,6 +479,10 @@ func buildImageStudioGenerateBody(input ImageStudioGenerateInput) ([]byte, error
 	}
 	if background := strings.TrimSpace(input.Background); background != "" {
 		body["background"] = background
+	}
+	if NormalizeImageStudioOutputFormat(input.OutputFormat) == "gif" {
+		body["output_format"], body["size"] = "gif", "auto"
+		delete(body, "response_format")
 	}
 	return json.Marshal(body)
 }
@@ -482,6 +541,9 @@ func imageStudioReferenceImageMIMEType(image ImageStudioReferenceImage) string {
 }
 
 func buildImageStudioEditBody(input ImageStudioEditInput) ([]byte, string, error) {
+	if NormalizeImageStudioOutputFormat(input.OutputFormat) == "gif" {
+		return nil, "", fmt.Errorf("GIF supports generation only")
+	}
 	var buffer bytes.Buffer
 	writer := multipart.NewWriter(&buffer)
 	fields := map[string]string{
@@ -577,27 +639,27 @@ func extractImageStudioBytesFromGatewayBody(body []byte) ([]byte, string, error)
 			return nil, "", err
 		}
 		outputFormat, _ := extractImageStudioOutputMetadataFromGatewayBody(body)
-		return decoded, openAIImageOutputMIMEType(outputFormat), nil
+		return decoded, imageStudioActualMIMEType(decoded, openAIImageOutputMIMEType(outputFormat)), nil
 	}
 	if decoded, mimeType, ok, err := extractImageStudioGeminiInlineData(body); ok || err != nil {
 		if err != nil {
 			return nil, "", err
 		}
-		return decoded, firstNonEmptyTrimmed(mimeType, "image/png"), nil
+		return decoded, imageStudioActualMIMEType(decoded, firstNonEmptyTrimmed(mimeType, "image/png")), nil
 	}
 	for _, item := range collectOpenAIImageInlineAssets(body, "") {
 		if decoded, ok, err := decodeImageStudioBase64(item.B64JSON); ok || err != nil {
 			if err != nil {
 				return nil, "", err
 			}
-			return decoded, firstNonEmptyTrimmed(item.MimeType, "image/png"), nil
+			return decoded, imageStudioActualMIMEType(decoded, firstNonEmptyTrimmed(item.MimeType, "image/png")), nil
 		}
 		if strings.HasPrefix(strings.ToLower(item.DownloadURL), "data:image/") {
 			decoded, mimeType, err := decodeImageStudioDataURL(item.DownloadURL)
 			if err != nil {
 				return nil, "", err
 			}
-			return decoded, mimeType, nil
+			return decoded, imageStudioActualMIMEType(decoded, mimeType), nil
 		}
 	}
 	return nil, "", infraerrors.ServiceUnavailable("IMAGE_GENERATION_EMPTY_RESULT", "image provider returned no inline image")
@@ -676,7 +738,7 @@ func decodeImageStudioDataURL(raw string) ([]byte, string, error) {
 	if !ok {
 		return nil, "", fmt.Errorf("invalid image data url")
 	}
-	return decoded, mimeType, nil
+	return decoded, imageStudioActualMIMEType(decoded, mimeType), nil
 }
 
 func decodeImageStudioBase64(raw string) ([]byte, bool, error) {
@@ -755,3 +817,46 @@ func imageStudioOpenAIForwardResultFromGemini(result *ForwardResult, upstreamEnd
 }
 
 var _ = io.EOF
+
+// Reuse the gateway's bounded downloader, account proxy and public-host checks.
+// No direct HTTP client or relaxed outbound policy is introduced for Studio.
+func (e *ImageStudioGatewayExecutor) extractImageStudioGatewayBytes(ctx context.Context, account *Account, body []byte) ([]byte, string, error) {
+	data, mimeType, err := extractImageStudioBytesFromGatewayBody(body)
+	if err == nil {
+		return data, mimeType, nil
+	}
+	if gjson.GetBytes(body, "data.0.b64_json").String() != "" {
+		return nil, "", err
+	}
+	rawURL := strings.TrimSpace(gjson.GetBytes(body, "data.0.url").String())
+	if !strings.HasPrefix(rawURL, "https://") && !strings.HasPrefix(rawURL, "http://") {
+		return nil, "", err
+	}
+	fetcher, ok := e.gateway.(interface {
+		fetchOpenAIImageURLBase64(context.Context, *Account, string) (string, error)
+	})
+	if !ok {
+		return nil, "", err
+	}
+	var encoded string
+	var fetchErr error
+	for attempt := 0; attempt < imageStudioMaxDownloadAttempts; attempt++ {
+		if fetchErr = ctx.Err(); fetchErr != nil {
+			break
+		}
+		// Retry only transport failures, using the same URL, account and safe
+		// downloader. Each GET retains its existing timeout and size limits.
+		encoded, fetchErr = fetcher.fetchOpenAIImageURLBase64(ctx, account, rawURL)
+		if fetchErr == nil || ctx.Err() != nil || !imageStudioProviderTimedOutOrDisconnected(fetchErr) {
+			break
+		}
+	}
+	if fetchErr != nil {
+		return nil, "", &imageStudioGeneratedImageDownloadError{cause: fetchErr}
+	}
+	data, ok, err = decodeImageStudioBase64(encoded)
+	if err != nil || !ok {
+		return nil, "", fmt.Errorf("invalid downloaded image payload")
+	}
+	return data, imageStudioActualMIMEType(data, "application/octet-stream"), nil
+}

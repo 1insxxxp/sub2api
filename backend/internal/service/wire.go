@@ -889,8 +889,9 @@ func ProvideAPIKeyService(
 
 // ProvideCategoryDefaultGroupService attaches the source resolver after the
 // API-key service exists, avoiding a resolver/cache-invalidator dependency cycle.
-func ProvideCategoryDefaultGroupService(repo CategoryDefaultGroupRepository, invalidator APIKeyAuthCacheInvalidator, apiKeys *APIKeyService) *CategoryDefaultGroupService {
+func ProvideCategoryDefaultGroupService(repo CategoryDefaultGroupRepository, invalidator APIKeyAuthCacheInvalidator, apiKeys *APIKeyService, channels *ChannelService) *CategoryDefaultGroupService {
 	svc := NewCategoryDefaultGroupService(repo, invalidator)
+	svc.SetChannelService(channels)
 	apiKeys.SetCategoryDefaultGroupService(svc)
 	return svc
 }

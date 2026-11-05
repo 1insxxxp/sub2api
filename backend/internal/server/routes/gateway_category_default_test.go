@@ -35,7 +35,7 @@ func TestCategoryDefaultRuntimeErrorsExplainRequiredAction(t *testing.T) {
 		message string
 	}{
 		{service.ErrCategoryDefaultModelConflict, http.StatusConflict, "模型调用名重名冲突"},
-		{service.ErrCategoryDefaultPendingSync, http.StatusServiceUnavailable, "等待管理员确认同步"},
+		{service.ErrCategoryDefaultPendingSync, http.StatusServiceUnavailable, "路由配置尚未在当前实例生效"},
 		{service.ErrCategoryDefaultSourceUnavailable, http.StatusServiceUnavailable, "来源分组暂不可用"},
 	} {
 		t.Run(tt.message, func(t *testing.T) {

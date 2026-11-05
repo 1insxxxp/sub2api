@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sort"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/group"
@@ -42,7 +43,45 @@ func (r *categoryDefaultGroupRepository) GetByGroupID(ctx context.Context, id in
 	return categoryDefaultLoadConfig(ctx, r.client, "", id, false)
 }
 
+func (r *categoryDefaultGroupRepository) Snapshot(ctx context.Context, req service.CategoryDefaultSnapshotRequest) (*service.CategoryDefaultCatalogSnapshot, error) {
+	tx, err := r.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	client := tx.Client()
+	config, err := categoryDefaultLoadConfigWithHistory(ctx, client, req.Category, req.GroupID, false, req.IncludeHistory)
+	if errors.Is(err, service.ErrCategoryDefaultNotFound) && req.GroupID == 0 {
+		config = &service.CategoryDefaultGroupConfig{Category: req.Category, SourceGroupIDs: []int64{}, Models: []service.CategoryDefaultPublishedModel{}}
+	} else if err != nil {
+		return nil, err
+	}
+	seen := make(map[int64]bool)
+	ids := make([]int64, 0, len(config.SourceGroupIDs)+len(req.AdditionalSourceGroupIDs))
+	for _, values := range [][]int64{config.SourceGroupIDs, req.AdditionalSourceGroupIDs} {
+		for _, id := range values {
+			if id > 0 && !seen[id] {
+				seen[id] = true
+				ids = append(ids, id)
+			}
+		}
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	sources, err := categoryDefaultLoadSources(ctx, client, ids)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return &service.CategoryDefaultCatalogSnapshot{Config: config, Sources: sources}, nil
+}
+
 func categoryDefaultLoadConfig(ctx context.Context, client *dbent.Client, category string, id int64, lock bool) (*service.CategoryDefaultGroupConfig, error) {
+	return categoryDefaultLoadConfigWithHistory(ctx, client, category, id, lock, true)
+}
+
+func categoryDefaultLoadConfigWithHistory(ctx context.Context, client *dbent.Client, category string, id int64, lock, includeHistory bool) (*service.CategoryDefaultGroupConfig, error) {
 	query := `SELECT c.group_id,c.category,g.name,g.status,c.revision FROM category_default_groups c JOIN groups g ON g.id=c.group_id WHERE g.deleted_at IS NULL AND g.is_category_default=TRUE AND (c.category=$1 OR ($2>0 AND c.group_id=$2))`
 	if lock {
 		query += ` FOR UPDATE OF c,g`
@@ -111,8 +150,10 @@ func categoryDefaultLoadConfig(ctx context.Context, client *dbent.Client, catego
 		return nil, closeErr
 	}
 	config.ModelsCount = len(config.Models)
-	if err := categoryDefaultLoadInvalidations(ctx, client, config); err != nil {
-		return nil, err
+	if includeHistory {
+		if err := categoryDefaultLoadInvalidations(ctx, client, config); err != nil {
+			return nil, err
+		}
 	}
 	return config, nil
 }

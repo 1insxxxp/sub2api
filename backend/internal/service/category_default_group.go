@@ -17,7 +17,7 @@ var (
 	ErrCategoryDefaultUnboundedSource     = infraerrors.BadRequest("CATEGORY_DEFAULT_UNBOUNDED_SOURCE", "source requires a finite model declaration or an exact model allowlist")
 	ErrCategoryDefaultModelConflict       = infraerrors.Conflict("CATEGORY_DEFAULT_MODEL_CONFLICT", "associated source groups expose duplicate model names; contact an administrator")
 	ErrCategoryDefaultStalePreview        = infraerrors.Conflict("CATEGORY_DEFAULT_STALE_PREVIEW", "configuration changed; refresh the synchronization preview")
-	ErrCategoryDefaultPendingSync         = infraerrors.ServiceUnavailable("CATEGORY_DEFAULT_PENDING_SYNC", "this model changed and is awaiting administrator confirmation")
+	ErrCategoryDefaultPendingSync         = infraerrors.ServiceUnavailable("CATEGORY_DEFAULT_PENDING_SYNC", "this model is waiting for the current routing configuration to take effect")
 	ErrCategoryDefaultModelNotAllowed     = infraerrors.Forbidden("CATEGORY_DEFAULT_MODEL_NOT_ALLOWED", "this model is not published or accessible through the category default group")
 	ErrCategoryDefaultSourceUnavailable   = infraerrors.ServiceUnavailable("CATEGORY_DEFAULT_SOURCE_UNAVAILABLE", "the selected model source is unavailable")
 	ErrCategoryDefaultEndpointUnsupported = infraerrors.New(501, "CATEGORY_DEFAULT_ENDPOINT_UNSUPPORTED", "use a specific group for this endpoint")
@@ -34,15 +34,37 @@ type CategoryDefaultPublishedModel struct {
 }
 
 type CategoryDefaultGroupConfig struct {
-	GroupID           int64                           `json:"group_id"`
-	Category          string                          `json:"category"`
-	Name              string                          `json:"name"`
-	Enabled           bool                            `json:"enabled"`
-	Revision          int64                           `json:"revision"`
-	SourceGroupIDs    []int64                         `json:"source_group_ids"`
-	Models            []CategoryDefaultPublishedModel `json:"models"`
-	ModelsCount       int                             `json:"models_count"`
-	InvalidatedModels []string                        `json:"invalidated_models,omitempty"`
+	GroupID            int64                              `json:"group_id"`
+	Category           string                             `json:"category"`
+	Name               string                             `json:"name"`
+	Enabled            bool                               `json:"enabled"`
+	Revision           int64                              `json:"revision"`
+	SourceGroupIDs     []int64                            `json:"source_group_ids"`
+	Models             []CategoryDefaultPublishedModel    `json:"models"`
+	ModelsCount        int                                `json:"models_count"`
+	InvalidatedModels  []string                           `json:"invalidated_models,omitempty"`
+	Conflicts          []CategoryDefaultModelConflict     `json:"conflicts,omitempty"`
+	UnavailableSources []CategoryDefaultUnavailableSource `json:"unavailable_sources,omitempty"`
+}
+
+type CategoryDefaultUnavailableSource struct {
+	SourceGroupID int64  `json:"source_group_id"`
+	Reason        string `json:"reason"`
+}
+
+// Snapshot reads the saved association boundary and all declarations in one
+// read-only transaction. Additional sources are for a save preview only; they
+// never become authorized until Publish commits the association.
+type CategoryDefaultSnapshotRequest struct {
+	Category                 string
+	GroupID                  int64
+	AdditionalSourceGroupIDs []int64
+	IncludeHistory           bool
+}
+
+type CategoryDefaultCatalogSnapshot struct {
+	Config  *CategoryDefaultGroupConfig
+	Sources []CategoryDefaultSourceSnapshot
 }
 
 // SourceSnapshot contains local configuration only. It must not probe upstreams
@@ -101,6 +123,7 @@ type CategoryDefaultModelRoute struct {
 type CategoryDefaultPublishValidator func(*CategoryDefaultGroupConfig, []CategoryDefaultSourceSnapshot) ([]CategoryDefaultPublishedModel, error)
 
 type CategoryDefaultGroupRepository interface {
+	Snapshot(context.Context, CategoryDefaultSnapshotRequest) (*CategoryDefaultCatalogSnapshot, error)
 	List(context.Context) ([]CategoryDefaultGroupConfig, error)
 	Get(context.Context, string) (*CategoryDefaultGroupConfig, error)
 	GetByGroupID(context.Context, int64) (*CategoryDefaultGroupConfig, error)

@@ -625,6 +625,84 @@ describe('ImageStudioView', () => {
     expect(wrapper.get('[data-testid="image-studio-reference-preview"]').attributes('src')).toBe('blob:passion-api-image-9.png')
   })
 
+  it('offers GIF only from resolved model capabilities and submits automatic dimensions', async () => {
+    vi.useFakeTimers()
+    getOptions.mockResolvedValueOnce({ ...options, groups: [{ ...options.groups[0], models: [{
+      model: '绘图/loop', label: 'Loop', capabilities: ['generation', 'edit'],
+      output_formats: ['png', 'jpeg', 'webp', 'gif'],
+    }] }] })
+    const wrapper = mount(ImageStudioView, { global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Icon: true } } })
+    await flushPromises()
+    await wrapper.get('[data-testid="image-studio-output-format-gif"]').trigger('click')
+    expect(wrapper.find('[data-testid="image-studio-quality-4K"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="image-studio-ratio-16:9"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('imageStudio.gifHint')
+    await wrapper.get('[data-testid="image-studio-prompt"]').setValue('looping lantern')
+    await wrapper.get('[data-testid="image-studio-submit"]').trigger('submit')
+    await flushPromises()
+    expect(createTask).toHaveBeenCalledWith(expect.objectContaining({ model: '绘图/loop', output_format: 'gif', aspect_ratio: 'auto' }))
+    expect(createTask.mock.calls[0]?.[0].quality).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('disables GIF and resets the selected format when switching to reference editing', async () => {
+    getOptions.mockResolvedValueOnce({ ...options, groups: [{ ...options.groups[0], models: [{
+      model: '绘图/loop', label: 'Loop', capabilities: ['generation', 'edit'], output_formats: ['png', 'gif'],
+    }] }] })
+    const wrapper = mount(ImageStudioView, { global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Icon: true } } })
+    await flushPromises()
+    await wrapper.get('[data-testid="image-studio-output-format-gif"]').trigger('click')
+    await wrapper.findAll('.image-studio-mode-switch button')[1].trigger('click')
+    expect(wrapper.get('[data-testid="image-studio-output-format-gif"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="image-studio-output-format-png"]').classes()).toContain('active')
+    wrapper.unmount()
+  })
+
+  it('does not infer GIF capability from an unverified GPT image name', async () => {
+    getOptions.mockResolvedValueOnce({ ...options, groups: [{ ...options.groups[0], models: [{
+      model: 'gpt-image-2.6-sunburst', label: 'Unverified alias', capabilities: ['generation', 'edit'],
+    }] }] })
+    const wrapper = mount(ImageStudioView, { global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Icon: true } } })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="image-studio-output-format-gif"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('restores a GIF task, previews animation directly and downloads the original GIF blob', async () => {
+    vi.useFakeTimers()
+    getOptions.mockResolvedValueOnce({ ...options, groups: [{ ...options.groups[0], models: [{
+      model: '绘图/loop', label: 'Loop', capabilities: ['generation', 'edit'], output_formats: ['png', 'gif'],
+    }] }] })
+    const task = { id: 31, mode: 'generation', status: 'running', api_key_id: 15, group_id: 9,
+      model: '绘图/loop', prompt: 'loop', aspect_ratio: 'auto', size: 'auto', output_format: 'gif',
+      estimated_cost: 0, source_image_count: 0, created_at: '2026-06-22T00:00:00Z', updated_at: '2026-06-22T00:00:00Z' }
+    listTasks.mockResolvedValueOnce({ items: [task], total: 1, page: 1, page_size: 5, pages: 1 })
+    getTask.mockResolvedValueOnce({ ...task, status: 'succeeded', image: {
+      ...task, id: 13, image_url: 'https://assets.example.com/loop.gif', mime_type: 'image/gif',
+      storage_object_key: 'loop.gif', size: '32x16', cost: 0.07, bytes: 100,
+    } })
+    const blob = new Blob(['GIF89a-original-frames'], { type: 'image/gif' })
+    downloadImageFile.mockResolvedValueOnce({ blob, filename: 'passion-api-image-13.gif' })
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    const append = vi.spyOn(document.body, 'appendChild')
+    const wrapper = mount(ImageStudioView, { global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Icon: true } } })
+    await flushPromises()
+    expect(wrapper.get('[data-testid="image-studio-output-format-gif"]').classes()).toContain('active')
+    await vi.advanceTimersByTimeAsync(1300)
+    await flushPromises()
+    expect(wrapper.find('img[src="https://assets.example.com/loop.gif"]').exists()).toBe(true)
+    await wrapper.get('.image-studio-current-actions button:nth-child(2)').trigger('click')
+    await flushPromises()
+    expect(downloadImageFile).toHaveBeenCalledWith(13)
+    expect(URL.createObjectURL).toHaveBeenCalledWith(blob)
+    const anchor = append.mock.calls.map(([node]) => node).find((node): node is HTMLAnchorElement => node instanceof HTMLAnchorElement)
+    expect(anchor?.download).toBe('passion-api-image-13.gif')
+    expect(click).toHaveBeenCalled()
+    wrapper.unmount()
+    append.mockRestore()
+    click.mockRestore()
+  })
+
   it('hides background options and sends output format with each generated image request', async () => {
     vi.useFakeTimers()
     getOptions.mockResolvedValueOnce({

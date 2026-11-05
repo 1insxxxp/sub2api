@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"sort"
 	"strings"
 
@@ -15,6 +14,7 @@ import (
 type CategoryDefaultGroupService struct {
 	repo        CategoryDefaultGroupRepository
 	invalidator APIKeyAuthCacheInvalidator
+	channels    *ChannelService
 }
 
 func NewCategoryDefaultGroupService(repo CategoryDefaultGroupRepository, invalidator APIKeyAuthCacheInvalidator) *CategoryDefaultGroupService {
@@ -22,21 +22,17 @@ func NewCategoryDefaultGroupService(repo CategoryDefaultGroupRepository, invalid
 }
 
 func (s *CategoryDefaultGroupService) List(ctx context.Context) ([]CategoryDefaultGroupConfig, error) {
-	stored, err := s.repo.List(ctx)
-	if err != nil {
-		return nil, err
-	}
-	byCategory := make(map[string]CategoryDefaultGroupConfig, len(stored))
-	for _, config := range stored {
-		byCategory[config.Category] = config
-	}
 	out := make([]CategoryDefaultGroupConfig, 0, len(CategoryDefaultCategories))
 	for _, category := range CategoryDefaultCategories {
-		config, ok := byCategory[category]
-		if !ok {
-			config = CategoryDefaultGroupConfig{Category: category, SourceGroupIDs: []int64{}, Models: []CategoryDefaultPublishedModel{}}
+		snapshot, err := s.repo.Snapshot(ctx, CategoryDefaultSnapshotRequest{Category: category})
+		if err != nil {
+			return nil, err
 		}
-		out = append(out, config)
+		projected, err := projectCategoryDefaultCatalog(snapshot)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *projected.config)
 	}
 	return out, nil
 }
@@ -125,17 +121,16 @@ func (s *CategoryDefaultGroupService) Preview(ctx context.Context, category stri
 	if err != nil {
 		return nil, err
 	}
-	current, err := s.repo.Get(ctx, category)
-	if err != nil && !errors.Is(err, ErrCategoryDefaultNotFound) {
-		return nil, err
-	}
-	if current == nil {
-		current = &CategoryDefaultGroupConfig{Category: category}
-	}
-	sources, err := s.repo.Sources(ctx, ids)
+	snapshot, err := s.repo.Snapshot(ctx, CategoryDefaultSnapshotRequest{Category: category, AdditionalSourceGroupIDs: ids, IncludeHistory: true})
 	if err != nil {
 		return nil, err
 	}
+	previousCatalog, err := projectCategoryDefaultCatalog(snapshot)
+	if err != nil {
+		return nil, err
+	}
+	current := snapshot.Config
+	sources := categoryDefaultSelectedSources(snapshot.Sources, ids)
 	if len(sources) != len(ids) {
 		return nil, ErrCategoryDefaultInvalidSource
 	}
@@ -144,9 +139,8 @@ func (s *CategoryDefaultGroupService) Preview(ctx context.Context, category stri
 		return nil, err
 	}
 	preview := &CategoryDefaultGroupPreview{Category: category, Revision: current.Revision, SourceGroupIDs: ids, PreviewHash: categoryDefaultPreviewHash(category, current.Revision, ids, models, conflicts, sources, current.InvalidatedModels), Added: []CategoryDefaultPublishedModel{}, Modified: []CategoryDefaultPublishedModel{}, Removed: []CategoryDefaultPublishedModel{}, Unchanged: []CategoryDefaultPublishedModel{}, Conflicts: conflicts, ModelsCount: len(models)}
-	invalidated := categoryDefaultInvalidationSet(current.InvalidatedModels)
-	previous := make(map[string]CategoryDefaultPublishedModel, len(current.Models))
-	for _, model := range current.Models {
+	previous := make(map[string]CategoryDefaultPublishedModel, len(previousCatalog.config.Models))
+	for _, model := range previousCatalog.config.Models {
 		previous[categoryDefaultModelKey(model.PublicModel)] = model
 	}
 	for _, model := range models {
@@ -155,7 +149,7 @@ func (s *CategoryDefaultGroupService) Preview(ctx context.Context, category stri
 		delete(previous, key)
 		if !exists {
 			preview.Added = append(preview.Added, model)
-		} else if invalidated[key] || old.SourceGroupID != model.SourceGroupID || old.SourceModel != model.SourceModel || old.Fingerprint != model.Fingerprint || old.PublicModel != model.PublicModel {
+		} else if old.SourceGroupID != model.SourceGroupID || old.SourceModel != model.SourceModel || old.Fingerprint != model.Fingerprint || old.PublicModel != model.PublicModel {
 			preview.Modified = append(preview.Modified, model)
 		} else {
 			preview.Unchanged = append(preview.Unchanged, model)
@@ -203,7 +197,10 @@ func (s *CategoryDefaultGroupService) Apply(ctx context.Context, category string
 	if err == nil && s.invalidator != nil {
 		s.invalidator.InvalidateAuthCacheByGroupID(ctx, result.GroupID)
 	}
-	return result, err
+	if err != nil {
+		return nil, err
+	}
+	return s.currentConfig(ctx, category)
 }
 
 func (s *CategoryDefaultGroupService) SetStatus(ctx context.Context, category string, enabled bool) (*CategoryDefaultGroupConfig, error) {
@@ -214,7 +211,22 @@ func (s *CategoryDefaultGroupService) SetStatus(ctx context.Context, category st
 	if err == nil && s.invalidator != nil {
 		s.invalidator.InvalidateAuthCacheByGroupID(ctx, config.GroupID)
 	}
-	return config, err
+	if err != nil {
+		return nil, err
+	}
+	return s.currentConfig(ctx, category)
+}
+
+func (s *CategoryDefaultGroupService) currentConfig(ctx context.Context, category string) (*CategoryDefaultGroupConfig, error) {
+	snapshot, err := s.repo.Snapshot(ctx, CategoryDefaultSnapshotRequest{Category: category})
+	if err != nil {
+		return nil, err
+	}
+	projected, err := projectCategoryDefaultCatalog(snapshot)
+	if err != nil {
+		return nil, err
+	}
+	return projected.config, nil
 }
 
 type categoryDefaultRuntime struct {
@@ -227,46 +239,14 @@ type categoryDefaultRuntime struct {
 }
 
 func (s *CategoryDefaultGroupService) runtime(ctx context.Context, entryID int64) (*categoryDefaultRuntime, error) {
-	config, err := s.repo.GetByGroupID(ctx, entryID)
+	snapshot, err := s.repo.Snapshot(ctx, CategoryDefaultSnapshotRequest{GroupID: entryID})
 	if err != nil {
 		return nil, err
 	}
-	if config == nil || config.GroupID != entryID || !config.Enabled || !validCategoryDefaultCategory(config.Category) {
+	if snapshot == nil || snapshot.Config == nil || snapshot.Config.GroupID != entryID || !snapshot.Config.Enabled {
 		return nil, ErrCategoryDefaultSourceUnavailable
 	}
-	sources, err := s.repo.Sources(ctx, config.SourceGroupIDs)
-	if err != nil {
-		return nil, ErrCategoryDefaultSourceUnavailable.WithCause(err)
-	}
-	runtime := &categoryDefaultRuntime{config: config, current: make(map[string]CategoryDefaultPublishedModel), conflicts: make(map[string]bool), invalidated: categoryDefaultInvalidationSet(config.InvalidatedModels), groups: make(map[int64]*Group)}
-	runtime.sources = make(map[int64]CategoryDefaultSourceSnapshot)
-	valid := make([]CategoryDefaultSourceSnapshot, 0, len(sources))
-	for _, source := range sources {
-		if !categoryDefaultSourceEligible(config.Category, source.Group) {
-			continue
-		}
-		declarations, err := categoryDefaultSourceModels(source)
-		if err != nil {
-			continue
-		}
-		for model := range categoryDefaultGrokProcessMismatches(source, declarations) {
-			runtime.invalidated[model] = true
-		}
-		valid = append(valid, source)
-		runtime.groups[source.Group.ID] = source.Group
-		runtime.sources[source.Group.ID] = source
-	}
-	models, conflicts, err := buildCategoryDefaultCatalog(config.Category, valid)
-	if err != nil {
-		return nil, ErrCategoryDefaultSourceUnavailable.WithCause(err)
-	}
-	for _, model := range models {
-		runtime.current[categoryDefaultModelKey(model.PublicModel)] = model
-	}
-	for _, conflict := range conflicts {
-		runtime.conflicts[categoryDefaultModelKey(conflict.PublicModel)] = true
-	}
-	return runtime, nil
+	return projectCategoryDefaultCatalog(snapshot)
 }
 
 func categoryDefaultUserCanUse(user *User, group *Group) bool {
@@ -279,34 +259,24 @@ func (s *CategoryDefaultGroupService) ResolveForUser(ctx context.Context, entryI
 		return nil, err
 	}
 	key := categoryDefaultModelKey(model)
-	var published *CategoryDefaultPublishedModel
-	for i := range runtime.config.Models {
-		if categoryDefaultModelKey(runtime.config.Models[i].PublicModel) == key {
-			published = &runtime.config.Models[i]
-			break
-		}
-	}
-	if published == nil {
-		return nil, ErrCategoryDefaultModelNotAllowed
-	}
-	group := runtime.groups[published.SourceGroupID]
-	if !categoryDefaultUserCanUse(user, group) {
-		return nil, ErrCategoryDefaultModelNotAllowed
-	}
 	if runtime.conflicts[key] {
 		return nil, ErrCategoryDefaultModelConflict
+	}
+	current, exists := runtime.current[key]
+	if !exists {
+		return nil, ErrCategoryDefaultModelNotAllowed
+	}
+	group := runtime.groups[current.SourceGroupID]
+	if !categoryDefaultUserCanUse(user, group) {
+		return nil, ErrCategoryDefaultModelNotAllowed
 	}
 	if runtime.invalidated[key] {
 		return nil, ErrCategoryDefaultPendingSync
 	}
-	current, exists := runtime.current[key]
-	if !exists {
-		return nil, ErrCategoryDefaultSourceUnavailable
+	if err := s.validateSourceChannel(ctx, runtime.sources[current.SourceGroupID]); err != nil {
+		return nil, err
 	}
-	if current.SourceGroupID != published.SourceGroupID || current.SourceModel != published.SourceModel || current.Fingerprint != published.Fingerprint {
-		return nil, ErrCategoryDefaultPendingSync
-	}
-	return &CategoryDefaultModelRoute{EntryGroupID: entryID, SourceGroup: group, PublicModel: published.PublicModel, SourceModel: published.SourceModel, GeminiNative: current.GeminiNative}, nil
+	return &CategoryDefaultModelRoute{EntryGroupID: entryID, SourceGroup: group, PublicModel: current.PublicModel, SourceModel: current.SourceModel, GeminiNative: current.GeminiNative}, nil
 }
 
 func categoryDefaultPlatformAllowed(group *Group, current CategoryDefaultPublishedModel, platform string) bool {
@@ -336,14 +306,12 @@ func (s *CategoryDefaultGroupService) ModelsForUser(ctx context.Context, entryID
 		return nil, err
 	}
 	models := make([]string, 0, len(runtime.config.Models))
-	for _, published := range runtime.config.Models {
-		key := categoryDefaultModelKey(published.PublicModel)
-		group := runtime.groups[published.SourceGroupID]
-		current, exists := runtime.current[key]
-		if !exists || runtime.conflicts[key] || runtime.invalidated[key] || !categoryDefaultUserCanUse(user, group) || current.SourceGroupID != published.SourceGroupID || current.SourceModel != published.SourceModel || current.Fingerprint != published.Fingerprint || !categoryDefaultPlatformAllowed(group, current, strings.TrimSpace(platform)) {
+	for _, current := range runtime.config.Models {
+		group := runtime.groups[current.SourceGroupID]
+		if !categoryDefaultUserCanUse(user, group) || !categoryDefaultPlatformAllowed(group, current, strings.TrimSpace(platform)) {
 			continue
 		}
-		models = append(models, published.PublicModel)
+		models = append(models, current.PublicModel)
 	}
 	sort.Slice(models, func(i, j int) bool { return categoryDefaultModelKey(models[i]) < categoryDefaultModelKey(models[j]) })
 	return models, nil

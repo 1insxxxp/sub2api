@@ -184,13 +184,13 @@ func categoryDefaultRuntimeErrorMessage(err error) string {
 	case errors.Is(err, service.ErrCategoryDefaultModelConflict):
 		return "模型调用名重名冲突，请联系管理员调整关联来源"
 	case errors.Is(err, service.ErrCategoryDefaultPendingSync):
-		return "此模型的来源声明已变更，等待管理员确认同步"
+		return "此模型的路由配置尚未在当前实例生效，请稍后重试或联系管理员"
 	case errors.Is(err, service.ErrCategoryDefaultSourceUnavailable):
 		return "来源分组暂不可用，请稍后重试或联系管理员"
 	case errors.Is(err, service.ErrCategoryDefaultNotFound):
 		return "默认分组已关闭或不存在，请使用具体分组调用"
 	default:
-		return "此模型尚未发布或当前账号无权使用，请联系管理员检查默认分组配置"
+		return "此模型当前不在关联来源的有效清单中，或当前账号无权使用，请联系管理员检查默认分组配置"
 	}
 }
 

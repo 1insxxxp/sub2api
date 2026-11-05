@@ -1,15 +1,19 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"image"
 	"io"
 	"mime"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
+	"sort"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -146,13 +150,19 @@ func (s *ImageStudioService) GetOptions(ctx context.Context, userID int64) (*Ima
 	}
 	for i := range groups {
 		group := groups[i]
-		models, err := s.discoverImageModels(ctx, &group)
+		formats, err := s.discoverImageModelFormats(ctx, &group)
 		if err != nil {
 			return nil, err
 		}
+		models := make([]string, 0, len(formats))
+		for model := range formats {
+			models = append(models, model)
+		}
+		sort.Strings(models)
 		option := imageStudioGroupOptionFromGroup(&group)
 		option.Models = imageStudioModelOptions(models)
 		for i := range option.Models {
+			option.Models[i].OutputFormats = formats[option.Models[i].Model]
 			qualities, prices, err := s.imageStudioModelPrices(ctx, userID, &group, option.Models[i].Model)
 			if err != nil {
 				return nil, fmt.Errorf("estimate image model price: %w", err)
@@ -369,7 +379,9 @@ func (s *ImageStudioService) Generate(ctx context.Context, input ImageStudioGene
 		return nil, ErrImageStudioExecutorMissing
 	}
 	executionInput := normalized
-	executionInput.Prompt = ImageStudioPromptWithAspectRatioGuidance(normalized.Prompt, normalized.AspectRatio)
+	if normalized.OutputFormat != "gif" {
+		executionInput.Prompt = ImageStudioPromptWithAspectRatioGuidance(normalized.Prompt, normalized.AspectRatio)
+	}
 	result, err := s.executor.Generate(ctx, executionInput)
 	if err != nil {
 		return nil, imageStudioExecutionError("generate image", err)
@@ -539,6 +551,22 @@ func (s *ImageStudioService) prepareGenerateInput(ctx context.Context, input Ima
 	if err != nil {
 		return nil, ImageStudioGenerateInput{}, err
 	}
+	if NormalizeImageStudioOutputFormat(input.OutputFormat) == "gif" {
+		if err := ValidateImageStudioOutputOptions("gif", input.Background); err != nil {
+			return nil, ImageStudioGenerateInput{}, infraerrors.BadRequest("INVALID_IMAGE_OUTPUT_OPTIONS", err.Error())
+		}
+		formats, err := s.discoverImageModelFormats(ctx, group)
+		if err != nil {
+			return nil, ImageStudioGenerateInput{}, err
+		}
+		if !slices.Contains(formats[model], "gif") {
+			return nil, ImageStudioGenerateInput{}, infraerrors.BadRequest("IMAGE_GIF_UNSUPPORTED", "selected model has no supported GIF generation route")
+		}
+		input.Model, input.Prompt = model, prompt
+		input.OutputFormat, input.Background = "gif", NormalizeImageStudioBackground(input.Background)
+		input.Size, input.AspectRatio, input.Quality, input.BillingTier = "auto", "auto", "", ""
+		return cfg, input, nil
+	}
 	aspectRatio := firstNonEmptyTrimmed(input.AspectRatio, "1:1")
 	quality := NormalizeImageStudioQuality(input.Quality)
 	size, billingTier, err := ResolveImageStudioRenderSpec(aspectRatio, quality)
@@ -562,6 +590,9 @@ func (s *ImageStudioService) prepareGenerateInput(ctx context.Context, input Ima
 }
 
 func (s *ImageStudioService) prepareEditInput(ctx context.Context, input ImageStudioEditInput) (*ImageStudioSettings, ImageStudioEditInput, error) {
+	if NormalizeImageStudioOutputFormat(input.OutputFormat) == "gif" {
+		return nil, ImageStudioEditInput{}, infraerrors.BadRequest("IMAGE_GIF_GENERATION_ONLY", "GIF supports generation only; reference images and edits are not supported")
+	}
 	cfg, err := s.loadSettings(ctx)
 	if err != nil {
 		return nil, ImageStudioEditInput{}, err
@@ -733,7 +764,7 @@ func imageStudioModelsForGroup(group *Group) []string {
 
 func imageStudioModelOptions(models []string) []ImageStudioModelOption {
 	out := make([]ImageStudioModelOption, 0, len(models))
-	for _, model := range dedupeImageStudioModels(models) {
+	for _, model := range dedupeImageStudioModelsWithPredicate(models, nil) {
 		out = append(out, ImageStudioModelOption{
 			Model:        model,
 			Label:        model,
@@ -885,6 +916,11 @@ func (s *ImageStudioService) storeExecutionResult(
 	imageBytes, mimeType, finalOutputFormat, err := normalizeImageStudioOutputImage(result.ImageBytes, mimeType, finalOutputFormat, finalBackground, aspectRatio, size)
 	if err != nil {
 		return nil, fmt.Errorf("normalize generated image: %w", err)
+	}
+	if finalOutputFormat == "gif" || size == "auto" {
+		if actual, _, decodeErr := image.DecodeConfig(bytes.NewReader(imageBytes)); decodeErr == nil {
+			size = fmt.Sprintf("%dx%d", actual.Width, actual.Height)
+		}
 	}
 	now := time.Now()
 	objectKey, err := GenerateImageStorageObjectKey(userID, mimeType, now)
@@ -1142,7 +1178,8 @@ func (s *ImageStudioService) generateTaskWithRecovery(ctx context.Context, input
 			return image, attempt.Quality, image.Cost, nil
 		}
 		lastErr = err
-		if !imageStudioProviderTimedOutOrDisconnected(err) {
+		var downloadErr *imageStudioGeneratedImageDownloadError
+		if errors.As(err, &downloadErr) || !imageStudioProviderTimedOutOrDisconnected(err) {
 			break
 		}
 	}
@@ -1168,6 +1205,10 @@ func imageStudioGenerationRecoveryAttempts(input ImageStudioGenerateInput) []Ima
 
 func normalizeImageStudioTaskAttempt(input ImageStudioGenerateInput) ImageStudioGenerateInput {
 	out := input
+	if NormalizeImageStudioOutputFormat(out.OutputFormat) == "gif" {
+		out.Size, out.AspectRatio, out.Quality, out.BillingTier = "auto", "auto", "", ""
+		return out
+	}
 	quality := NormalizeImageStudioQuality(out.Quality)
 	size, billingTier, err := ResolveImageStudioRenderSpec(out.AspectRatio, quality)
 	if err != nil {
@@ -1207,7 +1248,12 @@ func imageStudioExecutionError(operation string, err error) error {
 	var applicationErr *infraerrors.ApplicationError
 	var failoverErr *UpstreamFailoverError
 	var imageErr *OpenAIImagesUpstreamError
+	var downloadErr *imageStudioGeneratedImageDownloadError
 	switch {
+	case errors.As(err, &downloadErr):
+		return fmt.Errorf("%s: %w", operation, infraerrors.ServiceUnavailable(
+			"IMAGE_RESULT_DOWNLOAD_FAILED", "image was generated but could not be downloaded; generation was not retried and no charge was made",
+		).WithCause(err))
 	case errors.As(err, &applicationErr):
 		return fmt.Errorf("%s: %w", operation, err)
 	case errors.As(err, &failoverErr):

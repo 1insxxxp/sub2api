@@ -26,13 +26,18 @@ func (r *categoryDefaultModelsRepository) Sources(context.Context, []int64) ([]s
 	return r.sources, nil
 }
 
+func (r *categoryDefaultModelsRepository) Snapshot(_ context.Context, req service.CategoryDefaultSnapshotRequest) (*service.CategoryDefaultCatalogSnapshot, error) {
+	config := r.config
+	return &service.CategoryDefaultCatalogSnapshot{Config: &config, Sources: r.sources}, nil
+}
+
 type categoryDefaultModelsUserRepository struct{ service.UserRepository }
 
 func (categoryDefaultModelsUserRepository) GetByID(_ context.Context, id int64) (*service.User, error) {
 	return &service.User{ID: id, Status: service.StatusActive}, nil
 }
 
-func TestCategoryDefaultCodexManifestIsCompleteAndContainsOnlyPublishedNames(t *testing.T) {
+func TestCategoryDefaultCodexManifestFollowsCurrentAssociatedDeclarations(t *testing.T) {
 	entryID, sourceID := int64(91), int64(12)
 	repo := &categoryDefaultModelsRepository{
 		config: service.CategoryDefaultGroupConfig{GroupID: entryID, Category: "gemini", Enabled: true, SourceGroupIDs: []int64{sourceID}},
@@ -42,14 +47,7 @@ func TestCategoryDefaultCodexManifestIsCompleteAndContainsOnlyPublishedNames(t *
 		}},
 	}
 	groups := service.NewCategoryDefaultGroupService(repo, nil)
-	preview, err := groups.Preview(context.Background(), "gemini", []int64{sourceID})
-	require.NoError(t, err)
-	for _, model := range preview.Added {
-		if model.PublicModel == "friendly-model" {
-			repo.config.Models = []service.CategoryDefaultPublishedModel{model}
-		}
-	}
-	require.Len(t, repo.config.Models, 1)
+	repo.config.Models = []service.CategoryDefaultPublishedModel{{PublicModel: "friendly-model", SourceGroupID: sourceID, SourceModel: "friendly-model"}}
 	keys := service.NewAPIKeyService(nil, categoryDefaultModelsUserRepository{}, nil, nil, nil, nil, nil)
 	keys.SetCategoryDefaultGroupService(groups)
 	h := &GatewayHandler{apiKeyService: keys}
@@ -57,10 +55,9 @@ func TestCategoryDefaultCodexManifestIsCompleteAndContainsOnlyPublishedNames(t *
 	recorder, c := systemCustomModelsRequestContext(t, key, "/v1/models?client_version=0.144.0")
 	h.CategoryDefaultCodexModels(c)
 	require.Equal(t, http.StatusOK, recorder.Code)
-	require.Equal(t, []string{"friendly-model"}, gjsonStrings(recorder.Body.String(), "models.#.slug"))
+	require.Equal(t, []string{"friendly-model", "hidden-pending"}, gjsonStrings(recorder.Body.String(), "models.#.slug"))
 	require.True(t, gjson.Get(recorder.Body.String(), "models.0.supported_in_api").Bool())
 	require.Equal(t, []string{"text"}, gjsonStrings(recorder.Body.String(), "models.0.input_modalities"))
-	require.NotContains(t, recorder.Body.String(), "hidden-pending")
 	require.NotContains(t, recorder.Body.String(), "gemini-2.5-flash", "only the public model name reaches the client manifest")
 }
 

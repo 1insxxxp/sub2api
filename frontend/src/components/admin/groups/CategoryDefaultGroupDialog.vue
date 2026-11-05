@@ -44,6 +44,23 @@
         </button>
       </div>
 
+      <div v-if="config?.conflicts?.length" data-testid="category-default-live-conflicts" class="rounded-md border border-amber-200 px-3 py-2 text-xs leading-5 text-amber-800 dark:border-amber-800/70 dark:text-amber-300" role="status">
+        <p>{{ t('categoryDefaults.liveConflictHint') }}</p>
+        <ul class="mt-1 space-y-1">
+          <li v-for="conflict in config.conflicts" :key="conflict.public_model" class="break-words">
+            <strong class="font-mono font-medium">{{ conflict.public_model }}</strong> · {{ conflictSources(conflict).join('、') }}
+          </li>
+        </ul>
+      </div>
+      <div v-if="config?.unavailable_sources?.length" data-testid="category-default-unavailable-sources" class="text-xs leading-5 text-amber-700 dark:text-amber-400" role="status">
+        <p>{{ t('categoryDefaults.unavailableSourcesHint') }}</p>
+        <ul>
+          <li v-for="source in config.unavailable_sources" :key="source.source_group_id">
+            {{ sourceName(source.source_group_id) }} · {{ t(source.reason === 'unbounded' ? 'categoryDefaults.invalidSource' : 'categoryDefaults.sourceUnavailable') }}
+          </li>
+        </ul>
+      </div>
+
       <section>
         <div class="mb-2 flex items-center justify-between gap-3">
           <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ t('categoryDefaults.sources') }}</h3>

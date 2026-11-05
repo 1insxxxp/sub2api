@@ -17,6 +17,8 @@ export interface CategoryDefaultConfig {
   source_group_ids: number[]
   models: CategoryDefaultModel[]
   models_count: number
+  conflicts?: CategoryDefaultConflict[]
+  unavailable_sources?: { source_group_id: number; reason: 'unavailable' | 'unbounded' }[]
 }
 
 export interface CategoryDefaultCandidate {

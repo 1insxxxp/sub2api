@@ -246,8 +246,10 @@ func (s *OpenAIGatewayService) ParseOpenAIImagesRequest(c *gin.Context, body []b
 			req.Model = model
 		}
 	}
-	if err := validateCompatibleImagesModel(req.Model); err != nil {
-		return nil, err
+	if studio, _ := c.Request.Context().Value(imageStudioImageAliasContextKey{}).(bool); !studio {
+		if err := validateCompatibleImagesModel(req.Model); err != nil {
+			return nil, err
+		}
 	}
 	req.SizeTier = normalizeOpenAIImageSizeTier(req.Size)
 	req.RequiredCapability = classifyOpenAIImagesCapability(req)
@@ -652,8 +654,10 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesAPIKey(
 	if mapped := strings.TrimSpace(channelMappedModel); mapped != "" {
 		requestModel = mapped
 	}
-	if err := validateCompatibleImagesModel(requestModel); err != nil {
-		return nil, err
+	if studio, _ := ctx.Value(imageStudioImageAliasContextKey{}).(bool); !studio {
+		if err := validateCompatibleImagesModel(requestModel); err != nil {
+			return nil, err
+		}
 	}
 	upstreamModel := account.GetMappedModel(requestModel)
 	if err := validateCompatibleImagesModel(upstreamModel); err != nil {
@@ -1642,7 +1646,8 @@ func isLikelyOpenAIImageDownloadURL(raw string) bool {
 		strings.Contains(lower, ".png") ||
 		strings.Contains(lower, ".jpg") ||
 		strings.Contains(lower, ".jpeg") ||
-		strings.Contains(lower, ".webp")
+		strings.Contains(lower, ".webp") ||
+		strings.Contains(lower, ".gif")
 }
 
 func fetchOpenAIImageDownloadURL(

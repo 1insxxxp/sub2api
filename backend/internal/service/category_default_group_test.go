@@ -16,12 +16,29 @@ func categoryDefaultSource(id int64, name string, mapping map[string]any) Catego
 }
 
 func TestCategoryDefaultCatalogConflictsAcrossSources(t *testing.T) {
-	sources := []CategoryDefaultSourceSnapshot{categoryDefaultSource(1, "first", map[string]any{" Foo ": "upstream-a"}), categoryDefaultSource(2, "second", map[string]any{"foo": "upstream-b"})}
+	// Account keys are exact routing declarations, not trim-normalized input.
+	// Both sources must really serve their spelling before testing collision.
+	sources := []CategoryDefaultSourceSnapshot{categoryDefaultSource(1, "first", map[string]any{"Foo": "upstream-a"}), categoryDefaultSource(2, "second", map[string]any{"foo": "upstream-b"})}
+	for i, name := range []string{"Foo", "foo"} {
+		_, matched := sources[i].Accounts[0].ResolveMappedModel(name)
+		require.True(t, matched)
+	}
 	models, conflicts, err := buildCategoryDefaultCatalog("gemini", sources)
 	require.NoError(t, err)
 	require.Empty(t, models)
 	require.Len(t, conflicts, 1)
 	require.Equal(t, []int64{1, 2}, conflicts[0].SourceGroupIDs)
+}
+
+func TestCategoryDefaultCatalogDoesNotInventRoutesFromWhitespaceMappingKeys(t *testing.T) {
+	source := categoryDefaultSource(1, "first", map[string]any{" Foo ": "upstream-a", "safe": "upstream-safe"})
+	_, matched := source.Accounts[0].ResolveMappedModel("Foo")
+	require.False(t, matched, "the real account lookup does not normalize a stored mapping key")
+	models, conflicts, err := buildCategoryDefaultCatalog("gemini", []CategoryDefaultSourceSnapshot{source})
+	require.NoError(t, err)
+	require.Empty(t, conflicts)
+	require.Len(t, models, 1)
+	require.Equal(t, "safe", models[0].PublicModel)
 }
 
 func TestCategoryDefaultCatalogFingerprintAndAlias(t *testing.T) {
@@ -67,6 +84,21 @@ type categoryDefaultStoreFake struct {
 	sources []CategoryDefaultSourceSnapshot
 }
 
+func (f *categoryDefaultStoreFake) Snapshot(_ context.Context, req CategoryDefaultSnapshotRequest) (*CategoryDefaultCatalogSnapshot, error) {
+	config := &CategoryDefaultGroupConfig{Category: req.Category, SourceGroupIDs: []int64{}, Models: []CategoryDefaultPublishedModel{}}
+	if f.config != nil && (req.Category == f.config.Category || req.GroupID == f.config.GroupID) {
+		clone := *f.config
+		config = &clone
+	} else if req.GroupID != 0 {
+		return nil, ErrCategoryDefaultNotFound
+	}
+	if !req.IncludeHistory {
+		config.InvalidatedModels = nil
+	}
+	ids := append(append([]int64(nil), config.SourceGroupIDs...), req.AdditionalSourceGroupIDs...)
+	return &CategoryDefaultCatalogSnapshot{Config: config, Sources: categoryDefaultSelectedSources(f.sources, ids)}, nil
+}
+
 func (f *categoryDefaultStoreFake) List(context.Context) ([]CategoryDefaultGroupConfig, error) {
 	if f.config == nil {
 		return nil, nil
@@ -99,7 +131,7 @@ func (f *categoryDefaultStoreFake) Publish(_ context.Context, category string, i
 	if current.Revision != expected {
 		return nil, ErrCategoryDefaultStalePreview
 	}
-	models, err := validate(current, f.sources)
+	models, err := validate(current, categoryDefaultSelectedSources(f.sources, ids))
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +146,7 @@ func (f *categoryDefaultStoreFake) SetStatus(_ context.Context, _ string, enable
 	return f.config, nil
 }
 
-func TestCategoryDefaultManualPublishPermissionAndMappingChanges(t *testing.T) {
+func TestCategoryDefaultSavedSourcesFollowPermissionAndMappingChanges(t *testing.T) {
 	ctx := context.Background()
 	fake := &categoryDefaultStoreFake{sources: []CategoryDefaultSourceSnapshot{categoryDefaultSource(1, "first", map[string]any{"foo": "upstream"})}}
 	svc := NewCategoryDefaultGroupService(fake, nil)
@@ -132,12 +164,12 @@ func TestCategoryDefaultManualPublishPermissionAndMappingChanges(t *testing.T) {
 	fake.sources[0].Accounts[0].Credentials = map[string]any{"model_mapping": map[string]any{"foo": "upstream", "bar": "new-upstream"}}
 	models, err := svc.ModelsForUser(ctx, 100, user, "")
 	require.NoError(t, err)
-	require.Equal(t, []string{"foo"}, models)
+	require.Equal(t, []string{"bar", "foo"}, models)
 	_, err = svc.ResolveForUser(ctx, 100, user, "bar")
-	require.ErrorIs(t, err, ErrCategoryDefaultModelNotAllowed)
+	require.NoError(t, err)
 	fake.sources[0].Accounts[0].Credentials = map[string]any{"model_mapping": map[string]any{"foo": "changed"}}
 	_, err = svc.ResolveForUser(ctx, 100, user, "foo")
-	require.ErrorIs(t, err, ErrCategoryDefaultPendingSync)
+	require.NoError(t, err)
 	user.AllowedGroups = nil
 	models, err = svc.ModelsForUser(ctx, 100, user, "")
 	require.NoError(t, err)
@@ -258,7 +290,7 @@ func TestCategoryDefaultCatalogMatchesAccountLookupExactly(t *testing.T) {
 	}
 }
 
-func TestCategoryDefaultCompactMappingRequiresRepublishOnlyWhenEffectiveRouteChanges(t *testing.T) {
+func TestCategoryDefaultCompactMappingFollowsEffectiveRouteChanges(t *testing.T) {
 	for _, key := range []string{"public-model", "gpt-*"} {
 		t.Run(key, func(t *testing.T) {
 			ctx := context.Background()
@@ -280,31 +312,31 @@ func TestCategoryDefaultCompactMappingRequiresRepublishOnlyWhenEffectiveRouteCha
 			require.NoError(t, err)
 			compact[key] = "gpt-5-nano"
 			_, err = svc.ResolveForUser(ctx, 100, user, "public-model")
-			require.ErrorIs(t, err, ErrCategoryDefaultPendingSync)
+			require.NoError(t, err)
 		})
 	}
 }
 
-func TestCategoryDefaultLatchedInvalidationNeedsConfirmedPublish(t *testing.T) {
+func TestCategoryDefaultHistoryOnlyExpiresSavePreview(t *testing.T) {
 	ctx := context.Background()
 	svc, store := categoryDefaultPublishSource(t, categoryDefaultSource(1, "first", map[string]any{"foo": "gemini-2.5-flash"}), "gemini")
 	oldPreview, err := svc.Preview(ctx, "gemini", []int64{1})
 	require.NoError(t, err)
 	// The declaration has returned to its approved value after an intervening
-	// change; the repository's persistent event journal still requires review.
+	// change; history expires save previews but must not block current routes.
 	store.config.InvalidatedModels = []string{"foo"}
 	user := &User{ID: 2, Status: StatusActive}
 	_, err = svc.ResolveForUser(ctx, 100, user, "foo")
-	require.ErrorIs(t, err, ErrCategoryDefaultPendingSync)
+	require.NoError(t, err)
 	models, err := svc.ModelsForUser(ctx, 100, user, "")
 	require.NoError(t, err)
-	require.Empty(t, models)
+	require.Equal(t, []string{"foo"}, models)
 	_, err = svc.Apply(ctx, "gemini", CategoryDefaultGroupApplyRequest{SourceGroupIDs: []int64{1}, ExpectedRevision: oldPreview.Revision, PreviewHash: oldPreview.PreviewHash})
 	require.ErrorIs(t, err, ErrCategoryDefaultStalePreview)
 	preview, err := svc.Preview(ctx, "gemini", []int64{1})
 	require.NoError(t, err)
-	require.Len(t, preview.Modified, 1)
-	require.Empty(t, preview.Unchanged)
+	require.Empty(t, preview.Modified)
+	require.Len(t, preview.Unchanged, 1)
 	store.sources[0].DeclarationEpoch++
 	_, err = svc.Apply(ctx, "gemini", CategoryDefaultGroupApplyRequest{SourceGroupIDs: []int64{1}, ExpectedRevision: preview.Revision, PreviewHash: preview.PreviewHash})
 	require.ErrorIs(t, err, ErrCategoryDefaultStalePreview, "a new change/restore cycle must expire a preview even when the blocked names are unchanged")

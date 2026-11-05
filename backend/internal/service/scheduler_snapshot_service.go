@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sort"
 	"strconv"
 	"sync"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/domain"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 )
 
@@ -355,6 +357,35 @@ func (s *SchedulerSnapshotService) GetAccount(ctx context.Context, accountID int
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
+	}
+	// Default entries resolve declarations from a current database snapshot.
+	// Hydrating their actual selection from Redis could restore an old mapping
+	// after that check, including on sticky and pre-forward admission paths.
+	if key, ok := ctx.Value(ctxkey.APIKey).(*APIKey); ok && key != nil && key.CategoryDefaultGroupID != nil {
+		if *key.CategoryDefaultGroupID <= 0 || key.GroupID == nil || *key.GroupID <= 0 ||
+			key.Group == nil || key.Group.ID != *key.GroupID || key.Group.IsCategoryDefault || s.accountRepo == nil {
+			return nil, ErrCategoryDefaultSourceUnavailable
+		}
+		// This is an authoritative read, not a cache-failure fallback. Keep it
+		// bounded even when fallback timeouts are disabled for ordinary requests.
+		timeout := 3 * time.Second
+		if s.cfg != nil && s.cfg.Gateway.Scheduling.DbFallbackTimeoutSeconds > 0 {
+			timeout = time.Duration(s.cfg.Gateway.Scheduling.DbFallbackTimeoutSeconds) * time.Second
+		}
+		readCtx, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel()
+		account, err := s.accountRepo.GetByID(readCtx, accountID)
+		if readCtx.Err() != nil {
+			return nil, readCtx.Err()
+		}
+		if err != nil {
+			return nil, ErrCategoryDefaultSourceUnavailable.WithCause(err)
+		}
+		if account == nil || account.ID != accountID || account.Status != StatusActive || !account.Schedulable ||
+			!slices.Contains(account.GroupIDs, *key.GroupID) || !IsGroupAccountAllowedForUser(ctx, key.GroupID, accountID) {
+			return nil, ErrCategoryDefaultSourceUnavailable
+		}
+		return account, nil
 	}
 	if s.cache != nil {
 		account, err := s.cache.GetAccount(ctx, accountID)

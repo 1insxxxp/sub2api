@@ -69,10 +69,17 @@ func TestCategoryDefaultHistoricalChangeOnlyInvalidatesAffectedPublishedModel(t 
 func TestCategoryDefaultHistoricalConflictsOnlyInvalidateTheCollidingName(t *testing.T) {
 	source := categoryDefaultHistoryFixture(t, 1, map[string]any{"Foo": "gemini-2.5-flash", "bar": "gemini-2.5-pro"})
 	config := categoryDefaultHistoryConfig(t, source)
-	other := categoryDefaultHistoryFixture(t, 2, map[string]any{" foo ": "gemini-3-pro", "new": "gemini-2.5-pro"})
+	config.SourceGroupIDs = append(config.SourceGroupIDs, 2)
+	other := categoryDefaultHistoryFixture(t, 2, map[string]any{"foo": "gemini-3-pro", "new": "gemini-2.5-pro"})
+	_, matched := other.Accounts[0].ResolveMappedModel("foo")
+	require.True(t, matched, "the conflicting declaration must be routable by the actual account lookup")
 	require.Equal(t, map[string]bool{"foo": true}, categoryDefaultHistoryInvalidations(config, 2, other))
 	other.Group.Status = "inactive"
 	require.Empty(t, categoryDefaultHistoryInvalidations(config, 2, other), "unavailable foreign source does not disable unrelated owners")
+	malformed := categoryDefaultHistoryFixture(t, 2, map[string]any{" foo ": "gemini-3-pro", "new": "gemini-2.5-pro"})
+	_, matched = malformed.Accounts[0].ResolveMappedModel("foo")
+	require.False(t, matched)
+	require.Empty(t, categoryDefaultHistoryInvalidations(config, 2, malformed), "an unroutable whitespace key must not fabricate a historical conflict")
 }
 
 func TestCategoryDefaultHistoricalSourceDisableCategoryAndRemovalAreSticky(t *testing.T) {
