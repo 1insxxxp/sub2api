@@ -194,6 +194,68 @@ func TestForwardClaude55LegacyThinkingRequestedEffortAudit(t *testing.T) {
 	require.Equal(t, "low", parsed.OutputEffort)
 }
 
+func TestClaude55ContinuationBillsNormalizedEffort(t *testing.T) {
+	for _, tc := range []struct{ model, fields, want string }{
+		{"claude-opus-5-5", `"thinking":{"type":"disabled"},"output_config":{"effort":"max"}`, "low"},
+		{"claude-sonnet-5-5", `"thinking":{"type":"disabled"},"output_config":{"effort":"max"}`, "high"},
+		{"claude-opus-5-5", `"thinking":{"type":"enabled","budget_tokens":4096}`, "medium"},
+	} {
+		for _, enabled := range []bool{false, true} {
+			for _, stream := range []bool{false, true} {
+				for _, passthrough := range []bool{false, true} {
+					t.Run(fmt.Sprintf("%s/%s/enabled=%t/stream=%t/passthrough=%t", tc.model, tc.want, enabled, stream, passthrough), func(t *testing.T) {
+						body := []byte(fmt.Sprintf(`{"model":"long-text","max_tokens":256,"stream":%t,"messages":[{"role":"user","content":"write"}],%s}`, stream, tc.fields))
+						parsed, err := ParseGatewayRequest(NewRequestBodyRef(body), PlatformAnthropic)
+						require.NoError(t, err)
+						var responses []*http.Response
+						for i, reason := range []string{"max_tokens", "end_turn"} {
+							payload, contentType := anthropicTextStream("hello", reason, 100, 5), "text/event-stream"
+							if !stream {
+								payload = fmt.Sprintf(`{"id":"msg-%d","type":"message","role":"assistant","model":%q,"content":[{"type":"text","text":"hello"}],"stop_reason":%q,"usage":{"input_tokens":100,"output_tokens":5}}`, i, tc.model, reason)
+								contentType = "application/json"
+							}
+							responses = append(responses, &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": {contentType}}, Body: io.NopCloser(strings.NewReader(payload))})
+						}
+						upstream := &httpUpstreamRecorder{responses: responses}
+						svc := &GatewayService{cfg: rawChatCompletionsTestConfig(), httpUpstream: upstream, tlsFPProfileService: &TLSFingerprintProfileService{}, rateLimitService: &RateLimitService{}, deferredService: &DeferredService{}}
+						account := newAnthropicAPIKeyAccountForTest()
+						account.Extra["anthropic_passthrough"] = passthrough
+						account.Extra[AccountExtraAntiTruncation] = accountContinuationTestAccount(enabled).Extra[AccountExtraAntiTruncation]
+						account.Credentials["model_mapping"] = map[string]any{"long-text": tc.model}
+						c, _ := newGeminiOutputLimitContext(body)
+						ctx := context.Background()
+						if parsed.OutputEffort != "" {
+							ctx = WithRequestedReasoningEffort(ctx, parsed.OutputEffort)
+						}
+						result, err := svc.Forward(ctx, c, account, parsed)
+						require.NoError(t, err)
+						require.NotNil(t, result)
+						require.Equal(t, tc.want, optionalStringValue(result.ReasoningEffort))
+						if parsed.OutputEffort != "" {
+							require.Equal(t, "max", optionalStringValue(result.RequestedReasoningEffort))
+						}
+						leaves := []*ForwardResult{result}
+						if enabled {
+							require.Len(t, result.ContinuationResults, 2)
+							leaves = result.ContinuationResults
+						}
+						require.Len(t, upstream.bodies, len(leaves))
+						billing := NewBillingService(rawChatCompletionsTestConfig(), nil)
+						group := &Group{ID: 1, Platform: PlatformAnthropic, ModelPricing: []ChannelModelPricing{{Models: []string{tc.model}, BillingMode: BillingModeToken, InputPrice: testPtrFloat64(1e-6), OutputPrice: testPtrFloat64(0), ReasoningEffortMultipliers: map[string]float64{"low": 1, "medium": 2, "high": 3, "max": 7}}}}
+						for i, leaf := range leaves {
+							require.Equal(t, tc.want, optionalStringValue(leaf.ReasoningEffort))
+							require.Equal(t, tc.want, gjson.GetBytes(upstream.bodies[i], "output_config.effort").String())
+							cost, costErr := billing.CalculateTokenCostForRequest(TokenCostRequest{Ctx: context.Background(), Model: tc.model, Group: group, Tokens: UsageTokens{InputTokens: leaf.Usage.InputTokens, OutputTokens: leaf.Usage.OutputTokens}, ReasoningEffort: optionalStringValue(leaf.ReasoningEffort), RateMultiplier: 1, Resolver: NewModelPricingResolver(nil, billing)})
+							require.NoError(t, costErr)
+							require.InDelta(t, 100e-6*group.ModelPricing[0].ReasoningEffortMultipliers[tc.want], cost.ActualCost, 1e-12)
+						}
+					})
+				}
+			}
+		}
+	}
+}
+
 func TestClaude55LegacyThinkingBedrockPreservesEffectiveEffort(t *testing.T) {
 	body := []byte(`{"model":"claude-opus-5-5","max_tokens":256,"messages":[{"role":"user","content":"hello"}],"thinking":{"type":"disabled"}}`)
 	normalized, changed := normalizeClaude55LegacyThinking(body, "anthropic.claude-opus-5-5")

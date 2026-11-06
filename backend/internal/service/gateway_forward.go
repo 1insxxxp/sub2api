@@ -147,8 +147,14 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 		}
 		if changed {
 			defer func() {
-				if result != nil && result.RequestedReasoningEffort == nil {
-					result.RequestedReasoningEffort = requestedEffort
+				if result != nil {
+					// Continuation forwards a cloned request per round. Keep the
+					// effective tier on each result so billing cannot fall back
+					// to the outer request's unconverted legacy effort.
+					result.ReasoningEffort = NormalizeClaudeOutputEffort(parsed.OutputEffort)
+					if result.RequestedReasoningEffort == nil {
+						result.RequestedReasoningEffort = requestedEffort
+					}
 				}
 			}()
 		}

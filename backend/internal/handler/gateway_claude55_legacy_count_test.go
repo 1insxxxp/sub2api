@@ -4,6 +4,7 @@ package handler
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -33,11 +34,21 @@ func (u *claude55CountPolicyUpstream) DoWithTLS(req *http.Request, proxy string,
 
 func TestClaude55CountTokensHandlerEnforcesDerivedEffortPolicy(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	for _, deny := range []bool{false, true} {
-		t.Run(map[bool]string{false: "downgrade", true: "deny"}[deny], func(t *testing.T) {
+	for _, tc := range []struct {
+		name, extra, ceiling, want string
+		deny                       bool
+		mappings                   []service.ReasoningEffortMapping
+	}{
+		{name: "derived downgrade", ceiling: "medium", want: "medium"},
+		{name: "derived deny", ceiling: "medium", deny: true},
+		{name: "explicit downgrade", extra: `,"output_config":{"effort":"max"}`, ceiling: "medium", want: "medium"},
+		{name: "explicit deny", extra: `,"output_config":{"effort":"max"}`, ceiling: "medium", deny: true},
+		{name: "explicit mapping once", extra: `,"output_config":{"effort":"max"}`, want: "high", mappings: []service.ReasoningEffortMapping{{From: "max", To: "high"}, {From: "high", To: "low"}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
 			groupID := int64(9800)
-			group := &service.Group{ID: groupID, Hydrated: true, Platform: service.PlatformAnthropic, Status: service.StatusActive, MaxReasoningEffort: "medium"}
-			if deny {
+			group := &service.Group{ID: groupID, Hydrated: true, Platform: service.PlatformAnthropic, Status: service.StatusActive, MaxReasoningEffort: tc.ceiling, ReasoningEffortMappings: tc.mappings}
+			if tc.deny {
 				group.MaxReasoningEffortOverLimit = service.ReasoningEffortOverLimitDeny
 			}
 			account := &service.Account{ID: 9801, Platform: service.PlatformAnthropic, Type: service.AccountTypeAPIKey,
@@ -56,18 +67,18 @@ func TestClaude55CountTokensHandlerEnforcesDerivedEffortPolicy(t *testing.T) {
 			apiKey := &service.APIKey{ID: 9850, UserID: 9851, GroupID: &groupID, Group: group, Status: service.StatusActive, User: &service.User{ID: 9851, Balance: 100}}
 			rec := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(rec)
-			body := `{"model":"public-claude","messages":[{"role":"user","content":"hello"}],"thinking":{"type":"enabled","budget_tokens":32768}}`
+			body := fmt.Sprintf(`{"model":"public-claude","messages":[{"role":"user","content":"hello"}],"thinking":{"type":"enabled","budget_tokens":32768}%s}`, tc.extra)
 			c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages/count_tokens", strings.NewReader(body)).WithContext(context.WithValue(context.Background(), ctxkey.Group, group))
 			c.Set(string(middleware.ContextKeyAPIKey), apiKey)
 			c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: apiKey.UserID, Concurrency: 10})
 			h.CountTokens(c)
-			if deny {
+			if tc.deny {
 				require.Equal(t, http.StatusForbidden, rec.Code, rec.Body.String())
 				require.Empty(t, upstream.body)
 				return
 			}
 			require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-			require.Equal(t, "medium", gjson.GetBytes(upstream.body, "output_config.effort").String())
+			require.Equal(t, tc.want, gjson.GetBytes(upstream.body, "output_config.effort").String())
 		})
 	}
 }
