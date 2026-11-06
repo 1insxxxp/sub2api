@@ -3528,21 +3528,7 @@ func init() {
 	// userimagetaskDescQuality is the schema descriptor for quality field.
 	userimagetaskDescQuality := userimagetaskFields[9].Descriptor()
 	// userimagetask.QualityValidator is a validator for the "quality" field. It is called by the builders before save.
-	userimagetask.QualityValidator = func() func(string) error {
-		validators := userimagetaskDescQuality.Validators
-		fns := [...]func(string) error{
-			validators[0].(func(string) error),
-			validators[1].(func(string) error),
-		}
-		return func(quality string) error {
-			for _, fn := range fns {
-				if err := fn(quality); err != nil {
-					return err
-				}
-			}
-			return nil
-		}
-	}()
+	userimagetask.QualityValidator = userimagetaskDescQuality.Validators[0].(func(string) error)
 	// userimagetaskDescOutputFormat is the schema descriptor for output_format field.
 	userimagetaskDescOutputFormat := userimagetaskFields[10].Descriptor()
 	// userimagetask.DefaultOutputFormat holds the default value on creation for the output_format field.

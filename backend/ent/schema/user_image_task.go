@@ -59,8 +59,8 @@ func (UserImageTask) Fields() []ent.Field {
 			MaxLen(16).
 			NotEmpty(),
 		field.String("quality").
-			MaxLen(32).
-			NotEmpty(),
+			// GIF generation has no static-image quality tier.
+			MaxLen(32),
 		field.String("output_format").
 			MaxLen(16).
 			Default("png"),

@@ -114,3 +114,43 @@ func TestUserImageTaskRepositoryMarkFailed(t *testing.T) {
 	require.Contains(t, failed.ErrorMessage, "not charged")
 	require.NotNil(t, failed.CompletedAt)
 }
+
+func TestUserImageTaskRepositoryGIFWithoutStaticQuality(t *testing.T) {
+	imageRepo, client := newUserImageEntRepo(t)
+	taskRepo := NewUserImageTaskRepository(client)
+	ctx := context.Background()
+	userID := createUserImageTestUser(t, client, "gif-task-user@example.com")
+	task := &service.ImageStudioTask{
+		UserID: userID, Mode: service.ImageStudioModeGeneration,
+		Status: service.ImageStudioTaskStatusQueued,
+		Model:  "gpt-image-2.6", Prompt: "animated kite",
+		AspectRatio: "auto", Size: "auto", OutputFormat: "gif",
+		Background: "auto", EstimatedCost: 0.375,
+	}
+	require.NoError(t, taskRepo.Create(ctx, task))
+	require.NotZero(t, task.ID)
+	require.Empty(t, task.Quality)
+	claimed, err := taskRepo.MarkRunning(ctx, task.ID, time.Now())
+	require.NoError(t, err)
+	require.True(t, claimed)
+	image := createUserImageTestRecord(t, imageRepo, service.ImageStudioImageRecord{
+		UserID: userID, Mode: service.ImageStudioModeGeneration,
+		Model: task.Model, Prompt: task.Prompt, AspectRatio: "auto", Size: "auto",
+		OutputFormat: "gif", Background: "auto", MimeType: "image/gif",
+		ImageURL:         "https://assets.example.com/animated.gif",
+		StorageDriver:    service.ImageStorageDriverLocal,
+		StorageObjectKey: "images/gif-test/animated.gif", Bytes: 128, Cost: 0.375,
+	})
+	completed, err := taskRepo.MarkSucceeded(ctx, task.ID, &image, "", 0.375, time.Now())
+	require.NoError(t, err)
+	require.Equal(t, service.ImageStudioTaskStatusSucceeded, completed.Status)
+	require.Empty(t, completed.Quality)
+	persisted, err := taskRepo.GetByID(ctx, userID, task.ID)
+	require.NoError(t, err)
+	require.Empty(t, persisted.Quality)
+	require.Equal(t, "gif", persisted.OutputFormat)
+	require.Equal(t, "auto", persisted.Size)
+	require.Equal(t, image.ID, *persisted.ImageID)
+	require.Equal(t, "image/gif", persisted.Image.MimeType)
+	require.Equal(t, 0.375, persisted.EstimatedCost)
+}
