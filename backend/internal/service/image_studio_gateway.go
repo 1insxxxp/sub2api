@@ -200,8 +200,17 @@ func (e *ImageStudioGatewayExecutor) execute(ctx context.Context, input imageStu
 
 	gifOutput := NormalizeImageStudioOutputFormat(input.OutputFormat) == "gif"
 	if gifOutput {
-		if input.Endpoint != openAIImagesGenerationsEndpoint || input.SourceImageCount > 0 || len(input.ReferenceImages) > 0 {
-			return nil, fmt.Errorf("GIF supports generation only")
+		switch input.Endpoint {
+		case openAIImagesGenerationsEndpoint:
+			if input.SourceImageCount > 0 || len(input.ReferenceImages) > 0 {
+				return nil, fmt.Errorf("GIF reference images require the edit endpoint")
+			}
+		case openAIImagesEditsEndpoint:
+			if len(input.ReferenceImages) == 0 {
+				return nil, fmt.Errorf("reference image is required")
+			}
+		default:
+			return nil, fmt.Errorf("unsupported GIF image endpoint")
 		}
 		if err := ValidateImageStudioOutputOptions("gif", input.Background); err != nil {
 			return nil, err
@@ -250,12 +259,23 @@ func (e *ImageStudioGatewayExecutor) execute(ctx context.Context, input imageStu
 			}
 			return nil, fmt.Errorf("image scheduler returned an excluded account")
 		}
-		if gifOutput && !imageStudioAccountSupportsGIF(account, firstNonEmptyTrimmed(channelMapping.MappedModel, parsed.Model)) {
+		gifSupported := true
+		gifRoute := "generation"
+		if gifOutput {
+			mappedModel := firstNonEmptyTrimmed(channelMapping.MappedModel, parsed.Model)
+			if input.Endpoint == openAIImagesEditsEndpoint {
+				gifSupported = imageStudioAccountSupportsGIFEdit(account, mappedModel)
+				gifRoute = "edit"
+			} else {
+				gifSupported = imageStudioAccountSupportsGIF(account, mappedModel)
+			}
+		}
+		if !gifSupported {
 			if selection.ReleaseFunc != nil {
 				selection.ReleaseFunc()
 			}
 			excluded[account.ID] = struct{}{}
-			lastFailoverErr = fmt.Errorf("selected account has no supported GIF generation route")
+			lastFailoverErr = fmt.Errorf("selected account has no supported GIF %s route", gifRoute)
 			continue
 		}
 		ginCtx, recorder = newImageStudioGatewayGinContext(input.Endpoint, input.ContentType, input.Body, input.UserAgent, input.IPAddress)
@@ -541,8 +561,14 @@ func imageStudioReferenceImageMIMEType(image ImageStudioReferenceImage) string {
 }
 
 func buildImageStudioEditBody(input ImageStudioEditInput) ([]byte, string, error) {
-	if NormalizeImageStudioOutputFormat(input.OutputFormat) == "gif" {
-		return nil, "", fmt.Errorf("GIF supports generation only")
+	gifOutput := NormalizeImageStudioOutputFormat(input.OutputFormat) == "gif"
+	if gifOutput {
+		if err := ValidateImageStudioOutputOptions("gif", input.Background); err != nil {
+			return nil, "", err
+		}
+		if len(input.ReferenceImages) == 0 {
+			return nil, "", fmt.Errorf("reference image is required")
+		}
 	}
 	var buffer bytes.Buffer
 	writer := multipart.NewWriter(&buffer)
@@ -557,6 +583,10 @@ func buildImageStudioEditBody(input ImageStudioEditInput) ([]byte, string, error
 	}
 	if background := strings.TrimSpace(input.Background); background != "" {
 		fields["background"] = background
+	}
+	if gifOutput {
+		fields["output_format"], fields["size"] = "gif", "auto"
+		delete(fields, "response_format")
 	}
 	for key, value := range fields {
 		if err := writer.WriteField(key, value); err != nil {

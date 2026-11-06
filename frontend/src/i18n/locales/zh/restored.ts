@@ -72,7 +72,7 @@ export default {
     noUpcomingStreakLottery: '暂无下一档抽奖次数奖励。'
   },
   imageStudio: {
-    gifHint: 'GIF 动图 · 自动帧尺寸。仅支持文生图，能否生成取决于上游账户权限。',
+    gifHint: 'GIF 动图 · 自动帧尺寸。参考图编辑仅限已验证的 OpenAI gpt-image-2.6 API Key 线路（含映射别名），可用性取决于上游账户权限。',
     kicker: '提示词、生图与编辑',
     title: 'AI 生图工作台',
     description: '使用你的密钥池在线生图，支持参考图编辑，并从现有 USD 钱包余额扣费。',

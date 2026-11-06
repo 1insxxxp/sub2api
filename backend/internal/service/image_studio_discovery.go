@@ -44,11 +44,22 @@ func imageStudioAccountSupportsGIF(account *Account, model string) bool {
 	return account != nil && account.Platform == PlatformOpenAI && account.Type == AccountTypeAPIKey && imageStudioGIFModel(account.GetMappedModel(model))
 }
 
-func (s *ImageStudioService) discoverImageModelFormats(ctx context.Context, group *Group) (map[string][]string, error) {
-	models := make(map[string][]string)
+// GIF editing has been verified for the base model only. Generation support
+// alone must not advertise editing or select an unverified account route.
+func imageStudioAccountSupportsGIFEdit(account *Account, model string) bool {
+	return account != nil && account.Platform == PlatformOpenAI && account.Type == AccountTypeAPIKey && strings.EqualFold(strings.TrimSpace(account.GetMappedModel(model)), "gpt-image-2.6")
+}
+
+type imageStudioModelFormats struct {
+	Generation []string
+	Edit       []string
+}
+
+func (s *ImageStudioService) discoverImageModelFormats(ctx context.Context, group *Group) (map[string]imageStudioModelFormats, error) {
+	models := make(map[string]imageStudioModelFormats)
 	if s.modelAccounts == nil {
 		for _, model := range imageStudioModelsForGroup(group) {
-			models[model] = nil
+			models[model] = imageStudioModelFormats{}
 		}
 		return models, nil
 	}
@@ -109,12 +120,14 @@ func (s *ImageStudioService) discoverImageModelFormats(ctx context.Context, grou
 			if !imageStudioModelSupportedByGroup(group, account.GetMappedModel(requestModel)) {
 				continue
 			}
-			if _, exists := models[model]; !exists {
-				models[model] = nil
-			}
+			formats := models[model]
 			if imageStudioAccountSupportsGIF(account, requestModel) {
-				models[model] = []string{"png", "jpeg", "webp", "gif"}
+				formats.Generation = []string{"png", "jpeg", "webp", "gif"}
 			}
+			if imageStudioAccountSupportsGIFEdit(account, requestModel) {
+				formats.Edit = []string{"png", "jpeg", "webp", "gif"}
+			}
+			models[model] = formats
 		}
 	}
 	return models, nil

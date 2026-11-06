@@ -798,6 +798,7 @@ import {
   type ImageStudioMode,
   type ImageStudioModelOption,
   type ImageStudioOptions,
+  type ImageStudioOutputFormat,
   type ImageStudioQualityOption,
   type ImageStudioTask,
 } from '@/api/images'
@@ -827,7 +828,6 @@ const model = ref('')
 const aspectRatio = ref('1:1')
 const quality = ref('1K')
 type ImageStudioOutputCount = 1 | 2 | 3 | 4
-type ImageStudioOutputFormat = 'png' | 'jpeg' | 'webp' | 'gif'
 type ImageStudioBackground = 'auto' | 'opaque' | 'transparent'
 const outputCount = ref<ImageStudioOutputCount>(1)
 const outputFormat = ref<ImageStudioOutputFormat>('png')
@@ -899,8 +899,12 @@ const modelOptions = computed<ImageStudioModelOption[]>(() =>
   (selectedGroup.value?.models ?? []).filter((item) => item.capabilities.includes(mode.value)),
 )
 const selectedModelOption = computed(() => modelOptions.value.find((item) => item.model === model.value))
-const gifSupported = computed(() => selectedModelOption.value?.output_formats?.includes('gif') === true)
-const gifAvailable = computed(() => gifSupported.value && mode.value === 'generation' && referenceFiles.value.length === 0 && !referenceLoadingImage.value)
+const gifGenerationSupported = computed(() => selectedModelOption.value?.output_formats?.includes('gif') === true)
+const gifEditSupported = computed(() => selectedModelOption.value?.edit_output_formats?.includes('gif') === true)
+const gifSupported = computed(() => gifGenerationSupported.value || gifEditSupported.value)
+const gifAvailable = computed(() => mode.value === 'edit'
+  ? gifEditSupported.value
+  : gifGenerationSupported.value && referenceFiles.value.length === 0 && !referenceLoadingImage.value)
 const isGIF = computed(() => outputFormat.value === 'gif')
 const outputFormatOptions = computed(() => gifSupported.value
   ? [...staticOutputFormatOptions, { value: 'gif' as const, label: 'GIF' }]

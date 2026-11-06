@@ -4,6 +4,7 @@ import type { PaginatedResponse } from '@/types'
 const IMAGE_STUDIO_REQUEST_TIMEOUT_MS = 300000
 
 export type ImageStudioMode = 'generation' | 'edit'
+export type ImageStudioOutputFormat = 'png' | 'jpeg' | 'webp' | 'gif'
 
 export interface ImageStudioAspectRatio {
   ratio: string
@@ -23,7 +24,8 @@ export interface ImageStudioModelOption {
   model: string
   label: string
   mapped_model?: string
-  output_formats?: string[]
+  output_formats?: ImageStudioOutputFormat[]
+  edit_output_formats?: ImageStudioOutputFormat[]
   capabilities: string[]
   qualities?: ImageStudioQualityOption[]
   prices?: ImageStudioPricePreviewItem[]
@@ -180,6 +182,7 @@ export async function listTasks(
 
 export async function edit(payload: ImageStudioEditPayload): Promise<ImageStudioImage> {
   const formData = new FormData()
+  const isGIF = payload.output_format === 'gif'
   if (payload.api_key_id != null) {
     formData.append('api_key_id', String(payload.api_key_id))
   }
@@ -188,8 +191,11 @@ export async function edit(payload: ImageStudioEditPayload): Promise<ImageStudio
   }
   formData.append('model', payload.model)
   formData.append('prompt', payload.prompt)
-  formData.append('aspect_ratio', payload.aspect_ratio)
-  if (payload.quality) {
+  formData.append('aspect_ratio', isGIF ? 'auto' : payload.aspect_ratio)
+  if (isGIF) {
+    formData.append('size', 'auto')
+  }
+  if (!isGIF && payload.quality) {
     formData.append('quality', payload.quality)
   }
   if (payload.output_format) {

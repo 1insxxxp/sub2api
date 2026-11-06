@@ -57,13 +57,14 @@ type ImageStudioGroupOption struct {
 }
 
 type ImageStudioModelOption struct {
-	Model         string                        `json:"model"`
-	Label         string                        `json:"label"`
-	OutputFormats []string                      `json:"output_formats,omitempty"`
-	MappedModel   string                        `json:"mapped_model,omitempty"`
-	Capabilities  []string                      `json:"capabilities"`
-	Qualities     []ImageStudioQualityOption    `json:"qualities,omitempty"`
-	Prices        []ImageStudioPricePreviewItem `json:"prices,omitempty"`
+	Model             string                        `json:"model"`
+	Label             string                        `json:"label"`
+	OutputFormats     []string                      `json:"output_formats,omitempty"`
+	EditOutputFormats []string                      `json:"edit_output_formats,omitempty"`
+	MappedModel       string                        `json:"mapped_model,omitempty"`
+	Capabilities      []string                      `json:"capabilities"`
+	Qualities         []ImageStudioQualityOption    `json:"qualities,omitempty"`
+	Prices            []ImageStudioPricePreviewItem `json:"prices,omitempty"`
 }
 
 type ImageStudioQualityOption struct {

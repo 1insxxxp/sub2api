@@ -1,10 +1,11 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { nextTick } from 'vue'
 
 import ImageStudioView from '../ImageStudioView.vue'
 
-const { getConfig, getOptions, generate, createTask, getTask, listTasks, edit, list, deleteImage, downloadImageFile, listKeys, refreshUser, showError, showSuccess } =
+const { getConfig, getOptions, generate, createTask, getTask, listTasks, edit, list, deleteImage, downloadImageFile, listKeys, refreshUser, showError, showSuccess, apiPost } =
   vi.hoisted(() => ({
     getConfig: vi.fn(),
     getOptions: vi.fn(),
@@ -20,7 +21,10 @@ const { getConfig, getOptions, generate, createTask, getTask, listTasks, edit, l
     refreshUser: vi.fn(),
     showError: vi.fn(),
     showSuccess: vi.fn(),
+    apiPost: vi.fn(),
   }))
+
+vi.mock('@/api/client', () => ({ apiClient: { post: apiPost } }))
 
 vi.mock('@/api/images', () => ({
   imageStudioAPI: {
@@ -235,6 +239,7 @@ describe('ImageStudioView', () => {
     getTask.mockReset()
     listTasks.mockReset()
     edit.mockReset()
+    apiPost.mockReset()
     list.mockReset()
     deleteImage.mockReset()
     downloadImageFile.mockReset()
@@ -645,9 +650,9 @@ describe('ImageStudioView', () => {
     wrapper.unmount()
   })
 
-  it('disables GIF and resets the selected format when switching to reference editing', async () => {
+  it.each(['gpt-image-2.6', '绘图/loop', 'gpt-image-2.6-sunburst', 'gpt-image-2.6-flare'])('disables GIF editing for %s without explicit edit capability', async (model) => {
     getOptions.mockResolvedValueOnce({ ...options, groups: [{ ...options.groups[0], models: [{
-      model: '绘图/loop', label: 'Loop', capabilities: ['generation', 'edit'], output_formats: ['png', 'gif'],
+      model, label: model, capabilities: ['generation', 'edit'], output_formats: ['png', 'gif'],
     }] }] })
     const wrapper = mount(ImageStudioView, { global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Icon: true } } })
     await flushPromises()
@@ -656,6 +661,190 @@ describe('ImageStudioView', () => {
     expect(wrapper.get('[data-testid="image-studio-output-format-gif"]').attributes('disabled')).toBeDefined()
     expect(wrapper.get('[data-testid="image-studio-output-format-png"]').classes()).toContain('active')
     wrapper.unmount()
+  })
+
+  describe('GIF editing', () => {
+    const gifModel = {
+      model: '绘图/loop', label: 'Loop', capabilities: ['generation', 'edit'],
+      output_formats: ['png', 'gif'], edit_output_formats: ['png', 'gif'],
+    }
+    const editedImage = {
+      id: 13, mode: 'edit', model: gifModel.model, prompt: 'Animate the reference',
+      aspect_ratio: 'auto', size: 'auto', output_format: 'gif', mime_type: 'image/gif',
+      image_url: 'https://assets.example.com/loop.gif', cost: 0.07, bytes: 100,
+      source_image_count: 1, created_at: '2026-06-22T00:00:00Z', updated_at: '2026-06-22T00:00:00Z',
+    }
+    const mountStudio = () => mount(ImageStudioView, {
+      global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Icon: true } },
+    })
+
+    beforeEach(() => {
+      getOptions.mockResolvedValue({ ...options, groups: [{ ...options.groups[0], models: [gifModel] }] })
+      edit.mockResolvedValue(editedImage)
+      apiPost.mockResolvedValue({ data: editedImage })
+    })
+
+    it.each(['gpt-image-2.6', '绘图/loop'])('keeps GIF selected after uploading real files and submits %s through multipart', async (model) => {
+      getOptions.mockResolvedValueOnce({ ...options, groups: [{ ...options.groups[0], models: [{ ...gifModel, model }] }] })
+      const { edit: realEdit } = await vi.importActual<typeof import('@/api/images')>('@/api/images')
+      edit.mockImplementationOnce(realEdit)
+      const wrapper = mountStudio()
+      await flushPromises()
+      await wrapper.get('[data-testid="image-studio-quality-4K"]').trigger('click')
+      await wrapper.get('[data-testid="image-studio-ratio-16:9"]').trigger('click')
+      await wrapper.findAll('.image-studio-mode-switch button')[1].trigger('click')
+      const gifButton = wrapper.get('[data-testid="image-studio-output-format-gif"]')
+      expect(gifButton.attributes('disabled')).toBeUndefined()
+      await gifButton.trigger('click')
+      await wrapper.get('[data-testid="image-studio-prompt"]').setValue('Animate the reference')
+      expect(wrapper.get('[data-testid="image-studio-generate-button"]').attributes('disabled')).toBeDefined()
+
+      const files = [
+        new File(['original-png'], 'reference.png', { type: 'image/png' }),
+        new File(['original-webp'], 'reference.webp', { type: 'image/webp' }),
+      ]
+      const input = wrapper.get('input[type="file"]')
+      Object.defineProperty(input.element, 'files', { value: files, configurable: true })
+      await input.trigger('change')
+      expect(gifButton.classes()).toContain('active')
+      expect(wrapper.findAll('[data-testid="image-studio-reference-preview"]')).toHaveLength(2)
+      expect(wrapper.find('[data-testid="image-studio-quality-4K"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="image-studio-ratio-16:9"]').exists()).toBe(false)
+      expect(wrapper.get('[data-testid="image-studio-generate-button"]').attributes('disabled')).toBeUndefined()
+      await wrapper.get('[data-testid="image-studio-submit"]').trigger('submit')
+      await flushPromises()
+
+      expect(edit).toHaveBeenCalledWith({
+        api_key_id: 15, group_id: 9, model, prompt: 'Animate the reference',
+        aspect_ratio: 'auto', output_format: 'gif', images: files,
+      })
+      expect(apiPost).toHaveBeenCalledTimes(1)
+      const [url, form] = apiPost.mock.calls[0]!
+      expect(url).toBe('/user/images/edit')
+      expect(form).toBeInstanceOf(FormData)
+      expect(form.get('model')).toBe(model)
+      expect(form.get('output_format')).toBe('gif')
+      expect(form.get('aspect_ratio')).toBe('auto')
+      expect(form.get('size')).toBe('auto')
+      expect(form.has('quality')).toBe(false)
+      expect(form.has('background')).toBe(false)
+      expect(form.has('response_format')).toBe(false)
+      expect(form.getAll('image')).toEqual(files)
+      expect(form.getAll('image')[0]).toBe(files[0])
+      expect(createTask).not.toHaveBeenCalled()
+      expect(showError).not.toHaveBeenCalled()
+      wrapper.unmount()
+    })
+
+    it('uses edit_output_formats independently of generation output_formats', async () => {
+      getOptions.mockResolvedValueOnce({ ...options, groups: [{ ...options.groups[0], models: [{
+        ...gifModel, output_formats: ['png'],
+      }] }] })
+      const wrapper = mountStudio()
+      await flushPromises()
+      const generationGIF = wrapper.find('[data-testid="image-studio-output-format-gif"]')
+      if (generationGIF.exists()) expect(generationGIF.attributes('disabled')).toBeDefined()
+      await wrapper.findAll('.image-studio-mode-switch button')[1].trigger('click')
+      const gifButton = wrapper.find('[data-testid="image-studio-output-format-gif"]')
+      expect(gifButton.exists()).toBe(true)
+      expect(gifButton.attributes('disabled')).toBeUndefined()
+      await gifButton.trigger('click')
+      expect(gifButton.classes()).toContain('active')
+      await wrapper.findAll('.image-studio-mode-switch button')[0].trigger('click')
+      expect(wrapper.get('[data-testid="image-studio-output-format-png"]').classes()).toContain('active')
+      wrapper.unmount()
+    })
+
+    it.each([true, false])('loads a history reference with GIF edit capability=%s without dropping files', async (supportsGIFEdit) => {
+      getOptions.mockResolvedValueOnce({ ...options, groups: [{ ...options.groups[0], models: [{
+        ...gifModel, edit_output_formats: supportsGIFEdit ? ['png', 'gif'] : undefined,
+      }] }] })
+      list.mockResolvedValueOnce({ items: [editedImage], total: 1, page: 1, page_size: 12, pages: 1 })
+      let finishDownload!: (value: { blob: Blob; filename: string }) => void
+      downloadImageFile.mockReturnValueOnce(new Promise((resolve) => { finishDownload = resolve }))
+      const wrapper = mountStudio()
+      await flushPromises()
+      await wrapper.get('[data-testid="image-studio-output-format-gif"]').trigger('click')
+      const useReference = wrapper.findAll('button').find((button) => button.text().includes('imageStudio.useAsReference'))!
+      await useReference.trigger('click')
+      expect(wrapper.find('[data-testid="image-studio-reference-pending"]').exists()).toBe(true)
+      const selectedFormat = supportsGIFEdit ? 'gif' : 'png'
+      expect(wrapper.get(`[data-testid="image-studio-output-format-${selectedFormat}"]`).classes()).toContain('active')
+      finishDownload({ blob: new Blob(['GIF89a-original-frames'], { type: 'image/gif' }), filename: 'loop.gif' })
+      await flushPromises()
+      expect(wrapper.get(`[data-testid="image-studio-output-format-${selectedFormat}"]`).classes()).toContain('active')
+      expect(wrapper.get('[data-testid="image-studio-reference-preview"]').attributes('src')).toBe('blob:passion-api-image-13.gif')
+      await wrapper.get('[data-testid="image-studio-submit"]').trigger('submit')
+      await flushPromises()
+      const payload = edit.mock.calls[0]![0]
+      expect(payload.output_format).toBe(supportsGIFEdit ? 'gif' : undefined)
+      expect(payload.quality).toBe(supportsGIFEdit ? undefined : '1K')
+      expect(payload.images).toHaveLength(1)
+      expect(payload.images[0]).toBeInstanceOf(File)
+      expect(payload.images[0]).toMatchObject({ name: 'passion-api-image-13.gif', type: 'image/gif', size: 22 })
+      wrapper.unmount()
+    })
+
+    it('falls back to PNG when switching to a model without GIF edit capability', async () => {
+      getOptions.mockResolvedValueOnce({ ...options, groups: [{ ...options.groups[0], models: [gifModel, {
+        ...gifModel, model: 'gpt-image-2.6-flare', label: 'Flare', edit_output_formats: ['png'],
+      }] }] })
+      const wrapper = mountStudio()
+      await flushPromises()
+      await wrapper.findAll('.image-studio-mode-switch button')[1].trigger('click')
+      await wrapper.get('[data-testid="image-studio-output-format-gif"]').trigger('click')
+      expect(wrapper.get('[data-testid="image-studio-output-format-gif"]').classes()).toContain('active')
+      await wrapper.get('[data-testid="image-studio-model-select"]').trigger('click')
+      await wrapper.findAll('[data-testid="image-studio-model-menu"] button')[1].trigger('click')
+      expect(wrapper.get('[data-testid="image-studio-output-format-png"]').classes()).toContain('active')
+      expect(wrapper.get('[data-testid="image-studio-output-format-gif"]').attributes('disabled')).toBeDefined()
+      wrapper.unmount()
+    })
+
+    it('resets a transparent background to auto and rejects transparency for GIF editing', async () => {
+      const wrapper = mountStudio()
+      await flushPromises()
+      await wrapper.findAll('.image-studio-mode-switch button')[1].trigger('click')
+      // Background controls are intentionally hidden; exercise the preserved state guard.
+      const state = wrapper.vm as unknown as {
+        outputBackground: string
+        chooseOutputBackground: (value: string) => void
+        isOutputBackgroundDisabled: (value: string) => boolean
+      }
+      state.chooseOutputBackground('transparent')
+      await nextTick()
+      expect(state.outputBackground).toBe('transparent')
+      await wrapper.get('[data-testid="image-studio-output-format-gif"]').trigger('click')
+      expect(wrapper.get('[data-testid="image-studio-output-format-gif"]').classes()).toContain('active')
+      expect(state.outputBackground).toBe('auto')
+      expect(state.isOutputBackgroundDisabled('transparent')).toBe(true)
+      state.chooseOutputBackground('transparent')
+      expect(state.outputBackground).toBe('auto')
+      wrapper.unmount()
+    })
+
+    it.each([undefined, '4K'])('serializes GIF multipart without static quality=%s and forces automatic dimensions', async (quality) => {
+      const { edit: realEdit } = await vi.importActual<typeof import('@/api/images')>('@/api/images')
+      const file = new File(['reference-bytes'], 'reference.png', { type: 'image/png' })
+      await realEdit({ model: gifModel.model, prompt: 'Animate', aspect_ratio: '16:9', quality, output_format: 'gif', images: [file] })
+      const form = apiPost.mock.calls[0]![1] as FormData
+      expect(form.get('aspect_ratio')).toBe('auto')
+      expect(form.get('size')).toBe('auto')
+      expect(form.has('quality')).toBe(false)
+      expect(form.getAll('image')).toEqual([file])
+    })
+
+    it('preserves static edit multipart quality, aspect ratio and reference files', async () => {
+      const { edit: realEdit } = await vi.importActual<typeof import('@/api/images')>('@/api/images')
+      const file = new File(['reference-bytes'], 'reference.png', { type: 'image/png' })
+      await realEdit({ model: gifModel.model, prompt: 'Edit', aspect_ratio: '16:9', quality: '4K', output_format: 'webp', images: [file] })
+      const form = apiPost.mock.calls[0]![1] as FormData
+      expect(form.get('aspect_ratio')).toBe('16:9')
+      expect(form.get('quality')).toBe('4K')
+      expect(form.get('output_format')).toBe('webp')
+      expect(form.has('size')).toBe(false)
+      expect(form.getAll('image')).toEqual([file])
+    })
   })
 
   it('does not infer GIF capability from an unverified GPT image name', async () => {

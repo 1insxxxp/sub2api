@@ -162,7 +162,8 @@ func (s *ImageStudioService) GetOptions(ctx context.Context, userID int64) (*Ima
 		option := imageStudioGroupOptionFromGroup(&group)
 		option.Models = imageStudioModelOptions(models)
 		for i := range option.Models {
-			option.Models[i].OutputFormats = formats[option.Models[i].Model]
+			option.Models[i].OutputFormats = formats[option.Models[i].Model].Generation
+			option.Models[i].EditOutputFormats = formats[option.Models[i].Model].Edit
 			qualities, prices, err := s.imageStudioModelPrices(ctx, userID, &group, option.Models[i].Model)
 			if err != nil {
 				return nil, fmt.Errorf("estimate image model price: %w", err)
@@ -398,7 +399,9 @@ func (s *ImageStudioService) Edit(ctx context.Context, input ImageStudioEditInpu
 		return nil, ErrImageStudioExecutorMissing
 	}
 	executionInput := normalized
-	executionInput.Prompt = ImageStudioPromptWithAspectRatioGuidance(normalized.Prompt, normalized.AspectRatio)
+	if normalized.OutputFormat != "gif" {
+		executionInput.Prompt = ImageStudioPromptWithAspectRatioGuidance(normalized.Prompt, normalized.AspectRatio)
+	}
 	result, err := s.executor.Edit(ctx, executionInput)
 	if err != nil {
 		return nil, imageStudioExecutionError("edit image", err)
@@ -559,7 +562,7 @@ func (s *ImageStudioService) prepareGenerateInput(ctx context.Context, input Ima
 		if err != nil {
 			return nil, ImageStudioGenerateInput{}, err
 		}
-		if !slices.Contains(formats[model], "gif") {
+		if !slices.Contains(formats[model].Generation, "gif") {
 			return nil, ImageStudioGenerateInput{}, infraerrors.BadRequest("IMAGE_GIF_UNSUPPORTED", "selected model has no supported GIF generation route")
 		}
 		input.Model, input.Prompt = model, prompt
@@ -590,9 +593,6 @@ func (s *ImageStudioService) prepareGenerateInput(ctx context.Context, input Ima
 }
 
 func (s *ImageStudioService) prepareEditInput(ctx context.Context, input ImageStudioEditInput) (*ImageStudioSettings, ImageStudioEditInput, error) {
-	if NormalizeImageStudioOutputFormat(input.OutputFormat) == "gif" {
-		return nil, ImageStudioEditInput{}, infraerrors.BadRequest("IMAGE_GIF_GENERATION_ONLY", "GIF supports generation only; reference images and edits are not supported")
-	}
 	cfg, err := s.loadSettings(ctx)
 	if err != nil {
 		return nil, ImageStudioEditInput{}, err
@@ -623,16 +623,27 @@ func (s *ImageStudioService) prepareEditInput(ctx context.Context, input ImageSt
 	if err != nil {
 		return nil, ImageStudioEditInput{}, err
 	}
-	aspectRatio := firstNonEmptyTrimmed(input.AspectRatio, "1:1")
-	quality := NormalizeImageStudioQuality(input.Quality)
-	size, billingTier, err := ResolveImageStudioRenderSpec(aspectRatio, quality)
-	if err != nil {
-		return nil, ImageStudioEditInput{}, infraerrors.BadRequest("INVALID_IMAGE_RENDER_SPEC", err.Error())
-	}
 	outputFormat := NormalizeImageStudioOutputFormat(input.OutputFormat)
 	background := NormalizeImageStudioBackground(input.Background)
 	if err := ValidateImageStudioOutputOptionsForModel(model, outputFormat, background); err != nil {
 		return nil, ImageStudioEditInput{}, infraerrors.BadRequest("INVALID_IMAGE_OUTPUT_OPTIONS", err.Error())
+	}
+	aspectRatio, quality, size, billingTier := "auto", "", "auto", ""
+	if outputFormat == "gif" {
+		formats, err := s.discoverImageModelFormats(ctx, group)
+		if err != nil {
+			return nil, ImageStudioEditInput{}, err
+		}
+		if !slices.Contains(formats[model].Edit, "gif") {
+			return nil, ImageStudioEditInput{}, infraerrors.BadRequest("IMAGE_GIF_EDIT_UNSUPPORTED", "selected model has no supported GIF edit route")
+		}
+	} else {
+		aspectRatio = firstNonEmptyTrimmed(input.AspectRatio, "1:1")
+		quality = NormalizeImageStudioQuality(input.Quality)
+		size, billingTier, err = ResolveImageStudioRenderSpec(aspectRatio, quality)
+		if err != nil {
+			return nil, ImageStudioEditInput{}, infraerrors.BadRequest("INVALID_IMAGE_RENDER_SPEC", err.Error())
+		}
 	}
 	if len(input.ReferenceImages) == 0 {
 		return nil, ImageStudioEditInput{}, infraerrors.BadRequest("IMAGE_REFERENCE_REQUIRED", "reference image is required")

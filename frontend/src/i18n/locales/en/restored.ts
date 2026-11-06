@@ -75,7 +75,7 @@ export default {
     noUpcomingStreakLottery: 'No upcoming lottery-attempt reward is configured.'
   },
   imageStudio: {
-    gifHint: 'Animated GIF · automatic frame size. Generation only; availability depends on upstream account access.',
+    gifHint: 'Animated GIF · automatic frame size. Reference editing requires a verified OpenAI gpt-image-2.6 API-key route (including mapped aliases); availability depends on upstream account access.',
     kicker: 'Prompt, edit, and save',
     title: 'AI Image Studio',
     description: 'Generate images with your API key pool, edit from reference images, and pay from your existing USD wallet balance.',

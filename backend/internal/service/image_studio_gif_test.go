@@ -92,7 +92,7 @@ func TestImageStudioGIFMappedModelOptionsAndGenerationUseAutoSize(t *testing.T) 
 	_, _, err = svc.prepareGenerateInput(context.Background(), ImageStudioGenerateInput{UserID: 7, Model: "gpt-image-2", Prompt: "loop", OutputFormat: "gif"})
 	require.Error(t, err)
 	_, _, err = svc.prepareEditInput(context.Background(), ImageStudioEditInput{UserID: 7, Model: publicModel, Prompt: "loop", OutputFormat: "gif", ReferenceImages: []ImageStudioReferenceImage{{Data: []byte("image"), ContentType: "image/png"}}})
-	require.ErrorContains(t, err, "generation")
+	require.ErrorContains(t, err, "GIF edit route")
 }
 
 func TestImageStudioGIFBaseModelOptionsAndGeneration(t *testing.T) {
@@ -133,11 +133,11 @@ func TestImageStudioGIFBaseModelExecutorPreservesAnimation(t *testing.T) {
 	require.False(t, gjson.GetBytes(gateway.forwardBody, "response_format").Exists())
 }
 
-func TestImageStudioGIFRejectsTransparentBackgroundAndEditBody(t *testing.T) {
+func TestImageStudioGIFRejectsTransparentBackgroundAndMissingEditReference(t *testing.T) {
 	require.NoError(t, ValidateImageStudioOutputOptions("gif", "auto"))
 	require.Error(t, ValidateImageStudioOutputOptions("gif", "transparent"))
 	_, _, err := buildImageStudioEditBody(ImageStudioEditInput{OutputFormat: "gif"})
-	require.ErrorContains(t, err, "generation")
+	require.ErrorContains(t, err, "reference image is required")
 }
 
 func TestImageStudioGIFStorageUsesActualFormatAndDimensions(t *testing.T) {
@@ -266,7 +266,7 @@ func TestImageStudioGIFExecutorRejectsUnsupportedAndEditInputs(t *testing.T) {
 	require.Error(t, err)
 	require.Empty(t, gateway.forwarded)
 	_, err = executor.Edit(context.Background(), ImageStudioEditInput{UserID: 7, Model: "gpt-image-2.6-flare", OutputFormat: "gif"})
-	require.ErrorContains(t, err, "generation")
+	require.ErrorContains(t, err, "reference image is required")
 	_, err = executor.Generate(context.Background(), ImageStudioGenerateInput{UserID: 7, Model: "gpt-image-2.6-flare", OutputFormat: "gif", Background: "transparent"})
 	require.Error(t, err)
 	require.Empty(t, gateway.forwarded)

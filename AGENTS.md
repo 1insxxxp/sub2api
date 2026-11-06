@@ -661,7 +661,8 @@ curl -fsS -X POST "${BASE}/api/v1/admin/category-default-groups/gemini/sync-appl
 ### Image Studio GIF（2026-11-06）
 
 - GIF 仅对最终账号映射到 `gpt-image-2.6` / `gpt-image-2.6-sunburst` / `gpt-image-2.6-flare` 的 OpenAI API-key 生成线路开放；公开别名可以映射到这三个模型，混合账号池会跳过不支持 GIF 的账号。
-- 使用 `/v1/images/generations`、`output_format: "gif"`、`size: "auto"`，沿用上游默认帧数和间隔；不携带 `response_format`，不开放编辑、参考图、透明背景、分片流式输出或静态图片质量档位。
+- GIF 图生图仅对最终映射到已验证的 `gpt-image-2.6` 的 OpenAI API-key 账号开放（含公开别名），使用 multipart `/v1/images/edits`，保留参考图原始字节；sunburst/flare 暂只开放 GIF 文生图。前端分别读取 `output_formats` 与 `edit_output_formats`，后端按最终映射再次校验并跳过不支持当前模式的账号。
+- 文生图使用 `/v1/images/generations`；两种模式均传 `output_format: "gif"`、`size: "auto"`，沿用上游默认帧数和间隔，不携带 `response_format` 或静态质量档位，不注入画幅提示词；不开放透明背景或分片流式输出。GIF 图生图保留原有用户权限、参考图大小和类型校验。
 - 根据实际图片字节识别 MIME 和扩展名；GIF 原始字节直接保存、预览和下载，不做静态裁剪或转码。上游返回静态图片时记录真实格式，不伪装成 GIF。
 - 模型名称表示兼容能力，不保证上游账号拥有 GIF 预览权限；收费仍由现有实际用量和来源定价处理。
 
