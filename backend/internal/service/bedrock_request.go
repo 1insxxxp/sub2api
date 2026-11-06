@@ -190,7 +190,7 @@ func BuildBedrockURL(region, modelID string, stream bool) string {
 // PrepareBedrockRequestBody 处理请求体以适配 Bedrock API
 //  1. 注入 anthropic_version
 //  2. 注入 anthropic_beta（从客户端 anthropic-beta 头解析）
-//  3. 移除 Bedrock 不支持的字段（model, stream, output_format）；Sonnet 5.5 保留 output_config.effort
+//  3. 移除 Bedrock 不支持的字段（model, stream, output_format）；Opus/Sonnet 5.5 保留 output_config.effort
 //  4. 移除工具定义中的 custom 字段（Claude Code 会发送 custom: {defer_loading: true}）
 //  5. 清理 cache_control 中 Bedrock 不支持的字段（scope, ttl）
 //  6. 修复 thinking 字段兼容性（Opus 4.7 仅支持 adaptive，enabled 需要 budget_tokens）
@@ -249,10 +249,10 @@ func PrepareBedrockRequestBodyWithTokens(body []byte, modelID string, betaTokens
 	// 参考 litellm: _convert_output_format_to_inline_schema()
 	body = convertOutputFormatToInlineSchema(body)
 
-	// InvokeModel accepts output_config.effort for Sonnet 5.5. Keep just that
+	// InvokeModel accepts output_config.effort for Opus/Sonnet 5.5. Keep just that
 	// field; output_config.format has already been inlined above, and older
 	// models retain the existing output_config stripping behavior.
-	if claude.IsSonnet55(modelID) {
+	if claude.IsSonnet55(modelID) || claude.IsOpus55(modelID) {
 		if effort := gjson.GetBytes(body, "output_config.effort"); effort.Exists() {
 			body, err = sjson.SetRawBytes(body, "output_config", []byte(`{"effort":`+effort.Raw+`}`))
 		} else {

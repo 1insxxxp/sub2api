@@ -1586,7 +1586,7 @@ func NormalizeClaudeOutputEffort(raw string) *string {
 
 // ApplyGroupDefaultReasoningEffort injects a group's default Anthropic thinking
 // controls only when the client did not provide any top-level thinking or
-// output_config.effort. Opus 5.5 receives adaptive thinking without a budget;
+// output_config.effort. Claude 5.5 receives adaptive thinking without a budget;
 // other Claude models use enabled thinking with the corresponding budget. The
 // caller should invoke this only on Anthropic-format forwarding paths after
 // model mapping and request normalization.
@@ -1617,14 +1617,14 @@ func applyGroupDefaultReasoningEffort(body []byte, group *Group, account *Accoun
 		return body, false
 	}
 	model := gjson.GetBytes(body, "model").String()
-	isOpus55 := claude.IsOpus55(model)
+	adaptiveOnly := isClaude55SignedThinkingModel(model)
 	maxTokens := gjson.GetBytes(body, "max_tokens")
 	// A group default must never override an explicit allowance (including zero
 	// for cache-only calls), or turn an invalid client field into another value.
 	if maxTokens.Exists() && (maxTokens.Type != gjson.Number || maxTokens.Int() <= 0) {
 		return body, false
 	}
-	if !isOpus55 && maxTokens.Exists() && maxTokens.Int() <= int64(budget) {
+	if !adaptiveOnly && maxTokens.Exists() && maxTokens.Int() <= int64(budget) {
 		if maxTokens.Int() <= 1024 {
 			// Manual thinking requires at least 1024 tokens plus room for the answer.
 			// The caller's small output allowance wins over an automatic group default.
@@ -1648,7 +1648,7 @@ func applyGroupDefaultReasoningEffort(body []byte, group *Group, account *Accoun
 	if !maxTokens.Exists() {
 		if defaultMax := defaultAnthropicOutputTokens(account, model); defaultMax > 0 {
 			set("max_tokens", defaultMax)
-			if !isOpus55 && defaultMax <= budget {
+			if !adaptiveOnly && defaultMax <= budget {
 				if defaultMax <= 1024 {
 					return modified, changed
 				}
@@ -1657,8 +1657,8 @@ func applyGroupDefaultReasoningEffort(body []byte, group *Group, account *Accoun
 		}
 	}
 	set("output_config.effort", effort)
-	if isOpus55 {
-		// Opus 5.5 only accepts adaptive thinking and derives its budget from
+	if adaptiveOnly {
+		// Claude 5.5 uses adaptive thinking and derives its budget from
 		// output_config.effort. Sending enabled/budget_tokens is rejected.
 		set("thinking.type", "adaptive")
 	} else {

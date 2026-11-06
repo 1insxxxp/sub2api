@@ -126,11 +126,32 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 			if resolved, ok := ResolveBedrockModelID(account, validationModel); ok {
 				validationModel = resolved
 			}
-		} else if account.Type == AccountTypeAPIKey {
+		} else if account.Type == AccountTypeAPIKey || account.Type == AccountTypeServiceAccount {
 			validationModel = account.GetMappedModel(validationModel)
 		}
 	}
 	if account != nil && account.Platform == PlatformAnthropic {
+		requestedEffort := RequestedReasoningEffortFromContext(ctx)
+		if requestedEffort == nil {
+			requestedEffort = NormalizeClaudeOutputEffort(parsed.OutputEffort)
+		}
+		changed, normalizeErr := s.normalizeClaude55LegacyRequest(ctx, parsed, validationModel)
+		if normalizeErr != nil {
+			status, errorType := http.StatusInternalServerError, "api_error"
+			if IsReasoningEffortPolicyDenied(normalizeErr) {
+				status, errorType = http.StatusForbidden, "permission_error"
+				MarkOpsClientBusinessLimited(c, OpsClientBusinessLimitedReasonLocalPolicyDenied)
+			}
+			c.JSON(status, gin.H{"type": "error", "error": gin.H{"type": errorType, "message": normalizeErr.Error()}})
+			return nil, normalizeErr
+		}
+		if changed {
+			defer func() {
+				if result != nil && result.RequestedReasoningEffort == nil {
+					result.RequestedReasoningEffort = requestedEffort
+				}
+			}()
+		}
 		if err := validateClaude55Request(parsed.Body.Bytes(), validationModel); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"type": "error", "error": gin.H{"type": "invalid_request_error", "message": err.Error()}})
 			return nil, err

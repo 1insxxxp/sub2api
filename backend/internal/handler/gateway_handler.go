@@ -195,9 +195,9 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		reqStream = parsedReq.Stream
 	}
 	publicModel, routeModel := resolveGroupModelRoute(apiKey.Group, reqModel)
-	if routeModel != publicModel {
-		c.Request = c.Request.WithContext(service.WithGatewayPublicModel(c.Request.Context(), publicModel))
-	}
+	// Keep the ingress identity even when only a later channel mapping changes
+	// the model, so deferred legacy-thinking policy uses the same scoped rules.
+	c.Request = c.Request.WithContext(service.WithGatewayPublicModel(c.Request.Context(), publicModel))
 	reqLog = reqLog.With(zap.String("model", reqModel), zap.Bool("stream", reqStream))
 
 	// 解析渠道级模型映射
@@ -726,6 +726,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to parse request body")
 				return
 			}
+			attemptParsedReq.GroupID = currentAPIKey.GroupID
 
 			// 选择支持该模型的账号
 			reqLog.Info("sticky.selecting_account",
@@ -2434,6 +2435,7 @@ func (h *GatewayHandler) CountTokens(c *gin.Context) {
 	}
 	body = parsedReq.Body.Bytes()
 	// count_tokens 走 messages 严格校验时，复用已解析请求，避免二次反序列化。
+	parsedReq.GroupID = apiKey.GroupID
 	SetClaudeCodeClientContext(c, body, parsedReq)
 	ensureCompositeTargetPlatform(c, apiKey, parsedReq.Model)
 	reqLog = reqLog.With(zap.String("model", parsedReq.Model), zap.Bool("stream", parsedReq.Stream))

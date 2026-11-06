@@ -24,8 +24,12 @@ func (s *GatewayService) ForwardCountTokens(ctx context.Context, c *gin.Context,
 	}
 	// Antigravity 账户不支持 count_tokens，返回 404 让客户端 fallback 到本地估算。
 	// 返回 nil 避免 handler 层记录为错误，也不设置 ops 上游错误上下文。
+	// Vertex has no count_tokens builder here; never send its credentials/model
+	// aliases to the public Anthropic endpoint. Clients can estimate locally.
 	// 凭据只能走其他协议的 OAuth 账号同理，且必须在取 token、建请求之前拦下。
-	if account != nil && (account.Platform == PlatformAntigravity || !anthropicMessagesCredentialAllowed(account)) {
+	if account != nil && (account.Platform == PlatformAntigravity ||
+		(account.Platform == PlatformAnthropic && account.Type == AccountTypeServiceAccount) ||
+		!anthropicMessagesCredentialAllowed(account)) {
 		s.countTokensError(c, http.StatusNotFound, "not_found_error", "count_tokens endpoint is not supported for this platform")
 		return nil
 	}
@@ -41,6 +45,15 @@ func (s *GatewayService) ForwardCountTokens(ctx context.Context, c *gin.Context,
 		}
 	}
 	if account != nil && account.Platform == PlatformAnthropic {
+		if _, err := s.normalizeClaude55LegacyRequest(ctx, parsed, validationModel); err != nil {
+			status, errorType := http.StatusInternalServerError, "api_error"
+			if IsReasoningEffortPolicyDenied(err) {
+				status, errorType = http.StatusForbidden, "permission_error"
+				MarkOpsClientBusinessLimited(c, OpsClientBusinessLimitedReasonLocalPolicyDenied)
+			}
+			s.countTokensError(c, status, errorType, err.Error())
+			return err
+		}
 		if err := validateClaude55Request(parsed.Body.Bytes(), validationModel); err != nil {
 			s.countTokensError(c, http.StatusBadRequest, "invalid_request_error", err.Error())
 			return err
