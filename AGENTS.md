@@ -660,7 +660,7 @@ curl -fsS -X POST "${BASE}/api/v1/admin/category-default-groups/gemini/sync-appl
 
 ### Image Studio GIF（2026-11-06）
 
-- GIF 仅对最终账号映射到 `gpt-image-2.6-sunburst` / `gpt-image-2.6-flare` 的 OpenAI API-key 生成线路开放；公开别名可以映射到这两个模型，混合账号池会跳过不支持 GIF 的账号。
+- GIF 仅对最终账号映射到 `gpt-image-2.6` / `gpt-image-2.6-sunburst` / `gpt-image-2.6-flare` 的 OpenAI API-key 生成线路开放；公开别名可以映射到这三个模型，混合账号池会跳过不支持 GIF 的账号。
 - 使用 `/v1/images/generations`、`output_format: "gif"`、`size: "auto"`，沿用上游默认帧数和间隔；不携带 `response_format`，不开放编辑、参考图、透明背景、分片流式输出或静态图片质量档位。
 - 根据实际图片字节识别 MIME 和扩展名；GIF 原始字节直接保存、预览和下载，不做静态裁剪或转码。上游返回静态图片时记录真实格式，不伪装成 GIF。
 - 模型名称表示兼容能力，不保证上游账号拥有 GIF 预览权限；收费仍由现有实际用量和来源定价处理。
@@ -1184,6 +1184,28 @@ curl -fsS "${BASE}/api/v1/user/images/tasks/${TEST_TASK_ID}" \
 ```
 
 管理操作只调用已核对应用容器的回环端口。对每模型至多生成一张测试图，以测试用户余额变化、密钥 `quota_used` 和 `usage_logs.actual_cost` 核对实际扣费，并单独检查任务/图片的展示价格。完成后先 GET 核对精确归属，再停用、删除测试密钥并停用测试用户；保留账务和生成证据，不回写客户余额或修改渠道/分组定价。
+
+#### 3.4.2 GIF 线上功能验收补充（2026-11-06）
+
+- `GET /api/v1/user/images/tasks?page=1&page_size=20`：用户 JWT，只返回本人任务。生成 POST 响应丢失时，按专用用户、密钥、分组、模型及唯一提示词精确匹配恢复任务 ID；不重复提交生成。
+- `GET /api/v1/keys?search=<唯一名称>&page=1&page_size=20`：用户 JWT，搜索为部分匹配，读取后仍须核对 `name/user_id/group_id`。响应可能含明文密钥，仅在内存筛选，不能直接打印完整响应。
+- `GET /api/v1/usage?api_key_id=<测试密钥ID>&page=1&page_size=20`：用户 JWT，服务端校验本人及密钥归属。只投影 `id/user_id/api_key_id/group_id/account_id/model/actual_cost/image_count/billing_status` 等验收字段；`billing_status` 为 `settled` 后再核对余额、额度与费用，嵌套对象可能含凭证，不记录完整响应。
+- `GET /api/v1/user/images/:id/download`：用户 JWT，返回图片原始字节及附件文件名。公开预览按 `image.image_url` 读取，不携带任何认证头；R2 URL 可为外部域名，本地存储公开路由为 `/api/v1/user/images/files/*objectKey`。
+- 管理员查找专用用户时，`GET /api/v1/admin/users` 可传 `search`、`include_subscriptions=false`、`page`、`page_size`；须精确匹配 `email/username/notes`，不操作其他用户。
+- GIF 验收要求基础模型的 `output_formats` 包含 `gif`，下载与预览的字节摘要一致，实际解码得到多个不同画面且帧延时为正。HTTP 200、文件后缀或 MIME 单独不能证明动画有效。
+
+```bash
+# 下列变量仅来自本次专用测试用户；生成请求仅提交一次。
+curl -fsS -X POST "${BASE}/api/v1/user/images/tasks" \
+  -H "Authorization: Bearer ${TEST_USER_JWT}" -H 'Content-Type: application/json' \
+  --data-binary @gif-verification-task.json
+# JSON: {"mode":"generation","api_key_id":<TEST_KEY_ID>,"group_id":<TEST_GROUP_ID>,
+#        "model":"gpt-image-2.6","prompt":"<唯一动画测试提示词>","aspect_ratio":"auto","output_format":"gif"}
+curl -fsS "${BASE}/api/v1/user/images/tasks?page=1&page_size=20" \
+  -H "Authorization: Bearer ${TEST_USER_JWT}"
+curl -fsS "${BASE}/api/v1/user/images/${TEST_IMAGE_ID}/download" \
+  -H "Authorization: Bearer ${TEST_USER_JWT}" --output test-animation.gif
+```
 
 ### 3.5 支付取消频率限制
 

@@ -95,6 +95,44 @@ func TestImageStudioGIFMappedModelOptionsAndGenerationUseAutoSize(t *testing.T) 
 	require.ErrorContains(t, err, "generation")
 }
 
+func TestImageStudioGIFBaseModelOptionsAndGeneration(t *testing.T) {
+	for _, publicModel := range []string{"gpt-image-2.6", "绘图/base-loop"} {
+		t.Run(publicModel, func(t *testing.T) {
+			svc := NewImageStudioService(nil, &imageStudioConfigReaderStub{cfg: &ImageStudioSettings{Enabled: true}})
+			svc.SetGroupResolver(&imageStudioGroupResolverStub{groups: []Group{{ID: 9, Status: StatusActive, Platform: PlatformOpenAI, AllowImageGeneration: true}}})
+			svc.SetModelDiscovery(&imageStudioDiscoveryAccounts{accounts: []Account{{ID: 12, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Credentials: map[string]any{"model_mapping": map[string]any{publicModel: "gpt-image-2.6"}}}}}, nil)
+			options, err := svc.GetOptions(context.Background(), 7)
+			require.NoError(t, err)
+			encoded, err := json.Marshal(options)
+			require.NoError(t, err)
+			require.Contains(t, gjson.GetBytes(encoded, fmt.Sprintf(`groups.0.models.#(model==%q).output_formats`, publicModel)).Raw, `"gif"`)
+			_, prepared, err := svc.prepareGenerateInput(context.Background(), ImageStudioGenerateInput{UserID: 7, Model: publicModel, Prompt: "a looping lantern", OutputFormat: "gif", Quality: "4K", AspectRatio: "16:9"})
+			require.NoError(t, err)
+			body, err := buildImageStudioGenerateBody(prepared)
+			require.NoError(t, err)
+			require.Equal(t, "gif", gjson.GetBytes(body, "output_format").String())
+			require.Equal(t, "auto", gjson.GetBytes(body, "size").String())
+			require.False(t, gjson.GetBytes(body, "response_format").Exists())
+		})
+	}
+}
+
+func TestImageStudioGIFBaseModelExecutorPreservesAnimation(t *testing.T) {
+	gateway := &imageStudioGIFGateway{data: imageStudioAnimatedGIFFixture(t), channelModel: "channel-loop", accounts: []Account{
+		imageStudioGIFAccount(1, "gpt-image-2"), imageStudioGIFAccount(2, "gpt-image-2.6"), imageStudioGIFAccount(3, "gpt-image-2.6"),
+	}}
+	gateway.accounts[1].Type = AccountTypeOAuth
+	result, err := imageStudioGIFExecutor(gateway).Generate(context.Background(), ImageStudioGenerateInput{UserID: 7, Model: "绘图/loop", Prompt: "loop", OutputFormat: "gif", Size: "auto"})
+	require.NoError(t, err)
+	require.Equal(t, []int64{1, 2, 3}, gateway.selected)
+	require.Equal(t, gateway.selected, gateway.released)
+	require.Equal(t, []int64{3}, gateway.forwarded)
+	require.Equal(t, gateway.data, result.ImageBytes)
+	require.Equal(t, "image/gif", result.MimeType)
+	require.Equal(t, "gif", gjson.GetBytes(gateway.forwardBody, "output_format").String())
+	require.False(t, gjson.GetBytes(gateway.forwardBody, "response_format").Exists())
+}
+
 func TestImageStudioGIFRejectsTransparentBackgroundAndEditBody(t *testing.T) {
 	require.NoError(t, ValidateImageStudioOutputOptions("gif", "auto"))
 	require.Error(t, ValidateImageStudioOutputOptions("gif", "transparent"))
@@ -207,7 +245,7 @@ func imageStudioGIFAccount(id int64, model string) Account {
 
 func TestImageStudioGIFMixedPoolSkipsUnsupportedWithoutConsumingForwardBudget(t *testing.T) {
 	gateway := &imageStudioGIFGateway{data: imageStudioAnimatedGIFFixture(t), channelModel: "channel-loop", accounts: []Account{
-		imageStudioGIFAccount(1, "gpt-image-2"), imageStudioGIFAccount(2, "gpt-image-2.6"), imageStudioGIFAccount(3, "gpt-image-2.6-flare"), imageStudioGIFAccount(4, "gpt-image-2.6-sunburst"),
+		imageStudioGIFAccount(1, "gpt-image-2"), imageStudioGIFAccount(2, "gpt-image-1.5"), imageStudioGIFAccount(3, "gpt-image-2.6-flare"), imageStudioGIFAccount(4, "gpt-image-2.6-sunburst"),
 	}}
 	gateway.accounts[2].Type = AccountTypeOAuth
 	result, err := imageStudioGIFExecutor(gateway).Generate(context.Background(), ImageStudioGenerateInput{UserID: 7, Model: "绘图/loop", Prompt: "loop", OutputFormat: "gif", Size: "auto"})

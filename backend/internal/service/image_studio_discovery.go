@@ -29,11 +29,11 @@ func (s *ImageStudioService) discoverImageModels(ctx context.Context, group *Gro
 	return models, nil
 }
 
-// Only the documented generations API models advertise GIF. Resolve aliases
+// Only explicitly supported generation models advertise GIF. Resolve aliases
 // through channel/account mappings; public names alone are not capabilities.
 func imageStudioGIFModel(model string) bool {
 	switch strings.ToLower(strings.TrimSpace(model)) {
-	case "gpt-image-2.6-sunburst", "gpt-image-2.6-flare":
+	case "gpt-image-2.6", "gpt-image-2.6-sunburst", "gpt-image-2.6-flare":
 		return true
 	default:
 		return false
