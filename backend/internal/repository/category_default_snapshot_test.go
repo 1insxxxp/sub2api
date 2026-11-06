@@ -27,9 +27,13 @@ type categoryDefaultSnapshotDriver struct {
 func (d *categoryDefaultSnapshotDriver) BeginTx(ctx context.Context, opts *sql.TxOptions) (dialect.Tx, error) {
 	copy := *opts
 	d.options = &copy
-	tx, err := d.Driver.(interface {
+	beginner, ok := d.Driver.(interface {
 		BeginTx(context.Context, *sql.TxOptions) (dialect.Tx, error)
-	}).BeginTx(ctx, opts)
+	})
+	if !ok {
+		return nil, errors.New("snapshot test driver does not support BeginTx")
+	}
+	tx, err := beginner.BeginTx(ctx, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -53,9 +57,13 @@ func (tx *categoryDefaultSnapshotTx) Query(ctx context.Context, query string, ar
 // Preserve that optional interface so both raw and generated reads execute on
 // the wrapped transaction and the concurrent-writer gate sees the real query.
 func (tx *categoryDefaultSnapshotTx) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
-	rows, err := tx.Tx.(interface {
+	querier, ok := tx.Tx.(interface {
 		QueryContext(context.Context, string, ...any) (*sql.Rows, error)
-	}).QueryContext(ctx, query, args...)
+	})
+	if !ok {
+		return nil, errors.New("snapshot test transaction does not support QueryContext")
+	}
+	rows, err := querier.QueryContext(ctx, query, args...)
 	if err == nil {
 		tx.observeConfigRead(query)
 	}
@@ -63,9 +71,13 @@ func (tx *categoryDefaultSnapshotTx) QueryContext(ctx context.Context, query str
 }
 
 func (tx *categoryDefaultSnapshotTx) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
-	return tx.Tx.(interface {
+	executor, ok := tx.Tx.(interface {
 		ExecContext(context.Context, string, ...any) (sql.Result, error)
-	}).ExecContext(ctx, query, args...)
+	})
+	if !ok {
+		return nil, errors.New("snapshot test transaction does not support ExecContext")
+	}
+	return executor.ExecContext(ctx, query, args...)
 }
 
 func (tx *categoryDefaultSnapshotTx) observeConfigRead(query string) {

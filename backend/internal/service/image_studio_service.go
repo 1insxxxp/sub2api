@@ -834,10 +834,6 @@ func normalizeImageStudioImageMultiplier(group *Group) float64 {
 	return 1
 }
 
-func dedupeImageStudioModels(models []string) []string {
-	return dedupeImageStudioModelsWithPredicate(models, imageStudioSupportedModel)
-}
-
 func dedupeImageStudioModelsForGroup(group *Group, models []string) []string {
 	return dedupeImageStudioModelsWithPredicate(models, func(model string) bool {
 		return imageStudioModelSupportedByGroup(group, model)
@@ -859,10 +855,6 @@ func dedupeImageStudioModelsWithPredicate(models []string, supported func(string
 		out = append(out, model)
 	}
 	return out
-}
-
-func imageStudioSupportedModel(model string) bool {
-	return isOpenAIImageGenerationModel(model) || isImageGenerationModel(model)
 }
 
 func imageStudioModelSupportedByGroup(group *Group, model string) bool {
