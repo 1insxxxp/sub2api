@@ -779,6 +779,11 @@ const activeTab = ref<string>('basic')
 // Groups
 const allGroups = ref<AdminGroup[]>([])
 const groupsLoading = ref(false)
+// Category defaults route to source pricing; they cannot own channel pricing.
+const pricingGroups = computed(() => allGroups.value.filter(group => !group.is_category_default))
+const categoryDefaultGroupIds = computed(() => new Set(
+  allGroups.value.filter(group => group.is_category_default).map(group => group.id)
+))
 
 // All channels for group-conflict detection (independent of current page)
 const allChannelsForConflict = ref<Channel[]>([])
@@ -847,7 +852,7 @@ function togglePlatform(platform: GroupPlatform) {
 }
 
 function getGroupsForPlatform(platform: GroupPlatform): AdminGroup[] {
-  return allGroups.value.filter(
+  return pricingGroups.value.filter(
     g => g.platform === platform || (g.platform === 'composite' && compositePlatforms.value.includes(platform))
   )
 }
@@ -1289,7 +1294,7 @@ function formToAPI(): { group_ids: number[], model_pricing: ChannelModelPricing[
 function apiToForm(channel: Channel): PlatformSection[] {
   // Build a map: groupID → platform
   const groupPlatformMap = new Map<number, GroupPlatform>()
-  for (const g of allGroups.value) {
+  for (const g of pricingGroups.value) {
     groupPlatformMap.set(g.id, g.platform)
   }
 
@@ -1491,14 +1496,17 @@ async function openEditDialog(channel: Channel) {
 function distributeRulesToPlatforms(apiRules: AccountStatsPricingRule[]) {
   // Build groupID → platform lookup
   const groupPlatformMap = new Map<number, GroupPlatform>()
-  for (const g of allGroups.value) {
+  for (const g of pricingGroups.value) {
     groupPlatformMap.set(g.id, g.platform)
   }
 
   for (const apiRule of apiRules) {
+    const groupIds = (apiRule.group_ids || []).filter(id => !categoryDefaultGroupIds.value.has(id))
+    // Remove entry-only rules, but retain rules that still target specific accounts.
+    if (apiRule.group_ids?.length && groupIds.length === 0 && !apiRule.account_ids?.length) continue
     // Infer platform from group_ids
     const platforms = new Set<GroupPlatform>()
-    for (const gid of apiRule.group_ids || []) {
+    for (const gid of groupIds) {
       const p = groupPlatformMap.get(gid)
       if (p && p !== 'composite') platforms.add(p)
     }
@@ -1515,7 +1523,7 @@ function distributeRulesToPlatforms(apiRules: AccountStatsPricingRule[]) {
 
     const formRule: FormPricingRule = {
       name: apiRule.name || '',
-      group_ids: [...(apiRule.group_ids || [])],
+      group_ids: groupIds,
       account_ids: [...(apiRule.account_ids || [])],
       pricing: (apiRule.pricing || []).map(p => ({
         models: [...(p.models || [])],
