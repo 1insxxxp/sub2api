@@ -40,30 +40,38 @@ type UserSupportGrantResult struct {
 	User  UserSupportUser  `json:"user"`
 	Trial UserSupportTrial `json:"trial"`
 }
+
+// ModelContext is repository-only evidence; it is never part of the support API.
+type UserSupportModelContext struct {
+	RequestedModel string
+	GroupID        int64
+}
 type UserSupportUsageRecord struct {
-	ID              int64     `json:"id"`
-	CreatedAt       time.Time `json:"created_at"`
-	Model           string    `json:"model"`
-	GroupName       string    `json:"group_name"`
-	InputTokens     *int64    `json:"input_tokens"`
-	OutputTokens    *int64    `json:"output_tokens"`
-	CacheReadTokens *int64    `json:"cache_read_tokens"`
-	ChargedAmount   float64   `json:"charged_amount"`
-	DurationMs      *int64    `json:"duration_ms"`
-	FirstTokenMs    *int64    `json:"first_token_ms"`
-	OutputTPS       *float64  `json:"output_tps"`
-	Status          string    `json:"status"`
-	Stream          bool      `json:"stream"`
+	ModelContext    *UserSupportModelContext `json:"-"`
+	ID              int64                    `json:"id"`
+	CreatedAt       time.Time                `json:"created_at"`
+	Model           string                   `json:"model"`
+	GroupName       string                   `json:"group_name"`
+	InputTokens     *int64                   `json:"input_tokens"`
+	OutputTokens    *int64                   `json:"output_tokens"`
+	CacheReadTokens *int64                   `json:"cache_read_tokens"`
+	ChargedAmount   float64                  `json:"charged_amount"`
+	DurationMs      *int64                   `json:"duration_ms"`
+	FirstTokenMs    *int64                   `json:"first_token_ms"`
+	OutputTPS       *float64                 `json:"output_tps"`
+	Status          string                   `json:"status"`
+	Stream          bool                     `json:"stream"`
 }
 type UserSupportErrorRecord struct {
-	ID              int64     `json:"id"`
-	CreatedAt       time.Time `json:"created_at"`
-	Model           string    `json:"model"`
-	GroupName       string    `json:"group_name"`
-	StatusCode      *int64    `json:"status_code"`
-	ErrorKind       string    `json:"error_kind"`
-	Category        string    `json:"category"`
-	OriginalMessage string    `json:"original_message"`
+	ModelContext    *UserSupportModelContext `json:"-"`
+	ID              int64                    `json:"id"`
+	CreatedAt       time.Time                `json:"created_at"`
+	Model           string                   `json:"model"`
+	GroupName       string                   `json:"group_name"`
+	StatusCode      *int64                   `json:"status_code"`
+	ErrorKind       string                   `json:"error_kind"`
+	Category        string                   `json:"category"`
+	OriginalMessage string                   `json:"original_message"`
 }
 type UserSupportUsagePanel struct {
 	Status string                   `json:"status"`
@@ -95,6 +103,7 @@ type userSupportBalanceInvalidator interface {
 	InvalidateUserBalance(context.Context, int64) error
 }
 type UserSupportService struct {
+	modelSources userSupportModelSources
 	repo         UserSupportRepository
 	billingCache userSupportBalanceInvalidator
 	authCache    APIKeyAuthCacheInvalidator
@@ -217,11 +226,21 @@ func (s *UserSupportService) Lookup(ctx context.Context, actorID int64, account 
 	result := &UserSupportResult{User: grant.User, Trial: grant.Trial,
 		Usage:  UserSupportUsagePanel{Status: "unavailable", Items: []UserSupportUsageRecord{}},
 		Errors: UserSupportErrorPanel{Status: "unavailable", Items: []UserSupportErrorRecord{}}}
-	if rows, readErr := s.repo.ListUsage(ctx, grant.User.ID); readErr == nil {
+	usageRows, usageErr := s.repo.ListUsage(ctx, grant.User.ID)
+	errorRows, errorErr := s.repo.ListErrors(ctx, grant.User.ID)
+	if usageErr != nil {
+		usageRows = nil
+	}
+	if errorErr != nil {
+		errorRows = nil
+	}
+	publicModels := s.recordModelCatalog(ctx, usageRows, errorRows)
+	if rows := usageRows; usageErr == nil {
 		result.Usage.Status = "ok"
 		for i := 0; i < len(rows) && i < 10; i++ {
 			row := rows[i]
-			row.Model = PublicUserSupportModel(row.Model)
+			row.Model = projectUserSupportModel(row.Model, row.ModelContext, publicModels)
+			row.ModelContext = nil
 			row.GroupName = PublicUserSupportGroupName(row.GroupName)
 			switch row.Status {
 			case "completed", "interrupted", "failed", "empty":
@@ -231,11 +250,12 @@ func (s *UserSupportService) Lookup(ctx context.Context, actorID int64, account 
 			result.Usage.Items = append(result.Usage.Items, row)
 		}
 	}
-	if rows, readErr := s.repo.ListErrors(ctx, grant.User.ID); readErr == nil {
+	if rows := errorRows; errorErr == nil {
 		result.Errors.Status = "ok"
 		for i := 0; i < len(rows) && i < 10; i++ {
 			row := rows[i]
-			row.Model = PublicUserSupportModel(row.Model)
+			row.Model = projectUserSupportModel(row.Model, row.ModelContext, publicModels)
+			row.ModelContext = nil
 			row.GroupName = PublicUserSupportGroupName(row.GroupName)
 			row.ErrorKind = PublicUserSupportErrorKind(row.ErrorKind)
 			row.OriginalMessage = PublicUserSupportOriginalMessage(row.OriginalMessage, "")
@@ -276,16 +296,20 @@ func validUserSupportAccount(value string) bool {
 	return err == nil && parsed.Address == value
 }
 
-// Only static, reviewed public model names may be shown. Product prefixes and
-// arbitrary client-controlled values cannot reflect an address or credential.
+// Known public models retain safe product prefixes, including historical aliases.
+// Unrecognized aliases require an exact local public-catalog declaration.
 func PublicUserSupportModel(value string) string {
 	value = strings.TrimSpace(value)
+	if !safeUserSupportModel(value) {
+		return "unknown"
+	}
+	suffix := value
 	if i := strings.LastIndex(value, "/"); i >= 0 {
-		value = value[i+1:]
+		suffix = value[i+1:]
 	}
 	for _, model := range userSupportPublicModels {
-		if strings.EqualFold(value, model) {
-			return model
+		if strings.EqualFold(suffix, model) {
+			return value
 		}
 	}
 	return "unknown"

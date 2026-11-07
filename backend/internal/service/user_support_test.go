@@ -213,7 +213,7 @@ func TestUserSupportFixedErrorsAndPublicModelProjection(t *testing.T) {
 	for _, v := range []string{"", "private.example", "gemini-private.example", "sk-secret", "https://10.0.0.1/secret"} {
 		require.Equal(t, "unknown", PublicUserSupportModel(v))
 	}
-	require.Equal(t, "gemini-4-argon", PublicUserSupportModel("按量vet/gemini-4-argon"))
+	require.Equal(t, "按量vet/gemini-4-argon", PublicUserSupportModel("按量vet/gemini-4-argon"))
 	require.Equal(t, "gemini-2.5-pro", PublicUserSupportModel("gemini-2.5-pro"))
 	require.Equal(t, "service_unavailable", UserSupportErrorCategory("upstream", "https://secret.example"))
 	require.Equal(t, "quota", UserSupportErrorCategory("request", "billing_error"))
@@ -283,4 +283,13 @@ func TestUserSupportSearchIsBoundedReadOnlyAndRequiresFreshAccess(t *testing.T) 
 	_, err = searcher.Search(context.Background(), 1, "customer")
 	require.ErrorIs(t, err, ErrUserSupportForbidden)
 	require.Equal(t, 1, r.searchCalls)
+}
+
+func TestUserSupportFullPublicModelNames(t *testing.T) {
+	for _, name := range []string{"按量vet/gemini-4-argon", "enp/gemini-4-argon", "反重力自营/claude-opus-4-6"} {
+		require.Equal(t, name, PublicUserSupportModel(name))
+	}
+	for _, name := range []string{"https://private.example/gemini-4-argon", "sk-secret/gemini-4-argon", "10.0.0.1/gemini-4-argon", "x\n/gemini-4-argon", "x\u202e/gemini-4-argon"} {
+		require.Equal(t, "unknown", PublicUserSupportModel(name))
+	}
 }

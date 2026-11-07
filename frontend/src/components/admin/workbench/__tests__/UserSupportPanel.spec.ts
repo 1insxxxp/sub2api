@@ -240,3 +240,18 @@ describe('support request records', () => {
     expect(view.get('[data-test="support-usage"]').text()).toContain('userSupport.recordsUnavailable'); expect(view.text()).not.toContain('userSupport.noUsage'); expect(view.find('[data-test="support-grant"]').exists()).toBe(true); expect(grant).not.toHaveBeenCalled()
   })
 })
+
+it('labels and preserves full public requested model names in both panels', async () => {
+  const records = result()
+  records.usage.items[0].model = '按量vet/gemini-4-argon'
+  records.errors.items[0].model = '我的专用/新模型别名'
+  lookup.mockResolvedValue(records)
+  const view = createView(); await query(view)
+  const usage = view.findAll('[data-test="support-usage-row"]')[0]
+  expect(usage.get('h3').text()).toBe('按量vet/gemini-4-argon')
+  expect(usage.text()).toContain('userSupport.columns.model')
+  await showErrors(view)
+  const error = view.findAll('[data-test="support-error-row"]')[0]
+  expect(error.get('h3').text()).toBe('我的专用/新模型别名')
+  expect(error.text()).toContain('userSupport.columns.model')
+})

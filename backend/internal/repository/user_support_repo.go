@@ -324,7 +324,7 @@ func (r *userSupportRepository) ListUsage(ctx context.Context, userID int64) ([]
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	rows, err := r.db.QueryContext(ctx, `SELECT ul.id,ul.created_at,COALESCE(ul.requested_model,''),COALESCE(g.name,''),
+	rows, err := r.db.QueryContext(ctx, `SELECT ul.id,ul.created_at,COALESCE(ul.requested_model,''),COALESCE(ul.group_id,0),COALESCE(g.name,''),
 	CASE WHEN o.input_tokens_source='unreported' THEN NULL ELSE ul.input_tokens END,
 	CASE WHEN o.output_tokens_source='unreported' THEN NULL ELSE ul.output_tokens END,
 	ul.cache_read_tokens,GREATEST(ul.actual_cost-ul.compensated_cost,0),ul.duration_ms,ul.first_token_ms,
@@ -349,11 +349,11 @@ func (r *userSupportRepository) ListUsage(ctx context.Context, userID int64) ([]
 	defer func() { _ = rows.Close() }()
 	result := make([]service.UserSupportUsageRecord, 0, 10)
 	for rows.Next() {
-		var item service.UserSupportUsageRecord
+		item := service.UserSupportUsageRecord{ModelContext: &service.UserSupportModelContext{}}
 		var input, output, cache, duration, first sql.NullInt64
 		var outputTPS sql.NullFloat64
 		var outcome service.ResponseOutcome
-		if err = rows.Scan(&item.ID, &item.CreatedAt, &item.Model, &item.GroupName, &input, &output, &cache, &item.ChargedAmount, &duration, &first, &outputTPS, &item.Stream,
+		if err = rows.Scan(&item.ID, &item.CreatedAt, &item.Model, &item.ModelContext.GroupID, &item.GroupName, &input, &output, &cache, &item.ChargedAmount, &duration, &first, &outputTPS, &item.Stream,
 			&outcome.CollectorVersion, &outcome.HTTPStatus, &outcome.UpstreamStatus, &outcome.HasText, &outcome.HasToolCall, &outcome.HasReasoning, &outcome.HasMedia,
 			&outcome.StreamCompleted, &outcome.DisconnectSource, &outcome.UpstreamErrorKind); err != nil {
 			return nil, err
@@ -366,6 +366,7 @@ func (r *userSupportRepository) ListUsage(ctx context.Context, userID int64) ([]
 		if outputTPS.Valid {
 			item.OutputTPS = &outputTPS.Float64
 		}
+		item.ModelContext.RequestedModel = strings.TrimSpace(item.Model)
 		item.Model = service.PublicUserSupportModel(item.Model)
 		item.GroupName = service.PublicUserSupportGroupName(item.GroupName)
 		item.Status = string(service.ClassifyUsageRequestStatus(&outcome))
@@ -383,7 +384,7 @@ func (r *userSupportRepository) ListErrors(ctx context.Context, userID int64) ([
 	// Reuse only the user-visible request filter, never the broad Ops DTO or
 	// its provider-preferred status/message/model projection.
 	where, args := buildOpsErrorLogsWhere(&service.OpsErrorLogFilter{UserID: &userID, View: "all", ExcludeCountTokens: true, ExcludeCanceledRequests: true})
-	rows, err := r.db.QueryContext(ctx, `SELECT e.id,e.created_at,COALESCE(e.requested_model,''),COALESCE(g.name,''),
+	rows, err := r.db.QueryContext(ctx, `SELECT e.id,e.created_at,COALESCE(e.requested_model,''),COALESCE(e.group_id,0),COALESCE(g.name,''),
 	CASE WHEN e.status_code BETWEEN 100 AND 599 THEN e.status_code ELSE NULL END,e.error_phase,e.error_type,
 	COALESCE(e.error_message,''),COALESCE(e.upstream_error_message,'')
 	FROM ops_error_logs e LEFT JOIN groups g ON g.id=e.group_id `+where+` ORDER BY e.created_at DESC,e.id DESC LIMIT 10`, args...)
@@ -393,12 +394,13 @@ func (r *userSupportRepository) ListErrors(ctx context.Context, userID int64) ([
 	defer func() { _ = rows.Close() }()
 	result := make([]service.UserSupportErrorRecord, 0, 10)
 	for rows.Next() {
-		var item service.UserSupportErrorRecord
+		item := service.UserSupportErrorRecord{ModelContext: &service.UserSupportModelContext{}}
 		var status sql.NullInt64
 		var phase, kind, primaryMessage, upstreamMessage string
-		if err = rows.Scan(&item.ID, &item.CreatedAt, &item.Model, &item.GroupName, &status, &phase, &kind, &primaryMessage, &upstreamMessage); err != nil {
+		if err = rows.Scan(&item.ID, &item.CreatedAt, &item.Model, &item.ModelContext.GroupID, &item.GroupName, &status, &phase, &kind, &primaryMessage, &upstreamMessage); err != nil {
 			return nil, err
 		}
+		item.ModelContext.RequestedModel = strings.TrimSpace(item.Model)
 		item.Model = service.PublicUserSupportModel(item.Model)
 		item.GroupName = service.PublicUserSupportGroupName(item.GroupName)
 		item.StatusCode = supportInt64Pointer(status)

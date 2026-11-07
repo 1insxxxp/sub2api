@@ -86,7 +86,7 @@
           <ol v-else class="support-record-list support-usage-list">
             <li v-for="item in usage" :key="item.id" data-test="support-usage-row" class="support-record-card">
               <header class="support-record-header">
-                <div class="support-record-title"><h3>{{ displayModel(item.model) }}</h3><span class="support-protocol">{{ t(item.stream ? 'userSupport.stream' : 'userSupport.sync') }}</span></div>
+                <div class="support-record-title"><div class="support-model"><span class="support-meta-label">{{ t('userSupport.columns.model') }}</span><h3>{{ displayModel(item.model) }}</h3></div><span class="support-protocol">{{ t(item.stream ? 'userSupport.stream' : 'userSupport.sync') }}</span></div>
                 <span class="support-status" :class="statusClass(item.status)">{{ t(`userSupport.status.${safeStatus(item.status)}`) }}</span>
               </header>
               <div class="support-record-meta">
@@ -117,7 +117,7 @@
           <ol v-else class="support-record-list support-error-list">
             <li v-for="item in errors" :key="item.id" data-test="support-error-row" class="support-record-card support-error-record">
               <header class="support-record-header">
-                <h3>{{ displayModel(item.model) }}</h3>
+                <div class="support-model"><span class="support-meta-label">{{ t('userSupport.columns.model') }}</span><h3>{{ displayModel(item.model) }}</h3></div>
                 <span data-test="support-error-status" class="support-error-status" :title="t('userSupport.httpStatusHint')">{{ errorStatus(item.status_code, item.category) }}</span>
               </header>
               <div class="support-record-meta">
@@ -450,6 +450,8 @@ function statusClass(value: string) {
 .support-record-card { padding: 11px 12px; }
 .support-record-header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 10px; }
 .support-record-title { display: flex; flex: 1; align-items: baseline; flex-wrap: wrap; gap: 4px 7px; min-width: 0; }
+.support-model { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 7px; min-width: 0; flex: 1; }
+.support-model > .support-meta-label { flex-shrink: 0; font-size: 11px; }
 .support-record-header h3 { min-width: 0; font-size: 14px; line-height: 1.4; font-weight: 600; overflow-wrap: anywhere; }
 .support-protocol { color: var(--workspace-muted); font-size: 10px; line-height: 1.4; }
 .support-status { display: inline-flex; align-items: center; gap: 5px; padding: 0; border-radius: 0; background-color: transparent; font-size: 10px; line-height: 1.5; }

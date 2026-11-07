@@ -23,7 +23,7 @@ export default {
   stream: '流式', sync: '同步', cache: '缓存', firstToken: '首字',
   outputTps: '输出 TPS',
   outputTpsHint: '输出 Token ÷ 总耗时（包含首字等待），单位 tok/s。输出 Token 可能包含推理 Token。',
-  columns: { time: '时间', model: '模型', group: '分组', tokens: '输入 / 输出 Token', charge: '实际扣费', duration: '耗时', status: '状态', httpStatus: 'HTTP 状态码', errorKind: '类型', error: '错误提示', originalError: '原始报错', chineseExplanation: '中文说明' },
+  columns: { time: '时间', model: '调用模型', group: '分组', tokens: '输入 / 输出 Token', charge: '实际扣费', duration: '耗时', status: '状态', httpStatus: 'HTTP 状态码', errorKind: '类型', error: '错误提示', originalError: '原始报错', chineseExplanation: '中文说明' },
   httpStatusHint: '报错日志记录的 HTTP 状态码',
   errorKinds: { request: '请求错误', auth: '认证错误', account_auth: '账号认证错误', routing: '路由错误', upstream: '上游错误', network: '网络错误', internal: '系统错误', unknown: '未知类型' },
   trial: { label: '测试额度', eligibleShort: '可赠送', grantedShort: '已发放', receivedShort: '已领取', historicalShort: '历史发放', title: '15 测试额度', eligible: '尚未领取测试额度', send: '发送测试额度', sending: '发送中…', granted: '已发放 15 额度', alreadyReceived: '已领取，不重复发放', historical: '已识别历史手动发放记录', once: '每个账号仅发放一次' },

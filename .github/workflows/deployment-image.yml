@@ -26,10 +26,10 @@ jobs:
           cache-dependency-path: backend/go.sum
       - name: Verify group synchronization and image output
         working-directory: backend
-        run: go test -tags=unit ./internal/service ./internal/repository ./internal/handler ./internal/server/routes -run 'TestPublicGroupSync|TestCategoryDefault|TestImageStudio|Test.*GIF' -count=1
+        run: go test -tags=unit ./internal/service ./internal/repository ./internal/handler ./internal/server/routes -run 'TestPublicGroupSync|TestCategoryDefault|TestImageStudio|Test.*GIF|TestUserSupport' -count=1
       - name: Verify category catalog database consistency
         working-directory: backend
-        run: go test -tags=integration ./internal/repository -run 'TestCategoryDefault' -count=1
+        run: go test -tags=integration ./internal/repository -run 'TestCategoryDefault|TestUserSupport' -count=1
       - name: Resolve release identity
         id: release
         run: |

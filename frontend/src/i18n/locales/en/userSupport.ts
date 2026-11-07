@@ -23,7 +23,7 @@ export default {
   stream: 'Stream', sync: 'Sync', cache: 'Cache', firstToken: 'First token',
   outputTps: 'Output TPS',
   outputTpsHint: 'Output tokens divided by total duration (including first-token wait), in tok/s. Output tokens may include reasoning tokens.',
-  columns: { time: 'Time', model: 'Model', group: 'Group', tokens: 'Input / output tokens', charge: 'Charged', duration: 'Duration', status: 'Status', httpStatus: 'HTTP status', errorKind: 'Type', error: 'Error', originalError: 'Original error', chineseExplanation: 'Chinese explanation' },
+  columns: { time: 'Time', model: 'Requested model', group: 'Group', tokens: 'Input / output tokens', charge: 'Charged', duration: 'Duration', status: 'Status', httpStatus: 'HTTP status', errorKind: 'Type', error: 'Error', originalError: 'Original error', chineseExplanation: 'Chinese explanation' },
   httpStatusHint: 'HTTP status recorded in the error log',
   errorKinds: { request: 'Request error', auth: 'Authentication error', account_auth: 'Account authentication error', routing: 'Routing error', upstream: 'Upstream error', network: 'Network error', internal: 'System error', unknown: 'Unknown type' },
   trial: { label: 'Trial credit', eligibleShort: 'Available', grantedShort: 'Issued', receivedShort: 'Claimed', historicalShort: 'Past grant', title: '15 trial credits', eligible: 'Trial credit available', send: 'Send trial credit', sending: 'Sending…', granted: '15 credits issued', alreadyReceived: 'Already received; no additional credit', historical: 'Previous manual trial credit found', once: 'Issued once per account' },
