@@ -40,7 +40,7 @@ func TestUserSupportModelsFromScopedPublicDeclarations(t *testing.T) {
 		name  string
 	}{
 		{7, "enp/new-model-2027"}, {7, "定制别名"}, {8, "定制别名"}, {7, "secret-mapped-model"},
-		{7, "private.example/gemini-4-argon"}, {7, ""}, {7, "removed-alias"}, {7, "enp/gemini-4-argon"},
+		{7, "private.example/gemini-4-argon"}, {7, ""}, {7, "removed-alias"}, {7, "enp/gemini-4-argon"}, {7, "/Users/alice/gemini-4-argon"}, {7, "../private/gemini-4-argon"},
 	} {
 		r.usageRows = append(r.usageRows, UserSupportUsageRecord{Model: "unknown", ModelContext: &UserSupportModelContext{tc.name, tc.group}})
 		r.errorRows = append(r.errorRows, UserSupportErrorRecord{Model: "unknown", ModelContext: &UserSupportModelContext{tc.name, tc.group}})
@@ -49,7 +49,7 @@ func TestUserSupportModelsFromScopedPublicDeclarations(t *testing.T) {
 	s.modelSources = sources
 	got, err := s.Lookup(context.Background(), 1, "2")
 	require.NoError(t, err)
-	expected := []string{"enp/new-model-2027", "定制别名", "unknown", "unknown", "unknown", "unknown", "unknown", "enp/gemini-4-argon"}
+	expected := []string{"enp/new-model-2027", "定制别名", "unknown", "unknown", "unknown", "unknown", "unknown", "enp/gemini-4-argon", "unknown", "unknown"}
 	for i, name := range expected {
 		require.Equal(t, name, got.Usage.Items[i].Model)
 		require.Equal(t, name, got.Errors.Items[i].Model)

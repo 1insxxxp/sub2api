@@ -18,6 +18,12 @@ func ProvideUserSupportService(repo UserSupportRepository, billingCache *Billing
 }
 
 func safeUserSupportModel(value string) bool {
+	// Public model IDs may contain a product prefix, never filesystem roots or traversal.
+	for _, part := range strings.Split(value, "/") {
+		if part == "" || part == "." || part == ".." || part == "~" {
+			return false
+		}
+	}
 	return value != "" && len(value) <= 256 && !strings.ContainsAny(value, "*?\\%#<>&=\"':") &&
 		PublicUserSupportGroupName(value) == value
 }
