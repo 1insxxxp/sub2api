@@ -2,9 +2,11 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -45,8 +47,25 @@ func TestApplyGeminiCompatThinkingConfig(t *testing.T) {
 		{name: "unknown effort ignored", model: "gemini-3.7-flash", claudeBody: `{"output_config":{"effort":"turbo"}}`, wantNoConfig: true},
 		{name: "level with thoughts", model: "gemini-3.8-flash", claudeBody: `{"output_config":{"effort":"high"}}`, includeThoughts: true, wantLevel: "high", wantThoughts: true},
 		{name: "gemini 4 uses level", model: "gemini-4-argon", claudeBody: `{"output_config":{"effort":"low"}}`, wantLevel: "low"},
-		{name: "medium outside verified models becomes high", model: "gemini-4-argon", claudeBody: `{"output_config":{"effort":"medium"}}`, wantLevel: "high"},
-		{name: "medium budget outside verified models becomes high", model: "gemini-4-argon", claudeBody: `{"thinking":{"type":"enabled","budget_tokens":4096}}`, wantLevel: "high"},
+		{name: "argon medium stays medium", model: "gemini-4-argon", claudeBody: `{"output_config":{"effort":"medium"}}`, wantLevel: "medium"},
+		{name: "argon medium budget stays medium", model: "gemini-4-argon", claudeBody: `{"thinking":{"type":"enabled","budget_tokens":4096}}`, wantLevel: "medium"},
+		{name: "argon enterprise supports medium", model: "gemini-4-argon-enterprise", claudeBody: `{"output_config":{"effort":"medium"}}`, wantLevel: "medium"},
+		{name: "argon name boundary is required", model: "gemini-4-argonother", claudeBody: `{"output_config":{"effort":"medium"}}`, wantLevel: "high"},
+		{name: "tagged argon medium", model: "[量]gemini-4-argon", claudeBody: `{"output_config":{"effort":"medium"}}`, includeThoughts: true, wantLevel: "medium", wantThoughts: true},
+		{name: "tagged enterprise argon", model: "[P]gemini-4-argon-enterprise", claudeBody: `{"output_config":{"effort":"medium"}}`, wantLevel: "medium"},
+		{name: "tagged model trims case and models prefix", model: " models/[渠道_2.1]Gemini-4-Argon ", claudeBody: `{"output_config":{"effort":"medium"}}`, wantLevel: "medium"},
+		{name: "tagged argon disabled uses low", model: "[量]gemini-4-argon", claudeBody: `{"thinking":{"type":"disabled"},"output_config":{"effort":"high"}}`, wantLevel: "low"},
+		{name: "tagged argon leaves default level unset", model: "[量]gemini-4-argon", claudeBody: `{}`, includeThoughts: true, wantThoughts: true},
+		{name: "tagged argon high suffix stays authoritative", model: "[P]gemini-4-argon-high", claudeBody: `{"output_config":{"effort":"low"}}`, includeThoughts: true, wantThoughts: true},
+		{name: "tagged flash medium", model: "[P]gemini-3.8-flash", claudeBody: `{"output_config":{"effort":"medium"}}`, wantLevel: "medium"},
+		{name: "routing label does not imply flash capability", model: "[flash]gemini-3-pro-preview", claudeBody: `{"output_config":{"effort":"medium"}}`, wantLevel: "high"},
+		{name: "tagged 2.5 retains output budget cap", model: "[P]gemini-2.5-pro", claudeBody: `{"output_config":{"effort":"high"}}`, wantBudget: budget(8191)},
+		{name: "routing label does not imply pro budget", model: "[pro]gemini-2.5-flash", claudeBody: `{"output_config":{"effort":"none"}}`, wantBudget: budget(0)},
+		{name: "tagged image remains untouched", model: "[P]gemini-3-pro-image-preview", claudeBody: `{"output_config":{"effort":"high"}}`, includeThoughts: true, wantNoConfig: true},
+		{name: "unknown tagged model remains untouched", model: "[P]custom-model", claudeBody: `{"output_config":{"effort":"medium"}}`, includeThoughts: true, wantNoConfig: true},
+		{name: "nested routing labels are not recognized", model: "[P][量]gemini-4-argon", claudeBody: `{"output_config":{"effort":"medium"}}`, includeThoughts: true, wantNoConfig: true},
+		{name: "unsafe routing label is not recognized", model: "[P/Q]gemini-4-argon", claudeBody: `{"output_config":{"effort":"medium"}}`, includeThoughts: true, wantNoConfig: true},
+		{name: "unsafe tagged model is not recognized", model: "[P]gemini-4-argon/other", claudeBody: `{"output_config":{"effort":"medium"}}`, includeThoughts: true, wantNoConfig: true},
 		{name: "medium on unverified pro becomes high", model: "gemini-3.5-pro", claudeBody: `{"output_config":{"effort":"medium"}}`, wantLevel: "high"},
 		{name: "medium on flash lite", model: "gemini-3.1-flash-lite", claudeBody: `{"output_config":{"effort":"medium"}}`, wantLevel: "medium"},
 		{name: "tier suffix model keeps name tier", model: "gemini-4-argon-high", claudeBody: `{"output_config":{"effort":"low"}}`, includeThoughts: true, wantThoughts: true},
@@ -86,6 +105,64 @@ func TestApplyGeminiCompatThinkingConfig(t *testing.T) {
 			require.Equal(t, tt.wantThoughts, cfg.Get("includeThoughts").Bool(), cfg.Raw)
 			require.False(t, cfg.Get("thinkingLevel").Exists() && cfg.Get("thinkingBudget").Exists(), "thinkingLevel and thinkingBudget are mutually exclusive")
 		})
+	}
+}
+
+func TestGeminiCompatArgonForwardsThinkingLevelAfterModelMapping(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	const publicModel = "public-4a"
+	for _, target := range []string{"gemini-4-argon", "[量]gemini-4-argon", "[P]gemini-4-argon-enterprise"} {
+		for _, protocol := range []string{"chat/completions", "messages"} {
+			for _, stream := range []bool{false, true} {
+				for _, level := range []string{"low", "medium", "high"} {
+					t.Run(fmt.Sprintf("%s/%s/stream=%t/%s", target, protocol, stream, level), func(t *testing.T) {
+						responseBody := `{"candidates":[{"content":{"parts":[{"text":"ok"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":5,"candidatesTokenCount":2,"thoughtsTokenCount":7}}`
+						contentType, action := "application/json", "generateContent"
+						if stream {
+							responseBody = "data: " + responseBody + "\n\n"
+							contentType, action = "text/event-stream", "streamGenerateContent"
+						}
+						upstream := &queuedHTTPUpstreamStub{responses: []*http.Response{{
+							StatusCode: http.StatusOK,
+							Header:     http.Header{"Content-Type": []string{contentType}},
+							Body:       io.NopCloser(strings.NewReader(responseBody)),
+						}}, onCall: func(req *http.Request, _ *queuedHTTPUpstreamStub) {
+							require.Equal(t, "/v1beta/models/"+target+":"+action, req.URL.Path)
+							require.Equal(t, "/v1beta/models/"+url.PathEscape(target)+":"+action, req.URL.EscapedPath())
+						}}
+						svc := &GeminiMessagesCompatService{httpUpstream: upstream, cfg: &config.Config{}}
+						account := geminiCompatThinkingTestAccount()
+						account.Credentials["model_mapping"] = map[string]any{publicModel: target}
+						params := fmt.Sprintf(`"reasoning_effort":%q`, level)
+						if protocol == "messages" {
+							params = fmt.Sprintf(`"thinking":{"type":"adaptive"},"output_config":{"effort":%q}`, level)
+						}
+						body := []byte(fmt.Sprintf(`{"model":%q,"stream":%t,"max_tokens":256,%s,"messages":[{"role":"user","content":"hi"}]}`, publicModel, stream, params))
+						c, recorder := newAntigravityCompatContext(http.MethodPost, "/v1/"+protocol, body)
+						var result *ForwardResult
+						var err error
+						if protocol == "messages" {
+							result, err = svc.Forward(context.Background(), c, account, body)
+						} else {
+							result, err = svc.ForwardAsChatCompletions(context.Background(), c, account, body)
+						}
+						require.NoError(t, err)
+						require.Equal(t, http.StatusOK, recorder.Code)
+						require.Len(t, upstream.requestBodies, 1)
+						generation := gjson.GetBytes(upstream.requestBodies[0], "generationConfig")
+						require.Equal(t, level, generation.Get("thinkingConfig.thinkingLevel").String())
+						require.Equal(t, stream, generation.Get("thinkingConfig.includeThoughts").Bool())
+						require.False(t, generation.Get("thinkingConfig.thinkingBudget").Exists())
+						require.Equal(t, int64(256), generation.Get("maxOutputTokens").Int())
+						require.Equal(t, level, optionalStringValue(result.ReasoningEffort))
+						require.Equal(t, publicModel, result.Model)
+						require.Equal(t, target, result.UpstreamModel)
+						require.Equal(t, 5, result.Usage.InputTokens)
+						require.Equal(t, 9, result.Usage.OutputTokens)
+					})
+				}
+			}
+		}
 	}
 }
 

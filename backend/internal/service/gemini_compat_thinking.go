@@ -26,6 +26,19 @@ const (
 	gemini25FlashLiteMinThinkingBudget = 512
 )
 
+// geminiThinkingCapabilityModel strips a validated relay routing label only for
+// capability checks. The original mapped model must still be sent upstream.
+func geminiThinkingCapabilityModel(model string) string {
+	name := strings.TrimPrefix(strings.ToLower(strings.TrimSpace(model)), "models/")
+	if strings.HasPrefix(name, "[") {
+		if !isSafeGeminiAIStudioModelPathSegment(name) {
+			return ""
+		}
+		name = name[strings.IndexByte(name, ']')+1:]
+	}
+	return name
+}
+
 // geminiThinkingParamForModel 按上游模型名判断思考参数形态：2.5 系列用 thinkingBudget，
 // 3 及以上用 thinkingLevel。2.5 之前的版本、无法解析版本号的名字、图像/语音/向量类模型
 // 不写思考参数。
@@ -118,8 +131,8 @@ func claudeRequestEnablesThinking(claudeBody []byte) bool {
 }
 
 // geminiThinkingLevelFor 把思考意图映射为 thinkingLevel；返回空串表示交给模型默认档位。
-// minimal 只发给 flash 系列，其余模型用 low；medium 只发给 flash 系列与 Gemini 3.1 Pro，
-// 其余模型用 high（Gemini 3 及以上未指定档位时的默认档位）。
+// minimal 只发给 flash 系列，其余模型用 low；medium 保留给 flash、Gemini 3.1 Pro
+// 和 Gemini 4 Argon 系列，其余模型沿用 high。未指定档位时不写 thinkingLevel。
 func geminiThinkingLevelFor(model string, intent claudeThinkingIntent) string {
 	tier := intent.tier
 	if tier == "" && intent.budgetTokens > 0 {
@@ -134,10 +147,11 @@ func geminiThinkingLevelFor(model string, intent claudeThinkingIntent) string {
 	}
 	name := strings.TrimPrefix(strings.ToLower(strings.TrimSpace(model)), "models/")
 	isFlash := strings.Contains(name, "flash")
+	isArgon := name == "gemini-4-argon" || strings.HasPrefix(name, "gemini-4-argon-")
 	if tier == "minimal" && !isFlash {
 		tier = "low"
 	}
-	if tier == "medium" && !isFlash && !strings.HasPrefix(name, "gemini-3.1-pro") {
+	if tier == "medium" && !isFlash && !strings.HasPrefix(name, "gemini-3.1-pro") && !isArgon {
 		tier = "high"
 	}
 	return tier
@@ -188,27 +202,28 @@ func geminiThinkingBudgetBounds(model string) (minimum, maximum int) {
 // Gemini 请求 generationConfig.thinkingConfig。includeThoughts 为 true 时要求上游返回
 // 思考摘要（thought=true 的 part）；思考被关闭（预算为 0）时不要求。
 func applyGeminiCompatThinkingConfig(geminiReq, claudeBody []byte, upstreamModel string, includeThoughts bool) []byte {
-	param := geminiThinkingParamForModel(upstreamModel)
+	capabilityModel := geminiThinkingCapabilityModel(upstreamModel)
+	param := geminiThinkingParamForModel(capabilityModel)
 	if param == geminiThinkingParamNone {
 		return geminiReq
 	}
 	intent := parseClaudeThinkingIntent(claudeBody)
 	out := geminiReq
 	thinkingOff := false
-	if !geminiModelNameCarriesThinkingTier(upstreamModel) {
+	if !geminiModelNameCarriesThinkingTier(capabilityModel) {
 		switch param {
 		case geminiThinkingParamLevel:
-			if level := geminiThinkingLevelFor(upstreamModel, intent); level != "" {
+			if level := geminiThinkingLevelFor(capabilityModel, intent); level != "" {
 				out = setGeminiThinkingField(out, "thinkingLevel", level)
 			}
 		case geminiThinkingParamBudget:
-			if budget, ok := geminiThinkingBudgetFor(upstreamModel, intent); ok {
+			if budget, ok := geminiThinkingBudgetFor(capabilityModel, intent); ok {
 				if limit := gjson.GetBytes(out, "generationConfig.maxOutputTokens"); limit.Exists() {
 					if limit.Type != gjson.Number || limit.Int() <= 0 {
 						return out
 					}
 					if budget > 0 && int64(budget) >= limit.Int() {
-						minimum, _ := geminiThinkingBudgetBounds(upstreamModel)
+						minimum, _ := geminiThinkingBudgetBounds(capabilityModel)
 						if limit.Int() <= int64(minimum) {
 							return out
 						}
