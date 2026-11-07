@@ -168,6 +168,7 @@ vi.mock("@/api", () => ({
       getImageStudioSettings,
       updateImageStudioSettings,
       testImageStudioStorage,
+      getRegistrationEmailBlacklist: vi.fn().mockResolvedValue({ emails: [], max: 20000 }),
     },
     accounts: {
       getUpstreamBillingProbeSettings,

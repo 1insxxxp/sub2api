@@ -83,6 +83,7 @@ type Handlers struct {
 	Lottery            *LotteryHandler
 	InternalDujiaoAuth *InternalDujiaoAuthHandler
 	PublicGroupSync    *PublicGroupSyncHandler
+	MCPOAuth           *MCPOAuthHandler
 }
 
 // BuildInfo contains build-time information

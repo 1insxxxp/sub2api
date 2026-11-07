@@ -194,7 +194,8 @@ func TestGatewayResponsesBridgeMarksAnthropicMissingTerminal(t *testing.T) {
 	}
 
 	result, err := (&GatewayService{}).handleResponsesBufferedStreamingResponse(resp, c, "model", "model", "", nil, time.Now(), apicompat.ResponsesClientToolMapping{})
-	require.NoError(t, err)
+	require.ErrorContains(t, err, "missing terminal event")
+	require.Equal(t, http.StatusBadGateway, rec.Code)
 	require.NotNil(t, result)
 	require.NotNil(t, result.Outcome)
 	require.True(t, result.Outcome.HasText)

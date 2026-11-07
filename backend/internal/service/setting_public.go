@@ -375,6 +375,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		AccountQuotaNotifyEnabled:            settings[SettingKeyAccountQuotaNotifyEnabled] == "true",
 		BalanceLowNotifyThreshold:            balanceLowNotifyThreshold,
 		BalanceLowNotifyRechargeURL:          settings[SettingKeyBalanceLowNotifyRechargeURL],
+		MCPEnabled:                           s.cfg != nil && s.cfg.MCP.Enabled(),
 		ChannelMonitorEnabled:                !isFalseSettingValue(settings[SettingKeyChannelMonitorEnabled]),
 		ChannelMonitorMode:                   normalizeChannelMonitorMode(settings[SettingKeyChannelMonitorMode]),
 		ChannelMonitorDefaultIntervalSeconds: parseChannelMonitorInterval(settings[SettingKeyChannelMonitorDefaultIntervalSeconds]),
@@ -687,6 +688,7 @@ type PublicSettingsInjectionPayload struct {
 	GitHubOAuthEnabled                  bool                     `json:"github_oauth_enabled"`
 	GoogleOAuthEnabled                  bool                     `json:"google_oauth_enabled"`
 	BackendModeEnabled                  bool                     `json:"backend_mode_enabled"`
+	MCPEnabled                          bool                     `json:"mcp_enabled"`
 	PaymentEnabled                      bool                     `json:"payment_enabled"`
 	PaymentBalanceDisabled              bool                     `json:"payment_balance_disabled"`
 	Version                             string                   `json:"version"`
@@ -752,6 +754,7 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 	siteLogoDark, siteLogoDarkDeferred := deferLargeInjectedDataURL(settings.SiteLogoDark)
 
 	return &PublicSettingsInjectionPayload{
+		MCPEnabled:                             settings.MCPEnabled,
 		Partial:                                siteLogoDeferred || siteLogoLightDeferred || siteLogoDarkDeferred,
 		RegistrationEnabled:                    settings.RegistrationEnabled,
 		EmailVerifyEnabled:                     settings.EmailVerifyEnabled,

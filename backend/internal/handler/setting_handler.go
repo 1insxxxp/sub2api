@@ -106,6 +106,7 @@ func (h *SettingHandler) GetPublicSettings(c *gin.Context) {
 		AccountQuotaNotifyEnabled:            settings.AccountQuotaNotifyEnabled,
 		BalanceLowNotifyThreshold:            settings.BalanceLowNotifyThreshold,
 		BalanceLowNotifyRechargeURL:          settings.BalanceLowNotifyRechargeURL,
+		MCPEnabled:                           settings.MCPEnabled,
 		ChannelMonitorEnabled:                settings.ChannelMonitorEnabled,
 		ChannelMonitorMode:                   settings.ChannelMonitorMode,
 		ChannelMonitorDefaultIntervalSeconds: settings.ChannelMonitorDefaultIntervalSeconds,

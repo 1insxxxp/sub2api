@@ -10,7 +10,7 @@ func TestProvideHandlersIncludesModelStatusHandler(t *testing.T) {
 	modelStatusHandler := &ModelStatusHandler{}
 	lotteryHandler := &LotteryHandler{}
 	handlers := ProvideHandlers(
-		nil, nil, nil, userCustomGroupHandler, nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, userCustomGroupHandler, nil, nil, nil, nil, nil, nil,
 		nil, nil, nil, nil, nil, nil, nil, nil, nil,
 		checkinHandler, imageStudioHandler, nil, modelStatusHandler, nil, nil,
 		lotteryHandler, nil, nil, nil, nil, nil, nil,

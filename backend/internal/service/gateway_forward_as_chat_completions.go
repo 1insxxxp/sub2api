@@ -307,6 +307,7 @@ func (s *GatewayService) handleCCBufferedFromAnthropic(
 		maxLineSize = s.cfg.Gateway.MaxLineSize
 	}
 	scanner.Buffer(make([]byte, 0, 64*1024), maxLineSize)
+	scanner.Split(newBoundedSSESplit(s.cfg, maxLineSize, nil))
 
 	var finalResp *apicompat.AnthropicResponse
 	var usage ClaudeUsage
@@ -332,6 +333,7 @@ func (s *GatewayService) handleCCBufferedFromAnthropic(
 		}
 		return result
 	}
+	streamStatus := &anthropicCompatStream{body: resp.Body}
 
 	for !ccRequestCanceled(c) && scanner.Scan() {
 		if ccRequestCanceled(c) {
@@ -356,6 +358,11 @@ func (s *GatewayService) handleCCBufferedFromAnthropic(
 		var event apicompat.AnthropicStreamEvent
 		if err := json.Unmarshal([]byte(payload), &event); err != nil {
 			continue
+		}
+
+		streamStatus.observe(&event, payload)
+		if streamStatus.upstreamErrType != "" {
+			break
 		}
 
 		// message_start carries the initial response structure and cache usage
@@ -411,6 +418,13 @@ func (s *GatewayService) handleCCBufferedFromAnthropic(
 		}
 	} else if !outcomeCollector.Snapshot().StreamCompleted {
 		outcomeCollector.MarkStreamError(errors.New("missing terminal event"), false)
+	}
+
+	streamStatus.readErr = scanner.Err()
+	if failure := streamStatus.failure(); failure != nil {
+		_ = resp.Body.Close()
+		writeGatewayCCError(c, http.StatusBadGateway, "server_error", failure.message)
+		return resultWithUsage(false), failure.err
 	}
 
 	if finalResp == nil {

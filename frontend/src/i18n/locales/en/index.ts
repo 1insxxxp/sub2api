@@ -1,5 +1,6 @@
 import { mergeMessages } from '../mergeMessages'
 import adminAccessKeys from './adminAccessKeys'
+import mcp from './mcp'
 import landing from './landing'
 import common from './common'
 import dashboard from './dashboard'
@@ -20,6 +21,7 @@ export default mergeMessages({
   userSupport,
   modelProbes,
   categoryDefaults,
+  mcp,
   ...landing,
   ...common,
   ...dashboard,

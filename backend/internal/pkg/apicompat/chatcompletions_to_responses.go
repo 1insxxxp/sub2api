@@ -36,7 +36,7 @@ func ChatCompletionsToResponsesForAnthropic(req *ChatCompletionsRequest) (*Respo
 }
 
 func chatCompletionsToResponses(req *ChatCompletionsRequest, minOutputTokens int, preserveCacheControl bool) (*ResponsesRequest, error) {
-	if err := openai.ValidateGPT61SolReasoningEffort(req.Model, req.ReasoningEffort); err != nil {
+	if err := openai.ValidateGPT61ReasoningEffort(req.Model, req.ReasoningEffort); err != nil {
 		return nil, err
 	}
 	input, err := convertChatMessagesToResponsesInput(req.Messages, preserveCacheControl)

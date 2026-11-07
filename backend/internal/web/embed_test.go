@@ -532,6 +532,9 @@ func TestFrontendServer_Middleware(t *testing.T) {
 			"/antigravity/test",
 			"/setup/init",
 			"/health",
+			"/.well-known/oauth-protected-resource",
+			"/.well-known/oauth-protected-resource/api/v1/mcp",
+			"/.well-known/oauth-authorization-server",
 			"/responses",
 			"/responses/compact",
 		}
@@ -852,6 +855,9 @@ func TestServeEmbeddedFrontend(t *testing.T) {
 			"/antigravity/test",
 			"/setup/init",
 			"/health",
+			"/.well-known/oauth-protected-resource",
+			"/.well-known/oauth-protected-resource/api/v1/mcp",
+			"/.well-known/oauth-authorization-server",
 			"/responses",
 			"/responses/compact",
 		}

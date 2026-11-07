@@ -80,7 +80,7 @@ func TestGeminiChatCompletions_PreservesToolResultNamesWhenIDsCollideAfterAnthro
 	require.NoError(t, err)
 	claudeBody, err := json.Marshal(anthropicReq)
 	require.NoError(t, err)
-	geminiBody, err := convertClaudeMessagesToGeminiGenerateContent(claudeBody)
+	geminiBody, err := convertClaudeMessagesToGeminiGenerateContent(claudeBody, ccReq.Model)
 	require.NoError(t, err)
 
 	var converted map[string]any
@@ -1505,7 +1505,7 @@ func TestConvertClaudeMessagesToGeminiGenerateContent_AddsThoughtSignatureForToo
 	}
 	b, _ := json.Marshal(claudeReq)
 
-	out, err := convertClaudeMessagesToGeminiGenerateContent(b)
+	out, err := convertClaudeMessagesToGeminiGenerateContent(b, "gemini-2.5-flash")
 	if err != nil {
 		t.Fatalf("convert failed: %v", err)
 	}
@@ -1547,7 +1547,7 @@ func TestConvertClaudeMessagesToGeminiGenerateContent_OrdersParallelToolResultsB
 	body, err := json.Marshal(claudeReq)
 	require.NoError(t, err)
 
-	out, err := convertClaudeMessagesToGeminiGenerateContent(body)
+	out, err := convertClaudeMessagesToGeminiGenerateContent(body, "gemini-2.5-flash")
 	require.NoError(t, err)
 
 	var converted map[string]any
@@ -1589,7 +1589,7 @@ func TestConvertClaudeMessagesToGeminiGenerateContent_MergesSplitParallelToolRes
 	body, err := json.Marshal(claudeReq)
 	require.NoError(t, err)
 
-	out, err := convertClaudeMessagesToGeminiGenerateContent(body)
+	out, err := convertClaudeMessagesToGeminiGenerateContent(body, "gemini-2.5-flash")
 	require.NoError(t, err)
 
 	require.Equal(t, "find_files", gjson.GetBytes(out, "contents.1.parts.0.functionResponse.name").String())
@@ -1609,7 +1609,7 @@ func TestConvertClaudeMessagesToGeminiGenerateContent_AppendsContinuationAfterAs
 	body, err := json.Marshal(claudeReq)
 	require.NoError(t, err)
 
-	out, err := convertClaudeMessagesToGeminiGenerateContent(body)
+	out, err := convertClaudeMessagesToGeminiGenerateContent(body, "gemini-2.5-flash")
 	require.NoError(t, err)
 
 	var converted map[string]any
@@ -1670,7 +1670,7 @@ func TestConvertClaudeMessagesToGeminiGenerateContent_ExtractsToolResultImages(t
 	body, err := json.Marshal(claudeReq)
 	require.NoError(t, err)
 
-	converted, err := convertClaudeMessagesToGeminiGenerateContent(body)
+	converted, err := convertClaudeMessagesToGeminiGenerateContent(body, "gemini-2.5-flash")
 	require.NoError(t, err)
 	var geminiReq map[string]any
 	require.NoError(t, json.Unmarshal(converted, &geminiReq))

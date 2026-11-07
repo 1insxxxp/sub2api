@@ -177,8 +177,8 @@ func TestCategoryDefaultAuthCacheRoundtripAndRejectsPreviousVersion(t *testing.T
 	var snapshot APIKeyAuthSnapshot
 	require.NoError(t, json.Unmarshal(raw, &snapshot))
 	require.True(t, svc.snapshotToAPIKey("secret", &snapshot).Group.IsCategoryDefault)
-	require.Equal(t, 30, snapshot.Version)
-	restored, hit, err := svc.applyAuthCacheEntry("secret", &APIKeyAuthCacheEntry{Snapshot: &APIKeyAuthSnapshot{Version: 29}})
+	require.Equal(t, 31, snapshot.Version)
+	restored, hit, err := svc.applyAuthCacheEntry("secret", &APIKeyAuthCacheEntry{Snapshot: &APIKeyAuthSnapshot{Version: 30}})
 	require.NoError(t, err)
 	require.False(t, hit)
 	require.Nil(t, restored)

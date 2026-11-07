@@ -35,6 +35,13 @@ func RegisterUserRoutes(
 		{
 			user.GET("/profile", h.User.GetProfile)
 			registerIPGeoRoute(user, h.User, panelRateLimiter.Heavy())
+			if h.MCPOAuth != nil {
+				user.GET("/mcp/config", h.MCPOAuth.ConnectionConfig)
+				user.GET("/mcp/grants", h.MCPOAuth.ListGrants)
+				user.DELETE("/mcp/grants/:id", h.MCPOAuth.RevokeGrant)
+				user.GET("/mcp/authorize", h.MCPOAuth.Preview)
+				user.POST("/mcp/authorize", h.MCPOAuth.Decide)
+			}
 			user.PUT("/password", h.User.ChangePassword)
 			user.DELETE("/account", h.User.DeleteOwnAccount)
 			user.PUT("", h.User.UpdateProfile)

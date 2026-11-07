@@ -247,6 +247,7 @@ func ProvideAdminSettingHandler(settingService *service.SettingService, emailSer
 func ProvideHandlers(
 	authHandler *AuthHandler,
 	userHandler *UserHandler,
+	mcpOAuthHandler *MCPOAuthHandler,
 	apiKeyHandler *APIKeyHandler,
 	userCustomGroupHandler *UserCustomGroupHandler,
 	usageHandler *UsageHandler,
@@ -307,6 +308,7 @@ func ProvideHandlers(
 		Lottery:            lotteryHandler,
 		InternalDujiaoAuth: internalDujiaoAuthHandler,
 		PublicGroupSync:    publicGroupSyncHandler,
+		MCPOAuth:           mcpOAuthHandler,
 	}
 	if handlers.Admin != nil {
 		handlers.Admin.Lottery = adminLotteryHandler
@@ -319,6 +321,7 @@ var ProviderSet = wire.NewSet(
 	// Top-level handlers
 	NewAuthHandler,
 	NewUserHandler,
+	NewMCPOAuthHandler,
 	NewAPIKeyHandler,
 	NewUserCustomGroupHandler,
 	ProvideUsageHandler,
