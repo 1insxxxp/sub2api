@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -84,7 +85,11 @@ type modelProbeRoute struct {
 	billingGroup, group                                       *service.Group
 	publicModel, routeModel, forwardModel, platform, endpoint string
 	imageIntent                                               bool
+	sessionHash                                               string
+	excludedIDs                                               map[int64]struct{}
 }
+
+var errModelProbeProfitVeto = errors.New("probe account rejected by profit admission")
 
 func (h *GatewayHandler) SelectForProbe(ctx context.Context, g *service.Group, model string) (*service.ModelProbeSelection, error) {
 	if h == nil || h.gatewayService == nil || g == nil {
@@ -168,18 +173,18 @@ func (h *GatewayHandler) prepareModelProbe(ctx context.Context, billing *service
 	if probeImageDenied(billing, public, routeModel, mapping.MappedModel) {
 		return nil, service.ErrModelProbeUnsupported
 	}
-	return &modelProbeRoute{ctx, billing, g, public, routeModel, mapping.MappedModel, platform, endpoint, imageIntent}, nil
+	return &modelProbeRoute{ctx: ctx, billingGroup: billing, group: g, publicModel: public, routeModel: routeModel, forwardModel: mapping.MappedModel, platform: platform, endpoint: endpoint, imageIntent: imageIntent}, nil
 }
 func (h *GatewayHandler) selectModelProbeAccount(r *modelProbeRoute) (*service.AccountSelectionResult, error) {
 	if !domain.UsesOpenAIGateway(r.platform) {
-		return h.gatewayService.SelectAccountWithLoadAwareness(r.ctx, &r.group.ID, "", r.routeModel, nil, "", 0)
+		return h.gatewayService.SelectAccountWithLoadAwareness(r.ctx, &r.group.ID, r.sessionHash, r.routeModel, r.excludedIDs, "", 0)
 	}
 	if h.openAIGatewayService == nil {
 		return nil, service.ErrNoAvailableAccounts
 	}
 	r.ctx = service.WithOpenAIForwardModel(r.ctx, r.forwardModel, false)
 	if service.IsGPTImageGenerationModel(r.forwardModel) || service.IsNovelAIImageGenerationModel(r.forwardModel) {
-		v, _, err := h.openAIGatewayService.SelectAccountWithSchedulerForImages(r.ctx, &r.group.ID, "", r.forwardModel, nil, service.OpenAIImagesCapabilityNative)
+		v, _, err := h.openAIGatewayService.SelectAccountWithSchedulerForImages(r.ctx, &r.group.ID, r.sessionHash, r.forwardModel, r.excludedIDs, service.OpenAIImagesCapabilityNative)
 		return v, err
 	}
 	capability := service.OpenAIEndpointCapability("")
@@ -194,7 +199,7 @@ func (h *GatewayHandler) selectModelProbeAccount(r *modelProbeRoute) (*service.A
 		capability = service.OpenAIEndpointCapabilityGrokMediaGeneration
 		r.ctx = service.WithOpenAIProfitControlSuppressed(r.ctx)
 	}
-	v, _, err := h.openAIGatewayService.SelectAccountWithSchedulerForCapability(r.ctx, &r.group.ID, "", "", r.forwardModel, nil, service.OpenAIUpstreamTransportHTTPSSE, capability, false, false, !r.imageIntent, r.platform)
+	v, _, err := h.openAIGatewayService.SelectAccountWithSchedulerForCapability(r.ctx, &r.group.ID, "", r.sessionHash, r.forwardModel, r.excludedIDs, service.OpenAIUpstreamTransportHTTPSSE, capability, false, false, !r.imageIntent, r.platform)
 	return v, err
 }
 func releaseProbeSelection(s *service.AccountSelectionResult) {
@@ -229,15 +234,14 @@ func (h *GatewayHandler) finishModelProbeSelection(r *modelProbeRoute, a *servic
 		account, vetoed, _ = h.openAIGatewayService.ProfitControlVetoLatest(r.ctx, a)
 	}
 	if vetoed || account == nil {
-		return nil, service.ErrNoAvailableAccounts
+		return nil, errors.Join(service.ErrNoAvailableAccounts, errModelProbeProfitVeto)
 	}
-	if r.endpoint != service.CompositeRouteEndpointAny && service.ModelProbeNativeEndpoint(account, r.forwardModel) != r.endpoint {
-		return nil, service.ErrModelProbeUnsupported
-	}
+	// The production adapter uses the explicit route's endpoint, including
+	// protocol conversion. A native-test endpoint mismatch is no longer a veto.
 	if probeImageDenied(r.billingGroup, r.publicModel, r.routeModel, r.forwardModel, account.GetMappedModel(r.forwardModel)) {
 		return nil, service.ErrModelProbeUnsupported
 	}
-	return &service.ModelProbeSelection{AccountID: account.ID, Model: r.forwardModel, Release: release, Context: r.ctx}, nil
+	return &service.ModelProbeSelection{AccountID: account.ID, Account: account, Model: r.forwardModel, Release: release, Context: r.ctx}, nil
 }
 func probeImageDenied(g *service.Group, models ...string) bool {
 	if service.GeminiImageGenerationDenied(g, nil, models...) {

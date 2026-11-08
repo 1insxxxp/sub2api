@@ -55,6 +55,7 @@ func (s *modelProbeAccessStub) CanAccess(context.Context, int64) (bool, error) {
 }
 
 type modelProbeGatewayStub struct {
+	runner       *modelProbeRunnerStub
 	models       []string
 	catalogCalls int
 	selected     int
@@ -74,6 +75,15 @@ func (s *modelProbeGatewayStub) SelectForProbe(context.Context, *Group, string) 
 	return &ModelProbeSelection{AccountID: 8, Model: "private-native-model", Release: func() { s.released++ }}, nil
 }
 
+func (s *modelProbeGatewayStub) ExecuteForProbe(ctx context.Context, g *Group, model string) (ModelProbeExecution, error) {
+	selected, err := s.SelectForProbe(ctx, g, model)
+	if err != nil {
+		return ModelProbeExecution{}, err
+	}
+	defer selected.Release()
+	return s.runner.RunModelProbe(ctx, selected.AccountID, selected.Model)
+}
+
 type modelProbeRunnerStub struct {
 	account int64
 	model   string
@@ -91,7 +101,8 @@ func modelProbeFixture() (*ModelProbeService, *modelProbeGroupsStub, *modelProbe
 	access := &modelProbeAccessStub{allowed: true}
 	gateway := &modelProbeGatewayStub{models: []string{"public-model"}}
 	runner := &modelProbeRunnerStub{result: ModelProbeExecution{Status: "success"}}
-	return NewModelProbeService(groups, access, gateway, runner, groups, probeSettingsFor(7), probeRoot()), groups, access, gateway, runner
+	gateway.runner = runner
+	return NewModelProbeService(groups, access, gateway, groups, probeSettingsFor(7), probeRoot()), groups, access, gateway, runner
 }
 func TestModelProbeDeniedBeforeCatalogOrSelection(t *testing.T) {
 	svc, g, a, gw, _ := modelProbeFixture()
@@ -222,7 +233,7 @@ func TestModelProbeVisibilityLookupFailureFailsClosed(t *testing.T) {
 func TestModelProbeMissingPolicyDefaultsClosed(t *testing.T) {
 	_, groups, access, gateway, runner := modelProbeFixture()
 	// A fresh service with no policy dependency must never inherit all models.
-	svc := NewModelProbeService(groups, access, gateway, runner, groups, probeSettingsFor(), probeRoot())
+	svc := NewModelProbeService(groups, access, gateway, groups, probeSettingsFor(), probeRoot())
 	got, err := svc.Groups(context.Background(), 4)
 	if err != nil || len(got) != 0 {
 		t.Fatalf("missing configuration must expose no groups, got %#v %v", got, err)

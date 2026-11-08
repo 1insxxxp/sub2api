@@ -37,6 +37,29 @@ func StartModelFirstOutputTraversal(c *gin.Context, settings *SettingService, pl
 
 const modelFirstOutputRequestPolicyKey = "sub2api.model_first_output_request_policy"
 
+// SnapshotModelFirstOutputRequestPolicy freezes policy for an internal request
+// whose account attempts use fresh Gin contexts. It does not start a timer or
+// alter the normal request's protocol-specific traversal behavior.
+func SnapshotModelFirstOutputRequestPolicy(c *gin.Context, settings *SettingService, platform, model string) {
+	if c != nil && c.Request != nil && settings != nil {
+		c.Set(modelFirstOutputRequestPolicyKey, modelFirstOutputRequestPolicy(c.Request.Context(), c, settings, platform, model))
+	}
+}
+
+// CopyModelFirstOutputRequestState carries only request-level timeout state.
+// Attempt collectors, keepalive writers and cancellation guards must not be
+// shared when an internal caller replaces its downstream sink between accounts.
+func CopyModelFirstOutputRequestState(from, to *gin.Context) {
+	if from == nil || to == nil {
+		return
+	}
+	for _, key := range []string{modelFirstOutputRequestPolicyKey, string(modelFirstOutputBudgetStartKey), string(modelFirstOutputBudgetDeadlineKey)} {
+		if value, ok := from.Get(key); ok {
+			to.Set(key, value)
+		}
+	}
+}
+
 func modelFirstOutputRequestPolicy(ctx context.Context, c *gin.Context, settings *SettingService, platform, model string) ModelFirstOutputTimeoutPolicy {
 	// The snapshot belongs to the incoming Gemini request, including attempts
 	// served by native Antigravity accounts through the Messages/native routes.

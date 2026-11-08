@@ -34,8 +34,8 @@ func TestModelProbeAdminGroupsMatchOrdinaryAPIKeyPage(t *testing.T) {
 				ordinary, err := apiKeys.GetAvailableGroups(context.Background(), 4)
 				require.NoError(t, err)
 				user.Role = role // A staff role must not widen the ordinary directory.
-				_, repo, access, gateway, runner := modelProbeFixture()
-				svc := NewModelProbeService(repo, access, gateway, runner, apiKeys, probeSettingsFor(1, 2, 3, 4, 5, 6), probeRoot())
+				_, repo, access, gateway, _ := modelProbeFixture()
+				svc := NewModelProbeService(repo, access, gateway, apiKeys, probeSettingsFor(1, 2, 3, 4, 5, 6), probeRoot())
 				got, err := svc.Groups(context.Background(), 4)
 				require.NoError(t, err)
 				ids := make([]int64, 0, len(got))

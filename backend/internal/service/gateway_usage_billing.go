@@ -774,6 +774,9 @@ func detachUpstreamContext(ctx context.Context, drainTimeout ...time.Duration) (
 	if ctx == nil {
 		return context.Background(), func() {}
 	}
+	if probe, _ := ctx.Value(modelProbeExecutionContextKey{}).(bool); probe {
+		return ctx, func() {}
+	}
 	return pkghttputil.DetachUpstreamContext(ctx, drainTimeout...), func() {}
 }
 

@@ -40,13 +40,14 @@ type ModelProbeExecution struct {
 // ModelProbeSelection is private infrastructure data and must never be serialized.
 type ModelProbeSelection struct {
 	AccountID int64
+	Account   *Account `json:"-"`
 	Model     string
 	Release   func()
 	Context   context.Context
 }
 type ModelProbeGateway interface {
 	ModelsForProbe(context.Context, *Group) ([]string, error)
-	SelectForProbe(context.Context, *Group, string) (*ModelProbeSelection, error)
+	ExecuteForProbe(context.Context, *Group, string) (ModelProbeExecution, error)
 }
 type modelProbeGroups interface {
 	GetByID(context.Context, int64) (*Group, error)
@@ -58,22 +59,18 @@ type modelProbeGroupVisibility interface {
 type modelProbeAccess interface {
 	CanAccess(context.Context, int64) (bool, error)
 }
-type modelProbeRunner interface {
-	RunModelProbe(context.Context, int64, string) (ModelProbeExecution, error)
-}
 type ModelProbeService struct {
 	groups           modelProbeGroups
 	access           modelProbeAccess
 	gateway          ModelProbeGateway
-	runner           modelProbeRunner
 	visible          modelProbeGroupVisibility
 	settings         modelProbeSettings
 	users            modelProbeUsers
 	categoryDefaults *CategoryDefaultGroupService
 }
 
-func NewModelProbeService(groups modelProbeGroups, access modelProbeAccess, gateway ModelProbeGateway, runner modelProbeRunner, visible modelProbeGroupVisibility, settings modelProbeSettings, users modelProbeUsers) *ModelProbeService {
-	return &ModelProbeService{groups: groups, access: access, gateway: gateway, runner: runner, visible: visible, settings: settings, users: users}
+func NewModelProbeService(groups modelProbeGroups, access modelProbeAccess, gateway ModelProbeGateway, visible modelProbeGroupVisibility, settings modelProbeSettings, users modelProbeUsers) *ModelProbeService {
+	return &ModelProbeService{groups: groups, access: access, gateway: gateway, visible: visible, settings: settings, users: users}
 }
 
 func (s *ModelProbeService) SetCategoryDefaultGroupService(defaults *CategoryDefaultGroupService) {
@@ -82,6 +79,13 @@ func (s *ModelProbeService) SetCategoryDefaultGroupService(defaults *CategoryDef
 
 func (s *ModelProbeService) categoryDefaultActor(ctx context.Context, actor int64) (*User, error) {
 	if s.users == nil || s.categoryDefaults == nil {
+		return nil, ErrUserSupportUnavailable
+	}
+	return s.probeActor(ctx, actor)
+}
+
+func (s *ModelProbeService) probeActor(ctx context.Context, actor int64) (*User, error) {
+	if s.users == nil {
 		return nil, ErrUserSupportUnavailable
 	}
 	user, err := s.users.GetByID(ctx, actor)
@@ -238,28 +242,21 @@ func (s *ModelProbeService) Run(ctx context.Context, actor, id int64, model stri
 			return nil, ErrModelProbeInvalid
 		}
 		group, probeModel = route.SourceGroup, route.SourceModel
+		ctx = WithGroupAccountExclusions(ctx, user.ID, user.GroupAccountExclusions)
+	} else {
+		user, err := s.probeActor(ctx, actor)
+		if err != nil {
+			return nil, err
+		}
+		ctx = WithGroupAccountExclusions(ctx, user.ID, user.GroupAccountExclusions)
 	}
 	started := time.Now()
 	out := &ModelProbeResult{GroupID: id, Model: model, Status: "failed", StartedAt: started, ErrorCode: "probe_unavailable"}
 	defer func() { out.DurationMs = time.Since(started).Milliseconds(); setProbeContextOutcome(ctx, out) }()
-	selected, err := s.gateway.SelectForProbe(ctx, group, probeModel)
-	if err != nil || selected == nil || selected.AccountID <= 0 {
-		if selected != nil && selected.Release != nil {
-			selected.Release()
-		}
-		if errors.Is(err, ErrModelProbeUnsupported) {
-			applyProbeExecution(out, ModelProbeExecution{Status: "unsupported"}, nil)
-		}
-		return out, nil
+	result, err := s.gateway.ExecuteForProbe(ctx, group, probeModel)
+	if errors.Is(err, ErrModelProbeUnsupported) {
+		result, err = ModelProbeExecution{Status: "unsupported"}, nil
 	}
-	if selected.Release != nil {
-		defer selected.Release()
-	}
-	runCtx := ctx
-	if selected.Context != nil {
-		runCtx = selected.Context
-	}
-	result, err := s.runner.RunModelProbe(runCtx, selected.AccountID, selected.Model)
 	applyProbeExecution(out, result, err)
 	return out, nil
 }
@@ -308,8 +305,8 @@ func setProbeContextOutcome(ctx context.Context, out *ModelProbeResult) {
 }
 
 // Concrete provider keeps small interfaces testable while Wire resolves existing services.
-func ProvideModelProbeService(groups GroupRepository, access *UserSupportService, gateway ModelProbeGateway, runner *AccountTestService, apiKeys *APIKeyService, settings SettingRepository, users UserRepository, defaults *CategoryDefaultGroupService) *ModelProbeService {
-	svc := NewModelProbeService(groups, access, gateway, runner, apiKeys, settings, users)
+func ProvideModelProbeService(groups GroupRepository, access *UserSupportService, gateway ModelProbeGateway, apiKeys *APIKeyService, settings SettingRepository, users UserRepository, defaults *CategoryDefaultGroupService) *ModelProbeService {
+	svc := NewModelProbeService(groups, access, gateway, apiKeys, settings, users)
 	svc.SetCategoryDefaultGroupService(defaults)
 	return svc
 }

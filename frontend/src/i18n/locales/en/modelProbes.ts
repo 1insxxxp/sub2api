@@ -1,7 +1,7 @@
 export default {
   title: 'Model Probes',
   group: 'Group to probe', selectGroup: 'Select a group', searchGroups: 'Search group names',
-  description: 'Probe public models in enabled groups through the group’s actual scheduling, using the same tests as account management. Probes call the upstream service without creating user bills. Results do not validate a specific user’s key permissions, balance or subscription.',
+  description: 'Probe public models using the same scheduling, retries and account failover as user requests, with a 120-second limit per model. Probes call upstream services without creating user bills. Results do not validate a specific customer’s key permissions, balance or subscription.',
   probeAll: 'Probe all', stop: 'Stop probes', retryFailed: 'Retry unsuccessful', probe: 'Probe', retry: 'Retry', reload: 'Reload',
   checkingAccess: 'Checking access…', loading: 'Loading…',
   models: 'Models', completed: 'Completed', failures: 'Unsuccessful', progress: 'Probe progress', model: 'Model name', result: 'Probe result', duration: 'Duration',

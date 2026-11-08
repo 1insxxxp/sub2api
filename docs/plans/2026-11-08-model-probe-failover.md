@@ -44,3 +44,13 @@ Files: frontend/src/i18n/locales/{zh,en}/modelProbes.ts, AGENTS.md.
 
 ## Local verification environment
 Use per-command GOMAXPROCS=2, GOFLAGS=-p=2, GOCACHE=/Volumes/ORICO/sub2-support-model-checks/go-cache, GOTMPDIR=/Volumes/Sub2SupportChecks/tmp. These avoid main-disk pressure and exFAT executable corruption; do not change Go global env or production. Coordinate all heavy checks with other agents.
+
+## Implemented and verified
+
+- Complete gateway execution replaces the single native-account runner. Actual production forwarders preserve typed failures and native/compatible endpoint conversion.
+- Per-channel retry policy, source-scoped exclusions, account admission, independent sticky session and request-scoped timeout/profit state are preserved. Actor account exclusions also apply to probes.
+- Success requires completed output; partial output and accepted asynchronous tasks cannot be replayed. Media stops retain cancellation instead of entering customer billing drain.
+- Customer usage and accounting repositories remain untouched (non-nil write guards cover success, failed and interrupted production forwarding).
+- Targeted backend regressions passed in handler, service, routes and admin packages, including existing timeout, same-account, OAuth429, single-account and upstream-context cases. Frontend probe/API/locale tests: 45 passed in 4 files.
+- Server binary compiled successfully with `go build -p 2 ./cmd/server` (output stored outside the repo).
+- Independent review findings were resolved and regression tested. No production configuration, deployment or database changes were performed.

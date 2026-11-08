@@ -8,6 +8,7 @@ import (
 )
 
 type categoryDefaultProbeGateway struct {
+	runner       *modelProbeRunnerStub
 	catalogCalls int
 	group        *Group
 	model        string
@@ -21,6 +22,15 @@ func (g *categoryDefaultProbeGateway) ModelsForProbe(context.Context, *Group) ([
 func (g *categoryDefaultProbeGateway) SelectForProbe(_ context.Context, group *Group, model string) (*ModelProbeSelection, error) {
 	g.group, g.model = group, model
 	return &ModelProbeSelection{AccountID: 8, Model: "native-model", Release: func() { g.released++ }}, nil
+}
+
+func (g *categoryDefaultProbeGateway) ExecuteForProbe(ctx context.Context, group *Group, model string) (ModelProbeExecution, error) {
+	selected, err := g.SelectForProbe(ctx, group, model)
+	if err != nil {
+		return ModelProbeExecution{}, err
+	}
+	defer selected.Release()
+	return g.runner.RunModelProbe(ctx, selected.AccountID, selected.Model)
 }
 
 type categoryDefaultProbeUsers struct {
@@ -49,7 +59,8 @@ func categoryDefaultProbeFixture(t *testing.T) (*ModelProbeService, *categoryDef
 	runner := &modelProbeRunnerStub{result: ModelProbeExecution{Status: "success"}}
 	user := &User{ID: 4, Status: StatusActive, RestrictPublicGroups: true, AllowedGroups: []int64{1}}
 	users := &categoryDefaultProbeUsers{onGet: func(int) *User { return user }}
-	svc := NewModelProbeService(groups, &modelProbeAccessStub{allowed: true}, gateway, runner, groups, probeSettingsFor(100), users)
+	gateway.runner = runner
+	svc := NewModelProbeService(groups, &modelProbeAccessStub{allowed: true}, gateway, groups, probeSettingsFor(100), users)
 	svc.SetCategoryDefaultGroupService(defaults)
 	return svc, gateway, runner
 }

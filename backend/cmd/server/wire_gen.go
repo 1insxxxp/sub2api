@@ -236,7 +236,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	pluginManager := service.ProvidePluginManager(pluginRepository, secretEncryptor, configConfig, pluginHostInfo, pluginKVStore, openAIGatewayService)
 	accountTestService := service.ProvideAccountTestService(accountRepository, geminiTokenProvider, claudeTokenProvider, grokTokenProvider, antigravityGatewayService, httpUpstream, configConfig, tlsFingerprintProfileService, openAIGatewayService, settingService, pluginManager)
 	categoryDefaultGroupService := service.ProvideCategoryDefaultGroupService(categoryDefaultGroupRepository, apiKeyAuthCacheInvalidator, apiKeyService, channelService)
-	modelProbeService := service.ProvideModelProbeService(groupRepository, userSupportService, gatewayHandler, accountTestService, apiKeyService, settingRepository, userRepository, categoryDefaultGroupService)
+	modelProbeService := service.ProvideModelProbeService(groupRepository, userSupportService, gatewayHandler, apiKeyService, settingRepository, userRepository, categoryDefaultGroupService)
 	modelProbeHandler := admin.NewModelProbeHandler(modelProbeService)
 	adminWorkbenchAccessRepository := repository.NewAdminWorkbenchAccessRepository(db)
 	adminWorkbenchAccessService := service.NewAdminWorkbenchAccessService(adminWorkbenchAccessRepository)

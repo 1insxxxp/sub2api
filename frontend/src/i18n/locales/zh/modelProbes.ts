@@ -1,7 +1,7 @@
 export default {
   title: '模型探测',
   group: '探测分组', selectGroup: '选择一个分组', searchGroups: '搜索分组名称',
-  description: '按分组实际调度探测已开启分组的公开模型，沿用账号管理的测试方式。探测会调用上游，不产生用户账单；结果不代表特定用户的密钥权限、余额或订阅校验。',
+  description: '按用户请求的调度、重试和切号规则探测公开模型，单个模型最长 120 秒。探测会调用上游，不产生用户账单；结果不代表特定客户的密钥权限、余额或订阅校验。',
   probeAll: '一键探测', stop: '停止探测', retryFailed: '重试未通过', probe: '探测', retry: '重试', reload: '重新加载',
   checkingAccess: '正在检查权限…', loading: '正在加载…',
   models: '模型', completed: '已完成', failures: '未通过', progress: '探测进度', model: '模型名称', result: '探测结果', duration: '耗时',

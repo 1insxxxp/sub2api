@@ -256,7 +256,7 @@ func TestModelProbeGatewayIncludesOpenAIChatOnlyNativeDefault(t *testing.T) {
 	selection.Release()
 }
 
-func TestModelProbeGatewayDoesNotClaimDifferentExplicitEndpointPassed(t *testing.T) {
+func TestModelProbeGatewayRetainsExplicitEndpointForProductionForwarding(t *testing.T) {
 	group := &service.Group{ID: 7, Platform: service.PlatformComposite, Status: service.StatusActive, Hydrated: true}
 	account := probeGatewayAccount(71, 7, service.PlatformOpenAI, "route-model", "native-model")
 	account.Extra = map[string]any{openai_compat.ExtraKeyResponsesSupported: true}
@@ -267,8 +267,12 @@ func TestModelProbeGatewayDoesNotClaimDifferentExplicitEndpointPassed(t *testing
 	slots := &probeGatewaySlots{helperConcurrencyCacheStub: helperConcurrencyCacheStub{accountSeq: []bool{true}}}
 	h := probeGatewayFixture(repo, nil, routes, slots)
 	selection, err := h.SelectForProbe(context.Background(), group, "public-model")
-	require.ErrorIs(t, err, service.ErrModelProbeUnsupported, "a default Responses test does not establish an explicit Chat Completions route")
-	require.Nil(t, selection)
+	require.NoError(t, err, "the production adapter must honor Chat Completions rather than use the account's default Responses test")
+	require.Equal(t, account.ID, selection.AccountID)
+	route, err := h.prepareModelProbe(context.Background(), group, "public-model")
+	require.NoError(t, err)
+	require.Equal(t, service.CompositeRouteEndpointChatCompletions, modelProbeForwardEndpoint(route, selection.Account, selection.Account.GetMappedModel(selection.Model)))
+	selection.Release()
 	slots.mu.Lock()
 	releases := slots.accountReleaseCalls
 	slots.mu.Unlock()

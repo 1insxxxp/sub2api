@@ -32,14 +32,8 @@ type probeRouteGateway struct{ selected int }
 func (*probeRouteGateway) ModelsForProbe(context.Context, *service.Group) ([]string, error) {
 	return []string{"gemini-2.5-flash"}, nil
 }
-func (s *probeRouteGateway) SelectForProbe(context.Context, *service.Group, string) (*service.ModelProbeSelection, error) {
+func (s *probeRouteGateway) ExecuteForProbe(context.Context, *service.Group, string) (service.ModelProbeExecution, error) {
 	s.selected++
-	return &service.ModelProbeSelection{AccountID: 99, Model: "private-target", Release: func() {}}, nil
-}
-
-type probeRouteRunner struct{}
-
-func (probeRouteRunner) RunModelProbe(context.Context, int64, string) (service.ModelProbeExecution, error) {
 	return service.ModelProbeExecution{Status: "success"}, nil
 }
 
@@ -69,7 +63,7 @@ func TestModelProbeRoutesUseJWTAndFreshSupportCapability(t *testing.T) {
 	access := &supportRouteRepo{enabled: true}
 	gateway := &probeRouteGateway{}
 	users := &probeRouteUsers{role: service.RoleAdmin}
-	svc := service.NewModelProbeService(probeRouteGroups{}, access, gateway, probeRouteRunner{}, probeRouteGroups{}, probeRouteSettings{}, users)
+	svc := service.NewModelProbeService(probeRouteGroups{}, access, gateway, probeRouteGroups{}, probeRouteSettings{}, users)
 	h := &handler.Handlers{Admin: &handler.AdminHandlers{ModelProbe: admin.NewModelProbeHandler(svc)}}
 	r := gin.New()
 	role := service.RoleUser
