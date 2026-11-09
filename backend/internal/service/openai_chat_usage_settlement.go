@@ -272,6 +272,8 @@ func addOpenAIChatRoundUsage(total *OpenAIUsage, usage OpenAIUsage) {
 	total.OutputTokens += usage.OutputTokens
 	total.CacheReadInputTokens += usage.CacheReadInputTokens
 	total.CacheCreationInputTokens += usage.CacheCreationInputTokens
+	total.CacheCreation30mInputTokens += usage.CacheCreation30mInputTokens
+	total.CacheCreation12hInputTokens += usage.CacheCreation12hInputTokens
 	total.ImageInputTokens += usage.ImageInputTokens
 	total.ImageCacheReadTokens += usage.ImageCacheReadTokens
 	total.ImageOutputTokens += usage.ImageOutputTokens
@@ -339,16 +341,17 @@ func validateOpenAIChatUsageAggregate(result *OpenAIForwardResult) error {
 	if result == nil || result.ChatUsage == nil {
 		return nil
 	}
-	values := func(usage OpenAIUsage) [7]int {
-		return [7]int{usage.InputTokens, usage.OutputTokens, usage.CacheReadInputTokens,
-			usage.CacheCreationInputTokens, usage.ImageInputTokens, usage.ImageCacheReadTokens, usage.ImageOutputTokens}
+	values := func(usage OpenAIUsage) [9]int {
+		return [9]int{usage.InputTokens, usage.OutputTokens, usage.CacheReadInputTokens,
+			usage.CacheCreationInputTokens, usage.ImageInputTokens, usage.ImageCacheReadTokens, usage.ImageOutputTokens,
+			usage.CacheCreation30mInputTokens, usage.CacheCreation12hInputTokens}
 	}
 	for _, value := range values(result.Usage) {
 		if value < 0 || value > math.MaxInt32 {
 			return ErrOpenAIChatUsageOutOfRange
 		}
 	}
-	totals := [7]int{}
+	totals := [9]int{}
 	check := func(usage OpenAIUsage) error {
 		for i, value := range values(usage) {
 			if value < 0 || value > math.MaxInt32-totals[i] {

@@ -54,6 +54,8 @@ type usagePersistenceUsage struct {
 	CacheReadTokens           int                      `json:"cache_read_tokens"`
 	CacheCreation5mTokens     int                      `json:"cache_creation_5m_tokens"`
 	CacheCreation1hTokens     int                      `json:"cache_creation_1h_tokens"`
+	CacheCreation30mTokens    int                      `json:"cache_creation_30m_tokens,omitempty"`
+	CacheCreation12hTokens    int                      `json:"cache_creation_12h_tokens,omitempty"`
 	ImageOutputTokens         int                      `json:"image_output_tokens"`
 	ImageOutputCost           float64                  `json:"image_output_cost"`
 	ImageInputTokens          int                      `json:"image_input_tokens"`
@@ -158,6 +160,8 @@ func encodeUsagePersistencePayload(cmd *service.UsageBillingCommand, thresholdEx
 		CacheReadTokens:           log.CacheReadTokens,
 		CacheCreation5mTokens:     log.CacheCreation5mTokens,
 		CacheCreation1hTokens:     log.CacheCreation1hTokens,
+		CacheCreation30mTokens:    log.CacheCreation30mTokens,
+		CacheCreation12hTokens:    log.CacheCreation12hTokens,
 		ImageOutputTokens:         log.ImageOutputTokens,
 		ImageOutputCost:           log.ImageOutputCost,
 		ImageInputTokens:          log.ImageInputTokens,
@@ -391,6 +395,8 @@ func decodeUsagePersistencePayload(raw []byte, requestID string, apiKeyID int64)
 		CacheReadTokens:           usage.CacheReadTokens,
 		CacheCreation5mTokens:     usage.CacheCreation5mTokens,
 		CacheCreation1hTokens:     usage.CacheCreation1hTokens,
+		CacheCreation30mTokens:    usage.CacheCreation30mTokens,
+		CacheCreation12hTokens:    usage.CacheCreation12hTokens,
 		ImageOutputTokens:         usage.ImageOutputTokens,
 		ImageOutputCost:           usage.ImageOutputCost,
 		ImageInputTokens:          usage.ImageInputTokens,

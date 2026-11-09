@@ -57,6 +57,7 @@ func TestUsageBillingDurablePersistence_EnqueueSharesChargeTransactionAndSafePay
 			created := time.Date(2026, 10, 23, 1, 2, 3, 0, time.UTC)
 			cmd := &service.UsageBillingCommand{RequestID: "durable-charge", APIKeyID: 2, UserID: 1, AccountID: 3, BalanceCost: 2,
 				UsageLog: &service.UsageLog{UserID: 1, APIKeyID: 2, AccountID: 3, RequestID: "durable-charge", Model: "gemini-safe", InputTokens: 12, OutputTokens: 2, UpstreamOutputTokens: 10000, ActualCost: 2, ThresholdExemptCost: 99, CreatedAt: created,
+					CacheCreationTokens: 2410, CacheCreation5mTokens: 5, CacheCreation1hTokens: 6, CacheCreation30mTokens: 9, CacheCreation12hTokens: 2390,
 					User: &service.User{Email: "sensitive-user-email"}, APIKey: &service.APIKey{Key: "sensitive-api-key"}, Account: &service.Account{Credentials: map[string]any{"api_key": "sensitive-account-credential"}},
 					Outcome: &service.ResponseOutcome{HTTPStatus: 200, HasText: true, OutputBytes: 14, CollectorVersion: 1}}}
 			expectUsagePersistenceBillingClaim(mock, cmd)
@@ -86,6 +87,8 @@ func TestUsageBillingDurablePersistence_EnqueueSharesChargeTransactionAndSafePay
 			require.EqualValues(t, 2, payload.payload["version"])
 			usage := payload.payload["usage"].(map[string]any)
 			require.EqualValues(t, 10000, usage["upstream_output_tokens"])
+			require.EqualValues(t, 9, usage["cache_creation_30m_tokens"])
+			require.EqualValues(t, 2390, usage["cache_creation_12h_tokens"])
 			require.EqualValues(t, 0.25, usage["threshold_exempt_cost"], "wallet allocation, not the caller's stale estimate")
 			require.Equal(t, created.Format(time.RFC3339Nano), usage["created_at"])
 			raw, err := json.Marshal(payload.payload)
@@ -97,6 +100,30 @@ func TestUsageBillingDurablePersistence_EnqueueSharesChargeTransactionAndSafePay
 				_, exists := usage[field]
 				require.False(t, exists, field)
 			}
+			decoded, err := decodeUsagePersistencePayload(raw, cmd.RequestID, cmd.APIKeyID)
+			require.NoError(t, err)
+			require.Equal(t, 2410, decoded.CacheCreationTokens)
+			require.Equal(t, 5, decoded.CacheCreation5mTokens)
+			require.Equal(t, 6, decoded.CacheCreation1hTokens)
+			require.Equal(t, 9, decoded.CacheCreation30mTokens)
+			require.Equal(t, 2390, decoded.CacheCreation12hTokens)
+
+			delete(usage, "cache_creation_30m_tokens")
+			delete(usage, "cache_creation_12h_tokens")
+			legacyRaw, err := json.Marshal(payload.payload)
+			require.NoError(t, err)
+			legacy, err := decodeUsagePersistencePayload(legacyRaw, cmd.RequestID, cmd.APIKeyID)
+			require.NoError(t, err)
+			require.Zero(t, legacy.CacheCreation30mTokens)
+			require.Zero(t, legacy.CacheCreation12hTokens)
+			require.Equal(t, 5, legacy.CacheCreation5mTokens)
+			require.Equal(t, 6, legacy.CacheCreation1hTokens)
+			legacyCommand := *cmd
+			legacyCommand.UsageLog = legacy
+			legacyEncoded, err := encodeUsagePersistencePayload(&legacyCommand, 0.25)
+			require.NoError(t, err)
+			require.NotContains(t, string(legacyEncoded), "cache_creation_30m_tokens")
+			require.NotContains(t, string(legacyEncoded), "cache_creation_12h_tokens")
 		})
 	}
 }

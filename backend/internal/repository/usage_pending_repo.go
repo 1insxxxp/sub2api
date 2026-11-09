@@ -142,7 +142,7 @@ func pendingUsageSelectColumns() string {
 	for _, column := range strings.Fields("user_id api_key_id account_id request_id model requested_model upstream_model group_id source_group_id custom_group_id subscription_id input_tokens output_tokens cache_creation_tokens cache_read_tokens cache_creation_5m_tokens cache_creation_1h_tokens image_output_tokens billing_type stream duration_ms first_token_ms user_agent ip_address inbound_endpoint upstream_endpoint upstream_request_id session_id channel_id model_mapping_chain service_tier reasoning_effort requested_reasoning_effort created_at category_default_group_id") {
 		values[column] = "p." + column
 	}
-	for _, column := range strings.Fields("image_input_tokens image_count video_count") {
+	for _, column := range strings.Fields("image_input_tokens image_count video_count cache_creation_30m_tokens cache_creation_12h_tokens") {
 		values[column] = "0"
 	}
 	for _, column := range strings.Fields("image_output_cost image_input_cost input_cost output_cost cache_creation_cost cache_read_cost total_cost actual_cost threshold_exempt_cost compensated_cost") {

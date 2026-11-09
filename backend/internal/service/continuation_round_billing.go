@@ -85,7 +85,8 @@ func claudeContinuationCounts(usage ClaudeUsage) []int {
 
 func openAIContinuationCounts(usage OpenAIUsage) []int {
 	return []int{usage.InputTokens, usage.OutputTokens, usage.CacheReadInputTokens,
-		usage.CacheCreationInputTokens, usage.ImageInputTokens, usage.ImageCacheReadTokens, usage.ImageOutputTokens}
+		usage.CacheCreationInputTokens, usage.ImageInputTokens, usage.ImageCacheReadTokens, usage.ImageOutputTokens,
+		usage.CacheCreation30mInputTokens, usage.CacheCreation12hInputTokens}
 }
 
 // AggregateForwardContinuationResults snapshots leaf results so a subsequent
@@ -329,6 +330,7 @@ func openAIContinuationUsageTokens(result *OpenAIForwardResult, delivered bool) 
 	}
 	return UsageTokens{InputTokens: uncached, OutputTokens: output,
 		CacheReadTokens: result.Usage.CacheReadInputTokens, CacheCreationTokens: result.Usage.CacheCreationInputTokens,
+		CacheCreation30mTokens: result.Usage.CacheCreation30mInputTokens, CacheCreation12hTokens: result.Usage.CacheCreation12hInputTokens,
 		ImageInputTokens:     max(0, result.Usage.ImageInputTokens-result.Usage.ImageCacheReadTokens),
 		ImageCacheReadTokens: result.Usage.ImageCacheReadTokens, ImageOutputTokens: result.Usage.ImageOutputTokens}
 }

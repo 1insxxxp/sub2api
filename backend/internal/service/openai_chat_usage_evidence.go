@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -243,6 +244,24 @@ func (r *OpenAIChatUsageRound) mergeUsage(root gjson.Result) {
 	set(&r.CompletionTokens, &r.OutputReported, "output_tokens", "completion_tokens")
 	set(&r.Usage.CacheReadInputTokens, &r.CacheReadReported, "input_tokens_details.cached_tokens", "prompt_tokens_details.cached_tokens", "cache_read_input_tokens", "cache_read_tokens", "cached_tokens")
 	set(&r.Usage.CacheCreationInputTokens, &r.CacheWriteReported, "input_tokens_details.cache_write_tokens", "prompt_tokens_details.cache_write_tokens", "input_tokens_details.cache_creation_tokens", "prompt_tokens_details.cache_creation_tokens", "cache_write_tokens", "cache_creation_input_tokens", "cache_write_input_tokens", "cache_creation_tokens")
+	// Cache-write totals and TTL details can arrive in separate usage frames.
+	// Keep a complete reported breakdown until a conflicting total replaces it.
+	details := root.Get("input_tokens_details.cache_write_tokens_details")
+	if !details.Exists() {
+		details = root.Get("prompt_tokens_details.cache_write_tokens_details")
+	}
+	if details.Exists() {
+		r.Usage.CacheCreation30mInputTokens, r.Usage.CacheCreation12hInputTokens = 0, 0
+		short, shortReported := openAIChatReportedCount(details, "ttl_30m_tokens")
+		long, longReported := openAIChatReportedCount(details, "ttl_12h_tokens")
+		if shortReported && longReported && long <= math.MaxInt32-short {
+			r.Usage.CacheCreation30mInputTokens, r.Usage.CacheCreation12hInputTokens = short, long
+		}
+	}
+	if r.CacheWriteReported && (r.Usage.CacheCreation30mInputTokens > r.Usage.CacheCreationInputTokens ||
+		r.Usage.CacheCreation12hInputTokens != r.Usage.CacheCreationInputTokens-r.Usage.CacheCreation30mInputTokens) {
+		r.Usage.CacheCreation30mInputTokens, r.Usage.CacheCreation12hInputTokens = 0, 0
+	}
 	set(&r.ReasoningTokens, &r.ReasoningReported, "completion_tokens_details.reasoning_tokens", "output_tokens_details.reasoning_tokens")
 	set(&r.TotalTokens, &r.TotalReported, "total_tokens")
 	r.Usage.OutputTokens = r.CompletionTokens
