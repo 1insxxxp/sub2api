@@ -164,6 +164,11 @@ func (r *channelMonitorV2Repository) RecomputeRange(ctx context.Context, start, 
 }
 
 const channelMonitorV2UsageMetricsSQL = `
+WITH classified_usage AS MATERIALIZED (
+  SELECT ul.*, ` + usageRequestSuccessFilterUL + ` AS request_succeeded
+  FROM usage_logs ul
+  WHERE ul.created_at >= $1 AND ul.created_at < $2
+)
 INSERT INTO channel_monitor_v2_metrics_1m (
   bucket_start, platform, group_id, model, success_requests,
   input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
@@ -171,22 +176,27 @@ INSERT INTO channel_monitor_v2_metrics_1m (
 )
 SELECT date_trunc('minute', ul.created_at), %s, COALESCE(ul.group_id, 0), %s,
        COUNT(DISTINCT COALESCE(NULLIF(ul.request_id, ''), 'usage:' || ul.id::text))
-         FILTER (WHERE COALESCE(ul.request_type, 0) NOT IN (4, 6) AND ` + usageLogSuccessFilterUL + `),
-       COALESCE(SUM(ul.input_tokens) FILTER (WHERE ` + usageLogSuccessFilterUL + `), 0),
-       COALESCE(SUM(ul.output_tokens) FILTER (WHERE ` + usageLogSuccessFilterUL + `), 0),
-       COALESCE(SUM(ul.cache_creation_tokens) FILTER (WHERE ` + usageLogSuccessFilterUL + `), 0),
-       COALESCE(SUM(ul.cache_read_tokens) FILTER (WHERE ` + usageLogSuccessFilterUL + `), 0),
-       COALESCE(SUM(ul.first_token_ms) FILTER (WHERE ul.first_token_ms IS NOT NULL AND ` + usageLogSuccessFilterUL + `), 0),
-       COUNT(ul.first_token_ms) FILTER (WHERE ` + usageLogSuccessFilterUL + `),
-       COALESCE(SUM(ul.duration_ms) FILTER (WHERE ul.duration_ms IS NOT NULL AND ` + usageLogSuccessFilterUL + `), 0),
-       COUNT(ul.duration_ms) FILTER (WHERE ` + usageLogSuccessFilterUL + `), NOW()
-FROM usage_logs ul
+         FILTER (WHERE COALESCE(ul.request_type, 0) NOT IN (4, 6) AND ul.request_succeeded),
+       COALESCE(SUM(ul.input_tokens), 0),
+       COALESCE(SUM(ul.output_tokens), 0),
+       COALESCE(SUM(ul.cache_creation_tokens), 0),
+       COALESCE(SUM(ul.cache_read_tokens), 0),
+       COALESCE(SUM(ul.first_token_ms) FILTER (WHERE ul.first_token_ms IS NOT NULL AND ul.request_succeeded), 0),
+       COUNT(ul.first_token_ms) FILTER (WHERE ul.request_succeeded),
+       COALESCE(SUM(ul.duration_ms) FILTER (WHERE ul.duration_ms IS NOT NULL AND ul.request_succeeded), 0),
+       COUNT(ul.duration_ms) FILTER (WHERE ul.request_succeeded), NOW()
+FROM classified_usage ul
 LEFT JOIN groups g ON g.id = ul.group_id
 LEFT JOIN accounts a ON a.id = ul.account_id
 WHERE ul.created_at >= $1 AND ul.created_at < $2
 GROUP BY 1, 2, 3, 4`
 
 const channelMonitorV2UserMetricsSQL = `
+WITH classified_usage AS MATERIALIZED (
+  SELECT ul.*, ` + usageRequestSuccessFilterUL + ` AS request_succeeded
+  FROM usage_logs ul
+  WHERE ul.created_at >= $1 AND ul.created_at < $2
+)
 INSERT INTO channel_monitor_v2_user_metrics_1m (
   bucket_start, platform, group_id, model, user_id, success_requests,
   input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
@@ -194,35 +204,40 @@ INSERT INTO channel_monitor_v2_user_metrics_1m (
 )
 SELECT date_trunc('minute', ul.created_at), %s, COALESCE(ul.group_id, 0), %s, ul.user_id,
        COUNT(DISTINCT COALESCE(NULLIF(ul.request_id, ''), 'usage:' || ul.id::text))
-         FILTER (WHERE COALESCE(ul.request_type, 0) NOT IN (4, 6) AND ` + usageLogSuccessFilterUL + `),
-       COALESCE(SUM(ul.input_tokens) FILTER (WHERE ` + usageLogSuccessFilterUL + `), 0),
-       COALESCE(SUM(ul.output_tokens) FILTER (WHERE ` + usageLogSuccessFilterUL + `), 0),
-       COALESCE(SUM(ul.cache_creation_tokens) FILTER (WHERE ` + usageLogSuccessFilterUL + `), 0),
-       COALESCE(SUM(ul.cache_read_tokens) FILTER (WHERE ` + usageLogSuccessFilterUL + `), 0),
-       COALESCE(SUM(ul.first_token_ms) FILTER (WHERE ul.first_token_ms IS NOT NULL AND ` + usageLogSuccessFilterUL + `), 0),
-       COUNT(ul.first_token_ms) FILTER (WHERE ` + usageLogSuccessFilterUL + `),
-       COALESCE(SUM(ul.duration_ms) FILTER (WHERE ul.duration_ms IS NOT NULL AND ` + usageLogSuccessFilterUL + `), 0),
-       COUNT(ul.duration_ms) FILTER (WHERE ` + usageLogSuccessFilterUL + `), NOW()
-FROM usage_logs ul
+         FILTER (WHERE COALESCE(ul.request_type, 0) NOT IN (4, 6) AND ul.request_succeeded),
+       COALESCE(SUM(ul.input_tokens), 0),
+       COALESCE(SUM(ul.output_tokens), 0),
+       COALESCE(SUM(ul.cache_creation_tokens), 0),
+       COALESCE(SUM(ul.cache_read_tokens), 0),
+       COALESCE(SUM(ul.first_token_ms) FILTER (WHERE ul.first_token_ms IS NOT NULL AND ul.request_succeeded), 0),
+       COUNT(ul.first_token_ms) FILTER (WHERE ul.request_succeeded),
+       COALESCE(SUM(ul.duration_ms) FILTER (WHERE ul.duration_ms IS NOT NULL AND ul.request_succeeded), 0),
+       COUNT(ul.duration_ms) FILTER (WHERE ul.request_succeeded), NOW()
+FROM classified_usage ul
 LEFT JOIN groups g ON g.id = ul.group_id
 LEFT JOIN accounts a ON a.id = ul.account_id
 WHERE ul.created_at >= $1 AND ul.created_at < $2 AND ul.user_id IS NOT NULL
 GROUP BY 1, 2, 3, 4, 5`
 
 const channelMonitorV2HistogramSQL = `
+WITH classified_usage AS MATERIALIZED (
+  SELECT ul.*, ` + usageRequestSuccessFilterUL + ` AS request_succeeded
+  FROM usage_logs ul
+  WHERE ul.created_at >= $1 AND ul.created_at < $2
+)
 INSERT INTO channel_monitor_v2_latency_histograms_1m (
   bucket_start, platform, group_id, model, user_id, metric, upper_bound_ms, sample_count
 )
 SELECT date_trunc('minute', ul.created_at), %s, COALESCE(ul.group_id, 0), %s,
        audience.user_id, latency.metric, %s, COUNT(*)
-FROM usage_logs ul
+FROM classified_usage ul
 LEFT JOIN groups g ON g.id = ul.group_id
 LEFT JOIN accounts a ON a.id = ul.account_id
 CROSS JOIN LATERAL (VALUES (0::bigint), (ul.user_id)) audience(user_id)
 CROSS JOIN LATERAL (VALUES ('ttft'::text, ul.first_token_ms), ('duration'::text, ul.duration_ms)) latency(metric, value_ms)
 WHERE ul.created_at >= $1 AND ul.created_at < $2
   AND audience.user_id IS NOT NULL AND latency.value_ms IS NOT NULL AND latency.value_ms >= 0
-  AND ` + usageLogSuccessFilterUL + `
+  AND ul.request_succeeded
 GROUP BY 1, 2, 3, 4, 5, 6, 7`
 
 func channelMonitorV2HistogramBoundSQL(column string) string {

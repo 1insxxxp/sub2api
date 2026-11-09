@@ -28,13 +28,14 @@ func (r *opsRepository) UpsertHourlyMetrics(ctx context.Context, startTime, endT
 	// IMPORTANT: Postgres UNIQUE treats NULLs as distinct, so the table uses a COALESCE-based
 	// unique index; our ON CONFLICT target must match that expression set.
 	q := `
-WITH usage_base AS (
+WITH usage_base AS MATERIALIZED (
   SELECT
     date_trunc('hour', ul.created_at AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' AS bucket_start,
     g.platform AS platform,
     ul.group_id AS group_id,
     ul.duration_ms AS duration_ms,
     ul.first_token_ms AS first_token_ms,
+    ` + usageRequestSuccessFilterUL + ` AS request_succeeded,
     (ul.input_tokens + ul.output_tokens + ul.cache_creation_tokens + ul.cache_read_tokens) AS tokens
   FROM usage_logs ul
   JOIN groups g ON g.id = ul.group_id
@@ -45,23 +46,23 @@ usage_agg AS (
     bucket_start,
     CASE WHEN GROUPING(platform) = 1 THEN NULL ELSE platform END AS platform,
     CASE WHEN GROUPING(group_id) = 1 THEN NULL ELSE group_id END AS group_id,
-    COUNT(*) AS success_count,
-    COUNT(*) FILTER (WHERE first_token_ms IS NOT NULL) AS ttft_sample_count,
+    COUNT(*) FILTER (WHERE request_succeeded) AS success_count,
+    COUNT(*) FILTER (WHERE request_succeeded AND first_token_ms IS NOT NULL) AS ttft_sample_count,
     COALESCE(SUM(tokens), 0) AS token_consumed,
 
-    percentile_cont(0.50) WITHIN GROUP (ORDER BY duration_ms) FILTER (WHERE duration_ms IS NOT NULL) AS duration_p50_ms,
-    percentile_cont(0.90) WITHIN GROUP (ORDER BY duration_ms) FILTER (WHERE duration_ms IS NOT NULL) AS duration_p90_ms,
-    percentile_cont(0.95) WITHIN GROUP (ORDER BY duration_ms) FILTER (WHERE duration_ms IS NOT NULL) AS duration_p95_ms,
-    percentile_cont(0.99) WITHIN GROUP (ORDER BY duration_ms) FILTER (WHERE duration_ms IS NOT NULL) AS duration_p99_ms,
-    AVG(duration_ms) FILTER (WHERE duration_ms IS NOT NULL) AS duration_avg_ms,
-    MAX(duration_ms) AS duration_max_ms,
+    percentile_cont(0.50) WITHIN GROUP (ORDER BY duration_ms) FILTER (WHERE request_succeeded AND duration_ms IS NOT NULL) AS duration_p50_ms,
+    percentile_cont(0.90) WITHIN GROUP (ORDER BY duration_ms) FILTER (WHERE request_succeeded AND duration_ms IS NOT NULL) AS duration_p90_ms,
+    percentile_cont(0.95) WITHIN GROUP (ORDER BY duration_ms) FILTER (WHERE request_succeeded AND duration_ms IS NOT NULL) AS duration_p95_ms,
+    percentile_cont(0.99) WITHIN GROUP (ORDER BY duration_ms) FILTER (WHERE request_succeeded AND duration_ms IS NOT NULL) AS duration_p99_ms,
+    AVG(duration_ms) FILTER (WHERE request_succeeded AND duration_ms IS NOT NULL) AS duration_avg_ms,
+    MAX(duration_ms) FILTER (WHERE request_succeeded) AS duration_max_ms,
 
-    percentile_cont(0.50) WITHIN GROUP (ORDER BY first_token_ms) FILTER (WHERE first_token_ms IS NOT NULL) AS ttft_p50_ms,
-    percentile_cont(0.90) WITHIN GROUP (ORDER BY first_token_ms) FILTER (WHERE first_token_ms IS NOT NULL) AS ttft_p90_ms,
-    percentile_cont(0.95) WITHIN GROUP (ORDER BY first_token_ms) FILTER (WHERE first_token_ms IS NOT NULL) AS ttft_p95_ms,
-    percentile_cont(0.99) WITHIN GROUP (ORDER BY first_token_ms) FILTER (WHERE first_token_ms IS NOT NULL) AS ttft_p99_ms,
-    AVG(first_token_ms) FILTER (WHERE first_token_ms IS NOT NULL) AS ttft_avg_ms,
-    MAX(first_token_ms) AS ttft_max_ms
+    percentile_cont(0.50) WITHIN GROUP (ORDER BY first_token_ms) FILTER (WHERE request_succeeded AND first_token_ms IS NOT NULL) AS ttft_p50_ms,
+    percentile_cont(0.90) WITHIN GROUP (ORDER BY first_token_ms) FILTER (WHERE request_succeeded AND first_token_ms IS NOT NULL) AS ttft_p90_ms,
+    percentile_cont(0.95) WITHIN GROUP (ORDER BY first_token_ms) FILTER (WHERE request_succeeded AND first_token_ms IS NOT NULL) AS ttft_p95_ms,
+    percentile_cont(0.99) WITHIN GROUP (ORDER BY first_token_ms) FILTER (WHERE request_succeeded AND first_token_ms IS NOT NULL) AS ttft_p99_ms,
+    AVG(first_token_ms) FILTER (WHERE request_succeeded AND first_token_ms IS NOT NULL) AS ttft_avg_ms,
+    MAX(first_token_ms) FILTER (WHERE request_succeeded) AS ttft_max_ms
   FROM usage_base
   GROUP BY GROUPING SETS (
     (bucket_start),
