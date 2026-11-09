@@ -480,7 +480,7 @@ func (r *usageLogRepository) GetUserDashboardStats(ctx context.Context, userID i
 	// 与 ops 路径口径一致；HAVING 过滤掉无法确定平台的行（避免出现空字符串平台）。
 	// 与上面 totalStatsQuery/todayStatsQuery 的总值可能略微差异，原因有二：
 	//   1) 无平台归属的极少数行（group/account 都没 platform）会被 HAVING 排除；
-	//   2) usageLogSuccessFilterUL 会把 actual_cost = 0 的失败 placeholder 行排除，
+	//   2) usageLogChargedFilterUL 会把 actual_cost = 0 的失败 placeholder 行排除，
 	//      而 totalStatsQuery/todayStatsQuery 没有这层过滤、会把这些行的 request 计数算进去。
 	platformQuery := `
 		SELECT
@@ -495,7 +495,7 @@ func (r *usageLogRepository) GetUserDashboardStats(ctx context.Context, userID i
 		LEFT JOIN groups g ON g.id = ul.group_id
 		LEFT JOIN accounts a ON a.id = ul.account_id
 		WHERE ul.user_id = $1
-		  AND ` + usageLogSuccessFilterUL + `
+		  AND ` + usageLogChargedFilterUL + `
 		GROUP BY ` + usageLogEffectivePlatformExpr + `
 		HAVING ` + usageLogEffectivePlatformExpr + ` IS NOT NULL AND ` + usageLogEffectivePlatformExpr + ` <> ''
 		ORDER BY total_actual_cost DESC

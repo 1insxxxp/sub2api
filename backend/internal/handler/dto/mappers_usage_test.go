@@ -390,6 +390,7 @@ func TestUsageLogFromService_RequestStatusDoesNotGuessHistoricalSuccess(t *testi
 		{"client interrupted", &service.UsageLog{Outcome: &service.ResponseOutcome{CollectorVersion: 1, HasText: true, DisconnectSource: service.DisconnectSourceClient}}, "interrupted"},
 		{"upstream interrupted", &service.UsageLog{Outcome: &service.ResponseOutcome{CollectorVersion: 1, HasText: true, DisconnectSource: service.DisconnectSourceUpstream}}, "interrupted"},
 		{"failed", &service.UsageLog{Outcome: &service.ResponseOutcome{CollectorVersion: 1, HTTPStatus: 502, UpstreamStatus: 502}}, "failed"},
+		{"billed policy failure", &service.UsageLog{ActualCost: 1.56305, OutputTokens: 5748, Outcome: &service.ResponseOutcome{CollectorVersion: 1, HTTPStatus: 200, UpstreamStatus: 200, HasReasoning: true, StreamCompleted: true, FinishReason: "prohibited_content", DisconnectSource: service.DisconnectSourceUpstream}}, "failed"},
 		{"completed", &service.UsageLog{Outcome: &service.ResponseOutcome{CollectorVersion: 1, HTTPStatus: 200, UpstreamStatus: 200, HasText: true, StreamCompleted: true}}, "completed"},
 		{"empty", &service.UsageLog{Outcome: &service.ResponseOutcome{CollectorVersion: 1, HTTPStatus: 200, UpstreamStatus: 200, StreamCompleted: true}}, "empty"},
 	} {
