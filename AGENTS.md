@@ -634,6 +634,13 @@ x-api-key: admin-xxx
 
 ---
 
+### 已手动补偿的空回登记（2026-11-09）
+
+- `GET /api/v1/admin/users/:id/balance-history?type=admin_balance` 可核对管理员加款流水；`GET /api/v1/admin/usage/empty-response-claims?user_id=:id` 可核对既有空回申请。
+- 现有批准接口 `POST /api/v1/admin/usage/empty-response-claims/:id/approve` 会实际退款，不能用于登记已经手动加过余额的记录。目前没有“仅登记既有补偿”的 API。
+- 经用户确认后，先在服务器备份相关记录，再用受控事务更新 `usage_logs.compensated_cost`，并在原有手动加款流水备注中关联使用记录。保留原始扣费和 Token；不再次增加余额、不重复创建加款流水或空回申请、不虚记 API Key 额度退款。并发防护沿用用户日级事务建议锁及记录锁，遇到身份、金额、既有补偿不一致则整体回滚。
+- 按实际到账金额登记，不能把舍入后的加款虚记成精确全额；同一笔加款覆盖多条使用记录时记录分摊方式。无既有申请且 `compensated_cost > 0` 的记录会被空回列表排除，提交判定为 `already_compensated`；管理员仍能查阅原始加款和登记备注。
+
 ### 分类默认分组（2026-11-06，自动跟随来源）
 
 - 仅完整管理员可管理六类入口：`anthropic/openai/gemini/grok/domestic/other`。入口为真实、稳定的余额 `group_id`，标识 `is_category_default`；不与系统自定义订阅容器混用，不直接绑定账号。
