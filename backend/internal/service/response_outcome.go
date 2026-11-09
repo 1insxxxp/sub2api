@@ -86,9 +86,6 @@ func ClassifyUsageRequestStatus(outcome *ResponseOutcome) UsageRequestStatus {
 	if outcome == nil || outcome.CollectorVersion <= 0 {
 		return UsageRequestUnknown
 	}
-	if responseOutcomeHasPolicyFailure(outcome) {
-		return UsageRequestFailed
-	}
 	// A lost downstream connection does not prove a provider failure, even if
 	// response headers or a provider terminal event were already received.
 	if outcome.DisconnectSource == DisconnectSourceClient {
@@ -100,16 +97,14 @@ func ClassifyUsageRequestStatus(outcome *ResponseOutcome) UsageRequestStatus {
 	if outcome.DisconnectSource == DisconnectSourceUpstream || outcome.DisconnectSource == DisconnectSourceServer {
 		return UsageRequestInterrupted
 	}
+	if outcome.UpstreamErrorKind != "" && outcome.UpstreamErrorKind != UpstreamErrorNone {
+		return UsageRequestFailed
+	}
 	if outcome.StreamCompleted && outcome.HTTPStatus >= 200 && outcome.UpstreamStatus >= 200 {
 		if outcome.HasEffectiveOutput() {
 			return UsageRequestCompleted
 		}
 		return UsageRequestEmpty
-	}
-	// Completed final responses take precedence over diagnostics left by an
-	// earlier attempt, matching the monitoring outcome classification.
-	if outcome.UpstreamErrorKind != "" && outcome.UpstreamErrorKind != UpstreamErrorNone {
-		return UsageRequestFailed
 	}
 	return UsageRequestUnknown
 }
@@ -127,9 +122,6 @@ const (
 func ClassifyUsageOutcome(outcome *ResponseOutcome) UsageOutcomeStatus {
 	if outcome == nil {
 		return UsageOutcomeUnknown
-	}
-	if responseOutcomeHasPolicyFailure(outcome) {
-		return UsageOutcomeFailure
 	}
 	if outcome.DisconnectSource == DisconnectSourceClient {
 		return UsageOutcomeUnknown
@@ -152,13 +144,6 @@ func ClassifyUsageOutcome(outcome *ResponseOutcome) UsageOutcomeStatus {
 
 func (o ResponseOutcome) HasEffectiveOutput() bool {
 	return o.HasText || o.HasToolCall || o.HasReasoning || o.HasMedia
-}
-
-// A policy terminal can carry measured thinking usage and an initial HTTP 200.
-// Neither is evidence that the request completed successfully.
-func responseOutcomeHasPolicyFailure(outcome *ResponseOutcome) bool {
-	return outcome != nil && (GeminiOutcomeHasContentPolicyFailure(outcome) ||
-		strings.EqualFold(strings.TrimSpace(outcome.FinishReason), "content_filter"))
 }
 
 // ResponseOutcomeCollector records only structural response signals.

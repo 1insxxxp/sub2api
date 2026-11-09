@@ -108,7 +108,6 @@ WITH combined AS (
   LEFT JOIN groups g ON g.id = ul.group_id
   LEFT JOIN accounts a ON a.id = ul.account_id
   WHERE ul.created_at >= $1 AND ul.created_at < $2
-    AND ` + usageRequestSuccessFilterUL + `
 
   UNION ALL
 

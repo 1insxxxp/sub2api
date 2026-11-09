@@ -516,7 +516,7 @@ func (r *usageLogRepository) GetBatchUserUsageStats(ctx context.Context, userIDs
 		LEFT JOIN accounts a ON a.id = ul.account_id
 		WHERE ul.user_id = ANY($1)
 		  AND ul.created_at >= LEAST($2, $4)
-		  AND ` + usageLogChargedFilterUL + `
+		  AND ` + usageLogSuccessFilterUL + `
 		GROUP BY ul.user_id, ` + usageLogEffectivePlatformExpr + `
 	`
 	today := timezone.Today()

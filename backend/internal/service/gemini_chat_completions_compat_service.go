@@ -670,9 +670,6 @@ func (s *GeminiMessagesCompatService) handleChatCompletionsStreamingResponseFrom
 	clientDisconnected := false
 	finishReason := ""
 	defer func() {
-		if c.Writer.Written() {
-			outcomeCollector.SetStatuses(c.Writer.Status(), 0)
-		}
 		if clientDisconnected {
 			outcomeCollector.MarkStreamError(context.Canceled, true)
 		} else if err != nil {
