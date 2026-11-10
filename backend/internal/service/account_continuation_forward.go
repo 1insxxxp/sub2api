@@ -150,7 +150,8 @@ func runAccountContinuation[T any](
 		finalErr = roundErr
 		canContinue := !canceled && ctx.Err() == nil && result != nil && !round.Unsafe && round.Truncated && strings.TrimSpace(round.Text) != "" &&
 			budget.CanContinue(time.Now(), len(rounds)-1, budgetOutput) && finishErr == nil &&
-			(err == nil || accountContinuationCanRepairInterruption(err))
+			(err == nil || accountContinuationCanRepairInterruption(err)) &&
+			accountContinuationManualThinkingFits(protocol, body, budget.RemainingOutputTokens(budgetOutput), accountContinuationUpstreamModel(result, account, routeModel))
 		if canContinue {
 			_, _ = assistant.WriteString(round.Text)
 			currentBody, finalErr = BuildAccountContinuationBody(protocol, body, assistant.String(), budget.RemainingOutputTokens(budgetOutput))
@@ -203,6 +204,54 @@ func runAccountContinuation[T any](
 		finalizeAccountContinuationResult(result, output.PublicResponseID(), finalErr, ctx.Err() != nil)
 	}
 	return result, errors.Join(finalErr, aggregateErr)
+}
+
+func accountContinuationUpstreamModel(result any, account *Account, routeModel string) string {
+	model := ""
+	switch leaf := result.(type) {
+	case *ForwardResult:
+		if leaf != nil {
+			model = leaf.UpstreamModel
+		}
+	case *OpenAIForwardResult:
+		if leaf != nil {
+			model = leaf.UpstreamModel
+		}
+	}
+	if model = strings.TrimSpace(model); model != "" {
+		return model
+	}
+	if account != nil {
+		return account.GetMappedModel(routeModel)
+	}
+	return routeModel
+}
+
+func accountContinuationManualThinkingFits(protocol AccountContinuationProtocol, body []byte, remaining int, model string) bool {
+	if remaining <= 0 || ResolveThinkingProtocol(model) != ThinkingProtocolAnthropicStrict || (protocol != AccountContinuationChat && protocol != AccountContinuationMessages) {
+		return true
+	}
+	// Claude 5.5 has no manual thinking budget. Supported legacy enabled
+	// requests are normalized to adaptive before forwarding.
+	if isClaude55SignedThinkingModel(model) {
+		return true
+	}
+	if gjson.GetBytes(body, "thinking.type").String() != "enabled" {
+		return true
+	}
+	budget := gjson.GetBytes(body, "thinking.budget_tokens")
+	if budget.Type != gjson.Number || budget.Int() <= 0 {
+		return true
+	}
+	path := "max_tokens"
+	if protocol == AccountContinuationChat && gjson.GetBytes(body, "max_completion_tokens").Exists() {
+		path = "max_completion_tokens"
+	}
+	limit := int64(remaining)
+	if original := gjson.GetBytes(body, path); original.Type == gjson.Number && original.Int() > 0 {
+		limit = min(limit, original.Int())
+	}
+	return budget.Int() < limit
 }
 
 func applyAccountContinuationOutcome[T any](leaf *T, round AccountContinuationRound, err error, canceled bool) {
