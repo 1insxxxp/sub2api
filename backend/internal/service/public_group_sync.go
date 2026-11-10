@@ -217,7 +217,11 @@ func (s *PublicGroupSyncService) Snapshot(ctx context.Context) ([]PublicGroupSyn
 				mappings[m.DisplayName] = m.UpstreamModel
 			}
 		}
-		out = append(out, PublicGroupSyncRequest{Version: PublicGroupSyncSnapshotVersion, Revision: rev, GroupID: g.ID, SortOrder: g.SortOrder, GroupName: g.Name, PublicEnabled: true, GroupRatio: g.RateMultiplier, Models: names, ModelMapping: mappings, ModelPricing: pricing})
+		displayPricing, err := s.ordinaryDisplayPricing(ctx, &g, names, channelCatalog)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, PublicGroupSyncRequest{Version: PublicGroupSyncSnapshotVersion, Revision: rev, GroupID: g.ID, SortOrder: g.SortOrder, GroupName: g.Name, PublicEnabled: true, GroupRatio: g.RateMultiplier, Models: names, ModelMapping: mappings, ModelPricing: pricing, DisplayPricing: displayPricing})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].GroupID < out[j].GroupID })
 	return out, nil

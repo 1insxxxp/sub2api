@@ -19,6 +19,9 @@ type PublicGroupSyncRequest struct {
 	Models        []string                        `json:"models"`
 	ModelMapping  map[string]string               `json:"model_mapping"`
 	ModelPricing  map[string]PublicGroupSyncModel `json:"model_pricing"`
+	// DisplayPricing is an optional v2 response-only quote catalog. Receivers
+	// must not use it to change relay billing, routing or the legacy catalog.
+	DisplayPricing map[string]PublicGroupSyncModel `json:"display_pricing,omitempty"`
 }
 
 // PublicGroupSyncModel contains the public display name, upstream mapping and
