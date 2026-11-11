@@ -45,13 +45,17 @@ func TestGatewayAnthropicCompatReasoningPricingUsesForwardedEffort(t *testing.T)
 				{"native_max", "claude-fable-5-1", "max", "", "max", 3},
 				{"missing_effort", "kimi-k3", "", "", "", 1},
 				{"disabled_thinking", "kimi-k3", "", "disabled", "", 1},
-				{"unforwarded_thinking", "kimi-k3", "", "enabled", "", 1},
+				{"native_thinking", "kimi-k3", "", "enabled", "", 1},
 			} {
 				mode := "buffered"
 				if stream {
 					mode = "streaming"
 				}
 				t.Run(endpoint.name+"/"+mode+"/"+tc.name, func(t *testing.T) {
+					wantEffort, multiplier := tc.wantEffort, tc.multiplier
+					if endpoint.name == "chat_completions" && tc.thinking == "enabled" {
+						wantEffort, multiplier = "high", 1.5
+					}
 					request := map[string]any{"model": tc.model, "stream": stream}
 					if endpoint.name == "chat_completions" {
 						request["messages"] = []map[string]string{{"role": "user", "content": "hello"}}
@@ -87,9 +91,14 @@ func TestGatewayAnthropicCompatReasoningPricingUsesForwardedEffort(t *testing.T)
 					result, err := endpoint.call(svc, context.Background(), c, account, body)
 					require.NoError(t, err)
 					require.Len(t, upstream.requestBodies, 1)
-					require.Equal(t, tc.wantEffort, gjson.GetBytes(upstream.requestBodies[0], "output_config.effort").String())
-					require.Equal(t, tc.wantEffort, optionalStringValue(result.ReasoningEffort))
-					if tc.wantEffort == "" {
+					if tc.thinking == "enabled" && endpoint.name == "chat_completions" {
+						require.True(t, OpenAIBodyHasThinkingEnabled(upstream.requestBodies[0]))
+						require.Equal(t, "", gjson.GetBytes(upstream.requestBodies[0], "output_config.effort").String(), "native provider mode is not a synthesized Claude effort")
+					} else {
+						require.Equal(t, tc.wantEffort, gjson.GetBytes(upstream.requestBodies[0], "output_config.effort").String())
+					}
+					require.Equal(t, wantEffort, optionalStringValue(result.ReasoningEffort))
+					if wantEffort == "" {
 						require.Nil(t, result.ReasoningEffort)
 						require.False(t, OpenAIBodyHasThinkingEnabled(upstream.requestBodies[0]))
 					}
@@ -107,7 +116,7 @@ func TestGatewayAnthropicCompatReasoningPricingUsesForwardedEffort(t *testing.T)
 						Resolver: NewModelPricingResolver(nil, billing),
 					})
 					require.NoError(t, err)
-					require.InDelta(t, 20e-6*tc.multiplier, cost.TotalCost, 1e-12)
+					require.InDelta(t, 20e-6*multiplier, cost.TotalCost, 1e-12)
 				})
 			}
 		}

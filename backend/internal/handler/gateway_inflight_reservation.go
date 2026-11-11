@@ -40,8 +40,8 @@ func inflightNoop() {}
 // 成功时把预留句柄挂到 c.Request 的 context 上：之后通过 submit*UsageRecordTask 提交的
 // 计费任务会接管一个引用，直到余额缓存实际扣减后才释放。返回的 done 必须 defer 调用
 // （停止续期并归还 handler 引用；没有提交计费任务时即刻释放）。
-// 开关关闭、订阅模式、Redis 故障时返回 no-op（fail-open）；无法定价时默认 fail-open，
-// 配置 fail_closed_on_unpriced=true 时返回 ErrBillingServiceUnavailable，避免误报客户余额不足。
+// 开关关闭和订阅模式沿用各自的准入规则。预留服务异常、默认配置下无法定价时
+// 返回 ErrBillingServiceUnavailable，额度不足时返回带中文金额说明的余额错误。
 func reserveInflightBalance(
 	c *gin.Context,
 	billing *service.BillingCacheService,
@@ -74,7 +74,11 @@ func reserveInflightBalanceCtx(
 	if billing == nil || estimator == nil || apiKey == nil || apiKey.User == nil || !billing.InflightReservationEnabled() {
 		return ctx, inflightNoop, nil
 	}
-	if apiKey.Group != nil && apiKey.Group.IsSubscriptionType() && subscription != nil {
+	group, err := service.ResolveBillingEligibilityGroup(ctx, apiKey.Group, subscription)
+	if err != nil {
+		return ctx, inflightNoop, err
+	}
+	if group != nil && group.IsSubscriptionType() && subscription != nil {
 		return ctx, inflightNoop, nil
 	}
 	estimate, priced := estimator.EstimateInflightReservation(ctx, apiKey, req)

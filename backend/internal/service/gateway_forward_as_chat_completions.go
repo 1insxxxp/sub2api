@@ -84,7 +84,11 @@ func (s *GatewayService) ForwardAsChatCompletions(
 		return nil, err
 	}
 	responsesReq.Model = mappedModel
-	applyOpus55GroupReasoningDefault(responsesReq, group)
+	omitGeneratedEffort, err := prepareChatAnthropicReasoning(body, responsesReq, group)
+	if err != nil {
+		writeChatCompletionsError(c, http.StatusBadRequest, "invalid_request_error", err.Error())
+		return nil, err
+	}
 	anthropicReq, err := apicompat.ResponsesToAnthropicRequestWithDefaultMaxTokens(responsesReq, defaultAnthropicOutputTokens(account, mappedModel))
 	if err != nil {
 		if isClaude55SignedThinkingModel(mappedModel) {
@@ -92,8 +96,9 @@ func (s *GatewayService) ForwardAsChatCompletions(
 		}
 		return nil, fmt.Errorf("convert responses to anthropic: %w", err)
 	}
-	applyChatCompletionsThinkingDisabled(body, anthropicReq)
-
+	if omitGeneratedEffort {
+		anthropicReq.OutputConfig = nil
+	}
 	// 3. Force upstream streaming
 	anthropicReq.Stream = true
 	reqStream := true
@@ -110,9 +115,18 @@ func (s *GatewayService) ForwardAsChatCompletions(
 	if err != nil {
 		return nil, fmt.Errorf("marshal anthropic request: %w", err)
 	}
+	anthropicBody, err = applyChatCompletionsAnthropicControls(body, anthropicBody)
+	if err != nil {
+		writeChatCompletionsError(c, http.StatusBadRequest, "invalid_request_error", err.Error())
+		return nil, err
+	}
 	if rewritten, applied := applyGroupDefaultReasoningEffort(anthropicBody, group, account); applied {
 		anthropicBody = rewritten
 		logger.LegacyPrintf("service.gateway", "Applied group default reasoning effort for chat completions: group=%d effort=%s", group.ID, group.DefaultReasoningEffort)
+	}
+	if err := validateClaude55Request(anthropicBody, mappedModel); err != nil {
+		writeChatCompletionsError(c, http.StatusBadRequest, "invalid_request_error", err.Error())
+		return nil, err
 	}
 
 	// 6. Apply Claude Code mimicry for OAuth accounts.
@@ -125,6 +139,11 @@ func (s *GatewayService) ForwardAsChatCompletions(
 
 	if shouldMimicClaudeCode {
 		anthropicBody = s.applyClaudeCodeOAuthMimicryToBody(ctx, c, account, anthropicBody, anthropicReq.System, mappedModel)
+	}
+	if injected, _, injectErr := ApplyAccountModelSystemPrompt(anthropicBody, account, mappedModel, ModelSystemPromptClaude); injectErr != nil {
+		return nil, fmt.Errorf("inject account model system prompt: %w", injectErr)
+	} else {
+		anthropicBody = injected
 	}
 
 	// 7. Enforce cache_control block limit
@@ -192,7 +211,12 @@ func (s *GatewayService) ForwardAsChatCompletions(
 		upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(respBody))
 		upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
 
-		if s.shouldFailoverUpstreamError(resp.StatusCode) {
+		// Apply account policies even for statuses outside the default failover list.
+		shouldDisable := false
+		if s.rateLimitService != nil {
+			shouldDisable = s.rateLimitService.HandleUpstreamError(ctx, account, resp.StatusCode, resp.Header, respBody, mappedModel)
+		}
+		if shouldDisable || s.shouldFailoverUpstreamError(resp.StatusCode) {
 			appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
 				ProxyID:            opsUpstreamProxyID(account),
 				ProxyName:          opsUpstreamProxyName(account),
@@ -204,10 +228,6 @@ func (s *GatewayService) ForwardAsChatCompletions(
 				Kind:               "failover",
 				Message:            upstreamMsg,
 			})
-			shouldDisable := false
-			if s.rateLimitService != nil {
-				shouldDisable = s.rateLimitService.HandleUpstreamError(ctx, account, resp.StatusCode, resp.Header, respBody, mappedModel)
-			}
 			return nil, &UpstreamFailoverError{
 				StatusCode:             resp.StatusCode,
 				ResponseBody:           respBody,

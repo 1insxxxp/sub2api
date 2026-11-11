@@ -27,18 +27,21 @@ func TestBalanceErrorFormatting_PreservesSmallAmountsAndUnknownEstimates(t *test
 		{"smaller estimate", 0.000000001, "US$1e-09"},
 		{"smallest estimate", math.SmallestNonzeroFloat64, "US$5e-324"},
 		{"binary roundoff", 0.1 + 0.2, "US$0.30"},
-		{"invalid", math.NaN(), "unknown"},
-		{"infinite", math.Inf(1), "unknown"},
+		{"invalid", math.NaN(), "未知"},
+		{"infinite", math.Inf(1), "未知"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := NewInsufficientBalanceError(tc.amount, &tc.amount)
-			require.Contains(t, err.Message, "Current balance: "+tc.want+";")
-			require.Contains(t, err.Message, "estimated reservation for this request: "+tc.want+".")
+			require.Contains(t, err.Message, "当前余额 "+tc.want)
+			require.Contains(t, err.Message, "本次预扣额度 "+tc.want)
+			require.Contains(t, err.Message, "余额不足")
 		})
 	}
 
 	err := NewInsufficientBalanceError(0, nil)
-	require.Contains(t, err.Message, "estimated reservation for this request: not calculated.")
+	require.Contains(t, err.Message, "当前余额 US$0.00")
+	require.Contains(t, err.Message, "请充值后重试")
+	require.NotContains(t, err.Message, "本次预扣额度")
 }
 
 func TestBalanceErrorDetails_DoNotMutateSharedErrorsOrOtherUsers(t *testing.T) {
@@ -72,8 +75,8 @@ func TestBalanceRejectionDetails_FixedChargeUsesVerifiedBalanceAndKnownAmount(t 
 	res, err := svc.ReserveFixedCharge(context.Background(), &User{ID: 1}, nil, nil, nil, 0.125)
 	require.Nil(t, res)
 	require.ErrorIs(t, err, ErrInsufficientBalance)
-	require.Contains(t, pkgerrors.Message(err), "Current balance: US$0.02")
-	require.Contains(t, pkgerrors.Message(err), "estimated reservation for this request: US$0.125")
+	require.Contains(t, pkgerrors.Message(err), "当前余额 US$0.02")
+	require.Contains(t, pkgerrors.Message(err), "本次预扣额度 US$0.125")
 	require.Equal(t, int64(1), repo.calls.Load())
 	require.Zero(t, cache.deductCalls.Load(), "rejecting a request does not deduct its estimate")
 }
@@ -86,25 +89,25 @@ func TestBalanceRejectionDetails_EligibilityDoesNotInventRequestEstimate(t *test
 
 	err := svc.CheckBillingEligibility(context.Background(), &User{ID: 1}, nil, nil, nil, "")
 	require.ErrorIs(t, err, ErrInsufficientBalance)
-	require.Contains(t, pkgerrors.Message(err), "Current balance: US$-0.005")
-	require.Contains(t, pkgerrors.Message(err), "estimated reservation for this request: not calculated")
+	require.Contains(t, pkgerrors.Message(err), "当前余额 US$-0.005")
+	require.NotContains(t, pkgerrors.Message(err), "本次预扣额度")
 	require.Zero(t, cache.deductCalls.Load())
 }
 
-func TestBalanceRejectionDetails_InflightReportsCappedRequestAndOtherReservations(t *testing.T) {
+func TestBalanceRejectionDetails_InflightReportsFullRequestAndOtherReservations(t *testing.T) {
 	cache := newMemInflightCache(0.5)
 	cache.res["other-request"] = 0.4
 	svc := newInflightSvc(t, cache, 60)
-	svc.cfg.Billing.InflightReservation.MaxReservationUSD = 0.25
+	svc.cfg.Billing.InflightReservation.MaxReservationUSD = 0.05
 	svc.userRepo = &inflightRecheckUserRepo{user: &User{ID: 1, Status: StatusActive, Balance: 0.5}}
 
-	res, err := svc.ReserveInflight(context.Background(), &User{ID: 1}, nil, nil, 0.7)
+	res, err := svc.ReserveInflight(context.Background(), &User{ID: 1}, nil, nil, 0.25)
 	require.Nil(t, res)
 	require.ErrorIs(t, err, ErrBalanceInFlight)
-	require.Contains(t, pkgerrors.Message(err), "Current balance: US$0.50")
-	require.Contains(t, pkgerrors.Message(err), "reserved by other requests: US$0.40")
-	require.Contains(t, pkgerrors.Message(err), "estimated reservation for this request: US$0.25")
-	require.NotContains(t, pkgerrors.Message(err), "US$0.70")
+	require.Contains(t, pkgerrors.Message(err), "当前余额 US$0.50")
+	require.Contains(t, pkgerrors.Message(err), "其他请求已预扣 US$0.40")
+	require.Contains(t, pkgerrors.Message(err), "本次预扣额度 US$0.25")
+	require.NotContains(t, pkgerrors.Message(err), "US$0.05")
 	require.Equal(t, 1, cache.count(), "rejected request must not register or clear a reservation")
 	require.Len(t, cache.reserveIDs, 2, "retain one authoritative recheck and one atomic retry")
 }
@@ -115,11 +118,11 @@ func TestBalanceRejectionDetails_InflightEmptyWalletRetainsKnownEstimate(t *test
 	svc := newInflightSvc(t, cache, 60)
 	svc.userRepo = &inflightRecheckUserRepo{user: &User{ID: 1, Status: StatusActive, Balance: 0}}
 
-	res, err := svc.ReserveInflight(context.Background(), &User{ID: 1}, nil, nil, 0.7)
+	res, err := svc.ReserveInflight(context.Background(), &User{ID: 1}, nil, nil, 0.25)
 	require.Nil(t, res)
 	require.ErrorIs(t, err, ErrInsufficientBalance)
-	require.Contains(t, pkgerrors.Message(err), "Current balance: US$0.00")
-	require.Contains(t, pkgerrors.Message(err), "estimated reservation for this request: US$0.70")
+	require.Contains(t, pkgerrors.Message(err), "当前余额 US$0.00")
+	require.Contains(t, pkgerrors.Message(err), "本次预扣额度 US$0.25")
 	require.Equal(t, 1, cache.count())
 	require.Len(t, cache.reserveIDs, 1)
 }

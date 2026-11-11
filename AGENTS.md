@@ -641,6 +641,26 @@ x-api-key: admin-xxx
 - 经用户确认后，先在服务器备份相关记录，再用受控事务更新 `usage_logs.compensated_cost`，并在原有手动加款流水备注中关联使用记录。保留原始扣费和 Token；不再次增加余额、不重复创建加款流水或空回申请、不虚记 API Key 额度退款。并发防护沿用用户日级事务建议锁及记录锁，遇到身份、金额、既有补偿不一致则整体回滚。
 - 按实际到账金额登记，不能把舍入后的加款虚记成精确全额；同一笔加款覆盖多条使用记录时记录分摊方式。无既有申请且 `compensated_cost > 0` 的记录会被空回列表排除，提交判定为 `already_compensated`；管理员仍能查阅原始加款和登记备注。
 
+### 模型来源优先路由（2026-11-11）
+
+- `GET /api/v1/admin/groups/:id` 读取分组现有配置，`PUT /api/v1/admin/groups/:id` 接受 `model_routing_enabled: boolean` 和 `model_routing: { [公开模型名]: number[] }`。当前在 Anthropic/OpenAI 调度中生效。按原路由表合并更新，列表中的账号优先参与选择，仍执行账号状态、模型支持、并发、配额和盈利校验，路由账号不可用时沿用调度器的后续选择。
+- Gemini 调度使用账号优先级和会话粘性。`PUT /api/v1/admin/accounts/:id` 接受 `priority: number`（较小值优先）；`POST /api/v1/admin/accounts/:id/schedulable` 接受 `schedulable: boolean`。暂停已复现异常的来源前核对其模型与分组范围，调度会重新校验已有会话绑定的账号可用性。
+- `GET /api/v1/admin/accounts/:id`、`PUT /api/v1/admin/accounts/:id` 可读取和更新 `credentials.model_mapping`。更新前完整合并现有 credentials，再加入已经验证的公开名到上游模型名映射。凭据更新文件仅存放于服务器权限为 0600 的运维目录。
+- `PUT /api/v1/admin/api-keys/:id` 接受 `group_id: number`，用于调整管理员自有测试密钥的分组。正式入口验证需使用管理员自有密钥，记录原分组，并在结束或失败时恢复。
+- 2026-11-11 Ultra 分组 142 调整为优先使用账号 5920（priority=0），补充 `ultra/gemini-4-carbon` → `gemini-4-carbon` 映射；账号 5937 移除已持续返回无可用渠道的 `ultra/gemini-4-argon` 映射。账号 6029、5921 在隔离复测后恢复可调度，以承接首选来源配额耗尽时的备用流量。
+- 6029、5921 已复现相同输入、不同 seed 仍返回相同正文，5920 能返回不同正文，但存在上游配额 429。上述配置属于缓解措施。修改前备份位于服务器 `/opt/backups/sub2api-ultra-repeat-20261111-022246`，其中含凭据，按服务器敏感运维备份管理。
+
+分组路由更新请求示例沿用本节的认证变量，更新文件包含合并后的路由表。
+
+```bash
+curl -fsS -X PUT "${BASE}/api/v1/admin/groups/${GROUP_ID}" \
+  -H "x-api-key: ${KEY}" -H 'Content-Type: application/json' \
+  --data-binary @group-routing-update.json
+curl -fsS -X POST "${BASE}/api/v1/admin/accounts/${ACCOUNT_ID}/schedulable" \
+  -H "x-api-key: ${KEY}" -H 'Content-Type: application/json' \
+  --data '{"schedulable":false}'
+```
+
 ### 分类默认分组（2026-11-06，自动跟随来源）
 
 - 仅完整管理员可管理六类入口：`anthropic/openai/gemini/grok/domestic/other`。入口为真实、稳定的余额 `group_id`，标识 `is_category_default`；不与系统自定义订阅容器混用，不直接绑定账号。
@@ -1567,6 +1587,14 @@ curl -fsS "${BASE}/api/v1/admin/workbench/commission/monthly-report?month=2026-1
 ```
 
 **部署 249 迁移后的兼容约束**：启用排除名单前，必须停止旧镜像的后台分组日汇总任务。旧代码重建日桶时不写 `commission_excluded_cost`，可能把排除金额重置为 0。不能将旧应用容器长期运行作为静态资源回退；应单独保留旧静态文件，或先停止旧应用后台任务。应用回退也不能继续使用忽略此字段的旧聚合器。
+
+#### 历史日汇总的在线维护（2026-11-09）
+
+- 当前 Passion 使用独立的 `sub2api-group-usage-rollup.timer` 每小时北京时间 10 分后运行，配置位于 `/etc/systemd/system/`。程序和 SQL 位于 `/opt/sub2api-maintenance/group-usage-rollup/`，仓库源码为 `deploy/maintenance/group_usage_rollup.py`、同名 SQL 和 systemd 模板。
+- 持久游标和逐日最新审计位于 `/var/lib/sub2api-group-usage-rollup/`。每次最多追补 7 个漏跑日期，并复核最近两个完整自然日；失败日期保持待处理，成功日期原子推进。首次安装须根据已核验的历史边界显式指定起始日期，不能根据存在零星日桶跳过缺口。
+- SQL 逐天读取原始实际扣费，按排除名单的历史生效区间计算 `commission_excluded_cost`，原子发布到 `usage_group_daily_rollups`。每条语句限时 30 秒，聚合完成后短暂取得原生发布水位的 KEY SHARE 栅栏，兼容普通用量写入。空源数据与已有历史冲突、金额非法或发布校验失败时整体回滚。
+- 原生 `dashboard_aggregation.group_usage_rollups_enabled` 默认关闭。全局脏水位可能退到很早的日期，直接启用会触发长历史重扫。切回原生维护前，应先协调关闭独立 timer，再核对历史水位和原生任务的资源消耗。
+- 排查入口为 `systemctl status sub2api-group-usage-rollup.timer`、`systemctl status sub2api-group-usage-rollup.service` 和 `journalctl -u sub2api-group-usage-rollup.service`。首次修复前备份相关日桶、发布水位、授权口径与配置，备份只保存在服务器。
 
 ### 7. 用户支持与一次测试额度（2026-11-01，本地改造）
 

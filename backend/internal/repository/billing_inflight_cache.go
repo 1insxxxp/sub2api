@@ -14,7 +14,7 @@ import (
 //   - billing:inflight:{uid}      ZSET  member=requestID score=过期时间(ms)
 //   - billing:inflight_amt:{uid}  HASH  field=requestID value=预留金额(USD)
 //
-// 两个 key 使用同一 hash tag，保证 Redis Cluster 下 Lua 可同时访问。
+// 预留按用户分区，准入脚本同时读取既有的余额缓存。
 const (
 	billingInflightKeyPrefix    = "billing:inflight:"
 	billingInflightAmtKeyPrefix = "billing:inflight_amt:"
@@ -40,37 +40,55 @@ func billingInflightScopeKeys(scope string) (string, string) {
 }
 
 var (
-	// KEYS: [1]=zset [2]=hash
+	// KEYS: [1]=zset [2]=hash [3]=wallet balance [4]=wallet generation
 	// ARGV: [1]=now_ms [2]=expire_at_ms [3]=member [4]=amount [5]=balance [6]=key_ttl_ms
 	// 返回 {allowed, inflight_sum(string), inflight_count}
-	// 规则：先清理已过期成员；若无在途预留则直接放行（与旧行为一致，外层已校验余额 > 阈值）；
-	// 否则要求 balance - sum(在途) >= amount。放行时登记预留。
+	// 所有请求按钱包八位小数精度校验可用额度，放行时登记预留。
 	reserveInflightBalanceScript = redis.NewScript(`
 		local now = tonumber(ARGV[1])
 		local expired = redis.call('ZRANGEBYSCORE', KEYS[1], '-inf', now)
 		if #expired > 0 then
 			redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', now)
 			redis.call('HDEL', KEYS[2], unpack(expired))
+			redis.call('DEL', KEYS[3], KEYS[4])
+			return {0, '0', redis.call('ZCARD', KEYS[1])}
+		end
+		local registered = redis.call('HGET', KEYS[2], ARGV[3])
+		local score = redis.call('ZSCORE', KEYS[1], ARGV[3])
+		if registered and score and tonumber(score) > now and tonumber(registered) == tonumber(ARGV[4]) then
+			return {1, '0', redis.call('ZCARD', KEYS[1])}
+		end
+		local current_balance = redis.call('GET', KEYS[3])
+		if current_balance == false or redis.call('EXISTS', KEYS[4]) == 0 then
+			return {0, '0', 0}
 		end
 		local vals = redis.call('HVALS', KEYS[2])
-		local sum = 0
+		local sum_units = 0
 		for i = 1, #vals do
-			sum = sum + (tonumber(vals[i]) or 0)
+			sum_units = sum_units + math.floor((tonumber(vals[i]) or 0) * 100000000 + 0.5)
 		end
+		local sum = sum_units / 100000000
 		local count = redis.call('ZCARD', KEYS[1])
-		local amount = tonumber(ARGV[4])
-		local balance = tonumber(ARGV[5])
-		if count > 0 and (balance - sum) < amount then
+		local amount_units = math.floor(tonumber(ARGV[4]) * 100000000 + 0.5)
+		local balance = math.min(tonumber(ARGV[5]), tonumber(current_balance))
+		local balance_units = math.floor(balance * 100000000 + 0.5)
+		if balance_units - sum_units < amount_units then
 			return {0, tostring(sum), count}
 		end
 		redis.call('ZADD', KEYS[1], tonumber(ARGV[2]), ARGV[3])
 		redis.call('HSET', KEYS[2], ARGV[3], ARGV[4])
 		redis.call('PEXPIRE', KEYS[1], ARGV[6])
 		redis.call('PEXPIRE', KEYS[2], ARGV[6])
+		for i = 3, 4 do
+			local ttl = redis.call('PTTL', KEYS[i])
+			if ttl > tonumber(ARGV[6]) then
+				redis.call('PEXPIRE', KEYS[i], ARGV[6])
+			end
+		end
 		return {1, tostring(sum), count}
 	`)
 
-	// KEYS: [1]=zset [2]=hash  ARGV: [1]=member [2]=expire_at_ms [3]=key_ttl_ms [4]=now_ms
+	// KEYS: [1]=zset [2]=hash [3]=wallet [4]=generation  ARGV: [1]=member [2]=expire_at_ms [3]=key_ttl_ms [4]=now_ms
 	// 仅当成员仍存在且尚未过期（score > now）时续期（XX），并把两个 key 的 TTL 至少延长到 key_ttl_ms。
 	// 已过期但尚未被惰性清理的成员不得被复活：顺手清掉并返回 0。
 	renewInflightBalanceScript = redis.NewScript(`
@@ -81,6 +99,7 @@ var (
 		if tonumber(score) <= tonumber(ARGV[4]) then
 			redis.call('ZREM', KEYS[1], ARGV[1])
 			redis.call('HDEL', KEYS[2], ARGV[1])
+			redis.call('DEL', KEYS[3], KEYS[4])
 			return 0
 		end
 		redis.call('ZADD', KEYS[1], 'XX', tonumber(ARGV[2]), ARGV[1])
@@ -95,6 +114,12 @@ var (
 	`)
 
 	releaseInflightBalanceScript = redis.NewScript(`
+		if #KEYS >= 4 then
+			local score = redis.call('ZSCORE', KEYS[1], ARGV[1])
+			if score and tonumber(score) <= tonumber(ARGV[2]) then
+				redis.call('DEL', KEYS[3], KEYS[4])
+			end
+		end
 		redis.call('ZREM', KEYS[1], ARGV[1])
 		redis.call('HDEL', KEYS[2], ARGV[1])
 		return 1
@@ -131,7 +156,7 @@ func (c *billingCache) ReserveInflightBalance(ctx context.Context, userID int64,
 	if ttlMs <= 0 {
 		ttlMs = 1
 	}
-	res, err := reserveInflightBalanceScript.Run(ctx, c.rdb, []string{zkey, hkey},
+	res, err := reserveInflightBalanceScript.Run(ctx, c.rdb, []string{zkey, hkey, billingBalanceKey(userID), billingBalanceVersionKey(userID)},
 		now,
 		now+ttlMs,
 		requestID,
@@ -156,7 +181,8 @@ func (c *billingCache) ReserveInflightBalance(ctx context.Context, userID int64,
 // ReleaseInflightBalance 实现 service.InflightBalanceReservationCache。
 func (c *billingCache) ReleaseInflightBalance(ctx context.Context, userID int64, requestID string) error {
 	zkey, hkey := billingInflightKeys(userID)
-	return releaseInflightBalanceScript.Run(ctx, c.rdb, []string{zkey, hkey}, requestID).Err()
+	return releaseInflightBalanceScript.Run(ctx, c.rdb,
+		[]string{zkey, hkey, billingBalanceKey(userID), billingBalanceVersionKey(userID)}, requestID, time.Now().UnixMilli()).Err()
 }
 
 // RenewInflightBalance 实现 service.InflightBalanceReservationRenewer。
@@ -167,7 +193,7 @@ func (c *billingCache) RenewInflightBalance(ctx context.Context, userID int64, r
 		ttlMs = 1
 	}
 	now := time.Now().UnixMilli()
-	n, err := renewInflightBalanceScript.Run(ctx, c.rdb, []string{zkey, hkey}, requestID, now+ttlMs, ttlMs, now).Int64()
+	n, err := renewInflightBalanceScript.Run(ctx, c.rdb, []string{zkey, hkey, billingBalanceKey(userID), billingBalanceVersionKey(userID)}, requestID, now+ttlMs, ttlMs, now).Int64()
 	if err != nil {
 		return false, err
 	}

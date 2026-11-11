@@ -1,0 +1,20 @@
+[Unit]
+Description=Publish bounded Sub2API historical group usage rollups
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/sub2api-maintenance/group-usage-rollup/group_usage_rollup.py --state-dir /var/lib/sub2api-group-usage-rollup
+TimeoutStartSec=8min
+StateDirectory=sub2api-group-usage-rollup
+StateDirectoryMode=0700
+UMask=0077
+Environment=DOCKER_CONFIG=/var/lib/sub2api-group-usage-rollup/docker
+Nice=10
+MemoryMax=192M
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/sub2api-group-usage-rollup

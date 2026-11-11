@@ -1240,10 +1240,10 @@ billing:
   # In-flight balance reservation (Redis): at admission, estimate per-request cost
   # (input estimate + output price x max_tokens) and atomically require
   # cached_balance - in-flight reservations >= estimate. Released when the request ends.
-  # The first in-flight request of a user is always admitted (same as before).
-  # Fails open when the estimate cannot be computed or Redis is unavailable.
-  # 余额模式在途预留：准入时估算单请求费用，要求 缓存余额 - 在途预留合计 >= 估算；
-  # 用户无在途请求时始终放行（与旧行为一致）；估算失败/Redis 不可用时 fail-open。
+  # Every request requires sufficient available balance. Reservation-service
+  # failures return a billing-service error before forwarding upstream.
+  # 余额模式预扣费要求可用余额覆盖本次完整估算，首笔请求也参与校验。
+  # 预留服务异常时返回计费服务错误。
   inflight_reservation:
     enabled: true
     # Reservation TTL. Renewed every ttl/3 while the request is running; after the
@@ -1255,17 +1255,18 @@ billing:
     # Output tokens assumed when the request has no max_tokens
     # 请求未携带 max_tokens 时假定的输出 token 数
     default_max_tokens: 8192
-    # Cap for estimated output / input tokens
-    # 估算输出 / 输入 token 上限
+    # Legacy configuration fields retained for compatibility. Precharge uses
+    # the full input estimate and the complete requested output budget.
+    # 兼容旧配置字段；预扣费使用完整输入估算和完整输出预算。
     max_output_tokens: 128000
     max_input_tokens: 200000
-    # Cap for a single reservation in USD (0 = no cap)
-    # 单请求预留金额上限（USD，0 为不设上限）
+    # Legacy configuration field. Precharge uses the complete estimated cost.
+    # 兼容旧配置字段；预扣费使用完整估算金额。
     max_reservation_usd: 0
     # When a request cannot be priced (no base / group / channel pricing for the
     # billing model), reject it instead of admitting it without reservation.
-    # 无法为请求定价（计费模型无基础/分组/渠道定价）时拒绝请求；默认 false 为放行不预留（节流告警日志）
-    fail_closed_on_unpriced: false
+    # 无法定价时默认拒绝；false 显式启用旧的放行策略。
+    fail_closed_on_unpriced: true
 
 # =============================================================================
 # Turnstile Configuration

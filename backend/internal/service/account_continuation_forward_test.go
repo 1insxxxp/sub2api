@@ -17,6 +17,45 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+func TestAccountContinuationManualThinkingFits(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		protocol  AccountContinuationProtocol
+		body      string
+		remaining int
+		want      bool
+	}{
+		{"insufficient remaining", AccountContinuationChat, `{"max_tokens":4096,"thinking":{"type":"enabled","budget_tokens":2048}}`, 1096, false},
+		{"exact budget", AccountContinuationChat, `{"max_tokens":4096,"thinking":{"type":"enabled","budget_tokens":2048}}`, 2048, false},
+		{"budget plus answer token", AccountContinuationChat, `{"max_tokens":4096,"thinking":{"type":"enabled","budget_tokens":2048}}`, 2049, true},
+		{"original limit", AccountContinuationMessages, `{"max_tokens":2048,"thinking":{"type":"enabled","budget_tokens":2048}}`, 3000, false},
+		{"completion cap priority", AccountContinuationChat, `{"max_tokens":8192,"max_completion_tokens":2048,"thinking":{"type":"enabled","budget_tokens":2048}}`, 4096, false},
+		{"completion cap replaces legacy cap", AccountContinuationChat, `{"max_tokens":2048,"max_completion_tokens":4096,"thinking":{"type":"enabled","budget_tokens":2048}}`, 3000, true},
+		{"unbounded", AccountContinuationChat, `{"thinking":{"type":"enabled","budget_tokens":2048}}`, 0, true},
+		{"disabled", AccountContinuationChat, `{"thinking":{"type":"disabled","budget_tokens":2048}}`, 100, true},
+		{"adaptive", AccountContinuationChat, `{"thinking":{"type":"adaptive"}}`, 100, true},
+		{"provider without budget", AccountContinuationChat, `{"thinking":{"type":"enabled"}}`, 100, true},
+		{"other protocol", AccountContinuationResponses, `{"thinking":{"type":"enabled","budget_tokens":2048}}`, 100, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, accountContinuationManualThinkingFits(tc.protocol, []byte(tc.body), tc.remaining, "claude-opus-4-6"))
+		})
+	}
+}
+
+func TestAccountContinuationManualThinkingFitsNormalizedClaude55(t *testing.T) {
+	body := []byte(`{"max_tokens":256,"thinking":{"type":"enabled","budget_tokens":4096}}`)
+	for _, model := range []string{"claude-opus-5-5", "claude-sonnet-5-5", "anthropic/claude-opus-5.5"} {
+		t.Run(model, func(t *testing.T) {
+			normalized, changed := normalizeClaude55LegacyThinking(body, model)
+			require.True(t, changed)
+			require.Equal(t, "adaptive", gjson.GetBytes(normalized, "thinking.type").String())
+			require.False(t, gjson.GetBytes(normalized, "thinking.budget_tokens").Exists())
+			require.True(t, accountContinuationManualThinkingFits(AccountContinuationMessages, body, 251, model))
+		})
+	}
+}
+
 func TestAccountContinuationForwardRepairsSafeUnexpectedEOF(t *testing.T) {
 	c, recorder := accountContinuationTestContext()
 	body := []byte(`{"model":"long-text","stream":true,"messages":[{"role":"user","content":"write"}]}`)

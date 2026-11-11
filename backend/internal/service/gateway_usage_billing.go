@@ -654,6 +654,22 @@ func syncBalanceCacheAfterDeduction(ctx context.Context, p *postUsageBillingPara
 	if p == nil || p.Cost == nil || p.User == nil || deps == nil || deps.billingCacheService == nil {
 		return
 	}
+	if cache, versioned := deps.billingCacheService.cache.(VersionedBalanceCache); versioned && deps.billingCacheService.InflightReservationEnabled() {
+		var err error
+		if result != nil && result.NewBalance != nil {
+			err = cache.ConstrainUserBalance(ctx, p.User.ID, *result.NewBalance)
+		} else {
+			err = deps.billingCacheService.InvalidateUserBalance(ctx, p.User.ID)
+		}
+		if err != nil {
+			slog.Warn("synchronize committed wallet cache failed", "user_id", p.User.ID, "error", err)
+			if invalidateErr := deps.billingCacheService.InvalidateUserBalance(ctx, p.User.ID); invalidateErr != nil {
+				InflightReservationFromContext(ctx).retainUntilExpiry()
+				slog.Warn("invalidate wallet cache after synchronization failure failed", "user_id", p.User.ID, "error", invalidateErr)
+			}
+		}
+		return
+	}
 	if result != nil && result.NewBalance != nil && deps.billingCacheService.balanceBelowEligibilityThreshold(*result.NewBalance) {
 		if err := deps.billingCacheService.InvalidateUserBalance(ctx, p.User.ID); err != nil {
 			slog.Warn("invalidate balance cache after exhausted deduction failed",

@@ -1,0 +1,12 @@
+[Unit]
+Description=Refresh Sub2API group usage history every hour
+
+[Timer]
+OnCalendar=*-*-* *:10:00 Asia/Shanghai
+RandomizedDelaySec=30s
+AccuracySec=1min
+Persistent=true
+Unit=sub2api-group-usage-rollup.service
+
+[Install]
+WantedBy=timers.target

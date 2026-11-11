@@ -16,6 +16,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
 	"github.com/gin-gonic/gin"
+	"github.com/tidwall/sjson"
 )
 
 // ForwardAsChatCompletions serves OpenAI Chat Completions clients through
@@ -36,7 +37,10 @@ func (s *GeminiMessagesCompatService) ForwardAsChatCompletions(
 
 	startTime := time.Now()
 
-	var ccReq apicompat.ChatCompletionsRequest
+	var ccReq struct {
+		apicompat.ChatCompletionsRequest
+		Seed *int64 `json:"seed"`
+	}
 	if err := json.Unmarshal(body, &ccReq); err != nil {
 		return nil, s.writeChatCompletionsError(c, http.StatusBadRequest, "invalid_request_error", "Failed to parse request body")
 	}
@@ -57,7 +61,7 @@ func (s *GeminiMessagesCompatService) ForwardAsChatCompletions(
 		}
 	}
 
-	responsesReq, err := apicompat.ChatCompletionsToResponsesWithMinOutputTokens(&ccReq, 0)
+	responsesReq, err := apicompat.ChatCompletionsToResponsesWithMinOutputTokens(&ccReq.ChatCompletionsRequest, 0)
 	if err != nil {
 		return nil, s.writeChatCompletionsError(c, http.StatusBadRequest, "invalid_request_error", err.Error())
 	}
@@ -73,7 +77,7 @@ func (s *GeminiMessagesCompatService) ForwardAsChatCompletions(
 		return nil, fmt.Errorf("marshal chat completions compat request: %w", err)
 	}
 
-	return s.forwardClaudeBodyAsChatCompletions(ctx, c, account, claudeBody, originalModel, clientStream, includeUsage, startTime)
+	return s.forwardClaudeBodyAsChatCompletions(ctx, c, account, claudeBody, originalModel, clientStream, includeUsage, startTime, ccReq.Seed)
 }
 
 func (s *GeminiMessagesCompatService) forwardClaudeBodyAsChatCompletions(
@@ -85,6 +89,7 @@ func (s *GeminiMessagesCompatService) forwardClaudeBodyAsChatCompletions(
 	clientStream bool,
 	includeUsage bool,
 	startTime time.Time,
+	seed *int64,
 ) (result *ForwardResult, returnErr error) {
 	var req struct {
 		Model  string `json:"model"`
@@ -116,6 +121,12 @@ func (s *GeminiMessagesCompatService) forwardClaudeBodyAsChatCompletions(
 	}
 	geminiReq = ensureGeminiFunctionCallThoughtSignatures(geminiReq)
 	geminiReq = applyGeminiCompatThinkingConfig(geminiReq, claudeBody, mappedModel, clientStream)
+	if seed != nil {
+		geminiReq, err = sjson.SetBytes(geminiReq, "generationConfig.seed", *seed)
+		if err != nil {
+			return nil, fmt.Errorf("set Gemini sampling seed: %w", err)
+		}
+	}
 
 	proxyURL := ""
 	if account.ProxyID != nil && account.Proxy != nil {
@@ -454,7 +465,7 @@ func (s *GeminiMessagesCompatService) buildGeminiChatCompletionsUpstreamRequestF
 					fullURL += "?alt=sse"
 				}
 
-				var inner any
+				var inner json.RawMessage
 				if err := json.Unmarshal(geminiReq, &inner); err != nil {
 					return nil, "", fmt.Errorf("failed to parse gemini request: %w", err)
 				}

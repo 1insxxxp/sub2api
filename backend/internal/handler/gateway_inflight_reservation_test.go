@@ -81,6 +81,25 @@ func TestReserveInflightBalance_UnpricedFailOpenByDefaultFailClosedOptIn(t *test
 	require.ErrorIs(t, err, service.ErrBillingServiceUnavailable, "missing pricing is not a customer wallet shortage")
 }
 
+func TestReserveInflightBalance_SystemCustomSubscriptionSkipsWalletEstimate(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Billing.InflightReservation = config.InflightReservationConfig{Enabled: true, FailClosedOnUnpriced: true}
+	billing := service.NewBillingCacheService(nil, nil, nil, nil, nil, nil, cfg, nil)
+	t.Cleanup(billing.Stop)
+	sourceID := int64(42)
+	container := &service.Group{ID: 25, SubscriptionType: service.SubscriptionTypeSubscription}
+	key := &service.APIKey{User: &service.User{ID: 9}, GroupID: &sourceID, Group: &service.Group{ID: sourceID}}
+	subscription := &service.UserSubscription{ID: 7, UserID: 9, GroupID: container.ID, Group: container}
+	ctx := service.WithSystemCustomGroupResolution(context.Background(), service.SystemCustomGroupResolution{
+		BillingGroupID: container.ID, SourceGroupID: sourceID, PublicModel: "monthly-gpt", SourceModel: "gpt-5.4", SourcePlatform: service.PlatformOpenAI,
+	})
+	estimator := &countingEstimator{}
+	_, done, err := reserveInflightBalanceCtx(ctx, billing, estimator, key, subscription, tokenInflightEstimate("monthly-gpt", nil))
+	require.NoError(t, err)
+	done()
+	require.Zero(t, estimator.calls)
+}
+
 // handlerInflightCache 内存版余额缓存 + 在途预留（语义同 Redis Lua）。
 type handlerInflightCache struct {
 	service.BillingCache
@@ -101,6 +120,13 @@ func (m *handlerInflightCache) GetUserBalance(context.Context, int64) (float64, 
 	return m.balance, nil
 }
 
+func (m *handlerInflightCache) DeductUserBalance(_ context.Context, _ int64, amount float64) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.balance = service.QuantizeUsageBillingAmount(m.balance - amount)
+	return nil
+}
+
 func (m *handlerInflightCache) GetUserPlatformQuotaCache(context.Context, int64, string) (*service.UserPlatformQuotaCacheEntry, bool, error) {
 	return nil, false, nil
 }
@@ -112,7 +138,7 @@ func (m *handlerInflightCache) ReserveInflightBalance(_ context.Context, _ int64
 	for _, v := range m.res {
 		sum += v
 	}
-	if len(m.res) > 0 && balance-sum < amount {
+	if service.QuantizeUsageBillingAmount(balance-sum) < service.QuantizeUsageBillingAmount(amount) {
 		return false, sum, nil
 	}
 	m.res[id] = amount
@@ -146,7 +172,10 @@ func TestWrapUsageRecordTaskContext_HandsReservationToBillingTask(t *testing.T) 
 	require.Equal(t, 1, cache.count())
 
 	ran := false
-	task, abandon := wrapUsageRecordTaskContext(c.Request.Context(), func(context.Context) { ran = true })
+	task, abandon := wrapUsageRecordTaskContext(c.Request.Context(), func(ctx context.Context) {
+		require.NotNil(t, service.InflightReservationFromContext(ctx))
+		ran = true
+	})
 	done() // handler returns; billing still pending
 	require.Equal(t, 1, cache.count(), "reservation held until the billing task finishes")
 	task(context.Background())

@@ -1581,7 +1581,7 @@ func TestAPIKeyAuthRejectsExhaustedBalance(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	require.Equal(t, http.StatusForbidden, w.Code)
-	requireAPIKeyAuthError(t, w, "INSUFFICIENT_BALANCE", "Insufficient account balance. Current balance: US$0.00; estimated reservation for this request: not calculated.")
+	requireAPIKeyAuthError(t, w, "INSUFFICIENT_BALANCE", "余额不足，当前余额 US$0.00，请充值后重试。")
 }
 
 func TestAPIKeyAuthAllowsModelListWithExhaustedBalance(t *testing.T) {
@@ -1639,7 +1639,7 @@ func TestAPIKeyAuthAllowsModelListWithExhaustedBalance(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	require.Equal(t, http.StatusForbidden, w.Code)
-	requireAPIKeyAuthError(t, w, "INSUFFICIENT_BALANCE", "Insufficient account balance. Current balance: US$0.00; estimated reservation for this request: not calculated.")
+	requireAPIKeyAuthError(t, w, "INSUFFICIENT_BALANCE", "余额不足，当前余额 US$0.00，请充值后重试。")
 }
 
 func TestAPIKeyAuthOpenAIQuotaErrorFormat(t *testing.T) {
