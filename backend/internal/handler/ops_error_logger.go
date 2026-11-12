@@ -41,6 +41,7 @@ const (
 	opsErrInvalidAPIKey              = "invalid_api_key"
 	opsErrAPIKeyRequired             = "api_key_required"
 	opsErrInsufficientBalance        = "insufficient balance"
+	opsErrInsufficientBalanceChinese = "余额不足"
 	opsErrInsufficientAccountBalance = "insufficient account balance"
 	opsErrInsufficientQuota          = "insufficient_quota"
 
@@ -2383,6 +2384,7 @@ func isOpsLocalBusinessLimitError(code string, msg string) bool {
 		strings.Contains(msg, "no active subscription found for this group") ||
 		strings.Contains(msg, "subscription is invalid or expired") ||
 		strings.Contains(msg, opsErrInsufficientBalance) ||
+		strings.Contains(msg, opsErrInsufficientBalanceChinese) ||
 		strings.Contains(msg, "insufficient account balance") ||
 		strings.Contains(msg, "api key group platform is not gemini") ||
 		strings.Contains(msg, "api key 额度已用完") ||
@@ -2578,6 +2580,8 @@ func shouldSkipOpsErrorLog(ctx context.Context, ops *service.OpsService, message
 	if settings.IgnoreInsufficientBalanceErrors {
 		if strings.Contains(bodyLower, opsErrInsufficientBalance) || strings.Contains(bodyLower, opsErrInsufficientAccountBalance) ||
 			strings.Contains(bodyLower, opsErrInsufficientQuota) ||
+			strings.Contains(bodyLower, opsErrInsufficientBalanceChinese) ||
+			strings.Contains(msgLower, opsErrInsufficientBalanceChinese) ||
 			strings.Contains(msgLower, opsErrInsufficientBalance) || strings.Contains(msgLower, opsErrInsufficientAccountBalance) {
 			return true
 		}

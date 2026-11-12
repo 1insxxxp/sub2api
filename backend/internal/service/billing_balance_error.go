@@ -13,26 +13,25 @@ import (
 // changing the shared sentinel. A nil reservation means pricing has not run yet.
 func NewInsufficientBalanceError(balance float64, requestedReservation *float64) *pkgerrors.ApplicationError {
 	err := pkgerrors.Clone(ErrInsufficientBalance)
-	reservation := "not calculated"
-	if requestedReservation != nil {
-		reservation = formatBalanceErrorUSD(*requestedReservation)
+	if requestedReservation == nil {
+		err.Message = fmt.Sprintf("余额不足，当前余额 %s，请充值后重试。", formatBalanceErrorUSD(balance))
+		return err
 	}
-	// Keep this prefix for protocol clients and Ops balance-error classification.
-	err.Message = fmt.Sprintf("Insufficient account balance. Current balance: %s; estimated reservation for this request: %s.",
-		formatBalanceErrorUSD(balance), reservation)
+	err.Message = fmt.Sprintf("余额不足，当前余额 %s，本次预扣额度 %s，请充值后重试。",
+		formatBalanceErrorUSD(balance), formatBalanceErrorUSD(*requestedReservation))
 	return err
 }
 
 func newBalanceInFlightError(balance, inflight, requestedReservation float64) *pkgerrors.ApplicationError {
 	err := pkgerrors.Clone(ErrBalanceInFlight)
-	err.Message = fmt.Sprintf("Existing requests are processing or settling. Current balance: %s; reserved by other requests: %s; estimated reservation for this request: %s. Please retry shortly.",
+	err.Message = fmt.Sprintf("可用额度不足，当前余额 %s，其他请求已预扣 %s，本次预扣额度 %s。请等待其他请求结算后重试，或充值后重试。",
 		formatBalanceErrorUSD(balance), formatBalanceErrorUSD(inflight), formatBalanceErrorUSD(requestedReservation))
 	return err
 }
 
 func formatBalanceErrorUSD(amount float64) string {
 	if math.IsNaN(amount) || math.IsInf(amount, 0) {
-		return "unknown"
+		return "未知"
 	}
 	if amount != 0 && math.Abs(amount) < 1e-8 {
 		// An estimate may have more precision than the wallet's eight decimals.

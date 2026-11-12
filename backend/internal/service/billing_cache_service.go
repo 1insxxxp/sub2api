@@ -25,8 +25,8 @@ var errBillingCacheUnavailable = fmt.Errorf("billing cache unavailable")
 
 var (
 	ErrSubscriptionInvalid       = infraerrors.Forbidden("SUBSCRIPTION_INVALID", "subscription is invalid or expired")
-	ErrBillingServiceUnavailable = infraerrors.ServiceUnavailable("BILLING_SERVICE_ERROR", "Billing service temporarily unavailable. Please retry later.")
-	ErrBalanceInFlight           = infraerrors.TooManyRequests("BALANCE_IN_FLIGHT", "Existing requests are processing or settling. Please retry shortly.")
+	ErrBillingServiceUnavailable = infraerrors.ServiceUnavailable("BILLING_SERVICE_ERROR", "计费服务暂时不可用，请稍后重试。")
+	ErrBalanceInFlight           = infraerrors.TooManyRequests("BALANCE_IN_FLIGHT", "其他请求正在处理或结算，可用额度暂时不足，请稍后重试。")
 	// RPM 超限错误。gateway_handler 负责映射为 HTTP 429。
 	ErrGroupRPMExceeded = infraerrors.TooManyRequests("GROUP_RPM_EXCEEDED", "group requests-per-minute limit exceeded")
 	ErrUserRPMExceeded  = infraerrors.TooManyRequests("USER_RPM_EXCEEDED", "user requests-per-minute limit exceeded")
@@ -331,10 +331,26 @@ func (s *BillingCacheService) getUserBalance(ctx context.Context, userID int64) 
 		return balance, false, nil
 	}
 
-	// 缓存未命中：singleflight 合并同一 userID 的并发回源请求。
-	value, err, _ := s.balanceLoadSF.Do(strconv.FormatInt(userID, 10), func() (any, error) {
+	balance, err = s.loadUserBalance(ctx, userID)
+	return balance, true, err
+}
+
+// 同一用户、同一缓存版本的并发回源共享一次数据库读取。
+func (s *BillingCacheService) loadUserBalance(ctx context.Context, userID int64) (float64, error) {
+	loadKey := strconv.FormatInt(userID, 10)
+	if cache, versioned := s.cache.(VersionedBalanceCache); versioned && s.InflightReservationEnabled() {
+		version, err := cache.GetUserBalanceVersion(ctx, userID)
+		if err != nil {
+			return 0, err
+		}
+		loadKey += ":" + version
+	}
+	value, err, _ := s.balanceLoadSF.Do(loadKey, func() (any, error) {
 		loadCtx, cancel := context.WithTimeout(context.Background(), balanceLoadTimeout)
 		defer cancel()
+		if cache, versioned := s.cache.(VersionedBalanceCache); versioned && s.InflightReservationEnabled() {
+			return s.loadVersionedUserBalance(loadCtx, cache, userID)
+		}
 
 		balance, err := s.getUserBalanceFromDB(loadCtx, userID)
 		if err != nil {
@@ -350,13 +366,34 @@ func (s *BillingCacheService) getUserBalance(ctx context.Context, userID int64) 
 		return balance, nil
 	})
 	if err != nil {
-		return 0, true, err
+		return 0, err
 	}
 	balance, ok := value.(float64)
 	if !ok {
-		return 0, true, fmt.Errorf("unexpected balance type: %T", value)
+		return 0, fmt.Errorf("unexpected balance type: %T", value)
 	}
-	return balance, true, nil
+	return balance, nil
+}
+
+func (s *BillingCacheService) loadVersionedUserBalance(ctx context.Context, cache VersionedBalanceCache, userID int64) (float64, error) {
+	for attempt := 0; attempt < 3; attempt++ {
+		version, err := cache.GetUserBalanceVersion(ctx, userID)
+		if err != nil {
+			return 0, err
+		}
+		balance, err := s.getUserBalanceFromDB(ctx, userID)
+		if err != nil {
+			return 0, err
+		}
+		stored, err := cache.SetUserBalanceIfVersion(ctx, userID, balance, version)
+		if err != nil {
+			return 0, err
+		}
+		if stored {
+			return balance, nil
+		}
+	}
+	return 0, ErrBillingServiceUnavailable
 }
 
 // getUserBalanceFromDB 从数据库获取用户余额
@@ -368,9 +405,17 @@ func (s *BillingCacheService) getUserBalanceFromDB(ctx context.Context, userID i
 	return user.Balance, nil
 }
 
-// RecheckUserBalance bypasses stale wallet caches immediately before a rejection.
-// Never SET the result: billing may commit/deduct concurrently with this read.
+// RecheckUserBalance refreshes the wallet immediately before a rejection.
+// Versioned caches use guarded database loads. Other caches are invalidated so
+// an overlapping settlement cannot be overwritten by an unguarded snapshot.
 func (s *BillingCacheService) RecheckUserBalance(ctx context.Context, userID int64) (float64, error) {
+	if _, versioned := s.cache.(VersionedBalanceCache); versioned && s.InflightReservationEnabled() {
+		balance, err := s.loadUserBalance(ctx, userID)
+		if err != nil {
+			return 0, ErrBillingServiceUnavailable.WithCause(err)
+		}
+		return balance, nil
+	}
 	user, err := s.balanceRecheck.load(ctx, s.userRepo, userID)
 	if err != nil {
 		return 0, ErrBillingServiceUnavailable.WithCause(err)
@@ -762,6 +807,19 @@ func (s *BillingCacheService) IncrementUserPlatformQuotaUsage(userID int64, plat
 // 统一检查方法
 // ============================================
 
+// ResolveBillingEligibilityGroup resolves the subscription container retained by
+// a system-custom route and validates its billing identity.
+func ResolveBillingEligibilityGroup(ctx context.Context, group *Group, subscription *UserSubscription) (*Group, error) {
+	if resolution, systemCustom := SystemCustomGroupResolutionFromContext(ctx); systemCustom {
+		if subscription == nil || subscription.Group == nil ||
+			subscription.GroupID != resolution.BillingGroupID || subscription.Group.ID != resolution.BillingGroupID {
+			return nil, ErrSubscriptionInvalid
+		}
+		return subscription.Group, nil
+	}
+	return group, nil
+}
+
 // CheckBillingEligibility 检查用户是否有资格发起请求
 // 余额模式：检查缓存余额 > 0
 // 订阅模式：检查缓存用量未超过限额（Group限额从参数传入）
@@ -783,13 +841,9 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 	// 系统自定义月卡在路由解析后，apiKey.Group/group 已是实际来源分组，
 	// 但计费资格、订阅限额与 RPM 必须始终归属月卡容器。订阅对象由 auth
 	// 在解析前按容器加载；任一身份缺失/错配都 fail closed，绝不回退余额。
-	eligibilityGroup := group
-	if resolution, systemCustom := SystemCustomGroupResolutionFromContext(ctx); systemCustom {
-		if subscription == nil || subscription.Group == nil ||
-			subscription.GroupID != resolution.BillingGroupID || subscription.Group.ID != resolution.BillingGroupID {
-			return ErrSubscriptionInvalid
-		}
-		eligibilityGroup = subscription.Group
+	eligibilityGroup, err := ResolveBillingEligibilityGroup(ctx, group, subscription)
+	if err != nil {
+		return err
 	}
 
 	// 判断计费模式
@@ -841,6 +895,10 @@ func (s *BillingCacheService) ReserveFixedCharge(ctx context.Context, user *User
 	if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple {
 		return nil, nil
 	}
+	group, err := ResolveBillingEligibilityGroup(ctx, group, subscription)
+	if err != nil {
+		return nil, err
+	}
 	subscriptionBill := group != nil && group.IsSubscriptionType() && subscription != nil
 	if !subscriptionBill {
 		balance, err := s.GetUserBalance(ctx, user.ID)
@@ -857,7 +915,7 @@ func (s *BillingCacheService) ReserveFixedCharge(ctx context.Context, user *User
 			}
 		}
 	}
-	res, err := s.reserveInflight(ctx, user, group, subscription, amount, false, false)
+	res, err := s.reserveInflight(ctx, user, group, subscription, amount, false)
 	if err != nil {
 		return nil, err
 	}

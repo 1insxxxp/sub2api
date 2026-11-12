@@ -272,6 +272,8 @@ func TestLoadBalancePreauthorizationDefaults(t *testing.T) {
 	require.Equal(t, 2.0, cfg.Billing.BalancePreauthorizationMeanSafetyFactor)
 	require.Equal(t, 0.95, cfg.Billing.BalancePreauthorizationP95Quantile)
 	require.Equal(t, 0.5, cfg.Billing.BalancePreauthorizationMaxOverdraftFraction)
+	require.True(t, cfg.Billing.InflightReservation.Enabled)
+	require.True(t, cfg.Billing.InflightReservation.FailClosedOnUnpriced)
 }
 
 func TestValidateBalancePreauthorizationRejectsInvalidPolicy(t *testing.T) {

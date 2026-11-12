@@ -52,7 +52,7 @@ func TestBillingErrorDetails_BalanceInFlightMapsToRetryable429(t *testing.T) {
 	status, code, message, retryAfter := billingErrorDetails(service.ErrBalanceInFlight)
 	require.Equal(t, http.StatusTooManyRequests, status)
 	require.Equal(t, "balance_in_flight", code)
-	require.Contains(t, message, "processing or settling")
+	require.Contains(t, message, "其他请求正在处理或结算")
 	require.Equal(t, 2, retryAfter)
 }
 

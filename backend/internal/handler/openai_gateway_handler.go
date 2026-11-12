@@ -285,14 +285,12 @@ func wrapUsageRecordTaskContext(parent context.Context, task service.UsageRecord
 	if task == nil {
 		return nil, func() {}
 	}
-	done := func() {}
-	if parent != nil {
-		done = service.InflightReservationFromContext(parent).Acquire()
-	}
+	reservation := service.InflightReservationFromContext(parent)
+	done := reservation.Acquire()
 	requestContext := usageRecordContext(parent, context.Background())
 	return func(ctx context.Context) {
 		defer done()
-		task(usageRecordContext(requestContext, ctx))
+		task(service.WithInflightReservation(usageRecordContext(requestContext, ctx), reservation))
 	}, done
 }
 
