@@ -4716,7 +4716,7 @@ func convertClaudeToolsToGeminiTools(tools any) []any {
 
 func normalizeGeminiRequestForAIStudio(body []byte) []byte {
 	var payload map[string]any
-	if err := json.Unmarshal(body, &payload); err != nil {
+	if err := decodeOpenAIJSONUseNumber(body, &payload); err != nil {
 		return body
 	}
 
