@@ -10,7 +10,7 @@ import (
 // Missing models cannot recover on the same account. Keep the response
 // uncommitted so the handler can try another account within its normal budget.
 func (s *GeminiMessagesCompatService) handleGeminiModelNotFound(ctx context.Context, c *gin.Context, account *Account, resp *http.Response, body []byte, requestedModel string) *UpstreamFailoverError {
-	if resp.StatusCode != http.StatusNotFound || geminiCachedContentBoundFromContext(ctx) {
+	if (resp.StatusCode != http.StatusNotFound && !isUnknownProviderForModelError(body)) || geminiCachedContentBoundFromContext(ctx) {
 		return nil
 	}
 	body = unwrapIfNeeded(account.Type == AccountTypeOAuth, body)

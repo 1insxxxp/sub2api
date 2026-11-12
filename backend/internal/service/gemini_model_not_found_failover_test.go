@@ -72,6 +72,29 @@ func TestGeminiModelNotFoundFailover(t *testing.T) {
 	}
 }
 
+func TestGeminiUnknownProviderModel400Failover(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, fw := range geminiSingleCheckForwarders {
+		t.Run(fw.name, func(t *testing.T) {
+			body := `{"error":{"message":"unknown provider for model gemini-3.8-flash-high"}}`
+			svc, upstream, repo := newGeminiSingleCheckService(geminiSequenceUpstreamResponse{
+				status: http.StatusBadRequest,
+				body:   body,
+			})
+
+			err, c := fw.forward(t, svc, geminiDefaultPolicyAPIKeyAccount())
+
+			var failoverErr *UpstreamFailoverError
+			require.ErrorAs(t, err, &failoverErr)
+			require.Equal(t, http.StatusBadRequest, failoverErr.StatusCode)
+			require.True(t, failoverErr.ShouldRetryNextAccount())
+			require.False(t, c.Writer.Written())
+			require.Equal(t, 1, upstream.calls)
+			require.Len(t, repo.modelRateLimitCalls, 1)
+		})
+	}
+}
+
 func TestGeminiModelNotFoundUsesModelCooldownBeforeAccountRules(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	for _, fw := range geminiSingleCheckForwarders {

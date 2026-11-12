@@ -68,3 +68,17 @@ func TestNormalizeGeminiNativeRequestAlignsFunctionResponseName(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "use_package", gjson.GetBytes(normalized, "contents.1.parts.0.functionResponse.name").String())
 }
+
+func TestNormalizeGeminiNativeRequestMovesFunctionResponseToUserRole(t *testing.T) {
+	body := []byte(`{
+		"contents":[
+			{"role":"model","parts":[{"functionResponse":{"name":"lookup","response":{"content":"ok"}}}]}
+		]
+	}`)
+
+	normalized, err := normalizeGeminiNativeRequest(body)
+
+	require.NoError(t, err)
+	require.Equal(t, "user", gjson.GetBytes(normalized, "contents.0.role").String())
+	require.NotEmpty(t, gjson.GetBytes(normalized, "contents.0.parts.0.functionResponse").Raw)
+}

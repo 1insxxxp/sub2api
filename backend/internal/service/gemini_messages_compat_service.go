@@ -4442,6 +4442,7 @@ func convertClaudeMessagesToGeminiContents(messages any, toolUseIDToName map[str
 // parallel tool results across multiple user messages or return them in
 // completion order instead of call order.
 func normalizeGeminiFunctionCallHistory(contents []any) []any {
+	contents = normalizeGeminiFunctionPartRoles(contents)
 	contents = mergeConsecutiveGeminiContents(contents)
 	for i := 0; i+1 < len(contents); i++ {
 		modelContent, ok := contents[i].(map[string]any)

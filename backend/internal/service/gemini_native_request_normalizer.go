@@ -19,6 +19,7 @@ func normalizeGeminiNativeRequest(body []byte) ([]byte, error) {
 	normalizeGeminiNativeMixedTools(payload)
 
 	if contents, ok := payload["contents"].([]any); ok {
+		contents = normalizeGeminiFunctionPartRoles(contents)
 		contents = mergeConsecutiveGeminiContents(contents)
 		contents = normalizeGeminiFunctionCallHistory(contents)
 		contents = alignGeminiFunctionResponsesByOrder(contents)
@@ -27,6 +28,62 @@ func normalizeGeminiNativeRequest(body []byte) ([]byte, error) {
 	}
 
 	return json.Marshal(payload)
+}
+
+// normalizeGeminiFunctionPartRoles repairs clients that put a functionResponse
+// in a model turn. Gemini requires functionCall parts in model turns and
+// functionResponse parts in user turns.
+func normalizeGeminiFunctionPartRoles(contents []any) []any {
+	normalized := make([]any, 0, len(contents))
+	for _, raw := range contents {
+		content, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		parts, _ := content["parts"].([]any)
+		hasCall, hasResponse := false, false
+		for _, rawPart := range parts {
+			part, ok := rawPart.(map[string]any)
+			if !ok {
+				continue
+			}
+			if _, ok := part["functionCall"].(map[string]any); ok {
+				hasCall = true
+			}
+			if _, ok := part["functionResponse"].(map[string]any); ok {
+				hasResponse = true
+			}
+		}
+		if hasCall && hasResponse {
+			callContent := map[string]any{"role": "model", "parts": make([]any, 0, len(parts))}
+			responseContent := map[string]any{"role": "user", "parts": make([]any, 0, len(parts))}
+			for _, rawPart := range parts {
+				part, ok := rawPart.(map[string]any)
+				if !ok {
+					continue
+				}
+				if _, ok := part["functionResponse"].(map[string]any); ok {
+					responseContent["parts"] = append(responseContent["parts"].([]any), part)
+				} else {
+					callContent["parts"] = append(callContent["parts"].([]any), part)
+				}
+			}
+			if len(callContent["parts"].([]any)) > 0 {
+				normalized = append(normalized, callContent)
+			}
+			if len(responseContent["parts"].([]any)) > 0 {
+				normalized = append(normalized, responseContent)
+			}
+			continue
+		}
+		if hasResponse {
+			content["role"] = "user"
+		} else if hasCall {
+			content["role"] = "model"
+		}
+		normalized = append(normalized, content)
+	}
+	return normalized
 }
 
 func normalizeGeminiNativeThinkingLevel(payload map[string]any) {

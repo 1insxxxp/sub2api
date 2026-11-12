@@ -10,6 +10,9 @@ import (
 var upstreamModelNotFoundKeywords = []string{"model not found", "unknown model", "not found", "not supported", "unsupported", "does not exist"}
 
 func isUpstreamModelNotFoundError(statusCode int, body []byte) bool {
+	if statusCode == http.StatusBadRequest && isUnknownProviderForModelError(body) {
+		return true
+	}
 	if statusCode != http.StatusNotFound {
 		return false
 	}
@@ -45,6 +48,14 @@ func isUpstreamModelNotFoundError(statusCode int, body []byte) bool {
 		return true
 	}
 	return containsModelNotFoundKeyword(normalized)
+}
+
+func isUnknownProviderForModelError(body []byte) bool {
+	message := strings.ToLower(strings.TrimSpace(extractUpstreamErrorMessage(body)))
+	if message == "" && !gjson.ValidBytes(body) {
+		message = strings.ToLower(strings.TrimSpace(string(body)))
+	}
+	return strings.Contains(message, "unknown provider for model")
 }
 
 func isModelNotFoundError(statusCode int, body []byte) bool {

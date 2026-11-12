@@ -48,6 +48,12 @@ func TestIsUpstreamModelNotFoundError(t *testing.T) {
 			body:       []byte(`{"error":{"message":"model not found"}}`),
 			want:       false,
 		},
+		{
+			name:       "400 unknown provider for model is model specific",
+			statusCode: http.StatusBadRequest,
+			body:       []byte(`{"error":{"message":"unknown provider for model gemini-3.8-flash-high"}}`),
+			want:       true,
+		},
 	}
 
 	for _, tt := range tests {
