@@ -17,7 +17,7 @@
         @load="handleIframeLoad"
         @error="handleIframeError"
       ></iframe>
-      <div v-if="iframeFailed" class="model-plaza-frame-error">
+      <div v-if="iframeFailed" class="model-plaza-frame-error" role="alert" aria-live="polite">
         <span>{{ t('modelPlaza.loadFailed') }}</span>
         <a :href="MODEL_PLAZA_EXTERNAL_URL" target="_blank" rel="noopener noreferrer">
           {{ t('customPage.openInNewTab') }}
@@ -53,7 +53,7 @@
         @load="handleIframeLoad"
         @error="handleIframeError"
       ></iframe>
-      <div v-if="iframeFailed" class="model-plaza-frame-error">
+      <div v-if="iframeFailed" class="model-plaza-frame-error" role="alert" aria-live="polite">
         <span>{{ t('modelPlaza.loadFailed') }}</span>
         <a :href="MODEL_PLAZA_EXTERNAL_URL" target="_blank" rel="noopener noreferrer">
           {{ t('customPage.openInNewTab') }}
@@ -68,7 +68,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
@@ -97,10 +97,15 @@ const iframeFailed = ref(false)
 const data = ref<ModelPlazaResponse | null>(null)
 const loading = ref(true)
 const loadFailed = ref(false)
+const iframeTimedOut = ref(false)
+let iframeTimeout: number | undefined
+const MODEL_PLAZA_IFRAME_TIMEOUT_MS = 12_000
 
 function handleIframeLoad() {
   iframeLoaded.value = true
-  iframeFailed.value = false
+  if (!iframeTimedOut.value) {
+    iframeFailed.value = false
+  }
 }
 
 function handleIframeError() {
@@ -108,7 +113,18 @@ function handleIframeError() {
   iframeFailed.value = true
 }
 
+function startIframeTimeout() {
+  if (!useExternalModelSquare.value || typeof window === 'undefined') return
+  iframeTimeout = window.setTimeout(() => {
+    if (iframeLoaded.value) return
+    iframeTimedOut.value = true
+    iframeLoaded.value = true
+    iframeFailed.value = true
+  }, MODEL_PLAZA_IFRAME_TIMEOUT_MS)
+}
+
 onMounted(async () => {
+  startIframeTimeout()
   // 独立形态导航条需要站点名/Logo;有 __APP_CONFIG__ 注入时同步命中缓存。
   void appStore.fetchPublicSettings()
   try {
@@ -117,6 +133,12 @@ onMounted(async () => {
     loadFailed.value = true
   } finally {
     loading.value = false
+  }
+})
+
+onBeforeUnmount(() => {
+  if (iframeTimeout !== undefined && typeof window !== 'undefined') {
+    window.clearTimeout(iframeTimeout)
   }
 })
 </script>
