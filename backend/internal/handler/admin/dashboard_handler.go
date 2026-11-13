@@ -565,29 +565,26 @@ func (h *DashboardHandler) GetUserSpendingRanking(c *gin.Context) {
 		Limit: limit,
 	})
 	cacheKey := string(keyRaw)
-	if cached, ok := dashboardUsersRankingCache.Get(cacheKey); ok {
-		c.Header("X-Snapshot-Cache", "hit")
-		response.Success(c, cached.Payload)
-		return
-	}
-
-	ranking, err := h.dashboardService.GetUserSpendingRanking(c.Request.Context(), startTime, endTime, limit)
+	entry, hit, err := dashboardUsersRankingCache.GetOrLoad(cacheKey, func() (any, error) {
+		ranking, err := h.dashboardService.GetUserSpendingRanking(c.Request.Context(), startTime, endTime, limit)
+		if err != nil {
+			return nil, err
+		}
+		return gin.H{
+			"ranking":           ranking.Ranking,
+			"total_actual_cost": ranking.TotalActualCost,
+			"total_requests":    ranking.TotalRequests,
+			"total_tokens":      ranking.TotalTokens,
+			"start_date":        startTime.Format("2006-01-02"),
+			"end_date":          endTime.AddDate(0, 0, -1).Format("2006-01-02"),
+		}, nil
+	})
 	if err != nil {
 		response.Error(c, 500, "Failed to get user spending ranking")
 		return
 	}
-
-	payload := gin.H{
-		"ranking":           ranking.Ranking,
-		"total_actual_cost": ranking.TotalActualCost,
-		"total_requests":    ranking.TotalRequests,
-		"total_tokens":      ranking.TotalTokens,
-		"start_date":        startTime.Format("2006-01-02"),
-		"end_date":          endTime.AddDate(0, 0, -1).Format("2006-01-02"),
-	}
-	dashboardUsersRankingCache.Set(cacheKey, payload)
-	c.Header("X-Snapshot-Cache", "miss")
-	response.Success(c, payload)
+	c.Header("X-Snapshot-Cache", cacheStatusValue(hit))
+	response.Success(c, entry.Payload)
 }
 
 // GetBatchUsersUsage handles getting usage stats for multiple users

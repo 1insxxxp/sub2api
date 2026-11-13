@@ -761,9 +761,10 @@ const loadDashboardStats = async () => {
   const range = createDashboardRangeParams()
   await Promise.all([
     loadDashboardSnapshot(true, range),
-    loadUsersTrend(range),
-    loadUserSpendingRanking(range)
+    loadUsersTrend(range)
   ])
+  // 排行统计可能扫描大量 usage_logs，不阻塞首屏核心指标和趋势。
+  void loadUserSpendingRanking(range)
 }
 
 const autoRefresh = useAutoRefresh({
@@ -785,9 +786,9 @@ const loadChartData = async () => {
   const range = createDashboardRangeParams()
   await Promise.all([
     loadDashboardSnapshot(false, range),
-    loadUsersTrend(range),
-    loadUserSpendingRanking(range)
+    loadUsersTrend(range)
   ])
+  void loadUserSpendingRanking(range)
 }
 
 onMounted(async () => {
