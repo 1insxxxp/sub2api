@@ -93,15 +93,19 @@ func TestCategoryDefaultHistoryExpiresSavePreviewWithoutBlockingLiveRestores(t *
 	available("foo")
 	publish()
 	available("foo")
-	// A source pause/re-enable affects its models; the other source keeps working.
+	// Closing unlinks the source; re-enabling requires an explicit association.
 	_, err = integrationDB.ExecContext(ctx, `UPDATE groups SET status='inactive' WHERE id=$1`, first.ID)
 	require.NoError(t, err)
 	_, err = integrationDB.ExecContext(ctx, `UPDATE groups SET status='active' WHERE id=$1`, first.ID)
 	require.NoError(t, err)
-	available("foo")
-	available("bar")
+	_, err = svc.ResolveForUser(ctx, entryID, user, "foo")
+	require.ErrorIs(t, err, service.ErrCategoryDefaultModelNotAllowed)
+	_, err = svc.ResolveForUser(ctx, entryID, user, "bar")
+	require.ErrorIs(t, err, service.ErrCategoryDefaultModelNotAllowed)
 	available("baz")
 	publish()
+	available("foo")
+	available("bar")
 	// A duplicate that has been removed no longer quarantines the restored name.
 	_, err = integrationDB.ExecContext(ctx, `UPDATE accounts SET credentials=jsonb_set(credentials,'{model_mapping,foo}','"gemini-3-pro"'::jsonb) WHERE id=$1`, b.ID)
 	require.NoError(t, err)

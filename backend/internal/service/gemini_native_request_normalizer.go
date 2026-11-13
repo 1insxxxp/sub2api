@@ -55,24 +55,24 @@ func normalizeGeminiFunctionPartRoles(contents []any) []any {
 			}
 		}
 		if hasCall && hasResponse {
-			callContent := map[string]any{"role": "model", "parts": make([]any, 0, len(parts))}
-			responseContent := map[string]any{"role": "user", "parts": make([]any, 0, len(parts))}
+			callParts := make([]any, 0, len(parts))
+			responseParts := make([]any, 0, len(parts))
 			for _, rawPart := range parts {
 				part, ok := rawPart.(map[string]any)
 				if !ok {
 					continue
 				}
 				if _, ok := part["functionResponse"].(map[string]any); ok {
-					responseContent["parts"] = append(responseContent["parts"].([]any), part)
+					responseParts = append(responseParts, part)
 				} else {
-					callContent["parts"] = append(callContent["parts"].([]any), part)
+					callParts = append(callParts, part)
 				}
 			}
-			if len(callContent["parts"].([]any)) > 0 {
-				normalized = append(normalized, callContent)
+			if len(callParts) > 0 {
+				normalized = append(normalized, map[string]any{"role": "model", "parts": callParts})
 			}
-			if len(responseContent["parts"].([]any)) > 0 {
-				normalized = append(normalized, responseContent)
+			if len(responseParts) > 0 {
+				normalized = append(normalized, map[string]any{"role": "user", "parts": responseParts})
 			}
 			continue
 		}

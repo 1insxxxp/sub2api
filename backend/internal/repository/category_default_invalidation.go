@@ -152,3 +152,18 @@ func categoryDefaultLoadInvalidations(ctx context.Context, client *dbent.Client,
 	sort.Strings(config.InvalidatedModels)
 	return nil
 }
+
+// Source removers lock all associated entries before any declaration writes.
+// The reference advisory lock must already be held, matching Publish's order.
+func categoryDefaultLockEntriesForSourceRemoval(ctx context.Context, client *dbent.Client, sourceID int64) error {
+	rows, err := client.QueryContext(ctx, `SELECT c.group_id FROM category_default_groups c
+ WHERE EXISTS (SELECT 1 FROM category_default_group_sources s WHERE s.group_id=c.group_id AND s.source_group_id=$1)
+ ORDER BY c.group_id FOR UPDATE OF c`, sourceID)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+	}
+	return rows.Err()
+}

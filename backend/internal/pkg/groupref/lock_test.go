@@ -59,3 +59,29 @@ func TestLockGroupReferenceWritesIsNoopForNonPostgresTransaction(t *testing.T) {
 	require.NoError(t, tx.Rollback())
 	require.NoError(t, mock.ExpectationsWereMet())
 }
+
+func TestLockGroupReferenceWritesClientRejectsNonTransactionalPostgres(t *testing.T) {
+	db, _, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	client := dbent.NewClient(dbent.Driver(entsql.OpenDB(dialect.Postgres, db)))
+	t.Cleanup(func() { _ = client.Close() })
+	require.ErrorContains(t, LockGroupReferenceWritesClient(context.Background(), client, 1), "transaction")
+	require.ErrorContains(t, LockGroupReferenceWritesClient(context.Background(), nil, 1), "transaction")
+}
+
+func TestLockGroupReferenceWritesClientReusesTransaction(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	client := dbent.NewClient(dbent.Driver(entsql.OpenDB(dialect.Postgres, db)))
+	t.Cleanup(func() { _ = client.Close() })
+	mock.ExpectBegin()
+	tx, err := client.Tx(context.Background())
+	require.NoError(t, err)
+	mock.ExpectQuery("SELECT pg_advisory_xact_lock").WithArgs(groupReferenceLockNamespace, groupReferenceLockKey(7)).WillReturnRows(sqlmock.NewRows([]string{"pg_advisory_xact_lock"}).AddRow(nil))
+	mock.ExpectRollback()
+	require.NoError(t, LockGroupReferenceWritesClient(context.Background(), tx.Client(), 7))
+	require.NoError(t, tx.Rollback())
+	require.NoError(t, mock.ExpectationsWereMet())
+}

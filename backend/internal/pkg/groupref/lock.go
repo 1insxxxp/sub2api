@@ -21,9 +21,20 @@ func LockGroupReferenceWrites(ctx context.Context, tx *dbent.Tx, groupIDs ...int
 	if tx == nil {
 		return errors.New("group reference advisory lock requires an explicit transaction")
 	}
-	client := tx.Client()
+	return LockGroupReferenceWritesClient(ctx, tx.Client(), groupIDs...)
+}
+
+// LockGroupReferenceWritesClient supports repositories that reuse a caller-owned
+// Ent transaction. A non-transactional PostgreSQL client cannot hold xact locks.
+func LockGroupReferenceWritesClient(ctx context.Context, client *dbent.Client, groupIDs ...int64) error {
+	if client == nil {
+		return errors.New("group reference advisory lock requires an explicit transaction")
+	}
 	if client.Driver().Dialect() != dialect.Postgres {
 		return nil
+	}
+	if _, ok := client.Driver().(dialect.Tx); !ok {
+		return errors.New("group reference advisory lock requires an explicit transaction")
 	}
 	for _, groupID := range sortedUniquePositiveGroupIDs(groupIDs) {
 		rows, err := client.QueryContext(

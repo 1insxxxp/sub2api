@@ -12,6 +12,7 @@ import (
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/internal/domain"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/groupref"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -943,6 +944,11 @@ func (r *groupRepository) deleteCascade(ctx context.Context, id int64, requireEm
 		txClient = exec
 	}
 	// err 为 dbent.ErrTxStarted 时，复用当前 client 参与同一事务。
+	// Match category publication's reference lock before acquiring row/config
+	// locks, so a new source link cannot appear after the removal lock set is read.
+	if err := groupref.LockGroupReferenceWritesClient(ctx, exec, id); err != nil {
+		return nil, err
+	}
 
 	// Lock the group row to avoid concurrent writes while we cascade.
 	// 这里使用 exec.QueryContext 手动扫描，确保同一事务内加锁并能区分"未找到"与其他错误。
@@ -979,6 +985,13 @@ func (r *groupRepository) deleteCascade(ctx context.Context, id int64, requireEm
 		if hasAccount {
 			return nil, service.ErrGroupNotEmpty
 		}
+	}
+
+	// Account/route cleanup invokes declaration triggers before the final group
+	// deletion. Acquire the entry's exclusive lock first to avoid SHARE-to-UPDATE
+	// upgrades when two sources of the same category are deleted concurrently.
+	if err := categoryDefaultLockEntriesForSourceRemoval(ctx, exec, id); err != nil {
+		return nil, err
 	}
 
 	// Model writers take a shared source-group lock before touching their

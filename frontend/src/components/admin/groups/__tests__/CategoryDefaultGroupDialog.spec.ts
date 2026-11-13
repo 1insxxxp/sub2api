@@ -105,15 +105,31 @@ describe('CategoryDefaultGroupDialog', () => {
     wrapper.unmount()
   })
 
-  it('lets administrators remove missing or newly invalid sources from an existing configuration', async () => {
+  it('automatically deselects missing sources while allowing removal of an unbounded source', async () => {
     vi.mocked(categoryDefaultGroupsAPI.list).mockResolvedValue([{ ...config, source_group_ids: [11, 22] }])
     vi.mocked(categoryDefaultGroupsAPI.candidates).mockResolvedValue([{ ...candidates[0], invalid_reason: 'Explicit models required' }] as never)
     const wrapper = mountDialog()
     await flushPromises()
     expect(wrapper.get('[data-source-id="11"]').attributes('disabled')).toBeUndefined()
-    await wrapper.get('[data-source-id="22"]').setValue(false)
+    expect(wrapper.find('input[data-source-id="22"]').exists()).toBe(false)
+    await wrapper.get('[data-testid="category-default-preview"]').trigger('click')
+    await flushPromises()
+    expect(categoryDefaultGroupsAPI.preview).toHaveBeenCalledWith('anthropic', [11])
     await wrapper.get('[data-source-id="11"]').setValue(false)
     expect(wrapper.get('[data-testid="category-default-preview"]').attributes('disabled')).toBeDefined()
+    wrapper.unmount()
+  })
+
+  it('drops a source closed while the dialog is open before requesting a preview', async () => {
+    vi.mocked(categoryDefaultGroupsAPI.candidates).mockResolvedValueOnce(candidates as never).mockResolvedValueOnce([])
+    const wrapper = mountDialog()
+    await flushPromises()
+    await wrapper.get('[data-testid="category-default-preview"]').trigger('click')
+    await flushPromises()
+    expect(categoryDefaultGroupsAPI.preview).not.toHaveBeenCalled()
+    expect(wrapper.find('input[data-source-id="11"]').exists()).toBe(false)
+    expect(wrapper.get('[role="alert"]').text()).toContain('categoryDefaults.selectionUnavailable')
+    expect(wrapper.get('[data-testid="category-default-publish"]').attributes('disabled')).toBeDefined()
     wrapper.unmount()
   })
 

@@ -92,10 +92,7 @@
         </div>
         <div v-if="missingSourceIds.length" class="mt-2 space-y-2 text-xs leading-5 text-amber-700 dark:text-amber-400">
           <p>{{ t('categoryDefaults.missingSources') }}</p>
-          <label v-for="id in missingSourceIds" :key="id" class="flex min-h-11 cursor-pointer items-center gap-2">
-            <input v-model="selectedIds" type="checkbox" :value="id" :disabled="busy" :data-source-id="id" class="h-4 w-4 rounded border-gray-300 text-primary-500" />
-            <span>{{ sourceName(id) }}</span>
-          </label>
+          <p v-for="id in missingSourceIds" :key="id">{{ sourceName(id) }}</p>
         </div>
       </section>
 
@@ -165,7 +162,7 @@ const changedKinds = computed(() => changeKinds.filter(kind => kind !== 'unchang
 const config = computed(() => configs.value.find(item => item.category === category.value))
 const canPublish = computed(() => !loading.value && !busy.value && !!preview.value && preview.value.conflicts.length === 0 && selectedIds.value.length > 0)
 const filteredCandidates = computed(() => candidates.value.filter(item => item.group.name.toLowerCase().includes(search.value.trim().toLowerCase())))
-const missingSourceIds = computed(() => selectedIds.value.filter(id => !candidates.value.some(item => item.group.id === id)))
+const missingSourceIds = computed(() => (config.value?.source_group_ids ?? []).filter(id => !candidates.value.some(item => item.group.id === id)))
 let loadGeneration = 0
 
 function errorText(error: unknown, fallback: string): string {
@@ -194,7 +191,7 @@ async function load() {
     if (generation !== loadGeneration || !props.show) return
     configs.value = all ?? []
     candidates.value = sources ?? []
-    selectedIds.value = [...(config.value?.source_group_ids ?? [])]
+    selectedIds.value = (config.value?.source_group_ids ?? []).filter(id => candidates.value.some(item => item.group.id === id))
   } catch (error) {
     if (generation === loadGeneration) errorMessage.value = errorText(error, 'categoryDefaults.loadFailed')
   } finally { if (generation === loadGeneration) loading.value = false }
@@ -206,6 +203,12 @@ async function buildPreview() {
   errorMessage.value = ''
   preview.value = null
   try {
+    candidates.value = await categoryDefaultGroupsAPI.candidates(category.value) ?? []
+    selectedIds.value = selectedIds.value.filter(id => candidates.value.some(item => item.group.id === id))
+    if (!selectedIds.value.length) {
+      errorMessage.value = t('categoryDefaults.selectionUnavailable')
+      return
+    }
     const result = await categoryDefaultGroupsAPI.preview(category.value, [...selectedIds.value])
     preview.value = { ...result, added: result.added ?? [], modified: result.modified ?? [], removed: result.removed ?? [], unchanged: result.unchanged ?? [], conflicts: result.conflicts ?? [] }
   } catch (error) { errorMessage.value = errorText(error, 'categoryDefaults.previewFailed') }
