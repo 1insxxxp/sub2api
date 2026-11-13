@@ -19,9 +19,6 @@
       ></iframe>
       <div v-if="iframeFailed" class="model-plaza-frame-error" role="alert" aria-live="polite">
         <span>{{ t('modelPlaza.loadFailed') }}</span>
-        <a :href="MODEL_PLAZA_EXTERNAL_URL" target="_blank" rel="noopener noreferrer">
-          {{ t('customPage.openInNewTab') }}
-        </a>
         <RouterLink :to="internalModelPlazaRoute">{{ t('modelPlaza.title') }}</RouterLink>
       </div>
     </section>
@@ -55,9 +52,6 @@
       ></iframe>
       <div v-if="iframeFailed" class="model-plaza-frame-error" role="alert" aria-live="polite">
         <span>{{ t('modelPlaza.loadFailed') }}</span>
-        <a :href="MODEL_PLAZA_EXTERNAL_URL" target="_blank" rel="noopener noreferrer">
-          {{ t('customPage.openInNewTab') }}
-        </a>
         <RouterLink :to="internalModelPlazaRoute">{{ t('modelPlaza.title') }}</RouterLink>
       </div>
     </main>
