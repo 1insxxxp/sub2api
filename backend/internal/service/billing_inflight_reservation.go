@@ -410,6 +410,8 @@ const (
 type InflightEstimateRequest struct {
 	Model     string
 	BodyBytes int
+	// Body carries the original request for token billing only. Fixed-price requests do not tokenize it.
+	Body      []byte
 	MaxTokens int
 	Kind      InflightEstimateKind
 	// Units 按次/按张数量（<=0 视为 1）。
@@ -591,6 +593,9 @@ func (d inflightEstimateDeps) estimateOne(ctx context.Context, apiKey *APIKey, m
 	inputTokens, outputTokens := tokenCounts(cfg, req.BodyBytes, req.MaxTokens)
 	priced := false
 	tokenCost := func() float64 {
+		if estimated, ok := estimateInflightInputTokens(model, req.Body); ok {
+			inputTokens = estimated
+		}
 		var pricing *ModelPricing
 		if resolved != nil && (resolved.Mode == BillingModeToken || resolved.Mode == "") && d.resolver != nil {
 			pricing = d.resolver.GetIntervalPricing(resolved, inputTokens)

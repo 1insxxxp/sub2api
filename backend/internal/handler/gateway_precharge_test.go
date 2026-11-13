@@ -5,6 +5,7 @@ package handler
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -55,7 +56,7 @@ func TestGatewayPrecharge_ExactFixedPriceCanCallUpstream(t *testing.T) {
 	}
 }
 
-func runGatewayPrecharge(t *testing.T, protocol string, mode service.BillingMode, balance float64) (*httptest.ResponseRecorder, *compatStreamUsageUpstream, *handlerInflightCache) {
+func runGatewayPrecharge(t *testing.T, protocol string, mode service.BillingMode, balance float64, metadata ...string) (*httptest.ResponseRecorder, *compatStreamUsageUpstream, *handlerInflightCache) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	cfg := &config.Config{}
@@ -108,6 +109,14 @@ func runGatewayPrecharge(t *testing.T, protocol string, mode service.BillingMode
 		path = "/v1beta/models/" + model + ":streamGenerateContent?alt=sse"
 		body = `{"contents":[{"role":"user","parts":[{"text":"hello"}]}],"generationConfig":{"maxOutputTokens":1000}}`
 	}
+	if len(metadata) > 0 {
+		var payload map[string]any
+		require.NoError(t, json.Unmarshal([]byte(body), &payload))
+		payload["metadata"] = metadata[0]
+		encoded, err := json.Marshal(payload)
+		require.NoError(t, err)
+		body = string(encoded)
+	}
 	recorder := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(recorder)
 	ctx := context.WithValue(context.Background(), ctxkey.Group, group)
@@ -127,4 +136,14 @@ func runGatewayPrecharge(t *testing.T, protocol string, mode service.BillingMode
 		h.ChatCompletions(c)
 	}
 	return recorder, upstream, cache
+}
+
+func TestGatewayPrecharge_MetadataDoesNotBlockTokenRequests(t *testing.T) {
+	for _, protocol := range []string{"chat", "messages", "responses"} {
+		t.Run(protocol, func(t *testing.T) {
+			response, upstream, _ := runGatewayPrecharge(t, protocol, service.BillingModeToken, 0.1, strings.Repeat("metadata", 300000))
+			require.Equal(t, 1, upstream.calls, response.Body.String())
+			require.NotContains(t, response.Body.String(), "余额不足")
+		})
+	}
 }
