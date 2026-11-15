@@ -160,8 +160,8 @@ func TestModelStatusReportScopesSummaryAndPreservesTemporarilyLimitedModels(t *t
 	data, err := json.Marshal(report)
 	require.NoError(t, err)
 	require.Contains(t, string(data), `"recent_limit":30`)
-	require.Contains(t, string(data), `"bucket_count":20`)
-	require.Contains(t, string(data), `"bucket_interval_minutes":15`)
+	require.Contains(t, string(data), `"bucket_count":48`)
+	require.Contains(t, string(data), `"bucket_interval_minutes":30`)
 	for _, group := range report.Groups {
 		for _, model := range group.Models {
 			require.Len(t, model.Buckets, ModelStatusBucketCount)
@@ -314,6 +314,20 @@ func TestModelStatusErrorsDoNotFabricateEmptyHealthyReport(t *testing.T) {
 	require.False(t, strings.Contains(err.Error(), "healthy"))
 }
 
+func TestModelStatusReturnsStaleSnapshotWhenRefreshFails(t *testing.T) {
+	groups, accounts := modelStatusFixtures()
+	repo := &modelStatusRepoStub{err: errors.New("database unavailable")}
+	svc := NewModelStatusService(repo, groups, accounts, nil)
+	svc.cached = &ModelStatusReport{Groups: []ModelStatusGroup{{ID: 1, Name: "Public A", Platform: PlatformOpenAI}}}
+	svc.cachedAt = time.Now().Add(-modelStatusCacheTTL - time.Second)
+
+	report, err := svc.Report(context.Background())
+
+	require.NoError(t, err)
+	require.NotNil(t, report)
+	require.Len(t, report.Groups, 1)
+}
+
 func TestModelStatusSummaryWeightsLatencyBySamples(t *testing.T) {
 	groups, accounts := modelStatusFixtures()
 	repo := &modelStatusRepoStub{rows: []ModelStatusAggregate{
@@ -332,7 +346,7 @@ func TestModelStatusInitialCatalogReadHasBoundedDeadline(t *testing.T) {
 	var bounded bool
 	groups.onList = func(ctx context.Context) {
 		deadline, ok := ctx.Deadline()
-		bounded = ok && time.Until(deadline) <= 10*time.Second
+		bounded = ok && time.Until(deadline) <= 30*time.Second
 	}
 	_, err := NewModelStatusService(&modelStatusRepoStub{}, groups, accounts, nil).Report(context.Background())
 	require.NoError(t, err)

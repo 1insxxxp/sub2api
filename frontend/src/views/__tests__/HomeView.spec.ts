@@ -90,6 +90,17 @@ const mountHome = async () => {
         LocaleSwitcher: {
           template: '<button type="button">Locale</button>',
         },
+        RelayScene: {
+          props: ['dark', 'paused'],
+          template: '<div data-testid="relay-scene" :data-dark="dark" :data-paused="paused" />',
+        },
+        AnimationToggle: {
+          props: ['paused'],
+          template: '<button type="button" data-testid="animation-toggle" />',
+        },
+        WechatServiceButton: {
+          template: '<div data-testid="wechat-service" />',
+        },
         RouterLink: {
           props: ['to'],
           template: '<a :href="typeof to === \'string\' ? to : \'#\'"><slot /></a>',
@@ -151,8 +162,33 @@ describe('HomeView default homepage', () => {
     expect(wrapper.find('.home-minimal-root').exists()).toBe(true)
     expect(wrapper.find('.home-minimal-header').classes()).toContain('fixed')
     expect(wrapper.find('.home-minimal-logo').exists()).toBe(true)
-    expect(wrapper.find('.home-minimal-orb').exists()).toBe(true)
+    expect(wrapper.find('.home-relay-stage').exists()).toBe(true)
     expect(wrapper.findAll('.home-minimal-reveal').length).toBeGreaterThanOrEqual(6)
+  })
+
+  it('animates between the solar and cosmic homepage themes', async () => {
+    vi.useFakeTimers()
+    const wrapper = await mountHome()
+    const root = wrapper.get('.home-minimal-root')
+    const themeButton = wrapper.get('button[title="Switch to Dark Mode"]')
+
+    expect(root.attributes('data-theme')).toBe('solar')
+    expect(root.classes()).not.toContain('home-theme-transitioning')
+
+    await themeButton.trigger('click')
+    await wrapper.vm.$nextTick()
+
+    expect(appStoreState.setTheme).toHaveBeenCalledWith(true)
+    expect(root.attributes('data-theme')).toBe('cosmic')
+    expect(root.classes()).toContain('home-theme-transitioning')
+    expect(root.find('.home-theme-transition').classes()).toContain('is-active')
+
+    vi.advanceTimersByTime(760)
+    await wrapper.vm.$nextTick()
+    expect(root.classes()).not.toContain('home-theme-transitioning')
+
+    wrapper.unmount()
+    vi.useRealTimers()
   })
 
   it('uses a transparent navigation shell for the homepage header', async () => {
@@ -166,7 +202,7 @@ describe('HomeView default homepage', () => {
     expect(source).toContain('home-minimal-root')
     expect(source).toContain('home-minimal-header')
     expect(source).toContain('home-minimal-hero')
-    expect(source).toContain('home-minimal-orb')
+    expect(source).toContain('home-relay-stage')
     expect(source).toContain('home-minimal-primary')
     expect(source).toContain('home-minimal-reveal')
     expect(styleSource).toContain('.home-minimal-root')
@@ -203,11 +239,10 @@ describe('HomeView default homepage', () => {
     expect(source).toContain('--home-motion-ease')
     expect(source).toContain('home-minimal-rise')
     expect(source).toContain('calc(80ms + (var(--motion-index) * 90ms))')
-    expect(source).toContain('@keyframes home-orb-float')
     expect(source).toContain('@keyframes home-grid-pan')
     expect(source).toContain('home-grid-pan 22s linear infinite')
-    expect(source).toContain('@keyframes home-orb-spin')
-    expect(source).toContain('home-orb-track')
+    expect(source).toContain('RelayScene')
+    expect(source).toContain('home-relay-stage')
   })
 
   it('uses the blue-slate-cyan technology palette as the primary theme', () => {

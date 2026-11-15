@@ -13,14 +13,18 @@ import (
 )
 
 const (
-	modelStatusCacheTTL       = 15 * time.Second
-	modelStatusQueryTimeout   = 10 * time.Second
-	modelStatusHealthyRate    = 99
-	modelStatusDegradedRate   = 80
-	ModelStatusRecentLimit    = 30
-	ModelStatusBucketCount    = 20
-	ModelStatusBucketInterval = 15 * time.Minute
-	ModelStatusWindow         = ModelStatusBucketCount * ModelStatusBucketInterval
+	// The report aggregates a rolling 24-hour window. Keep a completed snapshot
+	// warm long enough for page refreshes to reuse it instead of retriggering the
+	// expensive full-window query every poll.
+	modelStatusCacheTTL           = 5 * time.Minute
+	modelStatusQueryTimeout       = 30 * time.Second
+	modelStatusHealthyRate        = 99
+	modelStatusDegradedRate       = 80
+	ModelStatusRecentLimit        = 30
+	ModelStatusBucketRequestLimit = 10
+	ModelStatusBucketCount        = 48
+	ModelStatusBucketInterval     = 30 * time.Minute
+	ModelStatusWindow             = ModelStatusBucketCount * ModelStatusBucketInterval
 )
 
 type ModelStatusHealth string
@@ -53,7 +57,7 @@ type ModelStatusRecent struct {
 	StatusCode int                `json:"status_code,omitempty"`
 }
 
-// ModelStatusBucket is one fixed 15-minute interval in the rolling report window.
+// ModelStatusBucket is one fixed 30-minute interval in the rolling report window.
 type ModelStatusBucket struct {
 	StartAt  time.Time           `json:"start_at"`
 	EndAt    time.Time           `json:"end_at"`
@@ -147,6 +151,10 @@ func (s *ModelStatusService) Report(ctx context.Context) (*ModelStatusReport, er
 	if report := s.loadCached(); report != nil {
 		return filterModelStatusReport(report, groups), nil
 	}
+	if report := s.loadStale(); report != nil {
+		s.refreshInBackground(groups)
+		return filterModelStatusReport(report, groups), nil
+	}
 	result := s.flight.DoChan("report", func() (any, error) {
 		if report := s.loadCached(); report != nil {
 			return report, nil
@@ -164,9 +172,15 @@ func (s *ModelStatusService) Report(ctx context.Context) (*ModelStatusReport, er
 	})
 	select {
 	case <-ctx.Done():
+		if report := s.loadStale(); report != nil {
+			return filterModelStatusReport(report, groups), nil
+		}
 		return nil, ctx.Err()
 	case result := <-result:
 		if result.Err != nil {
+			if report := s.loadStale(); report != nil {
+				return filterModelStatusReport(report, groups), nil
+			}
 			return nil, result.Err
 		}
 		report, ok := result.Val.(*ModelStatusReport)
@@ -184,6 +198,32 @@ func (s *ModelStatusService) loadCached() *ModelStatusReport {
 		return s.cached
 	}
 	return nil
+}
+
+func (s *ModelStatusService) loadStale() *ModelStatusReport {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.cached
+}
+
+func (s *ModelStatusService) refreshInBackground(groups []Group) {
+	go func() {
+		_, _, _ = s.flight.Do("report", func() (any, error) {
+			if report := s.loadCached(); report != nil {
+				return report, nil
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), modelStatusQueryTimeout)
+			defer cancel()
+			report, err := s.buildReport(ctx, groups)
+			if err != nil {
+				return nil, err
+			}
+			s.mu.Lock()
+			s.cached, s.cachedAt = report, time.Now()
+			s.mu.Unlock()
+			return report, nil
+		})
+	}()
 }
 
 func (s *ModelStatusService) buildReport(ctx context.Context, groups []Group) (*ModelStatusReport, error) {
@@ -280,7 +320,7 @@ func applyModelStatusAggregates(report *ModelStatusReport, rows []ModelStatusAgg
 }
 
 func emptyModelStatusBuckets(end time.Time) []ModelStatusBucket {
-	// Keep the current partial bucket visible while retaining exactly 20 buckets.
+	// Keep the current partial bucket visible while retaining exactly 48 buckets.
 	start := end.Truncate(ModelStatusBucketInterval).Add(-ModelStatusWindow + ModelStatusBucketInterval)
 	buckets := make([]ModelStatusBucket, ModelStatusBucketCount)
 	for i := range buckets {

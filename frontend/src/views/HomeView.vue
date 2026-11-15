@@ -16,8 +16,15 @@
   <div
     v-else-if="compactHomeEnabled"
     data-testid="compact-home"
+    :class="{ 'home-theme-transitioning': isThemeTransitioning }"
+    :data-theme="isDark ? 'cosmic' : 'solar'"
     class="flex min-h-screen flex-col bg-gray-50 text-gray-900 dark:bg-dark-950 dark:text-white"
   >
+    <div
+      class="home-theme-transition pointer-events-none fixed inset-0 z-[60]"
+      :class="{ 'is-active': isThemeTransitioning }"
+      aria-hidden="true"
+    ></div>
     <header class="border-b border-gray-200 px-4 py-4 sm:px-6 dark:border-dark-800">
       <nav class="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 sm:gap-4">
         <div class="flex min-w-0 flex-1 items-center gap-3">
@@ -97,9 +104,16 @@
   <div
     v-else
     class="home-minimal-root home-tech-root home-new-layout min-h-screen overflow-x-hidden bg-slate-100 text-slate-950 dark:bg-[#050914] dark:text-white"
+    :class="{ 'home-theme-transitioning': isThemeTransitioning }"
+    :data-theme="isDark ? 'cosmic' : 'solar'"
   >
     <div class="home-minimal-grid pointer-events-none absolute inset-0" aria-hidden="true"></div>
     <div class="home-tech-noise pointer-events-none absolute inset-0" aria-hidden="true"></div>
+    <div
+      class="home-theme-transition pointer-events-none fixed inset-0 z-[60]"
+      :class="{ 'is-active': isThemeTransitioning }"
+      aria-hidden="true"
+    ></div>
     <header
       class="home-minimal-header fixed inset-x-0 top-0 z-30 border-b border-transparent px-4 py-3 transition-all duration-300 sm:px-6"
       :class="{ 'home-minimal-header-scrolled': isHeaderScrolled }"
@@ -154,20 +168,12 @@
     </header>
 
     <main class="relative z-10">
-      <section class="home-minimal-hero home-tech-stage home-new-hero mx-auto grid min-h-[calc(100vh-6rem)] w-full max-w-7xl items-center gap-12 overflow-hidden px-5 pb-16 pt-32 sm:px-8 lg:grid-cols-[1.05fr_0.95fr] lg:gap-8 lg:px-12 lg:pb-24 lg:pt-36">
-        <div class="home-minimal-orb pointer-events-none absolute right-[5%] top-[13rem] h-[34rem] w-[34rem] rounded-full" aria-hidden="true">
-          <div class="home-orb-sphere">
-            <div class="home-orb-surface"></div>
-          </div>
-          <div class="home-orb-orbit">
-            <div class="home-orb-track"></div>
-          </div>
-          <div class="home-orb-orbit home-orb-orbit-cross">
-            <div class="home-orb-track"></div>
-          </div>
+      <section class="home-minimal-hero home-tech-stage home-new-hero mx-0 grid min-h-[calc(100vh-6rem)] w-full max-w-none items-center gap-12 overflow-hidden px-5 pb-16 pt-32 sm:px-8 lg:grid-cols-[1.05fr_0.95fr] lg:gap-8 lg:px-12 lg:pb-24 lg:pt-36">
+        <div class="home-relay-stage pointer-events-none absolute inset-0" aria-hidden="true">
+          <RelayScene :dark="isDark" />
         </div>
         <div class="relative z-10 max-w-2xl">
-          <p class="home-minimal-reveal mb-6 inline-flex items-center gap-2 rounded-full border border-cyan-300/25 bg-cyan-300/[0.08] px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-[0.24em] text-cyan-200" style="--motion-index: 0">
+          <p class="home-minimal-reveal mb-6 inline-flex items-center gap-2 rounded-full border border-cyan-300/25 bg-cyan-300/[0.08] px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-[0.24em] text-blue-600 dark:text-cyan-200" style="--motion-index: 0">
             <span class="home-tech-live-dot h-1.5 w-1.5 rounded-full bg-cyan-300"></span>
             {{ t('home.hero.eyebrow') }}
           </p>
@@ -203,32 +209,28 @@
           </div>
         </div>
 
-        <div class="home-minimal-reveal home-tech-console relative z-10 mx-auto w-full max-w-xl" style="--motion-index: 2">
+        <div class="home-minimal-reveal home-tech-console pointer-events-auto relative z-10 mx-auto w-full max-w-md lg:absolute lg:bottom-20 lg:right-12 lg:mx-0 lg:max-w-sm" style="--motion-index: 2">
           <div class="home-tech-console-glow"></div>
-          <div class="relative overflow-hidden rounded-3xl border border-white/15 bg-[#0b1424] shadow-2xl shadow-cyan-950/40 backdrop-blur-xl">
-            <div class="flex items-center justify-between border-b border-white/10 px-5 py-4">
-              <div class="flex items-center gap-2 text-xs font-semibold tracking-[0.18em] text-slate-300"><span class="home-tech-live-dot h-2 w-2 rounded-full bg-emerald-300"></span>{{ t('home.integration.consoleStatus') }}</div>
-              <div class="flex gap-1.5"><span class="h-2 w-2 rounded-full bg-white/20"></span><span class="h-2 w-2 rounded-full bg-white/20"></span><span class="h-2 w-2 rounded-full bg-white/20"></span></div>
+          <div
+            class="home-relay-overlay relative overflow-hidden rounded-2xl border border-white/15 shadow-2xl shadow-cyan-950/40 backdrop-blur-xl"
+            :class="isDark ? 'bg-[#0b1424]/85' : 'bg-white/75'"
+          >
+            <div class="flex items-center justify-between border-b border-white/10 px-4 py-2.5">
+              <div class="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400"><span class="home-tech-live-dot h-1.5 w-1.5 rounded-full bg-emerald-300"></span>{{ t('home.integration.consoleStatus') }}</div>
             </div>
-            <div class="space-y-5 p-5 sm:p-7">
-              <div class="rounded-2xl border border-cyan-200/15 bg-[#0d1b2d] p-4 font-mono text-xs leading-6 text-cyan-100 sm:text-sm">
-                <div class="text-slate-500">$ {{ t('home.integration.requestLabel') }}</div>
-                <div><span class="text-fuchsia-300">POST</span> <span class="text-slate-200">/v1/chat/completions</span></div>
-                <div class="text-slate-400">{{ t('home.integration.modelLabel') }}: <span class="text-cyan-200">your-model</span></div>
-                <div class="mt-1 text-emerald-300">✓ {{ t('home.integration.routedLabel') }}</div>
+            <div class="space-y-3 p-4">
+              <div class="home-minimal-connection flex items-center gap-2.5 rounded-xl border border-cyan-200/20 bg-cyan-300/[0.04] px-3.5 py-2.5 text-xs text-slate-300">
+                <span class="min-w-0 flex-1 truncate font-mono text-[11px]">{{ apiEndpoint }}</span>
+                <span class="whitespace-nowrap text-[10px] text-slate-500">Base URL</span>
               </div>
-              <div class="grid gap-3 sm:grid-cols-3">
-                <div v-for="(item, index) in valueItems" :key="item.title" class="home-tech-route-card rounded-2xl border border-white/10 bg-white/[0.045] p-3" :style="{ '--route-index': index }">
-                  <div class="flex items-center justify-between"><span class="flex h-7 w-7 items-center justify-center rounded-lg bg-white/10 text-cyan-200"><Icon :name="item.icon" size="xs" /></span><span class="home-tech-route-pulse h-1.5 w-1.5 rounded-full bg-cyan-300"></span></div>
-                  <p class="mt-3 truncate text-xs font-medium text-slate-200">{{ item.title }}</p>
-                  <p class="mt-1 text-[10px] tracking-[0.16em] text-slate-500">{{ t('home.integration.onlineLabel') }}</p>
+              <div class="grid grid-cols-3 gap-2">
+                <div v-for="(item, index) in valueItems.slice(0, 3)" :key="item.title" class="home-tech-route-card rounded-xl border border-white/10 bg-white/[0.03] p-2.5" :style="{ '--route-index': index }">
+                  <div class="flex items-center justify-between mb-2">
+                    <span class="flex h-6 w-6 items-center justify-center rounded-lg bg-white/10 text-cyan-200"><Icon :name="item.icon" size="xs" /></span>
+                    <span class="home-tech-route-pulse h-1 w-1 rounded-full bg-emerald-300"></span>
+                  </div>
+                  <p class="truncate text-[10px] font-medium text-slate-300">{{ item.title }}</p>
                 </div>
-              </div>
-              <div class="home-minimal-connection flex items-center gap-3 rounded-2xl border border-cyan-200/20 bg-cyan-300/[0.05] px-4 py-3 text-xs text-slate-300">
-                <span class="home-minimal-connection-dot h-2 w-2 shrink-0 rounded-full bg-cyan-300"></span>
-                <span class="min-w-0 truncate font-mono">{{ apiEndpoint }}</span>
-                <span class="h-4 w-px bg-white/15"></span>
-                <span class="whitespace-nowrap text-slate-400">{{ t('home.integration.replaceBaseUrl') }}</span>
               </div>
             </div>
           </div>
@@ -277,7 +279,9 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore, useAppStore } from '@/stores'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
+import WechatServiceButton from '@/components/common/WechatServiceButton.vue'
 import Icon from '@/components/icons/Icon.vue'
+import RelayScene from '@/components/home/RelayScene.vue'
 import { sanitizeUrl } from '@/utils/url'
 import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
 
@@ -314,8 +318,10 @@ const isHomeContentUrl = computed(() => {
 })
 
 const isDark = ref(document.documentElement.classList.contains('dark'))
+const isThemeTransitioning = ref(false)
 const isHeaderScrolled = ref(false)
 let revealObserver: IntersectionObserver | null = null
+let themeTransitionTimer: number | null = null
 
 const isAuthenticated = computed(() => authStore.isAuthenticated)
 const modelPlazaRequiresAuth = computed(
@@ -357,8 +363,24 @@ const workflowItems = computed(() => [
 ])
 
 function toggleTheme() {
-  isDark.value = !isDark.value
-  appStore.setTheme(isDark.value)
+  const nextTheme = !isDark.value
+  isDark.value = nextTheme
+  isThemeTransitioning.value = true
+  appStore.setTheme(nextTheme)
+
+  if (themeTransitionTimer) {
+    window.clearTimeout(themeTransitionTimer)
+  }
+  const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+  if (reducedMotion) {
+    isThemeTransitioning.value = false
+    themeTransitionTimer = null
+    return
+  }
+  themeTransitionTimer = window.setTimeout(() => {
+    isThemeTransitioning.value = false
+    themeTransitionTimer = null
+  }, 760)
 }
 
 function initTheme() {
@@ -368,6 +390,7 @@ function initTheme() {
     (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)
   document.documentElement.classList.toggle('dark', shouldUseDark)
   isDark.value = shouldUseDark
+  isThemeTransitioning.value = false
   appStore.syncThemeFromDocument()
 }
 
@@ -408,6 +431,10 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('scroll', syncHeaderScrolled)
+  if (themeTransitionTimer) {
+    window.clearTimeout(themeTransitionTimer)
+    themeTransitionTimer = null
+  }
   revealObserver?.disconnect()
   revealObserver = null
 })
@@ -418,6 +445,7 @@ onBeforeUnmount(() => {
   --home-motion-ease: cubic-bezier(0.16, 1, 0.3, 1);
   position: relative;
   isolation: isolate;
+  transition: color 680ms var(--home-motion-ease), background-color 680ms var(--home-motion-ease);
 }
 
 .home-tech-root {
@@ -427,7 +455,9 @@ onBeforeUnmount(() => {
 .home-new-layout {
   background:
     radial-gradient(circle at 12% 18%, rgba(6, 182, 212, 0.1), transparent 28rem),
-    linear-gradient(180deg, #f8fbff 0%, #f1f6ff 44%, #eef9fb 100%);
+    radial-gradient(circle at 88% 4%, rgba(251, 191, 36, 0.12), transparent 24rem),
+    linear-gradient(180deg, #fffdf8 0%, #f4f8ff 44%, #edfaff 100%);
+  transition: background-color 680ms ease, opacity 680ms ease;
 }
 
 .dark .home-new-layout {
@@ -436,8 +466,8 @@ onBeforeUnmount(() => {
 
 .home-tech-noise {
   z-index: 0;
-  opacity: 0.22;
-  background-image: radial-gradient(rgba(37, 99, 235, 0.24) 0.7px, transparent 0.7px);
+  opacity: 0.08;
+  background-image: radial-gradient(rgba(37, 99, 235, 0.12) 0.5px, transparent 0.5px);
   background-size: 18px 18px;
   mask-image: linear-gradient(to bottom, black, transparent 70%);
 }
@@ -446,20 +476,18 @@ onBeforeUnmount(() => {
   position: relative;
   isolation: isolate;
   border-radius: 0 0 2.5rem 2.5rem;
-  background:
-    radial-gradient(circle at 78% 44%, rgba(14, 165, 233, 0.2), transparent 30%),
-    radial-gradient(circle at 20% 20%, rgba(79, 70, 229, 0.24), transparent 36%),
-    linear-gradient(125deg, #050a15 0%, #0a1426 50%, #071c2d 100%);
-  box-shadow: 0 28px 90px rgba(15, 23, 42, 0.2);
+  box-shadow: 0 28px 90px rgba(15, 23, 42, 0.12);
+  transition: box-shadow 680ms ease, filter 680ms ease;
 }
 
 .home-new-hero {
   border-radius: 0;
   background:
-    radial-gradient(circle at 78% 42%, rgba(14, 165, 233, 0.14), transparent 31%),
-    radial-gradient(circle at 18% 18%, rgba(37, 99, 235, 0.12), transparent 28%),
-    linear-gradient(180deg, rgba(248, 251, 255, 0.96), rgba(239, 247, 255, 0.86));
+    radial-gradient(circle at 78% 42%, rgba(14, 165, 233, 0.2), transparent 31%),
+    radial-gradient(circle at 20% 18%, rgba(251, 191, 36, 0.18), transparent 30%),
+    linear-gradient(180deg, rgba(255, 253, 248, 0.98), rgba(239, 248, 255, 0.9));
   box-shadow: none;
+  transition: background-color 680ms ease, box-shadow 680ms ease, filter 680ms ease;
 }
 
 .dark .home-new-hero {
@@ -467,6 +495,21 @@ onBeforeUnmount(() => {
     radial-gradient(circle at 78% 42%, rgba(37, 99, 235, 0.22), transparent 31%),
     radial-gradient(circle at 18% 18%, rgba(236, 72, 153, 0.12), transparent 28%),
     linear-gradient(180deg, rgba(8, 13, 22, 0.96), rgba(13, 23, 35, 0.94));
+}
+
+.home-theme-transition {
+  opacity: 0;
+  background:
+    radial-gradient(circle at 50% 48%, rgba(255, 247, 206, 0.8), transparent 24%),
+    radial-gradient(circle at 78% 42%, rgba(56, 189, 248, 0.45), transparent 36%);
+  mix-blend-mode: screen;
+  transform: scale(0.96);
+  transition: opacity 180ms ease, transform 760ms var(--home-motion-ease);
+}
+
+.home-theme-transition.is-active {
+  opacity: 1;
+  animation: home-theme-flare 760ms var(--home-motion-ease) both;
 }
 
 .home-new-hero h1 {
@@ -503,19 +546,25 @@ onBeforeUnmount(() => {
   background-image: linear-gradient(rgba(125, 211, 252, 0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(125, 211, 252, 0.08) 1px, transparent 1px);
   background-size: 54px 54px;
   mask-image: linear-gradient(to bottom, black 0%, transparent 85%);
+  pointer-events: none;
 }
 
-.home-tech-stage .home-orb-sphere {
-  background: #0d2a4a;
-  box-shadow: 0 0 80px rgba(34, 211, 238, 0.22);
+.home-relay-stage {
+  z-index: 1;
+  mask-image: linear-gradient(90deg, transparent 0%, rgba(0, 0, 0, 0.35) 28%, black 52%, black 100%);
 }
 
-.home-tech-stage .home-orb-surface {
-  opacity: 0.5;
+.home-relay-overlay {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(239, 248, 255, 0.48)),
+    rgba(255, 255, 255, 0.34);
+  transition: background 680ms ease, border-color 680ms ease, box-shadow 680ms ease;
 }
 
-.home-tech-stage .home-orb-sphere::after {
-  background: radial-gradient(circle at 30% 22%, rgba(125, 211, 252, 0.28), transparent 45%, rgba(2, 6, 23, 0.7));
+.dark .home-relay-overlay {
+  background:
+    linear-gradient(180deg, rgba(11, 20, 36, 0.72), rgba(11, 20, 36, 0.46)),
+    rgba(11, 20, 36, 0.42);
 }
 
 .home-tech-live-dot {
@@ -603,108 +652,6 @@ onBeforeUnmount(() => {
     linear-gradient(rgba(96, 165, 250, 0.07) 1px, transparent 1px),
     linear-gradient(90deg, rgba(96, 165, 250, 0.07) 1px, transparent 1px);
   opacity: 0.4;
-}
-
-.home-minimal-orb {
-  z-index: 1;
-  transform: translate(0, -3%) scale(1);
-  animation: home-orb-float 10s ease-in-out infinite alternate;
-  opacity: 0.92;
-  mix-blend-mode: screen;
-}
-
-.home-orb-sphere {
-  position: absolute;
-  inset: 9%;
-  overflow: hidden;
-  border-radius: 50%;
-  background: #e0f2fe;
-  box-shadow: 0 0 64px rgba(56, 189, 248, 0.18);
-}
-
-.home-orb-surface {
-  position: absolute;
-  inset: -12%;
-  border-radius: 50%;
-  background: conic-gradient(
-    from 25deg,
-    #effaff 0deg,
-    #60a5fa 75deg,
-    #cffafe 125deg,
-    #f0f9ff 185deg,
-    #38bdf8 250deg,
-    #bfdbfe 300deg,
-    #effaff 360deg
-  );
-  opacity: 0.72;
-  filter: blur(8px);
-  animation: home-orb-spin 8s linear infinite;
-}
-
-.home-orb-sphere::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background:
-    radial-gradient(circle at 32% 22%, rgba(255, 255, 255, 0.85), transparent 52%),
-    radial-gradient(circle at 50% 45%, transparent 45%, rgba(37, 99, 235, 0.14) 85%, rgba(255, 255, 255, 0.75));
-}
-
-.home-orb-orbit {
-  position: absolute;
-  inset: -8%;
-  transform: rotate(-24deg) scaleY(0.48);
-}
-
-.home-orb-orbit-cross {
-  inset: -1%;
-  transform: rotate(58deg) scaleY(0.62);
-}
-
-.home-orb-track {
-  position: absolute;
-  inset: 0;
-  border: 1px solid rgba(59, 130, 246, 0.25);
-  border-top: 2px solid rgba(14, 165, 233, 0.7);
-  border-radius: 50%;
-  animation: home-orb-spin 6s linear infinite;
-}
-
-.home-orb-track::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 50%;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: #0ea5e9;
-  box-shadow: 0 0 0 5px rgba(56, 189, 248, 0.14), 0 0 22px rgba(14, 165, 233, 0.65);
-  transform: translate(-50%, -50%);
-}
-
-.home-orb-orbit-cross .home-orb-track {
-  border-top-color: rgba(6, 182, 212, 0.7);
-  animation-duration: 10s;
-  animation-direction: reverse;
-}
-
-.home-orb-orbit-cross .home-orb-track::before {
-  background: #06b6d4;
-}
-
-.dark .home-orb-sphere {
-  background: #0c2449;
-  box-shadow: 0 0 64px rgba(37, 99, 235, 0.15);
-}
-
-.dark .home-orb-surface {
-  opacity: 0.4;
-}
-
-.dark .home-orb-sphere::after {
-  background: radial-gradient(circle at 32% 22%, rgba(147, 197, 253, 0.14), transparent 48%, rgba(2, 6, 23, 0.6));
 }
 
 .home-minimal-header {
@@ -835,16 +782,6 @@ onBeforeUnmount(() => {
   to { transform: translate3d(2%, 1%, 0); }
 }
 
-@keyframes home-orb-float {
-  from { transform: translate(0, -3%) scale(0.98); }
-  to { transform: translate(0, 3%) scale(1.02); }
-}
-
-@keyframes home-orb-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
 @keyframes home-status-glow {
   70% { box-shadow: 0 0 0 10px rgba(34, 211, 238, 0); }
   100% { box-shadow: 0 0 0 0 rgba(34, 211, 238, 0); }
@@ -853,6 +790,21 @@ onBeforeUnmount(() => {
 @keyframes home-steps-breathe {
   0%, 100% { box-shadow: 0 0 0 rgba(59, 130, 246, 0); }
   50% { box-shadow: 0 14px 40px rgba(59, 130, 246, 0.08); }
+}
+
+@keyframes home-theme-flare {
+  0% {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  34% {
+    opacity: 0.92;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.06);
+  }
 }
 
 @keyframes home-route-pulse {
@@ -866,12 +818,9 @@ onBeforeUnmount(() => {
     padding-bottom: 0.65rem;
   }
 
-  .home-minimal-orb {
-    top: 34%;
-    right: -48%;
-    height: 21rem;
-    width: 21rem;
-    opacity: 0.28;
+  .home-relay-stage {
+    mask-image: linear-gradient(180deg, transparent 8%, black 42%, black 100%);
+    opacity: 0.72;
   }
 
   .home-minimal-grid {
@@ -889,10 +838,6 @@ onBeforeUnmount(() => {
   .home-minimal-grid,
   .home-tech-route-card,
   .home-minimal-root::after,
-  .home-minimal-orb,
-  .home-orb-surface,
-  .home-orb-track,
-  .home-orb-orbit-cross .home-orb-track,
   .home-minimal-reveal,
   .home-minimal-connection-dot {
     animation: none;
@@ -909,6 +854,11 @@ onBeforeUnmount(() => {
   .home-minimal-card,
   .home-minimal-steps,
   .home-scroll-reveal {
+    transition: none;
+  }
+
+  .home-theme-transition {
+    animation: none;
     transition: none;
   }
 

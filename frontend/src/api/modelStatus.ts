@@ -59,7 +59,7 @@ export interface ModelStatusResponse {
 }
 
 // Public statistics must not refresh, clear, or redirect a user's auth session.
-const publicClient = axios.create({ baseURL: getAPIBaseURL(), timeout: 20000, withCredentials: false })
+const publicClient = axios.create({ baseURL: getAPIBaseURL(), timeout: 35000, withCredentials: false })
 
 export async function getModelStatus(options?: { signal?: AbortSignal }): Promise<ModelStatusResponse> {
   const { data } = await publicClient.get<ApiResponse<ModelStatusResponse>>('/model-status', {

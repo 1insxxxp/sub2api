@@ -46,7 +46,7 @@
         <!-- Model Plaza Entry (icon only below sm) -->
         <router-link
           v-if="user && modelPlazaEnabled"
-          :to="{ path: '/model-plaza', query: { embedded: '1' } }"
+          to="/model-plaza"
           data-test="header-model-plaza-link"
           :aria-label="t('nav.modelPlaza')"
           :title="t('nav.modelPlaza')"

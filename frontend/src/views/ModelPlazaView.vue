@@ -80,7 +80,8 @@ const { t } = useI18n()
 
 // embedded=1 但未登录(如转发的链接)自动降级为独立形态。
 const isEmbedded = computed(() => route.query.embedded === '1' && authStore.isAuthenticated)
-const useExternalModelSquare = computed(() => route.query.source !== 'internal')
+// 模型广场使用当前应用自己的独立路由页面，避免在侧边栏入口内嵌外部页面。
+const useExternalModelSquare = computed(() => false)
 const internalModelPlazaRoute = computed(() => ({
   path: route.path,
   query: { ...route.query, source: 'internal' },

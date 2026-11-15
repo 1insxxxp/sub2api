@@ -52,7 +52,7 @@ func TestModelStatusRepositoryBatchesLargeScopeSets(t *testing.T) {
 	mock.ExpectQuery("WITH").WillReturnRows(row(2, "model-2"))
 	mock.ExpectRollback()
 
-	scopes := make([]service.ModelStatusScope, 101)
+	scopes := make([]service.ModelStatusScope, 501)
 	for i := range scopes {
 		scopes[i] = service.ModelStatusScope{GroupID: int64(i + 1), Platform: "openai", Model: "model"}
 	}
@@ -82,7 +82,7 @@ INSERT INTO usage_logs (group_id, api_key_id, request_id, requested_model, model
  (3,33,'private','shared','mapped-private','2026-09-06 11:56:07Z',7),
  (1,11,'hidden-model','hidden','mapped-private','2026-09-06 11:56:08Z',7),
  (4,44,'composite','shared','mapped-private','2026-09-06 11:56:09Z',7),
- (1,11,'old','shared','mapped-private','2026-09-06 11:44:59.999Z',7),
+ (1,11,'old','shared','mapped-private','2026-09-05 12:29:59.999Z',7),
  (1,11,'future','shared','mapped-private','2026-09-06 12:00:00Z',7),
  (1,11,'','shared','mapped-private','2026-09-06 11:56:10Z',7),
  (1,11,'','shared','mapped-private','2026-09-06 11:56:11Z',7);
@@ -144,7 +144,7 @@ INSERT INTO ops_error_logs (group_id, api_key_id, request_id, requested_model, c
 	var bucketTotal int64
 	for _, bucket := range byGroup[1].Buckets {
 		bucketTotal += bucket.Total
-		require.LessOrEqual(t, len(bucket.Requests), 100)
+		require.LessOrEqual(t, len(bucket.Requests), service.ModelStatusBucketRequestLimit)
 		for i := 1; i < len(bucket.Requests); i++ {
 			require.False(t, bucket.Requests[i].At.After(bucket.Requests[i-1].At))
 		}
@@ -336,7 +336,7 @@ INSERT INTO ops_error_logs (group_id, api_key_id, request_id, client_request_id,
 	require.WithinDuration(t, end.Add(-time.Millisecond), rows[0].Recent[2].At, 0)
 }
 
-func TestModelStatusPostgresUsesFiveHourWindow(t *testing.T) {
+func TestModelStatusPostgresUses24HourWindow(t *testing.T) {
 	db := modelStatusTestPostgres(t)
 	end := time.Date(2026, 9, 6, 12, 0, 0, 0, time.UTC)
 	_, err := db.Exec(`
@@ -480,7 +480,7 @@ CREATE INDEX test_error_client_identity ON ops_error_logs (client_request_id);
 	end := time.Date(2026, 9, 6, 12, 0, 0, 0, time.UTC)
 	var raw []byte
 	err = db.QueryRow("EXPLAIN (ANALYZE, FORMAT JSON) "+modelStatusAggregateSQL,
-		`[{"group_id":1,"platform":"openai","model":"shared"}]`, end, 30).Scan(&raw)
+		`[{"group_id":1,"platform":"openai","model":"shared"}]`, end, modelStatusWindowStart(end), 30).Scan(&raw)
 	require.NoError(t, err)
 	var plan any
 	require.NoError(t, json.Unmarshal(raw, &plan))

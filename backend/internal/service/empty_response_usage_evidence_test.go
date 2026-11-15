@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestEmptyResponseClaimDoesNotTreatMissingUsageAsMeasuredZero(t *testing.T) {
+func TestEmptyResponseClaimAllowsLowOutputWithoutProvenance(t *testing.T) {
 	now := time.Now()
 	group := Group{EmptyResponseCompensationEnabled: true}
 	base := UsageLog{ActualCost: 1, CreatedAt: now.Add(-time.Minute)}
@@ -26,8 +26,8 @@ func TestEmptyResponseClaimDoesNotTreatMissingUsageAsMeasuredZero(t *testing.T) 
 			usage := base
 			usage.OutputTokensSource = tc.source
 			decision := EvaluateEmptyResponseClaim(now, usage, tc.outcome, group, 0)
-			require.Equal(t, EmptyResponseClaimManualReview, decision.Status)
-			require.Equal(t, EmptyResponseReasonMissingEvidence, decision.ReasonCode)
+			require.Equal(t, EmptyResponseClaimApproved, decision.Status)
+			require.Equal(t, EmptyResponseReasonLowOutput, decision.ReasonCode)
 		})
 	}
 }

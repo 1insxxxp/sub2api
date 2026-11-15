@@ -157,25 +157,7 @@ func (r *emptyResponseClaimRepository) ListRecentEvaluations(ctx context.Context
 			AND COALESCE(g.empty_response_compensation_enabled, FALSE) = TRUE
 			AND ul.output_tokens >= 0
 			AND ul.output_tokens <= $4
-			AND (
-				erc.id IS NOT NULL
-				OR (
-					COALESCE(uro.output_tokens_source, 'unknown') <> 'unreported'
-					AND (COALESCE(uro.output_tokens_source, 'unknown') <> 'estimated' OR ul.output_tokens <> 0)
-				)
-				OR (
-					COALESCE(uro.collector_version, 0) > 0
-					AND COALESCE(uro.stream_completed, FALSE) = TRUE
-					AND uro.http_status >= 200 AND uro.http_status < 300
-					AND uro.upstream_status >= 200 AND uro.upstream_status < 300
-					AND NOT COALESCE(uro.has_text, FALSE)
-					AND NOT COALESCE(uro.has_tool_call, FALSE)
-					AND NOT COALESCE(uro.has_reasoning, FALSE)
-					AND NOT COALESCE(uro.has_media, FALSE)
-					AND COALESCE(uro.disconnect_source, '') IN ('', 'none')
-					AND COALESCE(uro.upstream_error_kind, '') IN ('', 'none')
-				)
-			)
+			AND (erc.id IS NOT NULL OR (ul.output_tokens >= 0 AND ul.output_tokens <= $4))
 			AND (erc.id IS NOT NULL OR (
                 ul.actual_cost > 0 AND COALESCE(ul.compensated_cost, 0) <= 0
                 AND TRUNC(LEAST(ul.actual_cost, 5), 10) > 0

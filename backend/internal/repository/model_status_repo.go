@@ -12,7 +12,10 @@ import (
 
 type modelStatusRepository struct{ db *sql.DB }
 
-const modelStatusScopeBatchSize = 100
+// Keep the full public model catalog in one bounded read for the usual case.
+// Smaller batches multiplied the expensive 24-hour evidence query and could
+// turn a single page load into several consecutive 30-second timeouts.
+const modelStatusScopeBatchSize = 500
 
 func NewModelStatusRepository(db *sql.DB) service.ModelStatusRepository {
 	return &modelStatusRepository{db: db}
@@ -46,7 +49,8 @@ func queryModelStatusCandidates(ctx context.Context, tx *sql.Tx, end time.Time, 
 	if err != nil {
 		return nil, fmt.Errorf("encode model status scope: %w", err)
 	}
-	rows, err := tx.QueryContext(ctx, modelStatusAggregateSQL, string(scopeJSON), end, service.ModelStatusRecentLimit)
+	windowStart := modelStatusWindowStart(end)
+	rows, err := tx.QueryContext(ctx, modelStatusAggregateSQL, string(scopeJSON), end, windowStart, service.ModelStatusRecentLimit)
 	if err != nil {
 		return nil, fmt.Errorf("query model status: %w", err)
 	}
@@ -82,7 +86,11 @@ func queryModelStatusCandidates(ctx context.Context, tx *sql.Tx, end time.Time, 
 	return result, nil
 }
 
-// The query reads the complete five-hour evidence window for a bounded scope
+func modelStatusWindowStart(end time.Time) time.Time {
+	return end.Truncate(service.ModelStatusBucketInterval).Add(-service.ModelStatusWindow + service.ModelStatusBucketInterval)
+}
+
+// The query reads the complete 24-hour evidence window for a bounded scope
 // batch. Recent request previews are limited during aggregation, while metrics
 // and buckets retain the complete window.
 const modelStatusAggregateSQL = `
@@ -98,7 +106,7 @@ WITH scope AS MATERIALIZED (
     FROM usage_logs ul
     WHERE ul.group_id = scope.group_id
       AND COALESCE(NULLIF(TRIM(ul.requested_model), ''), NULLIF(TRIM(ul.model), ''), 'unknown') = scope.model
-      AND ul.created_at < $2 AND ul.created_at >= date_bin(INTERVAL '15 minutes', $2, TIMESTAMPTZ '1970-01-01') - INTERVAL '4 hours 45 minutes'
+      AND ul.created_at < $2 AND ul.created_at >= $3
     ORDER BY ul.created_at DESC, ul.id DESC
   ) ul
 ), error_candidates AS MATERIALIZED (
@@ -109,7 +117,7 @@ WITH scope AS MATERIALIZED (
     FROM ops_error_logs e
     WHERE e.group_id = scope.group_id
       AND COALESCE(NULLIF(TRIM(e.requested_model), ''), NULLIF(TRIM(e.model), ''), 'unknown') = scope.model
-      AND e.created_at < $2 AND e.created_at >= date_bin(INTERVAL '15 minutes', $2, TIMESTAMPTZ '1970-01-01') - INTERVAL '4 hours 45 minutes' AND NOT e.is_count_tokens
+      AND e.created_at < $2 AND e.created_at >= $3 AND NOT e.is_count_tokens
       AND (e.status_code >= 400 OR e.error_type = 'cyber_policy')
     ORDER BY e.created_at DESC, e.id DESC
   ) e
@@ -232,13 +240,13 @@ WITH scope AS MATERIALIZED (
   ORDER BY group_id, platform, model, identity, priority DESC, created_at DESC, source_rank DESC, id DESC
 ), ranked AS (
   SELECT *, ROW_NUMBER() OVER (PARTITION BY group_id, platform, model ORDER BY created_at DESC, identity DESC) AS recent_rank
-  FROM deduplicated WHERE created_at < $2 AND created_at >= date_bin(INTERVAL '15 minutes', $2, TIMESTAMPTZ '1970-01-01') - INTERVAL '4 hours 45 minutes'
+  FROM deduplicated WHERE created_at < $2 AND created_at >= $3
 ), samples AS (
   SELECT * FROM ranked
 ), recent_requests AS (
   SELECT group_id, platform, model,
     JSONB_AGG(JSONB_BUILD_OBJECT('at', created_at, 'outcome', outcome, 'status_code', NULLIF(status_code, 0))
-      ORDER BY created_at, identity) FILTER (WHERE recent_rank <= $3) AS recent
+      ORDER BY created_at, identity) FILTER (WHERE recent_rank <= $4) AS recent
   FROM samples GROUP BY group_id, platform, model
 ), aggregates AS (
   SELECT group_id, platform, model,
@@ -252,7 +260,7 @@ WITH scope AS MATERIALIZED (
     MIN(created_at) AS oldest
   FROM samples s GROUP BY group_id, platform, model
 ), bucket_rows AS (
-  SELECT *, date_bin(INTERVAL '15 minutes', created_at, TIMESTAMPTZ '1970-01-01') AS bucket_start
+  SELECT *, date_bin(INTERVAL '30 minutes', created_at, TIMESTAMPTZ '1970-01-01') AS bucket_start
   FROM samples
 ), bucket_ranked AS (
   SELECT *, ROW_NUMBER() OVER (PARTITION BY group_id, platform, model, bucket_start ORDER BY created_at DESC, identity DESC) AS bucket_rank
@@ -262,12 +270,15 @@ WITH scope AS MATERIALIZED (
     COUNT(*) AS total, COUNT(*) FILTER (WHERE outcome = 'success') AS success,
     COUNT(*) FILTER (WHERE outcome = 'failure') AS failure, COUNT(*) FILTER (WHERE outcome = 'empty') AS empty,
     COUNT(*) FILTER (WHERE outcome = 'unknown') AS unknown,
+    -- The UI shows the latest ten requests when a bucket is opened. Keeping
+    -- the payload bounded prevents a busy bucket from making the whole report
+    -- multi-megabyte while preserving the bucket totals above.
     JSONB_AGG(JSONB_BUILD_OBJECT('at', created_at, 'outcome', outcome, 'status_code', NULLIF(status_code, 0))
-      ORDER BY created_at DESC, identity DESC) FILTER (WHERE bucket_rank <= 100) AS requests
+      ORDER BY created_at DESC, identity DESC) FILTER (WHERE bucket_rank <= 10) AS requests
   FROM bucket_ranked GROUP BY group_id, platform, model, bucket_start
 ), bucket_aggregates AS (
   SELECT group_id, platform, model,
-    JSONB_AGG(JSONB_BUILD_OBJECT('start_at', bucket_start, 'end_at', bucket_start + INTERVAL '15 minutes',
+    JSONB_AGG(JSONB_BUILD_OBJECT('start_at', bucket_start, 'end_at', bucket_start + INTERVAL '30 minutes',
       'total', total, 'success', success, 'failure', failure, 'empty', empty, 'unknown', unknown,
       'requests', COALESCE(requests, '[]'::jsonb)) ORDER BY bucket_start) AS buckets
   FROM bucket_stats GROUP BY group_id, platform, model

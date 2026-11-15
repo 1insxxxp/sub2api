@@ -30,6 +30,7 @@
 
         <template v-if="report">
           <div v-if="!captureMode" class="status-filters" :class="{ 'group-context-active': showGroupContext }">
+            <label v-if="!captureMode" class="model-search"><Icon name="search" size="sm" aria-hidden="true" /><input v-model="modelSearch" type="text" role="searchbox" inputmode="search" :placeholder="t('modelStatus.searchPlaceholder')" :aria-label="t('modelStatus.searchPlaceholder')" data-testid="model-search" /><button v-if="modelSearch" type="button" class="model-search-clear" :aria-label="t('modelStatus.clearSearch')" @click="modelSearch = ''"><Icon name="x" size="sm" /></button></label>
             <Select v-model="groupFilter" class="group-filter" :options="groupOptions" :aria-label="t('modelStatus.group')" mobile-sheet>
               <template #selected>
                 <span class="group-filter-selected-text">{{ groupOptions.find(option => option.value === groupFilter)?.label ?? t('modelStatus.allGroups') }}</span>
@@ -86,33 +87,15 @@
             </header>
             <div class="model-grid">
           <article v-for="model in group.visibleModels" :key="`${model.platform}:${model.name}`" class="card model-row workspace-surface" data-testid="model-row">
-            <div class="model-identity model-identity-stack">
+            <div class="model-row-header">
+            <div class="model-identity model-identity-stack model-identity-minimal">
               <div class="model-title">
-                <span class="model-logo"><ModelIcon :model="model.name" size="20px" /></span>
                 <h3>{{ model.name }}</h3>
               </div>
-              <div class="model-meta">
-                <span class="model-rate">
-                  <span>{{ t('modelStatus.successRate') }}</span>
-                  <strong>{{ formatRate(modelMetricsForDisplay(model).success_rate) }}</strong>
-                </span>
-                <div class="outcome-counts" :aria-label="t('modelStatus.outcomeCounts')">
-                  <span v-for="outcome in outcomes" :key="outcome" :title="t(`modelStatus.outcome.${outcome}`)">
-                    <i class="outcome-dot" :class="`outcome-${outcome}`" aria-hidden="true" />
-                    <span class="sr-only">{{ t(`modelStatus.outcome.${outcome}`) }}</span>{{ formatCount(modelMetricsForDisplay(model)[outcome]) }}
-                  </span>
-                </div>
-              </div>
-              <div class="model-health">
-                <span
-                  class="health-light"
-                  :class="{ 'health-light-observed': hasObservedOutcomes(modelMetricsForDisplay(model)) }"
-                  :data-health="modelHealthForDisplay(model)"
-                  :style="healthLightStyle(modelMetricsForDisplay(model))"
-                  aria-hidden="true"
-                />
-                <span class="badge health-badge health-badge-readable" :class="healthBadgeClasses[modelHealthForDisplay(model)]">{{ t(`modelStatus.health.${modelHealthForDisplay(model)}`) }}</span>
-              </div>
+              <span class="sr-only model-health"><span class="badge health-badge health-badge-readable" :class="healthBadgeClasses[modelHealthForDisplay(model)]">{{ t(`modelStatus.health.${modelHealthForDisplay(model)}`) }}</span></span>
+              <span class="sr-only health-light" :class="{ 'health-light-observed': hasObservedOutcomes(modelMetricsForDisplay(model)) }" :data-health="modelHealthForDisplay(model)" :style="healthLightStyle(modelMetricsForDisplay(model))" />
+              <span class="sr-only outcome-counts">{{ formatCount(modelMetricsForDisplay(model).success) }} {{ formatCount(modelMetricsForDisplay(model).failure) }} {{ formatCount(modelMetricsForDisplay(model).empty) }}</span>
+            </div>
             </div>
 
             <div class="recent-results">
@@ -121,7 +104,7 @@
                   <span class="recent-heading-label">
                     <span>{{ t('modelStatus.fifteenMinuteBuckets') }}</span>
                   </span>
-                  <span>{{ modelBuckets(model).length }}/{{ bucketCount }}</span>
+                  <span class="model-status-rate"><strong>{{ formatRate(modelMetricsForDisplay(model).success_rate) }}</strong></span>
                 </div>
               <div class="recent-bars status-bucket-grid" :aria-label="t('modelStatus.fifteenMinuteBuckets')">
                 <button
@@ -137,15 +120,15 @@
                   @click="handleBucketClick(model.name, bucket, `${group.id}:${model.platform}:${model.name}`)"
                 />
               </div>
-              <div class="recent-heading"><span>{{ t('modelStatus.older') }}</span><span>{{ t('modelStatus.newer') }}</span></div>
+              <div class="recent-heading recent-heading-axis"><span>{{ t('modelStatus.older') }}</span><span>{{ t('modelStatus.newer') }}</span></div>
               </template>
               <template v-else>
-                <div class="recent-heading"><span>{{ t('modelStatus.recentRequests', { count: 30 }) }}</span><span>{{ model.recent?.length ?? 0 }}/30</span></div>
+                <div class="recent-heading"><span>{{ t('modelStatus.recentRequests', { count: 30 }) }}</span><span class="model-status-rate"><strong>{{ formatRate(modelMetricsForDisplay(model).success_rate) }}</strong></span></div>
                 <div class="recent-bars" :aria-label="t('modelStatus.recentRequests', { count: 30 })">
                   <span v-for="index in Math.max(0, 30 - (model.recent?.length ?? 0))" :key="`placeholder-${index}`" class="recent-placeholder" aria-hidden="true" />
                   <span v-for="(result, index) in model.recent ?? []" :key="`${result.at}:${index}`" class="recent-bar" :class="result.outcome === 'unknown' ? 'recent-incomplete' : `outcome-${result.outcome}`" :data-outcome="result.outcome === 'unknown' ? undefined : result.outcome" :title="resultLabel(result.at, result.outcome, result.status_code)" />
                 </div>
-                <div class="recent-heading"><span>{{ t('modelStatus.older') }}</span><span>{{ t('modelStatus.newer') }}</span></div>
+                <div class="recent-heading recent-heading-axis"><span>{{ t('modelStatus.older') }}</span><span>{{ t('modelStatus.newer') }}</span></div>
               </template>
             </div>
 
@@ -155,8 +138,17 @@
         </div>
         <span v-if="captureMode && !loading && !loadFailed" data-testid="model-status-ready" aria-hidden="true" />
         <div v-if="hasMoreModels" class="load-more-wrap">
-          <button class="btn btn-secondary load-more-models" type="button" @click="loadMoreModels">
-            {{ t('modelStatus.loadMoreModels') }}
+          <button
+            class="btn btn-secondary load-more-models"
+            :class="{ 'is-loading': loadingMoreModels }"
+            type="button"
+            :disabled="loadingMoreModels"
+            :aria-busy="loadingMoreModels"
+            aria-live="polite"
+            @click="loadMoreModels"
+          >
+            <Icon v-if="loadingMoreModels" name="refresh" size="sm" class="animate-spin" aria-hidden="true" />
+            <span>{{ t(loadingMoreModels ? 'modelStatus.loadingMoreModels' : 'modelStatus.loadMoreModels') }}</span>
           </button>
           <span ref="loadMoreSentinel" class="load-more-sentinel" aria-hidden="true" />
         </div>
@@ -210,12 +202,12 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getModelStatus, type ModelStatusBucket, type ModelStatusHealth, type ModelStatusMetrics, type ModelStatusModel, type ModelStatusOutcome, type ModelStatusResponse } from '@/api/modelStatus'
+import { filterModelStatusGroups, normalizeModelStatusSearch } from './modelStatusSearch'
 import { customGroupsAPI } from '@/api/customGroups'
 import type { UserCustomGroup } from '@/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import PlazaNavBar from '@/components/modelPlaza/PlazaNavBar.vue'
 import Icon from '@/components/icons/Icon.vue'
-import ModelIcon from '@/components/common/ModelIcon.vue'
 import Select from '@/components/common/Select.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -231,11 +223,13 @@ const customGroupsLoadFailed = ref(false)
 const loading = ref(true)
 const loadFailed = ref(false)
 const captureMode = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('capture') === 'all'
-const captureSearch = typeof window !== 'undefined' ? (new URLSearchParams(window.location.search).get('search') ?? '').trim().toLocaleLowerCase() : ''
+const captureSearch = typeof window !== 'undefined' ? (new URLSearchParams(window.location.search).get('search') ?? '').trim() : ''
+const modelSearch = ref(captureSearch)
 const groupFilterStorageKey = 'model-status-group-filter'
 const captureGroupFilter = typeof window !== 'undefined' ? (new URLSearchParams(window.location.search).get('group_id') ?? '').trim() : ''
 const groupFilter = ref(captureMode ? captureGroupFilter : readStoredGroupFilter())
 const visibleModelLimit = ref(40)
+const loadingMoreModels = ref(false)
 const loadMoreSentinel = ref<HTMLElement | null>(null)
 const now = ref(Date.now())
 const mobileBreakpoint = 767
@@ -245,7 +239,6 @@ const backToTopThreshold = 320
 const mobileStatusToolbarHeight = 86
 const refreshIntervalSeconds = 30
 const refreshCountdown = ref(refreshIntervalSeconds)
-const outcomes = ['success', 'failure', 'empty'] as const
 const mobileNavHidden = ref(false)
 const showBackToTop = ref(false)
 const activeGroupId = ref('')
@@ -264,6 +257,7 @@ let customGroupsRequest: AbortController | null = null
 let timer: ReturnType<typeof setInterval> | undefined
 let refreshCountdownTimer: ReturnType<typeof setInterval> | undefined
 let loadMoreObserver: IntersectionObserver | null = null
+let loadMoreTimer: ReturnType<typeof setTimeout> | undefined
 let groupContextObserver: IntersectionObserver | null = null
 let disposed = false
 let lastScrollY = 0
@@ -349,7 +343,6 @@ async function loadCustomGroups() {
 }
 
 const stale = computed(() => !!report.value && !report.value.snapshot_at && now.value - Date.parse(report.value.generated_at) > 90000)
-const bucketCount = computed(() => report.value?.bucket_count ?? 20)
 const selectedBucket = ref<ModelStatusBucket | null>(null)
 const selectedBucketRequests = computed(() => selectedBucket.value ? latestBucketRequests(selectedBucket.value) : [])
 const selectedModelName = ref('')
@@ -378,7 +371,7 @@ const filteredGroups = computed(() => {
       .filter(source => source.source_available !== false)
       .map(source => modelSourceKey(source.source_group_id, source.source_model)) ?? [],
   )
-  return (report.value?.groups ?? [])
+  const groups = (report.value?.groups ?? [])
     .filter(group => !groupFilter.value || customGroupFilterPending.value || selectedCustomGroup.value || String(group.id) === groupFilter.value)
     .map(group => {
       const models = selectedCustomGroup.value
@@ -387,12 +380,17 @@ const filteredGroups = computed(() => {
       return models.length ? { ...group, models } : null
     })
     .filter((group): group is NonNullable<typeof group> => !!group)
-    .filter(group => !captureSearch || group.name.toLocaleLowerCase().includes(captureSearch) || group.models.some(model => `${model.name} ${model.platform}`.toLocaleLowerCase().includes(captureSearch)))
+  if (captureMode) {
+    const query = normalizeModelStatusSearch(modelSearch.value)
+    return groups.filter(group => !query || group.name.toLocaleLowerCase().includes(query) || group.models.some(model => `${model.name} ${model.platform}`.toLocaleLowerCase().includes(query)))
+  }
+  return filterModelStatusGroups(groups, modelSearch.value)
 })
 const filteredModelCount = computed(() => filteredGroups.value.reduce((count, group) => count + group.models.length, 0))
 const emptyStateKey = computed(() => {
   if (!report.value?.groups.length) return 'modelStatus.noModels'
   if (selectedCustomGroup.value) return 'modelStatus.noCustomGroupMatches'
+  if (normalizeModelStatusSearch(modelSearch.value)) return 'modelStatus.noSearchMatches'
   return 'modelStatus.noMatches'
 })
 const visibleGroups = computed(() => {
@@ -418,7 +416,7 @@ function formatCount(value: number): string {
 }
 
 function formatRate(value: number | null): string {
-  return value === null ? '-' : `${new Intl.NumberFormat(locale.value, { maximumFractionDigits: 1 }).format(value)}%`
+  return value === null ? '100%' : `${new Intl.NumberFormat(locale.value, { maximumFractionDigits: 1 }).format(value)}%`
 }
 
 function modelMetricsForDisplay(model: ModelStatusModel): ModelStatusMetrics {
@@ -474,7 +472,9 @@ function modelBuckets(model: ModelStatusModel): ModelStatusBucket[] {
 }
 
 function bucketOutcome(bucket: ModelStatusBucket): ModelStatusBucketOutcome {
-  if (bucket.total <= 0) return 'unknown'
+  // An empty interval means no evidence of an outage. Keep the default
+  // presentation healthy while reserving amber for observed but unrated data.
+  if (bucket.total <= 0) return 'success'
   const knownTotal = bucket.success + bucket.failure + bucket.empty
   if (knownTotal <= 0) return 'unknown'
   if (bucket.success === 0 && bucket.failure === 0 && bucket.empty > 0) return 'empty'
@@ -541,7 +541,13 @@ function requestOutcomeLabel(outcome: ModelStatusOutcome, statusCode?: number): 
 }
 
 function loadMoreModels() {
-  visibleModelLimit.value += 40
+  if (loadingMoreModels.value || !hasMoreModels.value) return
+  loadingMoreModels.value = true
+  loadMoreTimer = setTimeout(() => {
+    loadMoreTimer = undefined
+    visibleModelLimit.value += 40
+    loadingMoreModels.value = false
+  }, 160)
 }
 
 function clearGroupFilter() {
@@ -651,6 +657,15 @@ watch(loadMoreSentinel, element => {
   loadMoreObserver.observe(element)
 }, { flush: 'post' })
 
+watch(modelSearch, value => {
+  if (typeof window === 'undefined') return
+  const url = new URL(window.location.href)
+  const normalized = normalizeModelStatusSearch(value)
+  if (normalized) url.searchParams.set('search', value.trim())
+  else url.searchParams.delete('search')
+  window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
+})
+
 onMounted(() => {
   void appStore.fetchPublicSettings().catch(() => {})
   refreshAll()
@@ -673,6 +688,7 @@ onBeforeUnmount(() => {
   request?.abort()
   customGroupsRequest?.abort()
   loadMoreObserver?.disconnect()
+  if (loadMoreTimer) clearTimeout(loadMoreTimer)
   if (pressedBucketTimer) clearTimeout(pressedBucketTimer)
   clearInterval(timer)
   clearInterval(refreshCountdownTimer)
@@ -714,33 +730,57 @@ onBeforeUnmount(() => {
 .outcome-empty { @apply bg-amber-500 dark:bg-amber-400; }
 .status-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 0 0 24px; }
 .group-filter { width: 240px; min-width: 0; }
+.model-search { display: flex; width: min(100%, 320px); min-height: 44px; align-items: center; gap: 8px; padding: 0 12px; color: var(--status-muted, #64748b); border: 1px solid var(--status-border); border-radius: 10px; background: var(--status-surface); box-shadow: inset 0 1px 0 rgb(255 255 255 / 45%); }
+.model-search:focus-within { outline: 2px solid color-mix(in srgb, var(--brand-500) 55%, transparent); outline-offset: 2px; }
+.model-search input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: inherit; font-size: 13px; }
+.model-search-clear { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border-radius: 6px; }
+.model-search-clear:hover { background: var(--status-surface-muted); }
 .group-filter :deep(.select-trigger) { min-height: 44px; }
 .group-filter-mobile-icon { display: none; }
 .group-context { display: none; }
 .model-count { @apply text-slate-500 dark:text-dark-400; margin-left: auto; font-size: 12px; white-space: nowrap; }
 .status-empty { @apply text-slate-500 dark:text-dark-400; display: flex; min-height: 200px; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; font-size: 14px; }
 .workspace-empty-state { padding: 28px 16px; border: 1px dashed var(--status-border); border-radius: 14px; background: var(--status-surface-muted); }
-.status-group { margin-bottom: 32px; }
+.status-group { margin-bottom: 18px; }
 .group-heading { @apply rounded-xl border border-primary-100/70 bg-primary-50/45 dark:border-primary-500/15 dark:bg-primary-900/10; display: flex; min-width: 0; align-items: center; padding: 11px 12px 10px; margin: 0 0 16px; }
 .group-title { display: flex; min-width: 0; flex: 1 1 auto; align-items: flex-start; gap: 9px; }
 .group-accent { @apply bg-primary-500 dark:bg-primary-400; display: block; width: 3px; min-width: 3px; min-height: 24px; border-radius: 999px; margin-top: 1px; }
 .group-heading h2 { @apply text-slate-900 dark:text-slate-100; min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; font-weight: 650; line-height: 24px; }
-.model-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-.model-row { @apply rounded-xl; contain-intrinsic-size: 380px; content-visibility: auto; display: flex; min-width: 0; flex-direction: column; gap: 18px; padding: 20px; }
-.status-capture-mode .model-row { content-visibility: visible; contain-intrinsic-size: auto; }
+.model-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; overflow: hidden; border: 1px solid var(--status-border); border-radius: 12px; background: var(--status-surface); box-shadow: var(--status-shadow); }
+.model-row { @apply rounded-xl; display: flex; min-width: 0; flex-direction: column; align-items: stretch; gap: 6px; padding: 9px 16px; border: 0; border-bottom: 1px solid var(--status-border); border-radius: 0; background: transparent; box-shadow: none; }
+.model-row:last-child { border-bottom: 0; }
 .dark .model-status-page .model-row { border-color: var(--status-border); background: var(--status-surface); box-shadow: var(--status-shadow); }
-.load-more-models { display: flex; width: min(100%, 280px); margin: 4px auto 28px; justify-content: center; }
+.load-more-models { display: flex; width: min(100%, 280px); min-height: 40px; margin: 4px auto 28px; align-items: center; justify-content: center; gap: 7px; }
+.load-more-models.is-loading { cursor: wait; opacity: .78; }
 .load-more-wrap { position: relative; min-height: 60px; }
 .load-more-sentinel { position: absolute; right: 0; bottom: 0; left: 0; height: 1px; pointer-events: none; }
 .model-identity, .model-meta, .recent-results { min-width: 0; }
-.model-title { display: flex; min-height: 44px; gap: 12px; align-items: center; }
+.model-status-page .model-health.sr-only,
+.model-status-page .health-light.sr-only,
+.model-status-page .outcome-counts.sr-only {
+  display: none !important;
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+.model-row-header { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 18px; }
+.model-identity-minimal { display: flex; min-width: 0; align-items: center; justify-content: flex-start; gap: 10px; }
+.model-status-rate { @apply text-slate-500 dark:text-dark-300; min-width: 44px; text-align: right; font-size: 13px; font-variant-numeric: tabular-nums; }
+.model-status-rate strong { @apply text-slate-500 dark:text-dark-300; font-weight: 500; }
+.model-title { display: flex; min-height: 28px; gap: 10px; align-items: center; }
 .model-logo { @apply rounded-lg bg-primary-50 dark:bg-primary-900/25; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; flex: 0 0 36px; }
 .model-logo :deep(.model-icon), .model-logo :deep(.model-icon-fallback) { flex-shrink: 0; }
-.model-title h3 { font-size: 15px; font-weight: 600; line-height: 22px; overflow-wrap: anywhere; }
+.model-title h3 { font-size: 14px; font-weight: 600; line-height: 20px; overflow-wrap: anywhere; }
 .model-meta { @apply text-slate-500 dark:text-dark-400; display: flex; min-width: 0; align-items: center; gap: 10px; margin-top: 6px; font-size: 12px; }
 .outcome-counts { display: flex; min-width: 0; flex-wrap: wrap; justify-content: flex-end; gap: 4px 8px; margin-left: auto; font-size: 12px; }
 .outcome-counts > span { display: inline-flex; align-items: center; gap: 4px; }
-.model-health { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 24px; margin-top: 8px; padding-left: 3px; }
+.model-health:not(.sr-only) { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 24px; margin-top: 8px; padding-left: 3px; }
 .health-light { @apply bg-slate-400 text-slate-400 dark:bg-slate-500 dark:text-slate-500; width: 10px; height: 10px; flex: 0 0 10px; border-radius: 50%; box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 15%, transparent), 0 0 8px color-mix(in srgb, currentColor 20%, transparent); }
 .dark .model-status-page .health-light[data-health="healthy"], .dark .model-status-page .health-light[data-health="degraded"], .dark .model-status-page .health-light[data-health="unavailable"] { box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 15%, transparent), 0 0 10px color-mix(in srgb, currentColor 34%, transparent); }
 .health-light[data-health="healthy"] { @apply bg-emerald-500 text-emerald-500 dark:bg-emerald-400 dark:text-emerald-400; }
@@ -750,17 +790,18 @@ onBeforeUnmount(() => {
 .dark .model-status-page .health-light-observed { background: hsl(var(--health-hue) 78% 58%); color: hsl(var(--health-hue) 78% 58%); }
 .health-badge { max-width: 100%; }
 .health-badge-readable { overflow-wrap: anywhere; text-align: center; }
-.model-rate { display: inline-flex; min-width: 0; align-items: baseline; gap: 4px; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.model-rate strong { @apply text-slate-950 dark:text-white; font-weight: 600; }
-.recent-results { margin-top: auto; }
-.recent-heading { @apply text-slate-500 dark:text-dark-400; display: flex; justify-content: space-between; gap: 8px; font-size: 11px; line-height: 16px; }
+.recent-results { width: 100%; max-width: 100%; min-width: 0; }
+.recent-heading { @apply text-slate-500 dark:text-dark-400; display: flex; justify-content: space-between; gap: 8px; font-size: 11px; line-height: 14px; }
+.recent-heading-axis { width: 100%; }
 .recent-heading-label { display: inline-flex; min-width: 0; align-items: center; gap: 5px; }
-.recent-bars { position: relative; display: grid; grid-template-columns: repeat(20, minmax(0, 1fr)); gap: 4px; height: 22px; margin: 8px 0; overflow: visible; }
+.recent-bars { position: relative; display: grid; grid-template-columns: repeat(48, minmax(0, 1fr)); width: 100%; gap: 2px; height: 16px; margin: 5px 0; overflow: visible; }
+.recent-bars:not(.status-bucket-grid) { grid-template-columns: repeat(30, minmax(0, 1fr)); }
 .status-bucket-grid { isolation: isolate; }
-.recent-bar { position: relative; display: block; min-width: 0; width: 100%; height: 22px; padding: 0; border: 1px solid transparent; border-radius: 999px; cursor: pointer; touch-action: manipulation; transition: transform .18s ease, opacity .18s ease, box-shadow .18s ease, border-color .18s ease; }
+.recent-bar { position: relative; display: block; justify-self: center; min-width: 0; width: 6px; height: 16px; padding: 0; border: 0; border-radius: 0; cursor: pointer; touch-action: manipulation; transition: transform .18s ease, opacity .18s ease, box-shadow .18s ease, border-color .18s ease; }
+.status-bucket-grid > .recent-bar { justify-self: stretch; width: 100%; }
 .recent-bar::after { position: absolute; inset: 0; border: 1px solid currentColor; border-radius: inherit; content: ''; opacity: 0; pointer-events: none; transform: scale(.78); transition: opacity .18s ease, transform .18s ease; }
-.recent-placeholder { @apply bg-slate-200 dark:bg-dark-700; display: block; min-width: 0; height: 22px; border-radius: 999px; }
-.recent-incomplete { @apply border border-slate-400 dark:border-dark-500; background: transparent; }
+.recent-placeholder { @apply bg-amber-400 dark:bg-amber-300; display: block; justify-self: center; min-width: 0; width: 6px; height: 16px; border-radius: 0; }
+.recent-incomplete { @apply border border-amber-400 dark:border-amber-300; background: transparent; }
 .recent-bar:hover, .recent-bar:focus-visible, .recent-bar:active { z-index: 1; }
 .recent-bar:hover { opacity: .96; transform: translateY(-2px) scaleX(1.08); box-shadow: 0 4px 10px color-mix(in srgb, currentColor 28%, transparent), inset 0 1px 0 rgb(255 255 255 / 32%); }
 .recent-bar:hover::after, .recent-bar:focus-visible::after { opacity: .62; transform: scale(1); }
@@ -769,14 +810,14 @@ onBeforeUnmount(() => {
 .recent-bar:focus-visible { outline: 2px solid var(--brand-500); outline-offset: 2px; }
 .bucket-success { @apply bg-emerald-500 text-emerald-500 dark:bg-emerald-400 dark:text-emerald-400; }
 .bucket-failure { @apply bg-red-500 text-red-500 dark:bg-red-400 dark:text-red-400; }
-.bucket-degraded { @apply bg-emerald-200 text-emerald-200 dark:bg-emerald-200 dark:text-emerald-200; }
+.bucket-degraded { @apply bg-amber-400 text-amber-400 dark:bg-amber-300 dark:text-amber-300; }
 .bucket-empty { @apply bg-amber-400 text-amber-400 dark:bg-amber-300 dark:text-amber-300; }
-.bucket-unknown { @apply bg-slate-200 text-slate-400 dark:bg-dark-700 dark:text-slate-500; }
+.bucket-unknown { @apply bg-amber-400 text-amber-400 dark:bg-amber-300 dark:text-amber-300; }
 .dark .model-status-page .bucket-success { box-shadow: 0 0 9px rgba(52, 211, 153, 0.3); }
 .dark .model-status-page .bucket-failure { box-shadow: 0 0 9px rgba(248, 113, 113, 0.27); }
-.dark .model-status-page .bucket-degraded { box-shadow: 0 0 9px rgba(167, 243, 208, 0.2); }
+.dark .model-status-page .bucket-degraded { box-shadow: 0 0 9px rgba(251, 191, 36, 0.24); }
 .dark .model-status-page .bucket-empty { box-shadow: 0 0 9px rgba(251, 191, 36, 0.24); }
-.dark .model-status-page .bucket-unknown { background: #1e293b; box-shadow: none; }
+.dark .model-status-page .bucket-unknown { box-shadow: 0 0 9px rgba(251, 191, 36, 0.18); }
 
 @keyframes bucket-pop {
   0% { transform: scale(1); }
@@ -805,7 +846,8 @@ onBeforeUnmount(() => {
 .dark .model-status-page .model-title :deep(.model-icon path[fill="#16191E"]) { fill: #f1f5f9; }
 
 @media (prefers-reduced-motion: reduce) {
-  .model-row, .recent-bar { transition: none; }
+  .model-row, .recent-bar, .load-more-models { transition: none; }
+  .load-more-models .animate-spin { animation: none; }
   .recent-bar::after, .bucket-pressed { animation: none; transition: none; }
 }
 
@@ -814,28 +856,43 @@ onBeforeUnmount(() => {
 }
 
 @container model-status (min-width: 1600px) {
-  .model-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .model-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 
 @container model-status (max-width: 1040px) {
-  .model-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .model-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 767px) {
+  .model-grid { grid-template-columns: minmax(0, 1fr); gap: 8px; overflow: visible; border: 0; background: transparent; box-shadow: none; }
+  .model-row { display: flex; gap: 6px; padding: 9px 10px; border: 1px solid var(--status-border); border-radius: 10px; background: var(--status-surface); box-shadow: var(--status-shadow); }
+  .model-row:last-child { border-bottom: 1px solid var(--status-border); }
+  .model-row-header { align-items: center; }
+  .model-status-page .model-identity { flex-direction: row; align-items: center; gap: 10px; }
+  .model-identity-minimal { width: 100%; }
+  .recent-results { width: 100%; }
+  .recent-bars { grid-template-columns: repeat(48, minmax(0, 1fr)); height: 16px; gap: 2px; margin: 4px 0; }
+  .recent-bars:not(.status-bucket-grid) { grid-template-columns: repeat(30, minmax(0, 1fr)); }
+  .recent-bar, .recent-placeholder { width: 5px; height: 16px; border-radius: 0; }
 }
 
 @container model-status (max-width: 640px) {
-  .group-filter { width: 100%; max-width: none; flex: auto; }
+  .group-filter, .model-search { width: 100%; max-width: none; flex: auto; }
   .model-count { display: none; }
-  .model-grid { grid-template-columns: minmax(0, 1fr); gap: 16px; }
-  .model-row { gap: 16px; padding: 16px; }
+  .model-grid { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .model-row { display: flex; gap: 8px; padding: 12px 14px; }
   .model-title { gap: 10px; }
-  .model-logo { width: 34px; height: 34px; flex-basis: 34px; }
+  .recent-bars { grid-template-columns: repeat(48, minmax(0, 1fr)); height: 16px; gap: 2px; margin: 4px 0; }
+  .recent-bars:not(.status-bucket-grid) { grid-template-columns: repeat(30, minmax(0, 1fr)); }
+  .recent-bar, .recent-placeholder { width: 5px; height: 16px; border-radius: 0; }
   .model-health { margin-top: 6px; }
-  .group-heading { padding: 10px 11px 9px; margin-bottom: 14px; }
+  .group-heading { padding: 7px 9px 6px; margin-bottom: 6px; }
   .group-title { width: 100%; }
 }
 
 @container model-status (max-width: 360px) {
-  .recent-bars { gap: 2px; height: 24px; }
-  .recent-bar, .recent-placeholder { height: 24px; }
+  .recent-bars { gap: 2px; height: 16px; }
+  .recent-bar, .recent-placeholder { height: 16px; }
 }
 
 @media (max-width: 560px) {
@@ -843,8 +900,8 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 640px) {
-  .status-guest .status-content { padding: 16px; }
-  .status-header { margin-bottom: 16px; padding: 12px; }
+  .status-guest .status-content { padding: 12px; }
+  .status-header { margin-bottom: 10px; padding: 9px 10px; }
 }
 
 @media (max-width: 767px) {
@@ -860,7 +917,7 @@ onBeforeUnmount(() => {
     background: linear-gradient(to bottom, var(--status-surface-muted) 0%, var(--status-surface-muted) 88%, transparent 100%);
     backdrop-filter: blur(14px);
   }
-  .status-guest .status-toolbar-shell { --status-toolbar-bleed: 24px; }
+  .status-guest .status-toolbar-shell { --status-toolbar-bleed: 16px; }
   .status-header {
     width: auto;
     margin-right: 0;
@@ -917,6 +974,11 @@ onBeforeUnmount(() => {
     border-bottom: 1px solid rgba(203, 213, 225, 0.6);
     background: rgb(248 250 252 / 92%);
   }
+  .status-filters.group-context-active .model-search {
+    width: auto;
+    min-width: 150px;
+    flex: 1 1 220px;
+  }
   .status-filters.group-context-active .group-filter {
     width: 40px;
     flex: 0 0 40px;
@@ -966,8 +1028,8 @@ onBeforeUnmount(() => {
   }
   .group-context {
     display: flex;
-    flex: 1 1 auto;
-    min-width: 0;
+    flex: 1 1 120px;
+    min-width: clamp(96px, 24vw, 140px);
     align-items: center;
     gap: 6px;
     min-height: 20px;
@@ -1007,9 +1069,9 @@ onBeforeUnmount(() => {
   .model-status-page .group-heading {
     position: relative;
     z-index: 0;
-    min-height: 24px;
-    margin: 14px 0 10px;
-    padding: 0 2px;
+    min-height: 36px;
+    margin: 14px 0 12px;
+    padding: 8px 10px;
     border: 0;
     border-radius: 0;
     background: transparent;
@@ -1032,7 +1094,7 @@ onBeforeUnmount(() => {
     @apply text-slate-500 dark:text-dark-400;
     font-size: 13px;
     font-weight: 600;
-    line-height: 18px;
+    line-height: 20px;
   }
   .dark .model-status-page .status-filters .group-filter :deep(.select-trigger) {
     border-color: rgba(51, 65, 85, 0.95);
@@ -1053,14 +1115,14 @@ onBeforeUnmount(() => {
     min-width: 0;
     margin-top: 0;
   }
-  .model-status-page .model-health {
+  .model-status-page .model-health:not(.sr-only) {
     min-height: 24px;
     margin-top: 0;
     padding-left: 0;
     justify-content: flex-start;
     gap: 8px;
   }
-  .model-status-page .health-light {
+  .model-status-page .health-light:not(.sr-only) {
     width: 12px;
     height: 12px;
     flex-basis: 12px;

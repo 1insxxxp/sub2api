@@ -30,9 +30,9 @@ const metrics = {
 }
 
 function report(): ModelStatusResponse {
-  const emptyBuckets = (): ModelStatusBucket[] => Array.from({ length: 20 }, (_, index) => ({
-    start_at: new Date(Date.UTC(2026, 8, 6, 0, index * 15)).toISOString(),
-    end_at: new Date(Date.UTC(2026, 8, 6, 0, index * 15 + 15)).toISOString(),
+  const emptyBuckets = (): ModelStatusBucket[] => Array.from({ length: 48 }, (_, index) => ({
+    start_at: new Date(Date.UTC(2026, 8, 6, 0, index * 30)).toISOString(),
+    end_at: new Date(Date.UTC(2026, 8, 6, 0, index * 30 + 30)).toISOString(),
     total: 0, success: 0, failure: 0, empty: 0, unknown: 0, requests: [],
   }))
   const activeBuckets = emptyBuckets()
@@ -41,8 +41,8 @@ function report(): ModelStatusResponse {
   return {
     generated_at: '2026-09-06T04:00:00Z',
     snapshot_at: '2026-09-06T04:00:00Z',
-    bucket_count: 20,
-    bucket_interval_minutes: 15,
+    bucket_count: 48,
+    bucket_interval_minutes: 30,
     refresh_interval_seconds: 30,
     coverage: { status: 'partial', terminal_errors_enabled: false, reasons: ['best_effort_recording', 'terminal_errors_disabled'] },
     summary: metrics,
@@ -94,7 +94,7 @@ describe('ModelStatusView', () => {
     vi.useRealTimers()
   })
 
-  it('uses the latest 15-minute bucket for the continuous signal light', async () => {
+  it('uses the latest 30-minute bucket for the continuous signal light', async () => {
     const data = report()
     const baseModel = data.groups[0].models[0]
     data.groups = [{
@@ -108,7 +108,7 @@ describe('ModelStatusView', () => {
         ...model,
         status: 'healthy' as const,
         metrics: { ...metrics, total: 100, success: 100, failure: 0, empty: 0, success_rate: 100 },
-        buckets: baseModel.buckets!.map((bucket, index) => index === 19 ? { ...bucket, ...model.metrics } : bucket),
+        buckets: baseModel.buckets!.map((bucket, index) => index === 47 ? { ...bucket, ...model.metrics } : bucket),
       })),
     }]
     getModelStatus.mockResolvedValueOnce(data)
@@ -156,8 +156,8 @@ describe('ModelStatusView', () => {
   })
 
   it.each([
-    { success: 0, failure: 0, empty: 0, unknown: 0, status: 'no_data', rate: '-', hue: null },
-    { success: 0, failure: 0, empty: 0, unknown: 5, status: 'unknown', rate: '-', hue: null },
+    { success: 0, failure: 0, empty: 0, unknown: 0, status: 'no_data', rate: '100%', hue: null },
+    { success: 0, failure: 0, empty: 0, unknown: 5, status: 'unknown', rate: '100%', hue: null },
     { success: 4, failure: 0, empty: 0, unknown: 20, status: 'insufficient_data', rate: '100%', hue: 120 },
     { success: 5, failure: 0, empty: 0, unknown: 0, status: 'healthy', rate: '100%', hue: 120 },
     { success: 99, failure: 1, empty: 0, unknown: 0, status: 'healthy', rate: '99%', hue: 119 },
@@ -166,15 +166,15 @@ describe('ModelStatusView', () => {
     { success: 79, failure: 21, empty: 0, unknown: 0, status: 'unavailable', rate: '79%', hue: 95 },
     { success: 0, failure: 5, empty: 0, unknown: 0, status: 'unavailable', rate: '0%', hue: 0 },
     { success: 0, failure: 0, empty: 5, unknown: 0, status: 'unavailable', rate: '0%', hue: 0 },
-  ])('derives $status from the latest 15-minute bucket ($success/$failure/$empty/$unknown)', async ({ success, failure, empty, unknown, status, rate, hue }) => {
+  ])('derives $status from the latest 30-minute bucket ($success/$failure/$empty/$unknown)', async ({ success, failure, empty, unknown, status, rate, hue }) => {
     const data = report()
     const model = data.groups[0].models[0]
     model.status = status === 'healthy' ? 'unavailable' : 'healthy'
     model.metrics = status === 'healthy'
       ? { ...metrics, total: 100, success: 0, failure: 100, empty: 0, success_rate: 0 }
       : { ...metrics, total: 100, success: 100, failure: 0, empty: 0, success_rate: 100 }
-    model.buckets![19] = {
-      ...model.buckets![19], total: success + failure + empty + unknown,
+    model.buckets![47] = {
+      ...model.buckets![47], total: success + failure + empty + unknown,
       success, failure, empty, unknown,
     }
     data.groups = [{ ...data.groups[0], models: [model] }]
@@ -184,14 +184,14 @@ describe('ModelStatusView', () => {
 
     expect(wrapper.get('.health-badge').text()).toBe(`modelStatus.health.${status}`)
     expect(wrapper.get('.health-light').attributes('data-health')).toBe(status)
-    expect(wrapper.get('.model-rate strong').text()).toBe(rate)
+    expect(wrapper.get('.model-status-rate strong').text()).toBe(rate)
     expect(wrapper.get('.health-light').classes().includes('health-light-observed')).toBe(hue !== null)
     if (hue === null) {
       expect(wrapper.get('.health-light').attributes('style')).toBeUndefined()
     } else {
       expect(wrapper.get('.health-light').attributes('style')).toContain(`--health-hue: ${hue}deg`)
     }
-    expect(wrapper.findAll('[data-testid="status-bucket"]')).toHaveLength(20)
+    expect(wrapper.findAll('[data-testid="status-bucket"]')).toHaveLength(48)
   })
 
   it('keeps legacy health metrics when a cached response has no buckets', async () => {
@@ -205,7 +205,7 @@ describe('ModelStatusView', () => {
 
     expect(wrapper.get('.health-badge').text()).toBe('modelStatus.health.unavailable')
     expect(wrapper.get('.health-light').attributes('style')).toContain('--health-hue: 12deg')
-    expect(wrapper.get('.model-rate strong').text()).toBe('10%')
+    expect(wrapper.get('.model-status-rate strong').text()).toBe('10%')
   })
 
   it('shows a countdown that decrements each second and resets after a manual refresh', async () => {
@@ -243,7 +243,7 @@ describe('ModelStatusView', () => {
     await flushPromises()
 
     expect(wrapper.get('[data-testid="refresh-countdown"]').text()).toContain('modelStatus.autoRefreshIn')
-    expect(wrapper.find('[data-testid="model-search"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="model-search"]').exists()).toBe(true)
   })
 
   it('restores and persists the selected public group', async () => {
@@ -444,7 +444,7 @@ describe('ModelStatusView', () => {
     expect(wrapper.text()).not.toContain('modelStatus.coverage.terminal_errors_disabled')
     expect(wrapper.text()).not.toContain('modelStatus.snapshot')
     expect(wrapper.text()).not.toContain('modelStatus.snapshotWindow')
-    expect(wrapper.findAll('[data-outcome]').map(bar => bar.attributes('data-outcome'))).toEqual(['empty', 'success'])
+    expect(wrapper.findAll('[data-outcome]').map(bar => bar.attributes('data-outcome')).slice(0, 2)).toEqual(['empty', 'success'])
     expect(wrapper.find('[data-outcome="empty"]').attributes('title')).toContain('modelStatus.outcome.empty')
   })
 
@@ -563,9 +563,9 @@ describe('ModelStatusView', () => {
     expect(wrapper.find('[data-testid="incomplete-records"]').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('modelStatus.outcome.unknown')
     expect(wrapper.find('[data-outcome="unknown"]').exists()).toBe(false)
-    expect(wrapper.find('.bucket-unknown').exists()).toBe(true)
-    expect(wrapper.findAll('[data-outcome]').map(bar => bar.attributes('data-outcome'))).toEqual(['empty', 'success'])
-    expect(wrapper.findAll('.recent-bars').at(0)?.element.children).toHaveLength(20)
+    expect(wrapper.find('.bucket-success').exists()).toBe(true)
+    expect(wrapper.findAll('[data-outcome]').map(bar => bar.attributes('data-outcome')).slice(0, 2)).toEqual(['empty', 'success'])
+    expect(wrapper.findAll('.recent-bars').at(0)?.element.children).toHaveLength(48)
 
     await wrapper.get('[data-testid="refresh"]').trigger('click')
     await flushPromises()
@@ -596,14 +596,15 @@ describe('ModelStatusView', () => {
     await flushPromises()
     expect(wrapper.find('.status-summary').exists()).toBe(false)
     expect(wrapper.find('[data-testid="incomplete-records"]').exists()).toBe(false)
-    expect(wrapper.get('.model-row .model-rate strong').text()).toBe('-')
+    expect(wrapper.find('.model-row .model-status-rate').exists()).toBe(true)
+    expect(wrapper.find('.model-row .model-status-rate strong').text()).toBe('100%')
     expect(wrapper.find('.model-row .incomplete-note').exists()).toBe(false)
   })
 
   it.each([400, 401, 403, 404, 408, 429, 499])('labels excluded HTTP %i records without lowering the success rate', async statusCode => {
     const data = report()
-    data.groups[0].models[0].buckets![19] = {
-      ...data.groups[0].models[0].buckets![19],
+    data.groups[0].models[0].buckets![47] = {
+      ...data.groups[0].models[0].buckets![47],
       total: 6, success: 5, failure: 0, empty: 0, unknown: 1,
       requests: [{ at: '2026-09-06T03:54:00Z', outcome: 'unknown', status_code: statusCode }],
     }
@@ -611,8 +612,8 @@ describe('ModelStatusView', () => {
     const wrapper = render()
     await flushPromises()
 
-    expect(wrapper.get('.model-row .model-rate strong').text()).toBe('100%')
-    const bucket = wrapper.findAll('[data-testid="status-bucket"]')[19]
+    expect(wrapper.get('.model-row .model-status-rate strong').text()).toBe('100%')
+    const bucket = wrapper.findAll('[data-testid="status-bucket"]')[47]
     expect(bucket.classes()).toContain('bucket-success')
     await bucket.trigger('click')
     await flushPromises()
@@ -623,7 +624,7 @@ describe('ModelStatusView', () => {
 
   it('filters by group without merging names or changing model metrics', async () => {
     const data = report()
-    data.groups[1].models[0].buckets![19] = { ...data.groups[1].models[0].buckets![19], total: 1, success: 1, requests: [
+    data.groups[1].models[0].buckets![47] = { ...data.groups[1].models[0].buckets![47], total: 1, success: 1, requests: [
       { at: '2026-09-06T04:00:00Z', outcome: 'success' },
     ] }
     getModelStatus.mockResolvedValueOnce(data)
@@ -682,32 +683,32 @@ describe('ModelStatusView', () => {
     expect(wrapper.text()).not.toContain('modelStatus.noMatches')
   })
 
-  it('renders all 20 time buckets across the five-hour window', async () => {
+  it('renders all 48 time buckets across the 24-hour window', async () => {
     const data = report()
     const model = data.groups[0].models[0]
     model.metrics = { ...metrics, total: 30, success: 30, empty: 0, success_rate: 100 }
-    model.buckets = Array.from({ length: 20 }, (_, index) => ({
-      start_at: new Date(Date.UTC(2026, 8, 5, 1, index * 15)).toISOString(),
-      end_at: new Date(Date.UTC(2026, 8, 5, 1, index * 15 + 15)).toISOString(),
+    model.buckets = Array.from({ length: 48 }, (_, index) => ({
+      start_at: new Date(Date.UTC(2026, 8, 5, 1, index * 30)).toISOString(),
+      end_at: new Date(Date.UTC(2026, 8, 5, 1, index * 30 + 30)).toISOString(),
       total: 1, success: 1, failure: 0, empty: 0, unknown: 0,
-      requests: [{ at: new Date(Date.UTC(2026, 8, 5, 1, index * 15)).toISOString(), outcome: 'success' as const }],
+      requests: [{ at: new Date(Date.UTC(2026, 8, 5, 1, index * 30)).toISOString(), outcome: 'success' as const }],
     }))
-    model.buckets[19] = { ...model.buckets[19], total: 4, success: 3, failure: 1, requests: [
-      { at: '2026-09-05T05:45:00Z', outcome: 'failure' },
-      { at: '2026-09-05T05:44:00Z', outcome: 'success' },
-      { at: '2026-09-05T05:43:00Z', outcome: 'success' },
-      { at: '2026-09-05T05:42:00Z', outcome: 'success' },
+    model.buckets[47] = { ...model.buckets[47], total: 4, success: 3, failure: 1, requests: [
+      { at: '2026-09-06T00:45:00Z', outcome: 'failure' },
+      { at: '2026-09-06T00:44:00Z', outcome: 'success' },
+      { at: '2026-09-06T00:43:00Z', outcome: 'success' },
+      { at: '2026-09-06T00:42:00Z', outcome: 'success' },
     ] }
     data.groups = [{ ...data.groups[0], models: [model] }]
     getModelStatus.mockResolvedValueOnce(data)
     const wrapper = render()
     await flushPromises()
 
-    expect(wrapper.findAll('[data-testid="status-bucket"]')).toHaveLength(20)
+    expect(wrapper.findAll('[data-testid="status-bucket"]')).toHaveLength(48)
     expect(wrapper.find('.recent-placeholder').exists()).toBe(false)
     expect(wrapper.get('.recent-heading').text()).toContain('modelStatus.fifteenMinuteBuckets')
-    expect(wrapper.get('.recent-heading').text()).toContain('20/20')
-    expect(wrapper.get('.model-rate strong').text()).toBe('75%')
+    expect(wrapper.get('.recent-heading').text()).not.toContain('20/20')
+    expect(wrapper.get('.model-status-rate strong').text()).toBe('75%')
     expect(wrapper.get('.outcome-counts').text()).toContain('3')
     expect(wrapper.get('.outcome-counts').text()).toContain('1')
     expect(wrapper.findAll('[data-testid="status-bucket"]')[0].attributes('title')).toContain('9/5')
@@ -727,6 +728,31 @@ describe('ModelStatusView', () => {
     expect(wrapper.findAll('[data-testid="model-row"]')).toHaveLength(40)
     expect(wrapper.find('.load-more-models').exists()).toBe(true)
     await wrapper.get('.load-more-models').trigger('click')
+    await vi.advanceTimersByTimeAsync(160)
+    await flushPromises()
+    expect(wrapper.findAll('[data-testid="model-row"]')).toHaveLength(45)
+    expect(wrapper.find('.load-more-models').exists()).toBe(false)
+  })
+
+  it('shows a loading state while appending the next model batch', async () => {
+    const data = report()
+    const baseModel = data.groups[0].models[0]
+    data.groups = [{
+      ...data.groups[0],
+      models: Array.from({ length: 45 }, (_, index) => ({ ...baseModel, name: `model-${index}` })),
+    }]
+    getModelStatus.mockResolvedValueOnce(data)
+    const wrapper = render()
+    await flushPromises()
+
+    await wrapper.get('.load-more-models').trigger('click')
+    expect(wrapper.get('.load-more-models').attributes('aria-busy')).toBe('true')
+    expect(wrapper.get('.load-more-models').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('.load-more-models').text()).toContain('modelStatus.loadingMoreModels')
+    expect(wrapper.findAll('[data-testid="model-row"]')).toHaveLength(40)
+
+    await vi.advanceTimersByTimeAsync(160)
+    await flushPromises()
     expect(wrapper.findAll('[data-testid="model-row"]')).toHaveLength(45)
     expect(wrapper.find('.load-more-models').exists()).toBe(false)
   })
