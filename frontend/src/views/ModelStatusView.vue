@@ -419,19 +419,11 @@ function formatRate(value: number | null): string {
   return value === null ? '100%' : `${new Intl.NumberFormat(locale.value, { maximumFractionDigits: 1 }).format(value)}%`
 }
 
+// The API metrics are the rolling 24-hour aggregate. Buckets are only the
+// visual timeline and must not replace the card's overall success rate with
+// the most recent (potentially very small) 30-minute sample.
 function modelMetricsForDisplay(model: ModelStatusModel): ModelStatusMetrics {
-  const latestBucket = model.buckets?.at(-1)
-  if (!latestBucket) return model.metrics
-  const knownTotal = latestBucket.success + latestBucket.failure + latestBucket.empty
-  return {
-    ...model.metrics,
-    total: latestBucket.total,
-    success: latestBucket.success,
-    failure: latestBucket.failure,
-    empty: latestBucket.empty,
-    unknown: latestBucket.unknown,
-    success_rate: knownTotal > 0 ? latestBucket.success * 100 / knownTotal : null,
-  }
+  return model.metrics
 }
 
 function modelHealthForDisplay(model: ModelStatusModel): ModelStatusHealth {
