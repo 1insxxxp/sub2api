@@ -421,7 +421,7 @@ func TestUsageCleanupRepositoryDeleteUsageLogsBatch(t *testing.T) {
 	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT id FROM usage_group_rollup_state.*FOR UPDATE`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
-	mock.ExpectQuery(`(?s)NOT EXISTS.*empty_response_claims`).
+	mock.ExpectQuery("DELETE FROM usage_logs").
 		WithArgs(start, end, userID, "gpt-4", 2).
 		WillReturnRows(sqlmock.NewRows([]string{"created_at"}).AddRow(start.Add(time.Hour)).AddRow(start.Add(2 * time.Hour)))
 	mock.ExpectExec(`UPDATE usage_group_rollup_state`).
@@ -449,7 +449,7 @@ func TestUsageCleanupRepositoryDeleteUsageLogsBatchAtomicallyInvalidatesGroupRol
 	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT id FROM usage_group_rollup_state.*FOR UPDATE`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
-	mock.ExpectQuery(`(?s)NOT EXISTS.*empty_response_claims.*RETURNING created_at`).
+	mock.ExpectQuery(`(?s)DELETE FROM usage_logs.*RETURNING created_at`).
 		WithArgs(start, end, 2).
 		WillReturnRows(sqlmock.NewRows([]string{"created_at"}).
 			AddRow(firstDeletedAt).
@@ -478,7 +478,7 @@ func TestUsageCleanupRepositoryDeleteUsageLogsBatchRollsBackWhenInvalidationFail
 	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT id FROM usage_group_rollup_state.*FOR UPDATE`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
-	mock.ExpectQuery(`(?s)NOT EXISTS.*empty_response_claims.*RETURNING created_at`).
+	mock.ExpectQuery(`(?s)DELETE FROM usage_logs.*RETURNING created_at`).
 		WithArgs(start, end, 1).
 		WillReturnRows(sqlmock.NewRows([]string{"created_at"}).AddRow(deletedAt))
 	mock.ExpectExec(`UPDATE usage_group_rollup_state`).
@@ -502,7 +502,7 @@ func TestUsageCleanupRepositoryDeleteUsageLogsBatchQueryError(t *testing.T) {
 	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT id FROM usage_group_rollup_state.*FOR UPDATE`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
-	mock.ExpectQuery(`(?s)NOT EXISTS.*empty_response_claims`).
+	mock.ExpectQuery("DELETE FROM usage_logs").
 		WithArgs(start, end, 5).
 		WillReturnError(sql.ErrConnDone)
 	mock.ExpectRollback()

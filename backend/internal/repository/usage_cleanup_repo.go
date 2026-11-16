@@ -299,10 +299,6 @@ func (r *usageCleanupRepository) DeleteUsageLogsBatch(ctx context.Context, filte
 			SELECT id
 			FROM usage_logs
 			WHERE %s
-			  AND NOT EXISTS (
-				SELECT 1 FROM empty_response_claims erc
-				WHERE erc.usage_log_id = usage_logs.id
-			  )
 			ORDER BY created_at ASC, id ASC
 			LIMIT $%d
 		)
@@ -345,10 +341,6 @@ func (r *usageCleanupRepository) deleteUsageLogsBatchWithRollupInvalidation(ctx 
 			SELECT id
 			FROM usage_logs
 			WHERE %s
-			  AND NOT EXISTS (
-				SELECT 1 FROM empty_response_claims erc
-				WHERE erc.usage_log_id = usage_logs.id
-			  )
 			ORDER BY created_at ASC, id ASC
 			LIMIT $%d
 		)
