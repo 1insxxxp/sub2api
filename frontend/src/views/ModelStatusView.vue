@@ -342,7 +342,11 @@ async function loadCustomGroups() {
   }
 }
 
-const stale = computed(() => !!report.value && !report.value.snapshot_at && now.value - Date.parse(report.value.generated_at) > 90000)
+// The backend keeps a completed report cached for five minutes. Allow a
+// small buffer before warning so normal cache reuse is not reported as stale;
+// the notice is for a genuinely stuck refresh (older than six minutes).
+const staleReportThresholdMs = 6 * 60 * 1000
+const stale = computed(() => !!report.value && !report.value.snapshot_at && now.value - Date.parse(report.value.generated_at) > staleReportThresholdMs)
 const selectedBucket = ref<ModelStatusBucket | null>(null)
 const selectedBucketRequests = computed(() => selectedBucket.value ? latestBucketRequests(selectedBucket.value) : [])
 const selectedModelName = ref('')

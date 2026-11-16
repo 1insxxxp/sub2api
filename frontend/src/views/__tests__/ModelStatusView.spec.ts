@@ -675,12 +675,12 @@ describe('ModelStatusView', () => {
     getModelStatus.mockResolvedValue({ ...report(), snapshot_at: undefined })
     const wrapper = render()
     await flushPromises()
-    await vi.advanceTimersByTimeAsync(120000)
-    expect(getModelStatus).toHaveBeenCalledTimes(5)
+    await vi.advanceTimersByTimeAsync(420000)
+    expect(getModelStatus).toHaveBeenCalledTimes(15)
     expect(wrapper.text()).toContain('modelStatus.staleData')
     wrapper.unmount()
     await vi.advanceTimersByTimeAsync(30000)
-    expect(getModelStatus).toHaveBeenCalledTimes(5)
+    expect(getModelStatus).toHaveBeenCalledTimes(15)
   })
 
   it('renders an empty catalog separately from a filter with no matches', async () => {
