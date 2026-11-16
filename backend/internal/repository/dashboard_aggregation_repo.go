@@ -269,6 +269,10 @@ func (r *dashboardAggregationRepository) cleanupUsageLogsBatches(ctx context.Con
 				SELECT tableoid, ctid
 				FROM usage_logs
 				WHERE created_at < $1
+				  AND NOT EXISTS (
+					SELECT 1 FROM empty_response_claims erc
+					WHERE erc.usage_log_id = usage_logs.id
+				  )
 				ORDER BY created_at ASC, id ASC
 				LIMIT $2
 			)
@@ -311,9 +315,13 @@ func selectUsageLogsCleanupCandidates(ctx context.Context, db *sql.DB, cutoff ti
 	// watermark -> DROP PARTITION lock order.
 	rows, err := db.QueryContext(ctx, `
 		SELECT tableoid, ctid::text, xmin::text, id, created_at
-		FROM usage_logs
-		WHERE created_at < $1
-		ORDER BY created_at ASC, id ASC
+		FROM usage_logs ul
+		WHERE ul.created_at < $1
+		  AND NOT EXISTS (
+			SELECT 1 FROM empty_response_claims erc
+			WHERE erc.usage_log_id = ul.id
+		  )
+		ORDER BY ul.created_at ASC, ul.id ASC
 		LIMIT $2
 	`, cutoff.UTC(), usageLogsCleanupBatchSize)
 	if err != nil {
@@ -350,6 +358,10 @@ const usageLogsCleanupDeleteQuery = `
 				WHERE ul.tableoid = candidate.tableoid AND ul.ctid = candidate.ctid
 					AND ul.xmin::text = candidate.xmin AND ul.id = candidate.id
 					AND ul.created_at = candidate.created_at AND ul.created_at < $1
+					AND NOT EXISTS (
+						SELECT 1 FROM empty_response_claims erc
+						WHERE erc.usage_log_id = ul.id
+					)
 				FOR UPDATE OF ul SKIP LOCKED
 			) victim
 		)
@@ -706,6 +718,17 @@ func (r *dashboardAggregationRepository) dropUsageLogsPartitions(ctx context.Con
 	})
 	if db, ok := r.sql.(*sql.DB); ok {
 		for _, partition := range partitions {
+			hasClaims, err := usageLogsPartitionHasEmptyResponseClaims(ctx, db, partition.month)
+			if err != nil {
+				return err
+			}
+			// Empty-response claims are billing evidence and keep their usage log
+			// alive through an intentional RESTRICT foreign key. A partition that
+			// contains one cannot be dropped safely; the boundary cleanup below
+			// still removes unreferenced rows from that partition.
+			if hasClaims {
+				continue
+			}
 			if err := dropUsageLogsPartitionWithRollupInvalidation(ctx, db, partition.name, partition.month); err != nil {
 				return err
 			}
@@ -713,11 +736,32 @@ func (r *dashboardAggregationRepository) dropUsageLogsPartitions(ctx context.Con
 		return nil
 	}
 	for _, partition := range partitions {
+		hasClaims, err := usageLogsPartitionHasEmptyResponseClaims(ctx, r.sql, partition.month)
+		if err != nil {
+			return err
+		}
+		if hasClaims {
+			continue
+		}
 		if _, err := r.sql.ExecContext(ctx, fmt.Sprintf("DROP TABLE IF EXISTS %s", pq.QuoteIdentifier(partition.name))); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func usageLogsPartitionHasEmptyResponseClaims(ctx context.Context, queryer sqlExecutor, month time.Time) (bool, error) {
+	var hasClaims bool
+	nextMonth := month.UTC().AddDate(0, 1, 0)
+	err := scanSingleRow(ctx, queryer, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM empty_response_claims erc
+			JOIN usage_logs ul ON ul.id = erc.usage_log_id
+			WHERE ul.created_at >= $1 AND ul.created_at < $2
+		)
+	`, []any{month.UTC(), nextMonth}, &hasClaims)
+	return hasClaims, err
 }
 
 func dropUsageLogsPartitionWithRollupInvalidation(ctx context.Context, db *sql.DB, name string, monthStart time.Time) error {

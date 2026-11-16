@@ -447,6 +447,12 @@ func createGroupUsageRollupTriggerTestSchema(t *testing.T, ctx context.Context, 
 		CREATE TABLE groups (id BIGINT PRIMARY KEY);
 	`+usageLogsDDL)
 	require.NoError(t, err)
+	_, err = tx.ExecContext(ctx, `
+		CREATE TABLE empty_response_claims (
+			usage_log_id BIGINT UNIQUE
+		);
+	`)
+	require.NoError(t, err)
 
 	for _, migrationName := range []string{
 		"222_group_usage_daily_rollups.sql",

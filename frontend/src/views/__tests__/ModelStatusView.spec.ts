@@ -94,7 +94,7 @@ describe('ModelStatusView', () => {
     vi.useRealTimers()
   })
 
-  it('uses the latest 30-minute bucket for the continuous signal light', async () => {
+  it('uses the rolling 24-hour metrics for the continuous signal light', async () => {
     const data = report()
     const baseModel = data.groups[0].models[0]
     data.groups = [{
@@ -104,11 +104,15 @@ describe('ModelStatusView', () => {
         { ...baseModel, name: 'balanced', status: 'degraded', metrics: { ...metrics, total: 100, success: 50, failure: 0, empty: 50, success_rate: 50 } },
         { ...baseModel, name: 'mostly-failed', status: 'unavailable', metrics: { ...metrics, total: 100, success: 0, failure: 100, empty: 0, success_rate: 0 } },
         { ...baseModel, name: 'no-data', status: 'no_data', metrics: { ...metrics, total: 0, success: 0, failure: 0, empty: 0, unknown: 0, success_rate: null } },
-      ].map(model => ({
+      ].map((model, index) => ({
         ...model,
-        status: 'healthy' as const,
-        metrics: { ...metrics, total: 100, success: 100, failure: 0, empty: 0, success_rate: 100 },
-        buckets: baseModel.buckets!.map((bucket, index) => index === 47 ? { ...bucket, ...model.metrics } : bucket),
+        metrics: index === 0
+          ? { ...metrics, total: 100, success: 95, failure: 5, empty: 0, success_rate: 95 }
+          : index === 1
+            ? { ...metrics, total: 100, success: 50, failure: 0, empty: 50, success_rate: 50 }
+            : index === 2
+              ? { ...metrics, total: 100, success: 0, failure: 100, empty: 0, success_rate: 0 }
+              : { ...metrics, total: 0, success: 0, failure: 0, empty: 0, unknown: 0, success_rate: null },
       })),
     }]
     getModelStatus.mockResolvedValueOnce(data)
@@ -166,16 +170,19 @@ describe('ModelStatusView', () => {
     { success: 79, failure: 21, empty: 0, unknown: 0, status: 'unavailable', rate: '79%', hue: 95 },
     { success: 0, failure: 5, empty: 0, unknown: 0, status: 'unavailable', rate: '0%', hue: 0 },
     { success: 0, failure: 0, empty: 5, unknown: 0, status: 'unavailable', rate: '0%', hue: 0 },
-  ])('derives $status from the latest 30-minute bucket ($success/$failure/$empty/$unknown)', async ({ success, failure, empty, unknown, status, rate, hue }) => {
+  ])('derives $status from the rolling 24-hour metrics ($success/$failure/$empty/$unknown)', async ({ success, failure, empty, unknown, status, rate, hue }) => {
     const data = report()
     const model = data.groups[0].models[0]
     model.status = status === 'healthy' ? 'unavailable' : 'healthy'
-    model.metrics = status === 'healthy'
-      ? { ...metrics, total: 100, success: 0, failure: 100, empty: 0, success_rate: 0 }
-      : { ...metrics, total: 100, success: 100, failure: 0, empty: 0, success_rate: 100 }
-    model.buckets![47] = {
-      ...model.buckets![47], total: success + failure + empty + unknown,
-      success, failure, empty, unknown,
+    const known = success + failure + empty
+    model.metrics = {
+      ...metrics,
+      total: known + unknown,
+      success,
+      failure,
+      empty,
+      unknown,
+      success_rate: known > 0 ? success * 100 / known : null,
     }
     data.groups = [{ ...data.groups[0], models: [model] }]
     getModelStatus.mockResolvedValueOnce(data)
@@ -603,6 +610,7 @@ describe('ModelStatusView', () => {
 
   it.each([400, 401, 403, 404, 408, 429, 499])('labels excluded HTTP %i records without lowering the success rate', async statusCode => {
     const data = report()
+    data.groups[0].models[0].metrics = { ...metrics, total: 6, success: 5, failure: 0, empty: 0, unknown: 1, success_rate: 100 }
     data.groups[0].models[0].buckets![47] = {
       ...data.groups[0].models[0].buckets![47],
       total: 6, success: 5, failure: 0, empty: 0, unknown: 1,
@@ -667,12 +675,12 @@ describe('ModelStatusView', () => {
     getModelStatus.mockResolvedValue({ ...report(), snapshot_at: undefined })
     const wrapper = render()
     await flushPromises()
-    await vi.advanceTimersByTimeAsync(120000)
-    expect(getModelStatus).toHaveBeenCalledTimes(5)
+    await vi.advanceTimersByTimeAsync(420000)
+    expect(getModelStatus).toHaveBeenCalledTimes(15)
     expect(wrapper.text()).toContain('modelStatus.staleData')
     wrapper.unmount()
     await vi.advanceTimersByTimeAsync(30000)
-    expect(getModelStatus).toHaveBeenCalledTimes(5)
+    expect(getModelStatus).toHaveBeenCalledTimes(15)
   })
 
   it('renders an empty catalog separately from a filter with no matches', async () => {
@@ -686,7 +694,7 @@ describe('ModelStatusView', () => {
   it('renders all 48 time buckets across the 24-hour window', async () => {
     const data = report()
     const model = data.groups[0].models[0]
-    model.metrics = { ...metrics, total: 30, success: 30, empty: 0, success_rate: 100 }
+    model.metrics = { ...metrics, total: 4, success: 3, failure: 1, empty: 0, success_rate: 75 }
     model.buckets = Array.from({ length: 48 }, (_, index) => ({
       start_at: new Date(Date.UTC(2026, 8, 5, 1, index * 30)).toISOString(),
       end_at: new Date(Date.UTC(2026, 8, 5, 1, index * 30 + 30)).toISOString(),

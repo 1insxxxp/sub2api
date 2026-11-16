@@ -318,7 +318,10 @@ func TestModelStatusReturnsStaleSnapshotWhenRefreshFails(t *testing.T) {
 	groups, accounts := modelStatusFixtures()
 	repo := &modelStatusRepoStub{err: errors.New("database unavailable")}
 	svc := NewModelStatusService(repo, groups, accounts, nil)
-	svc.cached = &ModelStatusReport{Groups: []ModelStatusGroup{{ID: 1, Name: "Public A", Platform: PlatformOpenAI}}}
+	svc.cached = &ModelStatusReport{Groups: []ModelStatusGroup{{
+		ID: 1, Name: "Public A", Platform: PlatformOpenAI,
+		Models: []ModelStatusModel{{Name: "shared", Platform: PlatformOpenAI, Metrics: ModelStatusMetrics{Total: 3, Success: 3}}},
+	}}}
 	svc.cachedAt = time.Now().Add(-modelStatusCacheTTL - time.Second)
 
 	report, err := svc.Report(context.Background())
