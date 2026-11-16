@@ -30,6 +30,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
 
 const geminiStickySessionTTL = time.Hour
@@ -3318,7 +3319,12 @@ func (s *GeminiMessagesCompatService) handleNativeNonStreamingResponse(c *gin.Co
 	if contentType == "" {
 		contentType = "application/json"
 	}
-	c.Data(resp.StatusCode, contentType, projectGeminiInputCountingNativeUsage(c, respBody))
+	// Native clients (including New API) consume candidatesTokenCount directly
+	// from the wire response. Keep measured upstream usage authoritative, but
+	// repair the rare prompt-only usage snapshot when actual output content is
+	// present so downstream usage cannot settle at zero.
+	clientBody := patchGeminiNativeOutputUsage(respBody, geminiNativePayloadOutputText(respBody), 0)
+	c.Data(resp.StatusCode, contentType, projectGeminiInputCountingNativeUsage(c, clientBody))
 
 	if u := extractGeminiUsage(respBody); u != nil {
 		return u, nil
@@ -3391,6 +3397,7 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponseWithContext(c
 	var best geminiResponseSignal
 	sawDataEvent := false
 	fallback := &geminiSSEFallbackBody{}
+	var nativeOutputText strings.Builder
 	clientDisconnect := false
 	finished := false
 	semanticCommitted := firstOutputGuard == nil || !modelFirstOutputTimeoutEnabled(ctx, firstOutputPolicy)
@@ -3471,6 +3478,7 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponseWithContext(c
 					outcomeCollector.ObserveGeminiSSEData(string(rawBytes))
 					observer.ObserveGemini(rawBytes)
 					observeGeminiImageOutputs(c, rawBytes)
+					nativeOutputText.WriteString(geminiNativePayloadOutputText(rawBytes))
 
 					if gjson.GetBytes(rawBytes, "candidates.0.finishReason").String() != "" {
 						finished = true
@@ -3483,10 +3491,11 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponseWithContext(c
 					}
 
 					outputLine := line
-					projected := projectGeminiInputCountingNativeUsage(c, rawBytes)
-					if isOAuth || !bytes.Equal(projected, rawBytes) {
+					clientRawBytes := patchGeminiNativeOutputUsage(rawBytes, nativeOutputText.String(), 0)
+					projected := projectGeminiInputCountingNativeUsage(c, clientRawBytes)
+					if isOAuth || !bytes.Equal(projected, rawBytes) || !bytes.Equal(clientRawBytes, rawBytes) {
 						// SSE format requires double newline (\n\n) to separate events
-						if len(rawBytes) > 0 {
+						if len(projected) > 0 {
 							rawToWrite = string(projected)
 						}
 						outputLine = fmt.Sprintf("data: %s\n\n", rawToWrite)
@@ -3606,6 +3615,68 @@ func geminiNativePayloadHasSemanticContent(raw []byte) bool {
 		return !found
 	})
 	return found
+}
+
+// geminiNativePayloadOutputText returns the output-bearing content that a
+// downstream Gemini usage parser can count. Function calls are included because
+// they are billable model output even when there is no visible text.
+func geminiNativePayloadOutputText(raw []byte) string {
+	var output strings.Builder
+	gjson.GetBytes(raw, "candidates").ForEach(func(_, candidate gjson.Result) bool {
+		candidate.Get("content.parts").ForEach(func(_, part gjson.Result) bool {
+			if text := part.Get("text").String(); text != "" {
+				output.WriteString(text)
+			}
+			if functionCall := part.Get("functionCall"); functionCall.IsObject() {
+				if name := functionCall.Get("name").String(); name != "" {
+					output.WriteString(name)
+				}
+				if args := functionCall.Get("args"); args.Exists() {
+					output.WriteString(args.Raw)
+				}
+			}
+			return true
+		})
+		return true
+	})
+	return output.String()
+}
+
+// patchGeminiNativeOutputUsage repairs a prompt-only native usage snapshot for
+// downstream clients. The upstream candidate count remains authoritative when
+// it is positive. A locally estimated count is used only when response content
+// is present and candidatesTokenCount is missing or explicitly zero.
+func patchGeminiNativeOutputUsage(raw []byte, outputText string, outputTokens int) []byte {
+	if !gjson.ValidBytes(raw) {
+		return raw
+	}
+	path := "usageMetadata"
+	if !gjson.GetBytes(raw, path).IsObject() {
+		path = "response.usageMetadata"
+		if !gjson.GetBytes(raw, path).IsObject() {
+			return raw
+		}
+	}
+	if candidate := gjson.GetBytes(raw, path+".candidatesTokenCount"); candidate.Type == gjson.Number && candidate.Int() > 0 {
+		return raw
+	}
+	if outputTokens <= 0 {
+		outputTokens = estimateTokensForText(outputText)
+	}
+	if outputTokens <= 0 {
+		return raw
+	}
+	updated, err := sjson.SetBytes(raw, path+".candidatesTokenCount", outputTokens)
+	if err != nil {
+		return raw
+	}
+	if total := gjson.GetBytes(raw, path+".totalTokenCount"); total.Type == gjson.Number && total.Int() >= 0 {
+		updated, err = sjson.SetBytes(updated, path+".totalTokenCount", total.Int()+int64(outputTokens))
+		if err != nil {
+			return raw
+		}
+	}
+	return updated
 }
 
 // unwrapGeminiResponse 解包 Gemini OAuth 响应中的 response 字段
