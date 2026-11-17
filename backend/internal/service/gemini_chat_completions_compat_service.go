@@ -340,12 +340,12 @@ func (s *GeminiMessagesCompatService) forwardClaudeBodyAsChatCompletions(
 			forwardErr = streamErr
 		}
 	} else if useUpstreamStream {
-		collected, usageObj, _, err := collectGeminiSSEObserved(s.cfg, resp.Body, account.Type == AccountTypeOAuth, func(raw []byte) { ObserveGeminiUpstreamAttemptUsage(c, raw) })
+		collected, usageObj, stats, err := collectGeminiSSEObserved(s.cfg, resp.Body, account.Type == AccountTypeOAuth, func(raw []byte) { ObserveGeminiUpstreamAttemptUsage(c, raw) })
 		if err != nil {
 			return nil, s.writeChatCompletionsError(c, http.StatusBadGateway, "upstream_error", "Failed to read upstream stream")
 		}
 		collectedBytes, _ := json.Marshal(collected)
-		chatResp, usageObj2, err := geminiResponseToChatCompletions(collected, originalModel, collectedBytes, usageObj)
+		chatResp, usageObj2, err := geminiResponseToChatCompletions(collected, originalModel, collectedBytes, usageObj, stats.nativeUsage)
 		if err != nil {
 			return nil, s.writeChatCompletionsError(c, http.StatusBadGateway, "upstream_error", "Failed to parse upstream response")
 		}
@@ -575,7 +575,7 @@ func (s *GeminiMessagesCompatService) handleChatCompletionsNonStreamingResponseF
 		)
 	}
 
-	chatResp, usage, err := geminiResponseToChatCompletions(geminiResp, originalModel, respBody, nil)
+	chatResp, usage, err := geminiResponseToChatCompletions(geminiResp, originalModel, respBody, nil, nil)
 	if err != nil {
 		return nil, s.writeChatCompletionsError(c, http.StatusBadGateway, "upstream_error", "Failed to parse upstream response")
 	}
@@ -598,15 +598,16 @@ func geminiResponseToChatCompletions(
 	originalModel string,
 	rawData []byte,
 	usageOverride *ClaudeUsage,
+	outputUsage *geminiNativeOutputUsage,
 ) (*apicompat.ChatCompletionsResponse, *ClaudeUsage, error) {
 	claudeRespMap, usage := convertGeminiToClaudeMessage(geminiResp, originalModel, rawData, true)
 	if usageOverride != nil && (usageOverride.InputTokens > 0 || usageOverride.OutputTokens > 0 || usageOverride.CacheReadInputTokens > 0) {
 		usage = usageOverride
-		if usageMap, ok := claudeRespMap["usage"].(map[string]any); ok {
-			usageMap["input_tokens"] = usage.InputTokens
-			usageMap["output_tokens"] = usage.OutputTokens
-			usageMap["cache_read_input_tokens"] = usage.CacheReadInputTokens
-		}
+	}
+	if usageMap, ok := claudeRespMap["usage"].(map[string]any); ok {
+		usageMap["input_tokens"] = usage.InputTokens
+		usageMap["output_tokens"] = usage.OutputTokens
+		usageMap["cache_read_input_tokens"] = usage.CacheReadInputTokens
 	}
 
 	claudeBytes, err := json.Marshal(claudeRespMap)
@@ -618,7 +619,16 @@ func geminiResponseToChatCompletions(
 		return nil, nil, err
 	}
 	responsesResp := apicompat.AnthropicToResponsesResponse(&anthropicResp)
-	return apicompat.ResponsesToChatCompletions(responsesResp, originalModel), usage, nil
+	chatResp := apicompat.ResponsesToChatCompletions(responsesResp, originalModel)
+	if chatResp.Usage != nil && chatResp.Usage.CompletionTokens <= 0 {
+		if outputUsage == nil {
+			outputUsage = &geminiNativeOutputUsage{}
+			outputUsage.observe(rawData)
+		}
+		chatResp.Usage.CompletionTokens = outputUsage.chatOutputTokens(chatResp.Usage.CompletionTokens)
+		chatResp.Usage.TotalTokens = chatResp.Usage.PromptTokens + chatResp.Usage.CompletionTokens
+	}
+	return chatResp, usage, nil
 }
 
 func chatCompletionsResponseHasVisibleOutput(resp *apicompat.ChatCompletionsResponse) bool {
@@ -720,6 +730,7 @@ func (s *GeminiMessagesCompatService) handleChatCompletionsStreamingResponseFrom
 
 	var usage ClaudeUsage
 	var usageMetadata geminiUsageAccumulator
+	var outputUsage geminiNativeOutputUsage
 	var firstTokenMs *int
 	streamStarted := false
 	sawVisibleOutput := false
@@ -909,6 +920,9 @@ func (s *GeminiMessagesCompatService) handleChatCompletionsStreamingResponseFrom
 						}
 						if u := usageMetadata.Observe(rawBytes); u != nil {
 							usage = *u
+						}
+						if includeUsage {
+							outputUsage.observe(rawBytes)
 						}
 
 						for _, part := range extractGeminiParts(geminiResp) {
@@ -1103,6 +1117,9 @@ func (s *GeminiMessagesCompatService) handleChatCompletionsStreamingResponseFrom
 		stopReason = "tool_use"
 	}
 	customerUsage := geminiInputCountingClientUsage(c, &usage)
+	if includeUsage {
+		customerUsage.OutputTokens = outputUsage.chatOutputTokens(customerUsage.OutputTokens)
+	}
 	anthState.InputTokens = customerUsage.InputTokens
 	anthState.CacheReadInputTokens = customerUsage.CacheReadInputTokens
 	if emitAnthropicEvent(&apicompat.AnthropicStreamEvent{

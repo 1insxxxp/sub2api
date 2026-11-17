@@ -3729,6 +3729,19 @@ func (a *geminiNativeOutputUsage) process(raw []byte) []byte {
 	return a.project(raw)
 }
 
+// Chat adapters need the same missing-output repair as the native endpoint.
+// Preserve positive provider measurements (including thinking) and project only
+// the client response; this must not become measured usage in provider billing.
+func (a *geminiNativeOutputUsage) chatOutputTokens(reported int) int {
+	if reported > 0 {
+		return reported
+	}
+	if projected := extractGeminiUsage(a.project([]byte(`{}`))); projected != nil && projected.OutputTokens > 0 {
+		return projected.OutputTokens
+	}
+	return reported
+}
+
 // patchGeminiNativeOutputUsage repairs a prompt-only native usage snapshot for
 // downstream clients. The upstream candidate count remains authoritative when
 // it is positive. A locally estimated count is used only when response content

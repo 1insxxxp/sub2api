@@ -72,7 +72,7 @@ func TestGeminiResponseToChatCompletionsPreservesInlineData(t *testing.T) {
 			rawData, err := json.Marshal(geminiResp)
 			require.NoError(t, err)
 
-			got, _, err := geminiResponseToChatCompletions(geminiResp, "gemini-test", rawData, nil)
+			got, _, err := geminiResponseToChatCompletions(geminiResp, "gemini-test", rawData, nil, nil)
 			require.NoError(t, err)
 			require.Len(t, got.Choices, 1)
 
@@ -114,7 +114,7 @@ func TestGeminiResponseToChatCompletionsOmitsInvalidInlineData(t *testing.T) {
 			rawData, err := json.Marshal(geminiResp)
 			require.NoError(t, err)
 
-			got, _, err := geminiResponseToChatCompletions(geminiResp, "gemini-test", rawData, nil)
+			got, _, err := geminiResponseToChatCompletions(geminiResp, "gemini-test", rawData, nil, nil)
 			require.NoError(t, err)
 
 			var content string
@@ -179,7 +179,7 @@ func TestGeminiResponseToChatCompletionsRetainsTextAndToolBehavior(t *testing.T)
 	rawData, err := json.Marshal(geminiResp)
 	require.NoError(t, err)
 
-	got, _, err := geminiResponseToChatCompletions(geminiResp, "gemini-test", rawData, nil)
+	got, _, err := geminiResponseToChatCompletions(geminiResp, "gemini-test", rawData, nil, nil)
 	require.NoError(t, err)
 	require.Len(t, got.Choices, 1)
 
@@ -201,7 +201,7 @@ func TestGeminiResponseToChatCompletionsOmitsThoughtParts(t *testing.T) {
 	var geminiResp map[string]any
 	require.NoError(t, json.Unmarshal(rawData, &geminiResp))
 
-	got, usage, err := geminiResponseToChatCompletions(geminiResp, "gemini-test", rawData, nil)
+	got, usage, err := geminiResponseToChatCompletions(geminiResp, "gemini-test", rawData, nil, nil)
 	require.NoError(t, err)
 	require.Len(t, got.Choices, 1)
 
@@ -220,7 +220,7 @@ func TestGeminiResponseToChatCompletionsThoughtOnlyResponse(t *testing.T) {
 	var geminiResp map[string]any
 	require.NoError(t, json.Unmarshal(rawData, &geminiResp))
 
-	got, usage, err := geminiResponseToChatCompletions(geminiResp, "gemini-test", rawData, nil)
+	got, usage, err := geminiResponseToChatCompletions(geminiResp, "gemini-test", rawData, nil, nil)
 	require.NoError(t, err)
 	require.Len(t, got.Choices, 1)
 	require.Empty(t, got.Choices[0].Message.Content)
