@@ -14,15 +14,15 @@ import (
 
 // Deliberately use an operator price above the fallback catalog. Mapping tests
 // must retain this requested-model price, not accidentally price the target.
-// Keep all tier comparisons below the separate 5-credit estimated-hold ceiling.
-const inflightUltrafastStandardCost = 0.3 // 1000 input * .0001 + 1000 output * .0002
+// Keep all tier comparisons below the separate 1-credit estimated-hold ceiling.
+const inflightUltrafastStandardCost = 0.03 // 1000 input * .00001 + 1000 output * .00002
 
 type inflightUltrafastEstimator interface {
 	EstimateInflightReservation(context.Context, *APIKey, InflightEstimateRequest) (float64, bool)
 }
 
 func newInflightUltrafastGroup(model string) *Group {
-	input, output := .0001, .0002
+	input, output := .00001, .00002
 	return &Group{
 		ID: 7101, Platform: PlatformOpenAI, Status: StatusActive, Hydrated: true,
 		SubscriptionType: SubscriptionTypeStandard, RateMultiplier: 1,
@@ -326,7 +326,7 @@ func TestInflightUltrafast_PerRequestPriceIsUnchanged(t *testing.T) {
 	group := newInflightUltrafastGroup("gpt-6.1-sol")
 	group.ForceOpenAIUltrafast = true
 	group.RateMultiplier = 1.5
-	price := .4
+	price := .2 // Keep this pricing assertion below the estimated-hold ceiling.
 	group.ModelPricing = []ChannelModelPricing{{Models: []string{"gpt-6.1-sol"}, BillingMode: BillingModePerRequest, PerRequestPrice: &price}}
 	key := newInflightUltrafastKey(group)
 	request := inflightUltrafastRequest("gpt-6.1-sol", "ultrafast")

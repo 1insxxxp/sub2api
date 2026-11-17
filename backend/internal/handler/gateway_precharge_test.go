@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -57,6 +58,11 @@ func TestGatewayPrecharge_ExactFixedPriceCanCallUpstream(t *testing.T) {
 }
 
 func runGatewayPrecharge(t *testing.T, protocol string, mode service.BillingMode, balance float64, metadata ...string) (*httptest.ResponseRecorder, *compatStreamUsageUpstream, *handlerInflightCache) {
+	t.Helper()
+	return runGatewayPrechargeWithBudget(t, protocol, mode, balance, 1000, metadata...)
+}
+
+func runGatewayPrechargeWithBudget(t *testing.T, protocol string, mode service.BillingMode, balance float64, maxTokens int, metadata ...string) (*httptest.ResponseRecorder, *compatStreamUsageUpstream, *handlerInflightCache) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	cfg := &config.Config{}
@@ -109,6 +115,7 @@ func runGatewayPrecharge(t *testing.T, protocol string, mode service.BillingMode
 		path = "/v1beta/models/" + model + ":streamGenerateContent?alt=sse"
 		body = `{"contents":[{"role":"user","parts":[{"text":"hello"}]}],"generationConfig":{"maxOutputTokens":1000}}`
 	}
+	body = strings.ReplaceAll(body, ":1000", ":"+strconv.Itoa(maxTokens))
 	if len(metadata) > 0 {
 		var payload map[string]any
 		require.NoError(t, json.Unmarshal([]byte(body), &payload))
@@ -144,6 +151,28 @@ func TestGatewayPrecharge_MetadataDoesNotBlockTokenRequests(t *testing.T) {
 			response, upstream, _ := runGatewayPrecharge(t, protocol, service.BillingModeToken, 0.1, strings.Repeat("metadata", 300000))
 			require.Equal(t, 1, upstream.calls, response.Body.String())
 			require.NotContains(t, response.Body.String(), "余额不足")
+		})
+	}
+}
+
+func TestGatewayPrecharge_OneCreditCapAcrossProtocols(t *testing.T) {
+	for _, protocol := range []string{"chat", "messages", "responses", "gemini"} {
+		t.Run(protocol+"/insufficient", func(t *testing.T) {
+			response, upstream, cache := runGatewayPrechargeWithBudget(t, protocol, service.BillingModeToken, 0.99, 1_000_000)
+			require.Equal(t, http.StatusForbidden, response.Code, response.Body.String())
+			require.Contains(t, response.Body.String(), "本次预扣额度 US$1.00")
+			require.Zero(t, upstream.calls)
+			require.Zero(t, cache.count())
+		})
+		if protocol == "gemini" { // This fixture's successful upstream response uses Anthropic SSE.
+			continue
+		}
+		t.Run(protocol+"/sufficient", func(t *testing.T) {
+			response, upstream, cache := runGatewayPrechargeWithBudget(t, protocol, service.BillingModeToken, 1, 1_000_000)
+			require.Equal(t, http.StatusOK, response.Code, response.Body.String())
+			require.Equal(t, 1, upstream.calls)
+			require.Equal(t, 1.0, cache.maxHold)
+			require.Zero(t, cache.count(), "settlement releases the capped hold")
 		})
 	}
 }

@@ -106,6 +106,7 @@ type handlerInflightCache struct {
 	mu      sync.Mutex
 	balance float64
 	res     map[string]float64
+	maxHold float64
 }
 
 func newHandlerInflightCache(balance float64) *handlerInflightCache {
@@ -141,6 +142,7 @@ func (m *handlerInflightCache) ReserveInflightBalance(_ context.Context, _ int64
 	if service.QuantizeUsageBillingAmount(balance-sum) < service.QuantizeUsageBillingAmount(amount) {
 		return false, sum, nil
 	}
+	m.maxHold = max(m.maxHold, amount)
 	m.res[id] = amount
 	return true, sum, nil
 }

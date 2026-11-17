@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestInflightEstimateCapFiveAcrossGateways(t *testing.T) {
+func TestInflightEstimateCapOneAcrossGateways(t *testing.T) {
 	group := newInflightUltrafastGroup("gpt-6.1-sol")
 	group.ForceOpenAIUltrafast = true
 	key := newInflightUltrafastKey(group)
@@ -21,34 +21,34 @@ func TestInflightEstimateCapFiveAcrossGateways(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			estimate, priced := estimator.EstimateInflightReservation(inflightUltrafastContext(key), key, request)
 			require.True(t, priced)
-			require.Equal(t, 5.0, estimate, "cap after tier pricing and all multipliers")
+			require.Equal(t, 1.0, estimate, "cap after tier pricing and all multipliers")
 		})
 	}
 	billing := NewBillingService(&config.Config{}, nil)
 	estimate, priced := EstimateInflightReservationCost(billing, config.InflightReservationConfig{}, "claude-sonnet-4-5", 1_000_000, 1_000_000, 2)
 	require.True(t, priced)
-	require.Equal(t, 5.0, estimate)
+	require.Equal(t, 1.0, estimate)
 	cost, err := billing.CalculateCost("claude-sonnet-4-5", UsageTokens{InputTokens: 250_000, OutputTokens: 1_000_000}, 2)
 	require.NoError(t, err)
-	require.Greater(t, cost.ActualCost, 5.0, "the precharge ceiling must not discount actual billing")
+	require.Greater(t, cost.ActualCost, 1.0, "the precharge ceiling must not discount actual billing")
 }
 
-func TestInflightEstimateCapFiveAdmissionAndRelease(t *testing.T) {
+func TestInflightEstimateCapOneAdmissionAndRelease(t *testing.T) {
 	ctx := context.Background()
-	user := &User{ID: 1, Balance: 5}
-	cache := newMemInflightCache(5)
+	user := &User{ID: 1, Balance: 1}
+	cache := newMemInflightCache(1)
 	svc := newInflightSvc(t, cache, 60)
 	svc.userRepo = &inflightRecheckUserRepo{user: user}
 	res, err := svc.ReserveInflight(ctx, user, nil, nil, 128.09169)
 	require.NoError(t, err)
 	require.NotNil(t, res)
 	t.Cleanup(res.HandlerDone)
-	require.Equal(t, 5.0, res.Amount())
+	require.Equal(t, 1.0, res.Amount())
 	require.Equal(t, 1, cache.count())
 	second, err := svc.ReserveInflight(ctx, user, nil, nil, 99)
 	require.Nil(t, second)
 	require.ErrorIs(t, err, ErrBalanceInFlight)
-	require.Contains(t, pkgerrors.Message(err), "本次预扣额度 US$5.00")
+	require.Contains(t, pkgerrors.Message(err), "本次预扣额度 US$1.00")
 	require.Equal(t, 1, cache.count())
 	res.HandlerDone()
 	require.Zero(t, cache.count())
@@ -68,15 +68,15 @@ func TestInflightEstimateCapFiveAdmissionAndRelease(t *testing.T) {
 	require.Zero(t, cache.count())
 }
 
-func TestInflightEstimateCapFiveInsufficientBalanceMessage(t *testing.T) {
-	user := &User{ID: 1, Balance: 4.99}
+func TestInflightEstimateCapOneInsufficientBalanceMessage(t *testing.T) {
+	user := &User{ID: 1, Balance: 0.99}
 	cache := newMemInflightCache(user.Balance)
 	svc := newInflightSvc(t, cache, 60)
 	svc.userRepo = &inflightRecheckUserRepo{user: user}
 	res, err := svc.ReserveInflight(context.Background(), user, nil, nil, 128.09169)
 	require.Nil(t, res)
 	require.ErrorIs(t, err, ErrInsufficientBalance)
-	require.Contains(t, pkgerrors.Message(err), "本次预扣额度 US$5.00")
+	require.Contains(t, pkgerrors.Message(err), "本次预扣额度 US$1.00")
 	require.NotContains(t, pkgerrors.Message(err), "128.09")
 	require.Zero(t, cache.count())
 }

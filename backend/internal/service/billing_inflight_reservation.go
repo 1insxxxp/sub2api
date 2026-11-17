@@ -51,7 +51,7 @@ const (
 	inflightReservationRenewTimeout    = 2 * time.Second
 	inflightInputBytesPerTokenEstimate = 4
 	inflightUnpricedLogInterval        = time.Minute
-	maxInflightEstimatedReservationUSD = 5.0
+	maxInflightEstimatedReservationUSD = 1.0
 )
 
 // InflightReservation 一次请求的在途预留句柄。
@@ -265,7 +265,7 @@ func (s *BillingCacheService) ReserveInflightBalance(ctx context.Context, user *
 // 调用方须在 handler 结束时调用 HandlerDone（nil 安全）。
 //
 // 开关关闭、简易模式、订阅模式和零费用请求沿用各自的准入规则。
-// 估算预留最多 5 额度；真实结算费用和已知固定费用准入不受此上限影响。
+// 估算预留最多 1 额度；真实结算费用和已知固定费用准入不受此上限影响。
 // 预留服务不可用时返回计费服务错误。
 // 缓存余额不足以覆盖其他在途请求时，先复核真实余额并原子重试一次。
 // 真实余额耗尽返回 ErrInsufficientBalance；仍被其他在途请求占用返回 ErrBalanceInFlight。
@@ -840,7 +840,7 @@ func (d inflightEstimateDeps) estimateOne(ctx context.Context, apiKey *APIKey, m
 	return cost, priced || cost > 0
 }
 
-// estimate 返回单请求估算预扣额度（USD，已乘倍率，最多 5）；无法定价返回 (0,false)。
+// estimate 返回单请求估算预扣额度（USD，已乘倍率，最多 1）；无法定价返回 (0,false)。
 func (d inflightEstimateDeps) estimate(ctx context.Context, apiKey *APIKey, req InflightEstimateRequest) (float64, bool) {
 	if apiKey == nil || apiKey.User == nil {
 		return 0, false
@@ -930,7 +930,7 @@ func (d inflightEstimateDeps) estimate(ctx context.Context, apiKey *APIKey, req 
 //
 //	input_tokens  = bodyBytes / 4
 //	output_tokens = max_tokens 或 default_max_tokens
-//	cost = min((input_tokens × 输入单价 + output_tokens × 输出单价) × rateMultiplier, 5)
+//	cost = min((input_tokens × 输入单价 + output_tokens × 输出单价) × rateMultiplier, 1)
 //
 // 无法取得定价时返回 (0, false)，调用方按预扣费配置返回错误。
 func EstimateInflightReservationCost(billing *BillingService, cfg config.InflightReservationConfig, model string, bodyBytes, maxTokens int, rateMultiplier float64) (float64, bool) {

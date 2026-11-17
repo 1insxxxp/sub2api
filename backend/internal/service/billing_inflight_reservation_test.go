@@ -39,7 +39,7 @@ func TestEstimateInflightReservationCost(t *testing.T) {
 	// Input/output budgets remain complete; the final estimated hold is capped.
 	cost, ok = EstimateInflightReservationCost(billing, cfg, "claude-sonnet-4-5", 1_000_000, 1_000_000, 1)
 	require.True(t, ok)
-	require.Equal(t, 5.0, cost)
+	require.Equal(t, 1.0, cost)
 
 	// free group / missing billing → fail open
 	_, ok = EstimateInflightReservationCost(billing, cfg, "claude-sonnet-4-5", 10, 10, 0)
@@ -59,15 +59,15 @@ func TestReserveInflightBalance_NoReservationCacheFailsClosed(t *testing.T) {
 	require.ErrorIs(t, err, ErrBillingServiceUnavailable)
 }
 
-func TestInflightReservation_LegacyAmountSettingDoesNotOverrideFiveCap(t *testing.T) {
+func TestInflightReservation_LegacyAmountSettingDoesNotOverrideOneCap(t *testing.T) {
 	cache := newMemInflightCache(33.69240739)
 	svc := newInflightSvc(t, cache, 60)
-	svc.cfg.Billing.InflightReservation.MaxReservationUSD = 1
+	svc.cfg.Billing.InflightReservation.MaxReservationUSD = 100
 	svc.userRepo = &inflightRecheckUserRepo{user: &User{ID: 1, Balance: 33.69240739}}
 	res, err := svc.ReserveInflight(context.Background(), &User{ID: 1}, nil, nil, 128.09169)
 	require.NoError(t, err)
 	require.NotNil(t, res)
-	require.Equal(t, 5.0, res.Amount())
+	require.Equal(t, 1.0, res.Amount())
 	res.HandlerDone()
 	require.Zero(t, cache.count())
 }

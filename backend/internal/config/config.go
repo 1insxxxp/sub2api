@@ -1022,7 +1022,7 @@ type BillingConfig struct {
 
 // InflightReservationConfig 余额模式在途预留配置。
 // 准入时按 输入估算 + 输出单价 × max_tokens 估算单请求费用，在 Redis 中原子地
-// 校验 缓存余额 - 在途预留合计 >= min(估算,5) 后登记预留，实际结算完成后释放。
+// 校验 缓存余额 - 在途预留合计 >= min(估算,1) 后登记预留，实际结算完成后释放。
 // 首笔请求也校验足额预留；预留服务异常时返回计费错误，无法定价时默认拒绝。
 type InflightReservationConfig struct {
 	Enabled bool `mapstructure:"enabled"`
@@ -1034,7 +1034,7 @@ type InflightReservationConfig struct {
 	MaxOutputTokens int `mapstructure:"max_output_tokens"`
 	// MaxInputTokens 保留旧配置解析兼容，预扣费使用完整输入估算。
 	MaxInputTokens int `mapstructure:"max_input_tokens"`
-	// MaxReservationUSD 保留旧配置解析兼容；估算预扣固定最多 5，此字段不覆盖上限。
+	// MaxReservationUSD 保留旧配置解析兼容；估算预扣固定最多 1，此字段不覆盖上限。
 	MaxReservationUSD float64 `mapstructure:"max_reservation_usd"`
 	// FailClosedOnUnpriced 无法为请求估算费用（模型/分组/渠道均无定价）时是否拒绝请求。
 	// 默认 true；false 为显式启用旧的无法定价时放行策略。
