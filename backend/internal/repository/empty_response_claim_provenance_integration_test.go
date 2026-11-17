@@ -47,20 +47,22 @@ func TestEmptyResponseClaimProvenancePaginationMatchesEligibility(t *testing.T) 
 		claim   string
 		visible bool
 	}{
-		{"missing metadata", service.UsageTokenSourceUnreported, 0, nil, "", false},
-		{"estimated zero", service.UsageTokenSourceEstimated, 0, nil, "", false},
-		{"missing with visible text", service.UsageTokenSourceUnreported, 0, text, "", false},
+		{"missing metadata", service.UsageTokenSourceUnreported, 0, nil, "", true},
+		{"estimated zero", service.UsageTokenSourceEstimated, 0, nil, "", true},
+		{"missing with visible text", service.UsageTokenSourceUnreported, 0, text, "", true},
 		{"measured zero", service.UsageTokenSourceUpstream, 0, nil, "", true},
 		{"legacy unknown zero", service.UsageTokenSourceUnknown, 0, nil, "", true},
 		{"estimated nonzero", service.UsageTokenSourceEstimated, 7, nil, "", true},
+		{"unreported nonzero", service.UsageTokenSourceUnreported, 7, nil, "", false},
+		{"unreported nonzero verified empty", service.UsageTokenSourceUnreported, 7, pure(), "", true},
 		{"missing with pure empty", service.UsageTokenSourceUnreported, 0, pure(), "", true},
 		{"estimated zero pure empty", service.UsageTokenSourceEstimated, 0, pure(), "", true},
 		{"missing existing visible claim", service.UsageTokenSourceUnreported, 0, nil, service.EmptyResponseReasonLowOutput, true},
 		{"missing existing hidden claim", service.UsageTokenSourceUnreported, 0, nil, service.EmptyResponseReasonMissingEvidence, false},
-		{"missing with reasoning", service.UsageTokenSourceUnreported, 0, reasoning, "", false},
-		{"missing client canceled", service.UsageTokenSourceUnreported, 0, canceled, "", false},
-		{"missing upstream failure", service.UsageTokenSourceUnreported, 0, failed, "", false},
-		{"metadata only is not empty evidence", service.UsageTokenSourceUnreported, 0, metadataOnly, "", false},
+		{"missing with reasoning", service.UsageTokenSourceUnreported, 0, reasoning, "", true},
+		{"missing client canceled", service.UsageTokenSourceUnreported, 0, canceled, "", true},
+		{"missing upstream failure", service.UsageTokenSourceUnreported, 0, failed, "", true},
+		{"metadata only is not empty evidence", service.UsageTokenSourceUnreported, 0, metadataOnly, "", true},
 	}
 	var expectedIDs []int64
 	for i, tc := range cases {

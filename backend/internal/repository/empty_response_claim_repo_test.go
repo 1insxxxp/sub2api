@@ -506,7 +506,7 @@ func TestEmptyResponseClaimRepositoryCreateTransactionFailures(t *testing.T) {
 // Existing claims preserve their frozen visible decision; independently observed
 // pure-empty completion does not require a reported output token count.
 func TestEmptyResponseClaimRepositoryPaginatesOnlyVisibleUsageEvidence(t *testing.T) {
-	guard := `AND (erc.id IS NOT NULL OR (ul.output_tokens >= 0 AND ul.output_tokens <= $4))`
+	guard := `AND ( erc.id IS NOT NULL OR ul.output_tokens = 0 OR COALESCE(uro.output_tokens_source, 'unknown') <> 'unreported' OR (`
 	guardPattern := regexp.QuoteMeta(strings.Join(strings.Fields(guard), " "))
 	for _, guardedQuery := range []string{"count", "page"} {
 		t.Run(guardedQuery, func(t *testing.T) {

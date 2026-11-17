@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestEmptyResponseClaimRequiresProvenanceForUnknownLowOutput(t *testing.T) {
+func TestEmptyResponseClaimAcceptsZeroRegardlessOfProvenance(t *testing.T) {
 	now := time.Now()
 	group := Group{EmptyResponseCompensationEnabled: true}
 	base := UsageLog{ActualCost: 1, CreatedAt: now.Add(-time.Minute)}
@@ -21,13 +21,15 @@ func TestEmptyResponseClaimRequiresProvenanceForUnknownLowOutput(t *testing.T) {
 		{"estimated zero without evidence", UsageTokenSourceEstimated, nil},
 		{"estimated zero with output", UsageTokenSourceEstimated, &ResponseOutcome{HasReasoning: true, CollectorVersion: 1}},
 		{"estimated zero incomplete response", UsageTokenSourceEstimated, &ResponseOutcome{HTTPStatus: 200, UpstreamStatus: 200, CollectorVersion: 1}},
+		{"client canceled zero", UsageTokenSourceEstimated, &ResponseOutcome{DisconnectSource: DisconnectSourceClient, CollectorVersion: 1}},
+		{"tool output with zero", UsageTokenSourceUnreported, &ResponseOutcome{HasToolCall: true, CollectorVersion: 1}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			usage := base
 			usage.OutputTokensSource = tc.source
 			decision := EvaluateEmptyResponseClaim(now, usage, tc.outcome, group, 0)
-			require.Equal(t, EmptyResponseClaimManualReview, decision.Status)
-			require.Equal(t, EmptyResponseReasonMissingEvidence, decision.ReasonCode)
+			require.Equal(t, EmptyResponseClaimApproved, decision.Status)
+			require.Equal(t, EmptyResponseReasonLowOutput, decision.ReasonCode)
 		})
 	}
 }
@@ -61,4 +63,12 @@ func TestEmptyResponseClaimStillAcceptsVerifiedEmptyWithoutUsage(t *testing.T) {
 	decision := EvaluateEmptyResponseClaim(now, usage, outcome, Group{EmptyResponseCompensationEnabled: true}, 0)
 	require.Equal(t, EmptyResponseClaimApproved, decision.Status)
 	require.Equal(t, EmptyResponseReasonPureEmpty, decision.ReasonCode)
+}
+
+func TestEmptyResponseClaimUnreportedPositiveStillNeedsEvidence(t *testing.T) {
+	now := time.Now()
+	usage := UsageLog{ActualCost: 1, CreatedAt: now.Add(-time.Minute), OutputTokens: 5, OutputTokensSource: UsageTokenSourceUnreported}
+	decision := EvaluateEmptyResponseClaim(now, usage, nil, Group{EmptyResponseCompensationEnabled: true}, 0)
+	require.Equal(t, EmptyResponseClaimManualReview, decision.Status)
+	require.Equal(t, EmptyResponseReasonMissingEvidence, decision.ReasonCode)
 }

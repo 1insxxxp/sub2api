@@ -236,3 +236,33 @@ func TestEmptyResponseClaimServiceRetriesAnExistingApprovedClaim(t *testing.T) {
 	require.Equal(t, EmptyResponseClaimCompensated, claim.Status)
 	require.Equal(t, 1.0, claim.BalanceRefund)
 }
+
+func TestEmptyResponseClaimZeroSourceListAndSubmit(t *testing.T) {
+	for _, source := range []UsageTokenSource{UsageTokenSourceEstimated, UsageTokenSourceUnreported, UsageTokenSourceUpstream, UsageTokenSourceUnknown} {
+		t.Run(string(source), func(t *testing.T) {
+			now := time.Now()
+			evaluation := EmptyResponseClaimEvaluation{Usage: UsageLog{ID: 100, UserID: 7, ActualCost: 2, OutputTokens: 0, OutputTokensSource: source, CreatedAt: now.Add(-time.Minute)}, Group: Group{EmptyResponseCompensationEnabled: true}}
+			amount := 2.0
+			repo := &emptyResponseClaimRepoStub{evaluation: &evaluation, recent: []EmptyResponseRecentCandidate{{Evaluation: evaluation}}, claim: &EmptyResponseClaim{ID: 200, Status: EmptyResponseClaimApproved, OriginalActualCost: 2, CompensationAmount: &amount, RuleVersion: 6}, created: true}
+			compensator := &emptyResponseClaimCompensatorStub{}
+			svc := NewEmptyResponseClaimService(repo, compensator)
+			svc.now = func() time.Time { return now }
+			records, page, err := svc.ListRecent(context.Background(), 7, pagination.PaginationParams{Page: 1, PageSize: 10})
+			require.NoError(t, err)
+			require.Len(t, records, 1)
+			require.EqualValues(t, 1, page.Total)
+			require.Equal(t, "claimable", records[0].Status)
+			usage := evaluation.Usage
+			usage.Group = &evaluation.Group
+			projectUsageLogCompensation(&usage, now)
+			require.True(t, usage.CompensationEligible)
+			require.Equal(t, UsageCompensationEligible, usage.CompensationEligibility)
+			claim, err := svc.Submit(context.Background(), EmptyResponseClaimSubmitInput{UserID: 7, UsageLogID: 100})
+			require.NoError(t, err)
+			require.Equal(t, EmptyResponseClaimCompensated, claim.Status)
+			require.Equal(t, 2.0, claim.BalanceRefund)
+			require.Equal(t, int64(200), compensator.claimID)
+			require.Equal(t, 6, repo.createIn.Decision.RuleVersion)
+		})
+	}
+}

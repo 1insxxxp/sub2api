@@ -19,7 +19,7 @@ const (
 	EmptyResponseClaimCompensated  = "compensated"
 	EmptyResponseClaimDailyLimited = "daily_limited"
 
-	EmptyResponseClaimRuleVersion     = 5
+	EmptyResponseClaimRuleVersion     = 6
 	EmptyResponseClaimDailyLimit      = 15
 	EmptyResponseClaimMaxOutputTokens = 10
 	EmptyResponseClaimMaxRefund       = 5
@@ -499,11 +499,9 @@ func EvaluateEmptyResponseClaim(now time.Time, usage UsageLog, outcome *Response
 	if isPureEmptyResponse(outcome) {
 		return decision(EmptyResponseClaimApproved, EmptyResponseReasonPureEmpty)
 	}
-	// New provenance-aware rows must not turn an absent measurement into a
-	// low-output claim. Verified empty completion above remains independent
-	// evidence. Unknown historical rows retain the original benefit policy.
-	if usage.OutputTokensSource == UsageTokenSourceUnreported ||
-		(usage.OutputTokensSource == UsageTokenSourceEstimated && usage.OutputTokens == 0) {
+	// Zero billed output is eligible regardless of usage provenance or response
+	// evidence. Keep the measurement gate only for nonzero unreported counts.
+	if usage.OutputTokens != 0 && usage.OutputTokensSource == UsageTokenSourceUnreported {
 		return decision(EmptyResponseClaimManualReview, EmptyResponseReasonMissingEvidence)
 	}
 	// The user-facing rule is based on the billed output token count. Response
