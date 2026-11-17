@@ -338,7 +338,10 @@ func TestGeminiForwardNative_StreamNonSSEJSONBodyIsInspected(t *testing.T) {
 		_, err := svc.ForwardNative(context.Background(), c, geminiSignalTestAccount(),
 			"gemini-3.7-flash", "streamGenerateContent", true, geminiSignalTestRequest())
 		require.NoError(t, err)
-		require.Equal(t, body, rec.Body.String())
+		require.JSONEq(t, `[
+            {"candidates":[{"content":{"parts":[{"text":"hello"}],"role":"model"}}],"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":1}},
+            {"candidates":[{"content":{},"finishReason":"PROHIBITED_CONTENT"}],"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":1}}
+        ]`, rec.Body.String(), "retain the filter signal and provider usage in the final frame")
 		streamErrs := GetOpsStreamErrors(c)
 		require.Len(t, streamErrs, 1)
 		require.Equal(t, "PROHIBITED_CONTENT", streamErrs[0].Code)
@@ -499,7 +502,7 @@ func TestGeminiForwardNative_CountTokensBodyLeavesNoMark(t *testing.T) {
 	require.Empty(t, upstreamErrorEventsFromContext(t, c))
 }
 
-func TestCollectGeminiSSEObserved_SeesTerminalChunkEvenWhenAggregateDropsIt(t *testing.T) {
+func TestCollectGeminiSSEObserved_RetainsTerminalChunkSignal(t *testing.T) {
 	var observed []string
 	collected, usage, stats, err := collectGeminiSSEObserved(nil, strings.NewReader(geminiSignalTestProhibitedSSE), false, func(raw []byte) {
 		observed = append(observed, string(raw))
@@ -518,8 +521,8 @@ func TestCollectGeminiSSEObserved_SeesTerminalChunkEvenWhenAggregateDropsIt(t *t
 		}
 	}
 	require.True(t, hit)
-	// 聚合结果沿用"最后一个带 parts 的块"，本身不携带末块的 finishReason；检测必须逐事件进行。
+	// 聚合保留末块 finishReason，逐事件观察仍保留完整的原始信号。
 	aggregated, err := json.Marshal(collected)
 	require.NoError(t, err)
-	require.NotContains(t, string(aggregated), "PROHIBITED_CONTENT")
+	require.Contains(t, string(aggregated), "PROHIBITED_CONTENT")
 }

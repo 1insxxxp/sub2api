@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/Wei-Shaw/sub2api/migrations"
 	"github.com/lib/pq"
 	"github.com/stretchr/testify/require"
@@ -458,6 +459,7 @@ func createGroupUsageRollupTriggerTestSchema(t *testing.T, ctx context.Context, 
 		"222_group_usage_daily_rollups.sql",
 		"223_group_usage_rollup_timezone.sql",
 		"249_sub_admin_commission_exclusions.sql",
+		"251_group_usage_rollup_nonblocking_build.sql",
 	} {
 		migrationSQL, readErr := migrations.FS.ReadFile(migrationName)
 		require.NoError(t, readErr)
@@ -522,4 +524,37 @@ func waitForGroupUsageRollupStateLock(
 			return false, ctx.Err()
 		}
 	}
+}
+
+func TestGroupUsageRollupRetentionPreservesHistoricalCommissionBuckets(t *testing.T) {
+	useGroupUsageRepositoryTestTimezone(t, "UTC")
+	ctx := context.Background()
+	schema := createGroupUsageRollupTriggerTestSchema(t, ctx, false)
+	db := openRetentionTestDB(t, ctx, schema)
+	_, err := db.ExecContext(ctx, `
+  INSERT INTO groups(id) VALUES (10);
+  INSERT INTO users(id) VALUES (1);
+  INSERT INTO sub_admin_commission_exclusions(user_id, started_at, ended_at)
+  VALUES (1, '2020-01-01', '2020-02-01');
+  INSERT INTO usage_logs(id,user_id,group_id,actual_cost,created_at)
+  VALUES (1,1,10,3,'2020-01-02'), (2,1,10,7,'2026-08-12');
+ `)
+	require.NoError(t, err)
+	repo := newDashboardAggregationRepositoryWithSQL(db)
+	repo.clock = func() time.Time { return time.Date(2026, 8, 14, 12, 0, 0, 0, time.UTC) }
+	cutoff := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	require.Error(t, repo.CleanupUsageLogs(ctx, cutoff), "unpublished revenue must prevent retention")
+	require.NoError(t, repo.SyncGroupUsageRollups(ctx, service.GroupUsageTodayStart(repo.now())))
+	require.NoError(t, repo.CleanupUsageLogs(ctx, cutoff))
+	// Force another build after source rows have been removed.
+	_, err = db.ExecContext(ctx, "UPDATE usage_logs SET actual_cost=8 WHERE id=2")
+	require.NoError(t, err)
+	require.NoError(t, repo.SyncGroupUsageRollups(ctx, service.GroupUsageTodayStart(repo.now())))
+	var gross, excluded float64
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT actual_cost,commission_excluded_cost FROM usage_group_daily_rollups WHERE bucket_date='2020-01-02' AND group_id=10").Scan(&gross, &excluded))
+	require.Equal(t, 3.0, gross)
+	require.Equal(t, 3.0, excluded)
+	var remaining int
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT COUNT(*) FROM usage_logs WHERE id=1").Scan(&remaining))
+	require.Zero(t, remaining)
 }

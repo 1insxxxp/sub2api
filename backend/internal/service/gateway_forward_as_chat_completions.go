@@ -128,6 +128,10 @@ func (s *GatewayService) ForwardAsChatCompletions(
 		writeChatCompletionsError(c, http.StatusBadRequest, "invalid_request_error", err.Error())
 		return nil, err
 	}
+	if !account.IsOAuth() {
+		// OAuth accounts get their id from the mimicry below.
+		anthropicBody = withChatCompletionsMetadataUserID(body, anthropicBody)
+	}
 
 	// 6. Apply Claude Code mimicry for OAuth accounts.
 	// Chat Completions 协议进来的请求永远不是 Claude Code 客户端，所以对 OAuth 账号
@@ -164,13 +168,38 @@ func (s *GatewayService) ForwardAsChatCompletions(
 		proxyURL = account.Proxy.URL()
 	}
 
-	// 10. Build upstream request
 	upstreamCtx, releaseUpstreamCtx := context.WithCancel(ctx)
 	defer releaseUpstreamCtx()
-	upstreamReq, forwardedBody, err := s.buildUpstreamRequest(upstreamCtx, c, account, anthropicBody, token, tokenType, mappedModel, reqStream, shouldMimicClaudeCode)
-	if err != nil {
-		return nil, fmt.Errorf("build upstream request: %w", err)
+	// 10. Build and send the request, recovering a concurrent token rotation once.
+	var upstreamReq *http.Request
+	var forwardedBody []byte
+	var resp *http.Response
+	for retriedRotatedToken := false; ; {
+		upstreamReq, forwardedBody, err = s.buildUpstreamRequest(upstreamCtx, c, account, anthropicBody, token, tokenType, mappedModel, reqStream, shouldMimicClaudeCode)
+		if err != nil {
+			return nil, fmt.Errorf("build upstream request: %w", err)
+		}
+		resp, err = s.httpUpstream.DoWithTLS(upstreamReq, proxyURL, account.ID, account.Concurrency, s.tlsFPProfileService.ResolveTLSProfile(account))
+		if err != nil {
+			if resp != nil && resp.Body != nil {
+				_ = resp.Body.Close()
+			}
+			return nil, s.handleUpstreamTransportError(ctx, c, account, err, OpsUpstreamErrorEvent{
+				UpstreamURL: safeUpstreamURL(upstreamReq.URL.String()),
+			})
+		}
+		if resp.StatusCode == http.StatusUnauthorized && !retriedRotatedToken {
+			if rotatedToken := s.rotatedClaudeAccessToken(ctx, account, token); rotatedToken != "" {
+				_ = resp.Body.Close()
+				token = rotatedToken
+				retriedRotatedToken = true
+				continue
+			}
+		}
+		break
 	}
+	defer func() { _ = resp.Body.Close() }()
+
 	cacheCreationTTLTarget, _ := cacheTTLTargetFromAnthropicRequestBody(forwardedBody)
 	// Bill the final Anthropic effort after conversion and account normalization.
 	// For example, OpenAI xhigh is forwarded as output_config.effort=max.
@@ -180,17 +209,6 @@ func (s *GatewayService) ForwardAsChatCompletions(
 		reasoningEffort = nil
 	}
 
-	// 11. Send request
-	resp, err := s.httpUpstream.DoWithTLS(upstreamReq, proxyURL, account.ID, account.Concurrency, s.tlsFPProfileService.ResolveTLSProfile(account))
-	if err != nil {
-		if resp != nil && resp.Body != nil {
-			_ = resp.Body.Close()
-		}
-		return nil, s.handleUpstreamTransportError(ctx, c, account, err, OpsUpstreamErrorEvent{
-			UpstreamURL: safeUpstreamURL(upstreamReq.URL.String()),
-		})
-	}
-	defer func() { _ = resp.Body.Close() }()
 	// Unblock adapters waiting between SSE events when the client cancels.
 	// Capture the body before error handling can replace it.
 	responseBody := resp.Body
@@ -318,6 +336,7 @@ func (s *GatewayService) handleCCBufferedFromAnthropic(
 	reasoningEffort *string,
 	startTime time.Time,
 ) (*ForwardResult, error) {
+	observer := beginUpstreamResponseModelObservation(c)
 	requestID := resp.Header.Get("x-request-id")
 	outcomeCollector := NewResponseOutcomeCollector(http.StatusOK, resp.StatusCode)
 
@@ -334,17 +353,20 @@ func (s *GatewayService) handleCCBufferedFromAnthropic(
 	resultWithUsage := func(clientDisconnected bool) *ForwardResult {
 		outcome := outcomeCollector.Snapshot()
 		result := &ForwardResult{
-			RequestID:              requestID,
-			UpstreamHeaders:        resp.Header,
-			Usage:                  usage,
-			Model:                  originalModel,
-			CacheCreationTTLTarget: cacheCreationTTLTarget,
-			UpstreamModel:          mappedModel,
-			ReasoningEffort:        reasoningEffort,
-			Stream:                 false,
-			Duration:               time.Since(startTime),
-			ClientDisconnect:       clientDisconnected,
-			Outcome:                &outcome,
+			UpstreamResponseModel:         observer.Model(),
+			UpstreamResponseModelConflict: observer.Conflict(),
+			UpstreamResponseServiceTier:   observer.ServiceTier(),
+			RequestID:                     requestID,
+			UpstreamHeaders:               resp.Header,
+			Usage:                         usage,
+			Model:                         originalModel,
+			CacheCreationTTLTarget:        cacheCreationTTLTarget,
+			UpstreamModel:                 mappedModel,
+			ReasoningEffort:               reasoningEffort,
+			Stream:                        false,
+			Duration:                      time.Since(startTime),
+			ClientDisconnect:              clientDisconnected,
+			Outcome:                       &outcome,
 		}
 		if clientDisconnected {
 			// Buffered clients received no response body and have no stream collector.
@@ -380,6 +402,7 @@ func (s *GatewayService) handleCCBufferedFromAnthropic(
 			continue
 		}
 
+		observer.ObserveAnthropic([]byte(payload))
 		streamStatus.observe(&event, payload)
 		if streamStatus.upstreamErrType != "" {
 			break
@@ -507,6 +530,7 @@ func (s *GatewayService) handleCCStreamingFromAnthropicWithContinuation(
 	antiTruncationPolicy domain.AntiTruncationPolicy,
 	continueRequest func(context.Context, string, int) (*http.Response, error),
 ) (*ForwardResult, error) {
+	observer := beginUpstreamResponseModelObservation(c)
 	requestID := resp.Header.Get("x-request-id")
 	outcomeCollector := NewResponseOutcomeCollector(http.StatusOK, resp.StatusCode)
 
@@ -574,19 +598,22 @@ func (s *GatewayService) handleCCStreamingFromAnthropicWithContinuation(
 	resultWithUsage := func() *ForwardResult {
 		outcome := outcomeCollector.Snapshot()
 		return &ForwardResult{
-			RequestID:              requestID,
-			UpstreamHeaders:        resp.Header,
-			Usage:                  usage,
-			Model:                  originalModel,
-			CacheCreationTTLTarget: cacheCreationTTLTarget,
-			UpstreamModel:          mappedModel,
-			ReasoningEffort:        reasoningEffort,
-			Stream:                 true,
-			Duration:               time.Since(startTime),
-			FirstTokenMs:           firstTokenMs,
-			AntiTruncationRounds:   antiTruncationRounds,
-			ClientDisconnect:       clientDisconnected,
-			Outcome:                &outcome,
+			RequestID:                     requestID,
+			UpstreamHeaders:               resp.Header,
+			Usage:                         usage,
+			Model:                         originalModel,
+			CacheCreationTTLTarget:        cacheCreationTTLTarget,
+			UpstreamModel:                 mappedModel,
+			ReasoningEffort:               reasoningEffort,
+			Stream:                        true,
+			Duration:                      time.Since(startTime),
+			FirstTokenMs:                  firstTokenMs,
+			AntiTruncationRounds:          antiTruncationRounds,
+			ClientDisconnect:              clientDisconnected,
+			Outcome:                       &outcome,
+			UpstreamResponseModel:         observer.Model(),
+			UpstreamResponseModelConflict: observer.Conflict(),
+			UpstreamResponseServiceTier:   observer.ServiceTier(),
 		}
 	}
 
@@ -601,7 +628,7 @@ func (s *GatewayService) handleCCStreamingFromAnthropicWithContinuation(
 		}
 		// Reverse tool name mapping: fake → real, per-chunk bytes.Replace.
 		// c 可能持有请求侧注入的 ToolNameRewrite；无则仅做静态前缀还原。
-		out := string(reverseToolNamesIfPresent(c, []byte(sse)))
+		out := reverseToolNamesIfPresentString(c, sse)
 		if _, err := fmt.Fprint(c.Writer, out); err != nil {
 			clientDisconnected = true
 			stream.markClientDisconnected()
@@ -716,7 +743,9 @@ func (s *GatewayService) handleCCStreamingFromAnthropicWithContinuation(
 			if err := json.Unmarshal([]byte(payload), &event); err != nil {
 				continue
 			}
+			// Preserve received usage even when the client did not request a usage chunk.
 			ccState.IncludeUsage = ccState.IncludeUsage || anthropicChatStreamHasUsage(&event, payload)
+			observer.ObserveAnthropic([]byte(payload))
 			stream.observe(&event, payload)
 			if stream.upstreamErrType != "" {
 				break

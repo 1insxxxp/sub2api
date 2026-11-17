@@ -204,7 +204,7 @@ func TestGroupAccountAccessUsesSystemCustomSourceGroup(t *testing.T) {
 
 func TestGroupAccountAccessFiltersSnapshotCandidates(t *testing.T) {
 	groupID := int64(10)
-	first, second := &Account{ID: 101}, &Account{ID: 102}
+	first, second := &Account{ID: 101, Status: StatusActive, Schedulable: true}, &Account{ID: 102, Status: StatusActive, Schedulable: true}
 	snapshot := NewSchedulerSnapshotService(&snapshotHydrationCache{snapshot: []*Account{first, second}}, nil, nil, nil, nil)
 	ctx := WithGroupAccountExclusions(context.Background(), 7, GroupAccountExclusions{groupID: {first.ID}})
 	gw := &GatewayService{schedulerSnapshot: snapshot}

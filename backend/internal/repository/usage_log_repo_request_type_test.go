@@ -1255,3 +1255,71 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 	})
 
 }
+
+func TestUsageLogRepositoryGetModelStatsAccountFilterKeepsActualCost(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		netActualCost float64
+	}{
+		{name: "partially_compensated", netActualCost: 1.8},
+		{name: "fully_compensated", netActualCost: 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db, mock := newSQLMock(t)
+			repo := &usageLogRepository{sql: db}
+			start := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+			end := start.Add(24 * time.Hour)
+			accountID := int64(42)
+
+			// Match compensation subtraction and its zero floor explicitly. The three
+			// amounts must stay separate even when filtering only by account_id.
+			mock.ExpectQuery(`COALESCE\(SUM\(actual_cost\), 0\) as actual_cost,\s+COALESCE\(SUM\(GREATEST\(actual_cost - compensated_cost, 0\)\), 0\) as net_actual_cost,\s+COALESCE\(SUM\(COALESCE\(account_stats_cost, total_cost\) \* COALESCE\(account_rate_multiplier, 1\)\), 0\) as account_cost`).
+				WithArgs(start, end, accountID).
+				WillReturnRows(sqlmock.NewRows([]string{
+					"model", "requests", "input_tokens", "output_tokens",
+					"cache_creation_tokens", "cache_read_tokens", "total_tokens",
+					"cost", "actual_cost", "net_actual_cost", "account_cost",
+				}).AddRow("gemini-4-argon", int64(3), int64(10), int64(20), int64(0), int64(0), int64(30), 6.0, 2.4, tc.netActualCost, 0.9))
+
+			results, err := repo.GetModelStatsWithUsageFiltersBySource(context.Background(), start, end, usagestats.UsageLogFilters{AccountID: accountID}, usagestats.ModelSourceRequested)
+			require.NoError(t, err)
+			require.Len(t, results, 1)
+			require.Equal(t, "gemini-4-argon", results[0].Model)
+			require.Equal(t, 6.0, results[0].Cost)
+			require.Equal(t, 2.4, results[0].ActualCost)
+			require.Equal(t, tc.netActualCost, results[0].NetActualCost)
+			require.Equal(t, 0.9, results[0].AccountCost)
+			require.Less(t, results[0].NetActualCost, results[0].ActualCost)
+			require.NotEqual(t, results[0].AccountCost, results[0].NetActualCost)
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+func TestUsageLogRepositoryGetEndpointStatsAccountFilterKeepsActualCost(t *testing.T) {
+	db, mock := newSQLMock(t)
+	repo := &usageLogRepository{sql: db}
+
+	start := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	end := start.Add(24 * time.Hour)
+	accountID := int64(42)
+
+	// EndpointStat currently exposes gross customer charges and account cost,
+	// without a net-cost field; compensation is asserted in the model test above.
+	mock.ExpectQuery("COALESCE\\(SUM\\(actual_cost\\), 0\\) as actual_cost,\\s+COALESCE\\(SUM\\(COALESCE\\(account_stats_cost, total_cost\\) \\* COALESCE\\(account_rate_multiplier, 1\\)\\), 0\\) as account_cost").
+		WithArgs(start, end, accountID).
+		WillReturnRows(sqlmock.NewRows([]string{"endpoint", "requests", "total_tokens", "cost", "actual_cost", "account_cost"}).
+			AddRow("/v1beta/models", int64(3), int64(30), 6.0, 2.4, 0.9))
+
+	results, err := repo.GetEndpointStatsWithFilters(context.Background(), start, end, 0, 0, accountID, 0, "", nil, nil, nil)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	require.Equal(t, "/v1beta/models", results[0].Endpoint)
+	require.EqualValues(t, 3, results[0].Requests)
+	require.EqualValues(t, 30, results[0].TotalTokens)
+	require.Equal(t, 6.0, results[0].Cost)
+	require.Equal(t, 2.4, results[0].ActualCost)
+	require.Equal(t, 0.9, results[0].AccountCost)
+	require.NotEqual(t, results[0].ActualCost, results[0].AccountCost)
+	require.NoError(t, mock.ExpectationsWereMet())
+}

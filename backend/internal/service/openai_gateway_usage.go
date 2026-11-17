@@ -544,7 +544,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		applyAccountStatsCost(ctx, usageLog, s.channelService, s.billingService,
 			account.ID, *apiKey.GroupID, result.UpstreamModel, result.Model,
 			providerTokens, cost.TotalCost, pricingAt,
-			accountStatsLongContextPricingEnabled(longContextBillingGate) && !modelLongContextExempt,
+			accountStatsLongContextPricingEnabled(longContextBillingGate) && !modelLongContextExempt, 1,
 		)
 	}
 	if accountQuotaTotalCost != nil && usageLog.AccountStatsCost == nil {

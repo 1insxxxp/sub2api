@@ -148,7 +148,7 @@ func (s *GatewayService) applyForwardContinuationAccountStatsCost(ctx context.Co
 		}
 		leaf := &UsageLog{ServiceTier: round.ServiceTier, ReasoningEffort: round.ReasoningEffort}
 		applyAccountStatsCost(ctx, leaf, s.channelService, s.billingService, input.Account.ID, *input.APIKey.GroupID, round.UpstreamModel, round.Model,
-			UsageTokens{InputTokens: round.Usage.InputTokens, OutputTokens: round.Usage.OutputTokens, CacheReadTokens: round.Usage.CacheReadInputTokens, CacheCreationTokens: round.Usage.CacheCreationInputTokens}, cost.TotalCost, at, accountStatsLongContextPricingEnabled(nil))
+			UsageTokens{InputTokens: round.Usage.InputTokens, OutputTokens: round.Usage.OutputTokens, CacheReadTokens: round.Usage.CacheReadInputTokens, CacheCreationTokens: round.Usage.CacheCreationInputTokens}, cost.TotalCost, at, accountStatsLongContextPricingEnabled(nil), round.upstreamPriceFactor())
 		if leaf.AccountStatsCost != nil {
 			total += *leaf.AccountStatsCost
 		} else {
@@ -444,7 +444,7 @@ func (s *OpenAIGatewayService) applyOpenAIContinuationAccountStatsCost(ctx conte
 			return err
 		}
 		leaf := &UsageLog{ServiceTier: round.ServiceTier, ReasoningEffort: round.ReasoningEffort}
-		applyAccountStatsCost(ctx, leaf, s.channelService, s.billingService, input.Account.ID, *input.APIKey.GroupID, round.UpstreamModel, round.Model, openAIContinuationUsageTokens(round, false), cost.TotalCost, at, accountStatsLongContextPricingEnabled(gate) && !exempt)
+		applyAccountStatsCost(ctx, leaf, s.channelService, s.billingService, input.Account.ID, *input.APIKey.GroupID, round.UpstreamModel, round.Model, openAIContinuationUsageTokens(round, false), cost.TotalCost, at, accountStatsLongContextPricingEnabled(gate) && !exempt, 1)
 		if leaf.AccountStatsCost != nil {
 			total += *leaf.AccountStatsCost
 		} else {

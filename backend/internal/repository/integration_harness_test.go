@@ -39,6 +39,7 @@ var (
 	integrationEntClient   *dbent.Client
 	integrationRedis       *redisclient.Client
 	integrationPostgresDSN string
+	integrationDSN         string
 
 	redisNamespaceSeq uint64
 )
@@ -51,6 +52,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 	if dsn := os.Getenv("SUB2API_TEST_POSTGRES_DSN"); dsn != "" {
+		integrationDSN = dsn
 		os.Exit(runLocalIntegrationHarness(m, dsn, os.Getenv("SUB2API_TEST_REDIS_ADDR")))
 	}
 
@@ -96,6 +98,7 @@ func TestMain(m *testing.M) {
 	}
 	integrationPostgresDSN = dsn
 
+	integrationDSN = dsn
 	integrationDB, err = openSQLWithRetry(ctx, dsn, 30*time.Second)
 	if err != nil {
 		log.Printf("failed to open sql db: %v", err)

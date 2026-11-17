@@ -3,8 +3,10 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -98,9 +100,9 @@ func TestGeminiFallbackEvidenceCountsCumulativeFunctionArgumentsOnce(t *testing.
 	first := `{"candidates":[{"content":{"parts":[{"functionCall":{"name":"lookup","args":"{\"city\":\"Shang"}}]}}]}`
 	last := `{"candidates":[{"content":{"parts":[{"functionCall":{"name":"lookup","args":"{\"city\":\"Shanghai\"}"}}]}}]}`
 	require.Equal(t, measure([]string{last}), measure([]string{first, last, last}))
-	objectFirst := `{"candidates":[{"content":{"parts":[{"functionCall":{"name":"lookup","args":{"city":"Shang"}}}]}}]}`
-	objectLast := `{"candidates":[{"content":{"parts":[{"functionCall":{"name":"lookup","args":{"city":"Shanghai"}}}]}}]}`
-	require.Equal(t, measure([]string{objectLast}), measure([]string{objectFirst, objectLast, objectLast}), "structured argument snapshots replace earlier objects despite changed closing braces")
+	objectFirst := `{"candidates":[{"content":{"parts":[{"functionCall":{"id":"snapshot","name":"lookup","args":{"city":"Shang"}}}]}}]}`
+	objectLast := `{"candidates":[{"content":{"parts":[{"functionCall":{"id":"snapshot","name":"lookup","args":{"city":"Shanghai"}}}]}}]}`
+	require.Equal(t, measure([]string{objectLast}), measure([]string{objectFirst, objectLast, objectLast}), "identified argument snapshots replace earlier objects despite changed closing braces")
 }
 
 func TestGeminiFallbackEvidenceKeepsParallelSameNameToolsSeparate(t *testing.T) {
@@ -118,7 +120,7 @@ func TestGeminiFallbackEvidenceMixedCumulativeFramesDoNotRepeatTools(t *testing.
 	attempt := BeginGeminiUpstreamAttempt(c, &Account{ID: 701, Platform: PlatformGemini}, "gemini-test", true)
 	for _, text := range []string{"checking", "checking", "checking again"} {
 		raw, err := json.Marshal(map[string]any{"candidates": []any{map[string]any{"content": map[string]any{"parts": []any{
-			map[string]any{"text": text}, map[string]any{"functionCall": map[string]any{"name": "lookup", "args": map[string]any{"city": "Shanghai"}}},
+			map[string]any{"text": text}, map[string]any{"functionCall": map[string]any{"id": "snapshot", "name": "lookup", "args": map[string]any{"city": "Shanghai"}}},
 		}}}}})
 		require.NoError(t, err)
 		attempt.ObserveUsage(raw)
@@ -238,4 +240,50 @@ func TestGeminiFallbackEvidenceSurvivesDiagnosticStatusRewriteOnAcceptedStream(t
 	require.NotNil(t, result, "the caller has independently verified downstream cancellation; rewritten diagnostic HTTP status must not erase accepted inference")
 	require.True(t, result.GeminiUsageFallback.UpstreamAccepted)
 	require.Positive(t, result.GeminiUsageFallback.CandidateTokens)
+}
+
+// Billing must follow the same call boundaries as the client adapters when the
+// provider omits candidatesTokenCount. A later real measurement still wins.
+func TestGeminiFallbackToolBoundariesSettleOnlyMissingUsage(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		calls    []string
+		wantArgs []string
+	}{
+		{"anonymous missing args", []string{`{"name":"lookup"}`, `{"name":"lookup"}`}, []string{"", ""}},
+		{"anonymous separate objects", []string{`{"name":"lookup","args":{"x":1}}`, `{"name":"lookup","args":{"x":2}}`}, []string{`{"x":1}`, `{"x":2}`}},
+		{"anonymous identical objects", []string{`{"name":"lookup","args":{}}`, `{"name":"lookup","args":{}}`}, []string{`{}`, `{}`}},
+		{"late id", []string{`{"name":"lookup","args":"{\"x\":"}`, `{"id":"a","name":"lookup","args":"{\"x\":1}"}`, `{"id":"a","name":"lookup","args":{"x":1}}`}, []string{`{"x":1}`}},
+		{"first id only", []string{`{"id":"a","name":"lookup","args":"{\"x\":"}`, `{"name":"lookup","args":"1}"}`, `{"name":"lookup","args":{"x":1}}`}, []string{`{"x":1}`}},
+		{"snapshot then next call", []string{`{"name":"lookup","args":"{\"x\":"}`, `{"name":"lookup","args":"1}"}`, `{"name":"lookup","args":{"x":1}}`, `{"name":"lookup","args":{"x":1}}`}, []string{`{"x":1}`, `{"x":1}`}},
+		{"duplicate complete strings", []string{`{"name":"lookup","args":"{\"x\":1}"}`, `{"name":"lookup","args":"{\"x\":1}"}`}, []string{`{"x":1}`}},
+	} {
+		for _, measured := range []bool{false, true} {
+			t.Run(tc.name+fmt.Sprint("/measured=", measured), func(t *testing.T) {
+				c := newGeminiAttemptTestContext(t)
+				attempt := BeginGeminiUpstreamAttempt(c, &Account{ID: 701, Platform: PlatformGemini}, "gemini-test", true)
+				for _, call := range tc.calls {
+					attempt.ObserveUsage([]byte(`{"candidates":[{"content":{"parts":[{"functionCall":` + call + `}]}}]}`))
+				}
+				tail := `{"usageMetadata":{"promptTokenCount":10,"thoughtsTokenCount":3}}`
+				wantOutput := 3
+				for _, args := range tc.wantArgs {
+					wantOutput += geminiFallbackCount(t, "lookup") + geminiFallbackCount(t, args)
+				}
+				if measured {
+					tail = `{"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":73,"thoughtsTokenCount":3}}`
+					wantOutput = 76
+				}
+				attempt.ObserveUsage([]byte(tail))
+				result := &ForwardResult{Model: "gemini-test", Usage: ClaudeUsage{InputTokens: 10, OutputTokens: int(attempt.event.OutputTokens)}}
+				finishGeminiUpstreamAttempt(attempt, result, nil)
+				(&GatewayService{}).FinalizeGeminiUsageFallback(context.Background(), &RecordUsageInput{Result: result})
+				require.Equal(t, wantOutput, result.Usage.OutputTokens)
+				require.Equal(t, measured, result.MeasuredUsageComplete)
+				require.Equal(t, 10, result.Usage.InputTokens)
+				(&GatewayService{}).FinalizeGeminiUsageFallback(context.Background(), &RecordUsageInput{Result: result})
+				require.Equal(t, wantOutput, result.Usage.OutputTokens, "finalization is idempotent")
+			})
+		}
+	}
 }

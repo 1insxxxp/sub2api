@@ -43,6 +43,7 @@ type geminiFallbackTool struct {
 	name     string
 	nameHash [32]byte
 	args     strings.Builder
+	boundary geminiToolCallBoundary
 }
 
 // reconcileGeminiFallbackText matches computeGeminiTextDelta, while appending
@@ -121,9 +122,9 @@ func (a *GeminiUpstreamAttempt) observeFallbackOutput(raw []byte) {
 				}
 				seen, incoming := target.String(), strings.TrimSuffix(text.String(), "\u0000")
 				// Cumulative frames may repeat text before the same tool call.
-				// Only a new incremental text boundary closes anonymous tools;
+				// Only newly emitted text closes anonymous tools;
 				// explicit IDs remain stable for the entire candidate.
-				if incoming != "" && !strings.HasPrefix(seen, incoming) && (seen == "" || !strings.HasPrefix(incoming, seen)) {
+				if incoming != "" && !strings.HasPrefix(seen, incoming) {
 					output.activeTools = nil
 				}
 				a.reconcileFallbackText(target, incoming)
@@ -131,39 +132,52 @@ func (a *GeminiUpstreamAttempt) observeFallbackOutput(raw []byte) {
 			if call.IsObject() {
 				name, id := call.Get("name").String(), call.Get("id").String()
 				args := geminiFallbackToolArguments(call.Get("args"))
-				key := strconv.Itoa(toolPosition)
+				slot := strconv.Itoa(toolPosition)
 				toolPosition++
 				if id != "" {
 					digest := sha256.Sum256([]byte(id))
-					key = "id:" + hex.EncodeToString(digest[:])
+					id = hex.EncodeToString(digest[:])
 				}
 				if name == "" && args == "" {
 					return true
 				}
 				a.upstreamAccepted = true
 				nameHash := sha256.Sum256([]byte(name))
-				tool := output.activeTools[key]
-				if id != "" {
-					tool = output.identifiedTools[key]
+				tool := output.activeTools[slot]
+				if identified := output.identifiedTools[id]; id != "" && identified != nil {
+					tool = identified
 				}
-				if tool == nil || tool.nameHash != nameHash {
+				// Use the adapters' identity/representation rules. An ID learned
+				// mid-call aliases the active slot; omitting it later keeps that call.
+				fc := map[string]any{"name": name, "id": id}
+				if value := call.Get("args"); value.Type == gjson.String {
+					fc["args"] = value.String()
+				}
+				seenJSON, argsJSON := "{}", args
+				if tool != nil && tool.args.Len() > 0 {
+					seenJSON = tool.args.String()
+				}
+				if argsJSON == "" {
+					argsJSON = "{}"
+				}
+				if tool == nil || tool.nameHash != nameHash || tool.boundary.startsNewBlock(name, seenJSON, argsJSON, fc) {
 					if !a.allowFallbackStream() {
 						return true
 					}
 					tool = &geminiFallbackTool{name: strings.Clone(a.boundedFallbackText(name)), nameHash: nameHash}
 					output.tools = append(output.tools, tool)
-					if id != "" {
-						if output.identifiedTools == nil {
-							output.identifiedTools = make(map[string]*geminiFallbackTool)
-						}
-						output.identifiedTools[key] = tool
-					} else {
-						if output.activeTools == nil {
-							output.activeTools = make(map[string]*geminiFallbackTool)
-						}
-						output.activeTools[key] = tool
-					}
 				}
+				if output.activeTools == nil {
+					output.activeTools = make(map[string]*geminiFallbackTool)
+				}
+				output.activeTools[slot] = tool
+				if id != "" {
+					if output.identifiedTools == nil {
+						output.identifiedTools = make(map[string]*geminiFallbackTool)
+					}
+					output.identifiedTools[id] = tool
+				}
+				tool.boundary.observe(fc)
 				if parsedArgs := call.Get("args"); parsedArgs.IsObject() || parsedArgs.IsArray() {
 					// Structured args are complete snapshots; JSON closing braces
 					// make prefix-based string reconciliation unsuitable here.

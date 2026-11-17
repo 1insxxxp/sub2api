@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"sort"
@@ -22,6 +23,9 @@ type dashboardAggregationRepository struct {
 // Each deleted row runs the rollup invalidation trigger while holding the
 // shared watermark. Keep that fenced phase bounded independently of retention.
 const usageLogsCleanupBatchSize = 1000
+
+// Bound partition parent-table lock waits to avoid blocking live writes.
+const usageLogsPartitionDropLockTimeout = 3 * time.Second
 const usageBillingDedupCleanupBatchSize = 10000
 
 // NewDashboardAggregationRepository 创建仪表盘预聚合仓储。
@@ -133,26 +137,19 @@ func (r *dashboardAggregationRepository) RecomputeRange(ctx context.Context, sta
 		dayEnd = dayEnd.Add(24 * time.Hour)
 	}
 
+	// 分组日桶从 start 所在自然日起失效，由后台同步重建；失效语句独立提交，不与看板重算共享事务。
+	if err := invalidateGroupUsageRollupsAt(ctx, r.sql, start); err != nil {
+		return err
+	}
+
 	// 尽量使用事务保证范围内的一致性（允许在非 *sql.DB 的情况下退化为非事务执行）。
 	if db, ok := r.sql.(*sql.DB); ok {
 		tx, err := db.BeginTx(ctx, nil)
 		if err != nil {
 			return err
 		}
-		if err := lockGroupUsageRollupState(ctx, tx); err != nil {
-			_ = tx.Rollback()
-			return err
-		}
-		if err := invalidateGroupUsageRollupsAt(ctx, tx, start); err != nil {
-			_ = tx.Rollback()
-			return err
-		}
 		txRepo := newDashboardAggregationRepositoryWithSQL(tx)
 		if err := txRepo.recomputeRangeInTx(ctx, hourStart, hourEnd, dayStart, dayEnd); err != nil {
-			_ = tx.Rollback()
-			return err
-		}
-		if err := txRepo.syncGroupUsageRollupsInTx(ctx, service.GroupUsageTodayStart(r.now())); err != nil {
 			_ = tx.Rollback()
 			return err
 		}
@@ -232,7 +229,13 @@ func (r *dashboardAggregationRepository) CleanupAggregates(ctx context.Context, 
 	return nil
 }
 
+// CleanupUsageLogs 删除服务端配置时区内 cutoff 所在自然日零点之前的 usage_logs。
+// 删除前先把分组日汇总的保留下界推进到该零点，被删除的记录不触发日桶失效。
 func (r *dashboardAggregationRepository) CleanupUsageLogs(ctx context.Context, cutoff time.Time) error {
+	cutoff = service.GroupUsageTodayStart(cutoff)
+	if err := expireGroupUsageRollupsBefore(ctx, r.sql, cutoff); err != nil {
+		return err
+	}
 	isPartitioned, err := r.isUsageLogsPartitioned(ctx)
 	if err != nil {
 		return err
@@ -251,19 +254,7 @@ func (r *dashboardAggregationRepository) CleanupUsageLogs(ctx context.Context, c
 }
 
 func (r *dashboardAggregationRepository) cleanupUsageLogsBatches(ctx context.Context, cutoff time.Time) error {
-	db, transactional := r.sql.(*sql.DB)
 	for {
-		if transactional {
-			affected, err := cleanupUsageLogsBatchWithRollupInvalidation(ctx, db, cutoff)
-			if err != nil {
-				return err
-			}
-			if affected < usageLogsCleanupBatchSize {
-				return nil
-			}
-			continue
-		}
-
 		res, err := r.sql.ExecContext(ctx, `
 			WITH victims AS (
 				SELECT tableoid, ctid
@@ -716,72 +707,91 @@ func (r *dashboardAggregationRepository) dropUsageLogsPartitions(ctx context.Con
 	sort.Slice(partitions, func(i, j int) bool {
 		return partitions[i].month.Before(partitions[j].month)
 	})
-	if db, ok := r.sql.(*sql.DB); ok {
-		for _, partition := range partitions {
-			hasClaims, err := usageLogsPartitionHasEmptyResponseClaims(ctx, db, partition.month)
-			if err != nil {
-				return err
-			}
-			// Empty-response claims are billing evidence and keep their usage log
-			// alive through an intentional RESTRICT foreign key. A partition that
-			// contains one cannot be dropped safely; the boundary cleanup below
-			// still removes unreferenced rows from that partition.
-			if hasClaims {
+	for _, partition := range partitions {
+		if err := r.dropUsageLogsPartition(ctx, partition.name); err != nil {
+			// 父表锁等待超时：保留该分区，其中的过期记录由随后的按行删除清理，空分区在下次清理时删除。
+			if isPostgresLockNotAvailable(err) {
+				log.Printf("[DashboardAggregation] 删除分区 %s 等待锁超时，本次改为按行删除", partition.name)
 				continue
 			}
-			if err := dropUsageLogsPartitionWithRollupInvalidation(ctx, db, partition.name, partition.month); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-	for _, partition := range partitions {
-		hasClaims, err := usageLogsPartitionHasEmptyResponseClaims(ctx, r.sql, partition.month)
-		if err != nil {
-			return err
-		}
-		if hasClaims {
-			continue
-		}
-		if _, err := r.sql.ExecContext(ctx, fmt.Sprintf("DROP TABLE IF EXISTS %s", pq.QuoteIdentifier(partition.name))); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func usageLogsPartitionHasEmptyResponseClaims(ctx context.Context, queryer sqlExecutor, month time.Time) (bool, error) {
+// Check the actual partition, rather than UTC month bounds: partitions may have
+// been created in a different session timezone and contain boundary-day rows.
+func usageLogsPartitionHasEmptyResponseClaims(ctx context.Context, queryer sqlExecutor, name string) (bool, error) {
 	var hasClaims bool
-	nextMonth := month.UTC().AddDate(0, 1, 0)
-	err := scanSingleRow(ctx, queryer, `
-		SELECT EXISTS (
-			SELECT 1
-			FROM empty_response_claims erc
-			JOIN usage_logs ul ON ul.id = erc.usage_log_id
-			WHERE ul.created_at >= $1 AND ul.created_at < $2
-		)
-	`, []any{month.UTC(), nextMonth}, &hasClaims)
+	err := scanSingleRow(ctx, queryer, fmt.Sprintf(`
+  SELECT EXISTS (
+   SELECT 1 FROM empty_response_claims erc
+   JOIN %s ul ON ul.id = erc.usage_log_id
+  )
+ `, pq.QuoteIdentifier(name)), nil, &hasClaims)
 	return hasClaims, err
 }
 
-func dropUsageLogsPartitionWithRollupInvalidation(ctx context.Context, db *sql.DB, name string, monthStart time.Time) error {
+func isPostgresLockNotAvailable(err error) bool {
+	var pqErr *pq.Error
+	return errors.As(err, &pqErr) && pqErr.Code == "55P03"
+}
+
+// dropUsageLogsPartition 删除一个 usage_logs 月分区。分区内不早于保留下界的记录参与分组日汇总，
+// 删除后按其中最早的时刻使日桶失效；状态行的 FOR KEY SHARE 使失效与重建的登记、发布串行。
+// DROP 需要父表 ACCESS EXCLUSIVE 锁，排队期间会挡住 usage_logs 写入，因此限定锁等待时长。
+func (r *dashboardAggregationRepository) dropUsageLogsPartition(ctx context.Context, name string) error {
+	drop := func(q sqlExecutor) error {
+		var expiredBefore time.Time
+		if err := scanSingleRow(ctx, q, `
+			SELECT expired_before
+			FROM usage_group_rollup_state
+			WHERE id = 1
+			FOR KEY SHARE
+		`, nil, &expiredBefore); err != nil {
+			return fmt.Errorf("读取分组用量汇总保留下界: %w", err)
+		}
+		hasClaims, err := usageLogsPartitionHasEmptyResponseClaims(ctx, q, name)
+		if err != nil {
+			return err
+		}
+		// Keep referenced logs as billing evidence; row cleanup still removes the
+		// remaining expired logs from this partition.
+		if hasClaims {
+			return nil
+		}
+		var earliestRetained sql.NullTime
+		if err := scanSingleRow(ctx, q,
+			fmt.Sprintf("SELECT MIN(created_at) FROM %s WHERE created_at >= $1", pq.QuoteIdentifier(name)),
+			[]any{expiredBefore.UTC()}, &earliestRetained,
+		); err != nil {
+			return err
+		}
+		if _, err := q.ExecContext(ctx, fmt.Sprintf("DROP TABLE IF EXISTS %s", pq.QuoteIdentifier(name))); err != nil {
+			return err
+		}
+		if earliestRetained.Valid {
+			return invalidateGroupUsageRollupsAt(ctx, q, earliestRetained.Time)
+		}
+		return nil
+	}
+
+	db, ok := r.sql.(*sql.DB)
+	if !ok {
+		return drop(r.sql)
+	}
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	rollback := func(err error) error {
+	if _, err := tx.ExecContext(ctx, fmt.Sprintf("SET LOCAL lock_timeout = '%dms'", usageLogsPartitionDropLockTimeout.Milliseconds())); err != nil {
 		_ = tx.Rollback()
 		return err
 	}
-
-	if err := lockGroupUsageRollupState(ctx, tx); err != nil {
-		return rollback(err)
-	}
-	if err := invalidateGroupUsageRollupsAt(ctx, tx, monthStart); err != nil {
-		return rollback(err)
-	}
-	if _, err := tx.ExecContext(ctx, fmt.Sprintf("DROP TABLE IF EXISTS %s", pq.QuoteIdentifier(name))); err != nil {
-		return rollback(err)
+	if err := drop(tx); err != nil {
+		_ = tx.Rollback()
+		return err
 	}
 	return tx.Commit()
 }
@@ -807,4 +817,14 @@ func truncateToDay(t time.Time) time.Time {
 func truncateToMonthUTC(t time.Time) time.Time {
 	t = t.UTC()
 	return time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, time.UTC)
+}
+
+// lockGroupUsageRollupState fences the legacy bounded-candidate cleanup helper.
+// Regular cleanup relies on the nonblocking invalidation triggers instead.
+func lockGroupUsageRollupState(ctx context.Context, tx *sql.Tx) error {
+	var id int16
+	if err := tx.QueryRowContext(ctx, `SELECT id FROM usage_group_rollup_state WHERE id = 1 FOR UPDATE`).Scan(&id); err != nil {
+		return fmt.Errorf("锁定分组用量汇总水位: %w", err)
+	}
+	return nil
 }

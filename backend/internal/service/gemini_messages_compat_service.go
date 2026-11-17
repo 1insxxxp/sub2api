@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -881,7 +882,7 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 			if req.Stream {
 				action = "streamGenerateContent"
 			}
-			fullURL, err := buildVertexGeminiAccountURL(account, mappedModel, action, req.Stream)
+			fullURL, err := buildVertexGeminiAccountURL(account, mappedModel, action, req.Stream, "")
 			if err != nil {
 				return nil, "", err
 			}
@@ -1307,6 +1308,7 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 		ImageSize:                     imageSize,
 		ImageInputSize:                imageInputSize,
 		Outcome:                       ResponseOutcomeSnapshotFromContext(c.Request.Context()),
+		UpstreamPriceMultiplier:       VertexUpstreamPriceMultiplier(account, mappedModel, ""),
 	}, forwardErr
 }
 
@@ -1416,6 +1418,8 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 
 	var requestIDHeader string
 	var buildReq func(ctx context.Context) (*http.Request, string, error)
+	// cachedContentLocation 是 Vertex 账号请求引用的显式缓存所在区域，未引用时为空。
+	var cachedContentLocation string
 
 	switch account.Type {
 	case AccountTypeAPIKey:
@@ -1516,8 +1520,9 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 		requestIDHeader = "x-request-id"
 
 	case AccountTypeServiceAccount:
+		cachedContentLocation = geminiCachedContentLocationInBody(body)
 		buildReq = func(ctx context.Context) (*http.Request, string, error) {
-			fullURL, err := buildVertexGeminiAccountURL(account, mappedModel, upstreamAction, useUpstreamStream)
+			fullURL, err := buildVertexGeminiAccountURL(account, mappedModel, upstreamAction, useUpstreamStream, cachedContentLocation)
 			if err != nil {
 				return nil, "", err
 			}
@@ -1883,7 +1888,7 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 			}
 			upstreamResponseModelObserverFromContext(c).ObserveGemini(b)
 			observeGeminiImageOutputs(c, b)
-			c.Data(http.StatusOK, "application/json", projectGeminiInputCountingNativeUsage(c, b))
+			c.Data(http.StatusOK, "application/json", projectGeminiInputCountingNativeUsage(c, stats.nativeUsage.project(b)))
 			usage = usageObj
 		} else {
 			usageResp, err := s.handleNativeNonStreamingResponse(c, resp, isOAuth, account, requestID)
@@ -1925,6 +1930,7 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 		ImageSize:                     imageSize,
 		ImageInputSize:                imageInputSize,
 		Outcome:                       ResponseOutcomeSnapshotFromContext(c.Request.Context()),
+		UpstreamPriceMultiplier:       VertexUpstreamPriceMultiplier(account, mappedModel, cachedContentLocation),
 	}, forwardErr
 }
 
@@ -2644,6 +2650,7 @@ func (s *GeminiMessagesCompatService) handleStreamingResponseWithContext(ctx con
 	openToolIndex := -1
 	openToolID := ""
 	openToolName := ""
+	var toolBoundary geminiToolCallBoundary
 	var seenToolJSON geminiTextDelta
 
 	reader := newBoundedSSELineReader(resp.Body, s.cfg)
@@ -2715,6 +2722,7 @@ func (s *GeminiMessagesCompatService) handleStreamingResponseWithContext(ctx con
 					openToolIndex = -1
 					openToolName = ""
 					seenToolJSON.reset()
+					toolBoundary = geminiToolCallBoundary{}
 				}
 				if openBlockType != "thinking" {
 					if openBlockIndex >= 0 {
@@ -2765,6 +2773,7 @@ func (s *GeminiMessagesCompatService) handleStreamingResponseWithContext(ctx con
 					openToolIndex = -1
 					openToolName = ""
 					seenToolJSON.reset()
+					toolBoundary = geminiToolCallBoundary{}
 				}
 
 				delta := seenText.next(text)
@@ -2809,7 +2818,6 @@ func (s *GeminiMessagesCompatService) handleStreamingResponseWithContext(ctx con
 
 			if fc, ok := part["functionCall"].(map[string]any); ok && fc != nil {
 				name, _ := fc["name"].(string)
-				args := fc["args"]
 				if strings.TrimSpace(name) == "" {
 					name = "tool"
 				}
@@ -2825,7 +2833,8 @@ func (s *GeminiMessagesCompatService) handleStreamingResponseWithContext(ctx con
 				}
 
 				// If we receive streamed tool args in pieces, keep a single tool block open and emit deltas.
-				if openToolIndex >= 0 && openToolName != name {
+				argsJSONText := geminiToolCallArgsJSON(fc["args"])
+				if openToolIndex >= 0 && toolBoundary.startsNewBlock(openToolName, seenToolJSON.seen.String(), argsJSONText, fc) {
 					emitSSE("content_block_stop", map[string]any{
 						"type":  "content_block_stop",
 						"index": openToolIndex,
@@ -2833,6 +2842,7 @@ func (s *GeminiMessagesCompatService) handleStreamingResponseWithContext(ctx con
 					openToolIndex = -1
 					openToolName = ""
 					seenToolJSON.reset()
+					toolBoundary = geminiToolCallBoundary{}
 				}
 
 				if openToolIndex < 0 {
@@ -2858,21 +2868,8 @@ func (s *GeminiMessagesCompatService) handleStreamingResponseWithContext(ctx con
 					})
 				}
 
-				argsJSONText := "{}"
-				switch v := args.(type) {
-				case nil:
-					// keep default "{}"
-				case string:
-					if strings.TrimSpace(v) != "" {
-						argsJSONText = v
-					}
-				default:
-					if b, err := json.Marshal(args); err == nil && len(b) > 0 {
-						argsJSONText = string(b)
-					}
-				}
-
 				delta := seenToolJSON.next(argsJSONText)
+				toolBoundary.observe(fc)
 				if delta != "" {
 					emitSSE("content_block_delta", map[string]any{
 						"type":  "content_block_delta",
@@ -3009,8 +3006,9 @@ func unwrapIfNeeded(isOAuth bool, raw []byte) []byte {
 
 // geminiSSECollectStats 记录一次 SSE 聚合读到的 data 事件数，以及非 data 行的兜底内容。
 type geminiSSECollectStats struct {
-	dataEvents int
-	fallback   *geminiSSEFallbackBody
+	dataEvents  int
+	fallback    *geminiSSEFallbackBody
+	nativeUsage *geminiNativeOutputUsage
 }
 
 // collectGeminiSSEObserved 在聚合的同时把每个解包后的事件原文交给 observe（可为 nil）。
@@ -3022,7 +3020,18 @@ func collectGeminiSSEObserved(cfg *config.Config, body io.Reader, isOAuth bool, 
 	var collectedTextParts []string // Collect all text parts for aggregation
 	usage := &ClaudeUsage{}
 	var usageMetadata geminiUsageAccumulator
-	stats := geminiSSECollectStats{fallback: &geminiSSEFallbackBody{}}
+	stats := geminiSSECollectStats{fallback: &geminiSSEFallbackBody{}, nativeUsage: &geminiNativeOutputUsage{}}
+	finishReason := ""
+	collectResult := func() map[string]any {
+		result := mergeCollectedTextParts(pickGeminiCollectResult(last, lastWithParts), collectedTextParts)
+		raw, _ := json.Marshal(result)
+		raw = stats.nativeUsage.withUsage(raw)
+		if finishReason != "" {
+			raw, _ = sjson.SetBytes(raw, "candidates.0.finishReason", finishReason)
+		}
+		_ = json.Unmarshal(raw, &result)
+		return result
+	}
 
 	for {
 		line, err := reader.ReadLineString()
@@ -3037,7 +3046,7 @@ func collectGeminiSSEObserved(cfg *config.Config, body io.Reader, isOAuth bool, 
 				switch payload {
 				case "", "[DONE]":
 					if payload == "[DONE]" {
-						return mergeCollectedTextParts(pickGeminiCollectResult(last, lastWithParts), collectedTextParts), usage, stats, nil
+						return collectResult(), usage, stats, nil
 					}
 				default:
 					var parsed map[string]any
@@ -3062,6 +3071,10 @@ func collectGeminiSSEObserved(cfg *config.Config, body io.Reader, isOAuth bool, 
 						last = parsed
 						if u := usageMetadata.Observe(rawBytes); u != nil {
 							usage = u
+						}
+						stats.nativeUsage.observe(rawBytes)
+						if reason := extractGeminiFinishReason(parsed); reason != "" {
+							finishReason = reason
 						}
 						if parts := extractGeminiParts(parsed); len(parts) > 0 {
 							lastWithParts = parsed
@@ -3088,7 +3101,7 @@ func collectGeminiSSEObserved(cfg *config.Config, body io.Reader, isOAuth bool, 
 		}
 	}
 
-	return mergeCollectedTextParts(pickGeminiCollectResult(last, lastWithParts), collectedTextParts), usage, stats, nil
+	return collectResult(), usage, stats, nil
 }
 
 func pickGeminiCollectResult(last map[string]any, lastWithParts map[string]any) map[string]any {
@@ -3323,7 +3336,8 @@ func (s *GeminiMessagesCompatService) handleNativeNonStreamingResponse(c *gin.Co
 	// from the wire response. Keep measured upstream usage authoritative, but
 	// repair the rare prompt-only usage snapshot when actual output content is
 	// present so downstream usage cannot settle at zero.
-	clientBody := patchGeminiNativeOutputUsage(respBody, geminiNativePayloadOutputText(respBody), 0)
+	var nativeUsage geminiNativeOutputUsage
+	clientBody := nativeUsage.process(respBody)
 	c.Data(resp.StatusCode, contentType, projectGeminiInputCountingNativeUsage(c, clientBody))
 
 	if u := extractGeminiUsage(respBody); u != nil {
@@ -3397,14 +3411,14 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponseWithContext(c
 	var best geminiResponseSignal
 	sawDataEvent := false
 	fallback := &geminiSSEFallbackBody{}
-	var nativeOutputText strings.Builder
+	var nativeUsage geminiNativeOutputUsage
 	clientDisconnect := false
 	finished := false
 	semanticCommitted := firstOutputGuard == nil || !modelFirstOutputTimeoutEnabled(ctx, firstOutputPolicy)
 	stagedLines := make([]string, 0, 8)
-	var inputCountingJSON bytes.Buffer
-	bufferInputCountingJSON := false
-	allowInputCountingJSON := geminiInputCountingAttempt(c) != nil
+	var nativeJSON bytes.Buffer
+	bufferNativeJSON := false
+	allowNativeJSON := true
 	writeNative := func(line string, semantic bool) {
 		if !semanticCommitted {
 			stagedLines = append(stagedLines, line)
@@ -3426,8 +3440,8 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponseWithContext(c
 	defer func() {
 		// Failed/truncated JSON keeps its original bytes and never gains a
 		// measurement. The buffer is bounded like the existing fallback parser.
-		if inputCountingJSON.Len() > 0 {
-			writeNative(inputCountingJSON.String(), false)
+		if nativeJSON.Len() > 0 {
+			writeNative(nativeJSON.String(), false)
 		}
 	}()
 
@@ -3443,11 +3457,11 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponseWithContext(c
 		if len(line) > 0 && (err == nil || errors.Is(err, io.EOF)) {
 			trimmed := strings.TrimRight(line, "\r\n")
 			if strings.HasPrefix(trimmed, "data:") {
-				if inputCountingJSON.Len() > 0 {
-					writeNative(inputCountingJSON.String(), false)
-					inputCountingJSON.Reset()
+				if nativeJSON.Len() > 0 {
+					writeNative(nativeJSON.String(), false)
+					nativeJSON.Reset()
 				}
-				allowInputCountingJSON, bufferInputCountingJSON = false, false
+				allowNativeJSON, bufferNativeJSON = false, false
 				payload := strings.TrimSpace(strings.TrimPrefix(trimmed, "data:"))
 				// Keepalive / done markers
 				if payload == "" || payload == "[DONE]" {
@@ -3478,7 +3492,7 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponseWithContext(c
 					outcomeCollector.ObserveGeminiSSEData(string(rawBytes))
 					observer.ObserveGemini(rawBytes)
 					observeGeminiImageOutputs(c, rawBytes)
-					nativeOutputText.WriteString(geminiNativePayloadOutputText(rawBytes))
+					nativeUsage.observe(rawBytes)
 
 					if gjson.GetBytes(rawBytes, "candidates.0.finishReason").String() != "" {
 						finished = true
@@ -3491,7 +3505,10 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponseWithContext(c
 					}
 
 					outputLine := line
-					clientRawBytes := patchGeminiNativeOutputUsage(rawBytes, nativeOutputText.String(), 0)
+					clientRawBytes := rawBytes
+					if gjson.GetBytes(rawBytes, "usageMetadata").IsObject() || gjson.GetBytes(rawBytes, "candidates.0.finishReason").String() != "" {
+						clientRawBytes = nativeUsage.project(rawBytes)
+					}
 					projected := projectGeminiInputCountingNativeUsage(c, clientRawBytes)
 					if isOAuth || !bytes.Equal(projected, rawBytes) || !bytes.Equal(clientRawBytes, rawBytes) {
 						// SSE format requires double newline (\n\n) to separate events
@@ -3506,18 +3523,18 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponseWithContext(c
 				if !sawDataEvent {
 					fallback.AddLine(trimmed)
 				}
-				if allowInputCountingJSON && !sawDataEvent && (strings.HasPrefix(strings.TrimSpace(line), "{") || strings.HasPrefix(strings.TrimSpace(line), "[")) {
-					bufferInputCountingJSON = true
+				if allowNativeJSON && !sawDataEvent && (strings.HasPrefix(strings.TrimSpace(line), "{") || strings.HasPrefix(strings.TrimSpace(line), "[")) {
+					bufferNativeJSON = true
 				}
-				if bufferInputCountingJSON && inputCountingJSON.Len()+len(line) <= geminiSSEFallbackBodyLimit {
-					_, _ = inputCountingJSON.WriteString(line)
+				if bufferNativeJSON && nativeJSON.Len()+len(line) <= geminiSSEFallbackBodyLimit {
+					_, _ = nativeJSON.WriteString(line)
 				} else {
-					if inputCountingJSON.Len() > 0 {
-						writeNative(inputCountingJSON.String(), false)
-						inputCountingJSON.Reset()
+					if nativeJSON.Len() > 0 {
+						writeNative(nativeJSON.String(), false)
+						nativeJSON.Reset()
 					}
-					if bufferInputCountingJSON {
-						allowInputCountingJSON, bufferInputCountingJSON = false, false
+					if bufferNativeJSON {
+						allowNativeJSON, bufferNativeJSON = false, false
 					}
 					writeNative(line, false)
 				}
@@ -3570,10 +3587,10 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponseWithContext(c
 			}
 		}
 	}
-	if inputCountingJSON.Len() > 0 {
-		projected := projectGeminiInputCountingNativeUsage(c, inputCountingJSON.Bytes())
+	if nativeJSON.Len() > 0 {
+		projected := projectGeminiInputCountingNativeUsage(c, nativeUsage.process(nativeJSON.Bytes()))
 		writeNative(string(projected), geminiNativePayloadHasSemanticContent(projected))
-		inputCountingJSON.Reset()
+		nativeJSON.Reset()
 		// JSON arrays have no object-level semantic part. The bounded complete
 		// fallback is still the actual provider response and must be delivered.
 		if len(stagedLines) > 0 {
@@ -3617,29 +3634,99 @@ func geminiNativePayloadHasSemanticContent(raw []byte) bool {
 	return found
 }
 
-// geminiNativePayloadOutputText returns the output-bearing content that a
-// downstream Gemini usage parser can count. Function calls are included because
-// they are billable model output even when there is no visible text.
-func geminiNativePayloadOutputText(raw []byte) string {
-	var output strings.Builder
-	gjson.GetBytes(raw, "candidates").ForEach(func(_, candidate gjson.Result) bool {
-		candidate.Get("content.parts").ForEach(func(_, part gjson.Result) bool {
-			if text := part.Get("text").String(); text != "" {
-				output.WriteString(text)
-			}
-			if functionCall := part.Get("functionCall"); functionCall.IsObject() {
-				if name := functionCall.Get("name").String(); name != "" {
-					output.WriteString(name)
-				}
-				if args := functionCall.Get("args"); args.Exists() {
-					output.WriteString(args.Raw)
-				}
-			}
+// geminiNativeOutputUsage projects cumulative provider metadata and, only when
+// candidates are absent/zero, bounded semantic output onto the native wire.
+// It is separate from the real attempt: estimates never become billing evidence.
+type geminiNativeOutputUsage struct {
+	output   GeminiUpstreamAttempt
+	metadata map[string]json.RawMessage
+}
+
+func (a *geminiNativeOutputUsage) observe(raw []byte) {
+	if !gjson.ValidBytes(raw) {
+		return
+	}
+	a.output.observeFallbackOutput(raw)
+	root := gjson.ParseBytes(raw)
+	if wrapped := root.Get("response"); wrapped.IsObject() {
+		root = wrapped
+	}
+	metadata := root.Get("usageMetadata")
+	if !metadata.IsObject() {
+		return
+	}
+	metadata.ForEach(func(key, value gjson.Result) bool {
+		if value.Type == gjson.Null {
 			return true
-		})
+		}
+		switch key.String() {
+		case "promptTokenCount", "candidatesTokenCount", "thoughtsTokenCount", "cachedContentTokenCount", "totalTokenCount":
+			if value.Type != gjson.Number || value.Int() < 0 {
+				return true
+			}
+		}
+		if a.metadata == nil {
+			a.metadata = make(map[string]json.RawMessage)
+		}
+		a.metadata[key.String()] = json.RawMessage(value.Raw)
 		return true
 	})
-	return output.String()
+}
+
+func (a *geminiNativeOutputUsage) withUsage(raw []byte) []byte {
+	path := "usageMetadata"
+	if gjson.GetBytes(raw, "response").IsObject() {
+		path = "response.usageMetadata"
+	}
+	out := raw
+	for key, value := range a.metadata {
+		key = strings.ReplaceAll(strings.ReplaceAll(key, "\\", "\\\\"), ".", "\\.")
+		field := path + "." + key
+		if gjson.GetBytes(out, field).Raw == string(value) {
+			continue
+		}
+		updated, err := sjson.SetRawBytes(out, field, value)
+		if err == nil {
+			out = updated
+		}
+	}
+	return out
+}
+
+func (a *geminiNativeOutputUsage) project(raw []byte) []byte {
+	raw = a.withUsage(raw)
+	if count := a.metadata["candidatesTokenCount"]; gjson.ParseBytes(count).Int() > 0 {
+		return raw
+	}
+	var text strings.Builder
+	for _, candidate := range a.output.fallbackCandidates {
+		text.WriteString(candidate.text.String())
+		for _, tool := range candidate.tools {
+			text.WriteString(tool.name)
+			text.WriteString(tool.args.String())
+		}
+	}
+	// thought=true text is kept separate by the evidence collector and is not
+	// counted again as candidates alongside thoughtsTokenCount.
+	return patchGeminiNativeOutputUsage(raw, text.String(), 0)
+}
+
+func (a *geminiNativeOutputUsage) process(raw []byte) []byte {
+	if !gjson.ValidBytes(raw) {
+		return raw
+	}
+	if root := gjson.ParseBytes(raw); root.IsArray() {
+		out := raw
+		for i, item := range root.Array() {
+			updated, err := sjson.SetRawBytes(out, strconv.Itoa(i), a.process([]byte(item.Raw)))
+			if err == nil {
+				out = updated
+			}
+		}
+		return out
+	}
+	a.observe(raw)
+	return a.project(raw)
 }
 
 // patchGeminiNativeOutputUsage repairs a prompt-only native usage snapshot for
@@ -3651,11 +3738,8 @@ func patchGeminiNativeOutputUsage(raw []byte, outputText string, outputTokens in
 		return raw
 	}
 	path := "usageMetadata"
-	if !gjson.GetBytes(raw, path).IsObject() {
+	if gjson.GetBytes(raw, "response").IsObject() {
 		path = "response.usageMetadata"
-		if !gjson.GetBytes(raw, path).IsObject() {
-			return raw
-		}
 	}
 	if candidate := gjson.GetBytes(raw, path+".candidatesTokenCount"); candidate.Type == gjson.Number && candidate.Int() > 0 {
 		return raw

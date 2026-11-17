@@ -131,8 +131,8 @@ func claudeRequestEnablesThinking(claudeBody []byte) bool {
 }
 
 // geminiThinkingLevelFor 把思考意图映射为 thinkingLevel；返回空串表示交给模型默认档位。
-// minimal 只发给 flash 系列，其余模型用 low；medium 保留给 flash、Gemini 3.1 Pro
-// 和 Gemini 4 Argon 系列，其余模型沿用 high。未指定档位时不写 thinkingLevel。
+// minimal 只发给 flash 系列，其余模型用 low；medium 保留给 flash、Gemini 3.1 Pro、
+// Gemini 4 Argon 系列与 Gemini 4 Carbon，其余模型用 high。未指定档位时保留上游默认值。
 func geminiThinkingLevelFor(model string, intent claudeThinkingIntent) string {
 	tier := intent.tier
 	if tier == "" && intent.budgetTokens > 0 {
@@ -151,7 +151,7 @@ func geminiThinkingLevelFor(model string, intent claudeThinkingIntent) string {
 	if tier == "minimal" && !isFlash {
 		tier = "low"
 	}
-	if tier == "medium" && !isFlash && !strings.HasPrefix(name, "gemini-3.1-pro") && !isArgon {
+	if tier == "medium" && !isFlash && !strings.HasPrefix(name, "gemini-3.1-pro") && !isArgon && name != "gemini-4-carbon" {
 		tier = "high"
 	}
 	return tier
