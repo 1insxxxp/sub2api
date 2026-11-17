@@ -2,26 +2,22 @@ package service
 
 import (
 	"encoding/json"
-	"errors"
 	"unicode/utf8"
 
 	"github.com/tidwall/gjson"
 	"github.com/tiktoken-go/tokenizer"
 )
 
-var errInflightOpaqueInput = errors.New("input requires media or cached-content token accounting")
-
 // Decoding model inputs before tokenization excludes JSON transport escapes and
-// client metadata. Opaque media/cached inputs retain the conservative fallback.
+// client metadata. Media, encrypted content and cache references are not text:
+// their transport size must not trigger the raw-byte fallback. This estimates
+// inline text only; output reservations and actual usage billing remain separate.
 func estimateInflightInputTokens(model string, body []byte) (int, bool) {
 	if len(body) == 0 {
 		return 0, false
 	}
 	var request map[string]json.RawMessage
-	if json.Unmarshal(body, &request) != nil {
-		return 0, false
-	}
-	if len(request["cachedContent"]) > 0 || len(request["cached_content"]) > 0 {
+	if json.Unmarshal(body, &request) != nil || request == nil {
 		return 0, false
 	}
 	codec, err := openAIInputTokensCodecForModel(model)
@@ -29,7 +25,9 @@ func estimateInflightInputTokens(model string, body []byte) (int, bool) {
 		return 0, false
 	}
 	total := 0
-	found := false
+	// Cached content is an opaque reference, not inline text. An otherwise
+	// unrecognized request layout keeps the existing caller fallback.
+	found := len(request["cachedContent"]) > 0 || len(request["cached_content"]) > 0
 	for _, field := range []string{"messages", "system", "input", "instructions", "tools", "tool_choice", "functions", "function_call", "contents", "systemInstruction", "system_instruction", "response_format"} {
 		raw, exists := request[field]
 		if !exists {
@@ -146,16 +144,28 @@ func countInflightInputValue(codec tokenizer.Codec, value any) (int, error) {
 		}
 		return total, nil
 	case map[string]any:
-		switch item["type"] {
-		case "image", "input_image", "image_url", "input_audio", "audio", "video", "input_file", "file", "document", "redacted_thinking":
-			return 0, errInflightOpaqueInput
-		}
-		for _, key := range []string{"inlineData", "inline_data", "fileData", "file_data", "encrypted_content", "audio", "image_url"} {
-			if item[key] != nil {
-				return 0, errInflightOpaqueInput
+		total := openAIResponsesInputItemTokenOverhead
+		// Documents expose text in their source, title and context. Content
+		// sources may mix text with media, so recurse using the same projection.
+		// Binary/URL sources remain excluded from textual input estimation.
+		if item["type"] == "document" {
+			var content any
+			if source, ok := item["source"].(map[string]any); ok {
+				switch source["type"] {
+				case "text":
+					content = source["data"]
+				case "content":
+					content = source["content"]
+				}
+			}
+			for _, part := range []any{content, item["title"], item["context"]} {
+				count, err := countInflightInputValue(codec, part)
+				if err != nil {
+					return 0, err
+				}
+				total += count
 			}
 		}
-		total := openAIResponsesInputItemTokenOverhead
 		// Protocol fields only. In particular, metadata, cache_control and signatures
 		// are not model text. Structured tool arguments/results include all JSON keys.
 		for _, key := range []string{"role", "type", "content", "text", "parts", "name", "arguments", "output", "tool_calls", "function", "function_call", "functionCall", "functionResponse", "tool_use_id", "tool_call_id", "call_id", "id", "input", "response", "args", "thinking", "reasoning_content", "summary", "refusal"} {
@@ -167,7 +177,9 @@ func countInflightInputValue(codec tokenizer.Codec, value any) (int, error) {
 			var err error
 			switch key {
 			case "input", "response", "args", "output":
-				if text, ok := child.(string); ok {
+				if key == "output" && item["type"] == "function_call_output" && isInflightContentBlockList(child) {
+					count, err = countInflightInputValue(codec, child)
+				} else if text, ok := child.(string); ok {
 					count, err = countInflightText(codec, text)
 				} else {
 					count, err = countInflightJSON(codec, child)
@@ -184,6 +196,28 @@ func countInflightInputValue(codec tokenizer.Codec, value any) (int, error) {
 	default:
 		return countInflightJSON(codec, item)
 	}
+}
+
+// Responses tool output can be structured JSON or protocol content blocks.
+// Only the latter is projected; arbitrary tool JSON (including data/url keys)
+// must retain all of its model-visible text.
+func isInflightContentBlockList(value any) bool {
+	items, ok := value.([]any)
+	if !ok || len(items) == 0 {
+		return false
+	}
+	for _, value := range items {
+		item, ok := value.(map[string]any)
+		if !ok {
+			return false
+		}
+		switch item["type"] {
+		case "text", "input_text", "output_text", "input_image", "image_url", "image", "input_audio", "audio", "input_file", "file", "document", "video":
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // Schema objects are preserved verbatim. Only protocol wrapper fields are
