@@ -1265,8 +1265,9 @@ billing:
     # 兼容旧配置字段；预扣费使用完整输入估算和完整输出预算。
     max_output_tokens: 128000
     max_input_tokens: 200000
-    # Legacy configuration field. Precharge uses the complete estimated cost.
-    # 兼容旧配置字段；预扣费使用完整估算金额。
+    # Legacy field, ignored. Estimated holds are capped at 5 after all multipliers;
+    # actual settlement and exact known-charge admission are not capped.
+    # 兼容旧配置字段，不覆盖上限；倍率后估算预扣固定最多 5，实际结算和已知费用校验不封顶。
     max_reservation_usd: 0
     # When a request cannot be priced (no base / group / channel pricing for the
     # billing model), reject it instead of admitting it without reservation.

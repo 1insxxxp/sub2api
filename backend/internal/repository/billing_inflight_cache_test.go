@@ -131,15 +131,27 @@ func TestInflightReservation_ExactRemainingBalanceIsUsable(t *testing.T) {
 	require.ErrorIs(t, err, service.ErrBalanceInFlight)
 }
 
-func TestInflightReservation_RejectsIncidentSizedFirstRequest(t *testing.T) {
+func TestInflightReservation_CapsLargeEstimateAtFive(t *testing.T) {
 	_, cache, svc := newInflightTestEnv(t, true, 60, 33.69240739)
 	ctx := context.Background()
 	user := &service.User{ID: 7}
 	require.NoError(t, cache.SetUserBalance(ctx, user.ID, 33.69240739))
 	res, err := svc.ReserveInflight(ctx, user, nil, nil, 128.09169)
-	require.Nil(t, res)
-	require.ErrorIs(t, err, service.ErrInsufficientBalance)
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	defer res.Release()
+	require.Equal(t, 5.0, res.Amount())
+	require.Equal(t, int64(1), inflightCount(t, cache, user.ID))
+	_, hkey := billingInflightKeys(user.ID)
+	amounts, err := cache.rdb.HVals(ctx, hkey).Result()
+	require.NoError(t, err)
+	require.Len(t, amounts, 1)
+	require.Equal(t, "5", amounts[0])
+	res.Release()
 	require.Zero(t, inflightCount(t, cache, user.ID))
+	amounts, err = cache.rdb.HVals(ctx, hkey).Result()
+	require.NoError(t, err)
+	require.Empty(t, amounts)
 }
 
 func TestInflightReservation_UsesBalanceAtAtomicAdmission(t *testing.T) {

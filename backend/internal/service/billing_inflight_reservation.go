@@ -51,6 +51,7 @@ const (
 	inflightReservationRenewTimeout    = 2 * time.Second
 	inflightInputBytesPerTokenEstimate = 4
 	inflightUnpricedLogInterval        = time.Minute
+	maxInflightEstimatedReservationUSD = 5.0
 )
 
 // InflightReservation 一次请求的在途预留句柄。
@@ -248,7 +249,7 @@ func (s *BillingCacheService) InflightReservationFailClosedOnUnpriced() bool {
 
 // ReserveInflightBalance 简化封装：返回释放函数，不续期、不做计费交接（预留最长存活 TTL）。
 func (s *BillingCacheService) ReserveInflightBalance(ctx context.Context, user *User, group *Group, subscription *UserSubscription, estimate float64) (func(), error) {
-	r, err := s.reserveInflight(ctx, user, group, subscription, estimate, false)
+	r, err := s.reserveInflight(ctx, user, group, subscription, capInflightReservationEstimate(estimate), false)
 	if err != nil {
 		return noopRelease, err
 	}
@@ -264,11 +265,12 @@ func (s *BillingCacheService) ReserveInflightBalance(ctx context.Context, user *
 // 调用方须在 handler 结束时调用 HandlerDone（nil 安全）。
 //
 // 开关关闭、简易模式、订阅模式和零费用请求沿用各自的准入规则。
+// 估算预留最多 5 额度；真实结算费用和已知固定费用准入不受此上限影响。
 // 预留服务不可用时返回计费服务错误。
 // 缓存余额不足以覆盖其他在途请求时，先复核真实余额并原子重试一次。
 // 真实余额耗尽返回 ErrInsufficientBalance；仍被其他在途请求占用返回 ErrBalanceInFlight。
 func (s *BillingCacheService) ReserveInflight(ctx context.Context, user *User, group *Group, subscription *UserSubscription, estimate float64) (*InflightReservation, error) {
-	return s.reserveInflight(ctx, user, group, subscription, estimate, true)
+	return s.reserveInflight(ctx, user, group, subscription, capInflightReservationEstimate(estimate), true)
 }
 
 // inflightSubscriptionScope / inflightAPIKeyScope 是订阅 / API Key 维度在途预留的 scope 名。
@@ -576,6 +578,15 @@ func maxPerRequestPrice(resolved *ResolvedPricing) float64 {
 
 func validCost(v float64) bool { return v > 0 && !math.IsNaN(v) && !math.IsInf(v, 0) }
 
+// capInflightReservationEstimate caps only an estimated hold, after pricing and
+// multipliers. Invalid values keep their existing validation behavior.
+func capInflightReservationEstimate(amount float64) float64 {
+	if validCost(amount) && amount > maxInflightEstimatedReservationUSD {
+		return maxInflightEstimatedReservationUSD
+	}
+	return amount
+}
+
 type inflightServiceTierOption struct {
 	model string
 	tier  string
@@ -829,7 +840,7 @@ func (d inflightEstimateDeps) estimateOne(ctx context.Context, apiKey *APIKey, m
 	return cost, priced || cost > 0
 }
 
-// estimate 返回保守的单请求费用（USD，已乘倍率）；无法定价返回 (0,false)。
+// estimate 返回单请求估算预扣额度（USD，已乘倍率，最多 5）；无法定价返回 (0,false)。
 func (d inflightEstimateDeps) estimate(ctx context.Context, apiKey *APIKey, req InflightEstimateRequest) (float64, bool) {
 	if apiKey == nil || apiKey.User == nil {
 		return 0, false
@@ -912,14 +923,14 @@ func (d inflightEstimateDeps) estimate(ctx context.Context, apiKey *APIKey, req 
 		logInflightUnpriced(req.Model, apiKey.GroupID)
 		return 0, false
 	}
-	return best, true
+	return capInflightReservationEstimate(best), true
 }
 
 // EstimateInflightReservationCost 仅用基础定价的简化估算（保留给无 resolver 的调用方/测试）。
 //
 //	input_tokens  = bodyBytes / 4
 //	output_tokens = max_tokens 或 default_max_tokens
-//	cost = (input_tokens × 输入单价 + output_tokens × 输出单价) × rateMultiplier
+//	cost = min((input_tokens × 输入单价 + output_tokens × 输出单价) × rateMultiplier, 5)
 //
 // 无法取得定价时返回 (0, false)，调用方按预扣费配置返回错误。
 func EstimateInflightReservationCost(billing *BillingService, cfg config.InflightReservationConfig, model string, bodyBytes, maxTokens int, rateMultiplier float64) (float64, bool) {
@@ -935,7 +946,7 @@ func EstimateInflightReservationCost(billing *BillingService, cfg config.Infligh
 	if !validCost(cost) {
 		return 0, false
 	}
-	return cost, true
+	return capInflightReservationEstimate(cost), true
 }
 
 func inflightReservationCfg(cfg *config.Config) config.InflightReservationConfig {

@@ -14,14 +14,15 @@ import (
 
 // Deliberately use an operator price above the fallback catalog. Mapping tests
 // must retain this requested-model price, not accidentally price the target.
-const inflightUltrafastStandardCost = 3.0 // 1000 input * .001 + 1000 output * .002
+// Keep all tier comparisons below the separate 5-credit estimated-hold ceiling.
+const inflightUltrafastStandardCost = 0.3 // 1000 input * .0001 + 1000 output * .0002
 
 type inflightUltrafastEstimator interface {
 	EstimateInflightReservation(context.Context, *APIKey, InflightEstimateRequest) (float64, bool)
 }
 
 func newInflightUltrafastGroup(model string) *Group {
-	input, output := .001, .002
+	input, output := .0001, .0002
 	return &Group{
 		ID: 7101, Platform: PlatformOpenAI, Status: StatusActive, Hydrated: true,
 		SubscriptionType: SubscriptionTypeStandard, RateMultiplier: 1,
