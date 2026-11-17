@@ -187,6 +187,7 @@ type AdminGroup struct {
 	Group
 	GeminiInputCountingEnabled bool `json:"gemini_input_counting_enabled"`
 	ForceOpenAIFast            bool `json:"force_openai_fast"`
+	ForceOpenAIUltrafast       bool `json:"force_openai_ultrafast"`
 	FreeOpenAIFast             bool `json:"free_openai_fast"`
 
 	// 分组利润控制（五个 token 平台分组可启用；margin/buffer 为小数存储）。

@@ -94,6 +94,7 @@ func mustCreateGroup(t *testing.T, client *dbent.Client, g *service.Group) *serv
 		SetGeminiInputCountingEnabled(g.GeminiInputCountingEnabled).
 		SetIsExclusive(g.IsExclusive).
 		SetForceOpenaiFast(g.ForceOpenAIFast).
+		SetForceOpenaiUltrafast(g.ForceOpenAIUltrafast).
 		SetFreeOpenaiFast(g.FreeOpenAIFast).
 		SetModelAllowlist(service.DomainGroupModelAllowlist(g.ModelAllowlist)).
 		SetModelStatusVisibility(g.ModelStatusVisibility).

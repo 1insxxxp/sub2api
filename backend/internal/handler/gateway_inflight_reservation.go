@@ -13,6 +13,10 @@ type inflightReservationEstimator interface {
 	EstimateInflightReservation(ctx context.Context, apiKey *service.APIKey, req service.InflightEstimateRequest) (float64, bool)
 }
 
+type inflightEstimateContextPreparer interface {
+	PrepareInflightEstimateContext(context.Context, *service.APIKey, service.InflightEstimateRequest) context.Context
+}
+
 // requestMaxOutputTokens 从请求体中提取输出 token 上限（兼容 Anthropic / OpenAI Chat / Responses / Gemini）。
 func requestMaxOutputTokens(body []byte) int {
 	for _, path := range []string{"max_tokens", "max_completion_tokens", "max_output_tokens", "generationConfig.maxOutputTokens", "generation_config.max_output_tokens"} {
@@ -81,6 +85,9 @@ func reserveInflightBalanceCtx(
 	}
 	if group != nil && group.IsSubscriptionType() && subscription != nil {
 		return ctx, inflightNoop, nil
+	}
+	if preparer, ok := estimator.(inflightEstimateContextPreparer); ok {
+		ctx = preparer.PrepareInflightEstimateContext(ctx, apiKey, req)
 	}
 	estimate, priced := estimator.EstimateInflightReservation(ctx, apiKey, req)
 	if !priced && billing.InflightReservationFailClosedOnUnpriced() {

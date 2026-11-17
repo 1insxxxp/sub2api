@@ -171,14 +171,15 @@ func TestCategoryDefaultAvailableGroupsDerivesVisibilityAndModelCount(t *testing
 func TestCategoryDefaultAuthCacheRoundtripAndRejectsPreviousVersion(t *testing.T) {
 	entry := int64(51)
 	svc := &APIKeyService{}
-	key := &APIKey{ID: 4, UserID: 2, GroupID: &entry, User: &User{ID: 2}, Group: &Group{ID: entry, IsCategoryDefault: true, Platform: PlatformComposite, Hydrated: true}}
+	key := &APIKey{ID: 4, UserID: 2, GroupID: &entry, User: &User{ID: 2}, Group: &Group{ID: entry, IsCategoryDefault: true, Platform: PlatformComposite, Hydrated: true, ForceOpenAIUltrafast: true}}
 	raw, err := json.Marshal(svc.snapshotFromAPIKey(context.Background(), key))
 	require.NoError(t, err)
 	var snapshot APIKeyAuthSnapshot
 	require.NoError(t, json.Unmarshal(raw, &snapshot))
 	require.True(t, svc.snapshotToAPIKey("secret", &snapshot).Group.IsCategoryDefault)
-	require.Equal(t, 31, snapshot.Version)
-	restored, hit, err := svc.applyAuthCacheEntry("secret", &APIKeyAuthCacheEntry{Snapshot: &APIKeyAuthSnapshot{Version: 30}})
+	require.True(t, svc.snapshotToAPIKey("secret", &snapshot).Group.ForceOpenAIUltrafast)
+	require.Equal(t, 32, snapshot.Version)
+	restored, hit, err := svc.applyAuthCacheEntry("secret", &APIKeyAuthCacheEntry{Snapshot: &APIKeyAuthSnapshot{Version: 31}})
 	require.NoError(t, err)
 	require.False(t, hit)
 	require.Nil(t, restored)

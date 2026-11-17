@@ -56,7 +56,7 @@ describe("admin GroupsView layout", () => {
   });
 
   it("does not expose ordinary edit, composite route, or delete controls for system groups", () => {
-    expect(groupsViewSource).toContain('v-if="!isSystemCustomGroup(row)"');
+    expect(groupsViewSource).toContain('v-if="!isSystemCustomGroup(row) && !row.is_category_default"');
     expect(groupsViewSource).toMatch(
       /row.platform === 'composite' &&\s+!isSystemCustomGroup\(row\)/,
     );

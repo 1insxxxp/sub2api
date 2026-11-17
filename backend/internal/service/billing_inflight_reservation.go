@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
 	"github.com/google/uuid"
@@ -428,15 +429,17 @@ type InflightEstimateRequest struct {
 
 // inflightEstimateDeps 两种网关 service 共用的估算依赖。
 type inflightEstimateDeps struct {
-	cfg            *config.Config
-	billing        *BillingService
-	resolver       *ModelPricingResolver
-	resolveMapping func(ctx context.Context, groupID int64, model string) ChannelMappingResult
-	userGroupRate  func(ctx context.Context, userID, groupID int64, groupDefault float64) float64
+	cfg             *config.Config
+	billing         *BillingService
+	resolver        *ModelPricingResolver
+	settingService  *SettingService
+	defaultPlatform string
+	resolveMapping  func(ctx context.Context, groupID int64, model string) ChannelMappingResult
+	userGroupRate   func(ctx context.Context, userID, groupID int64, groupDefault float64) float64
 	// accountMappedModels 返回调度器可选账号对 model 的账号级映射结果（去重，不含 model 本身）。
 	// 准入时账号尚未选定，计费侧 billableModelWithFallback 会回退到实际转发模型（UpstreamModel，
 	// 即账号映射后的模型），因此这里取所有候选映射模型的最高估算。
-	// 仅在首选/渠道候选均无法定价（或 composite 分组）时才调用；实现只读调度器快照，
+	// 首选/渠道无价、composite 或 tier 依赖最终模型时调用；实现只读调度器快照，
 	// 不在请求路径上直接查库，也不按模型名缓存（内存不随请求模型名增长）。
 	accountMappedModels func(ctx context.Context, apiKey *APIKey, model string) []string
 }
@@ -573,8 +576,140 @@ func maxPerRequestPrice(resolved *ResolvedPricing) float64 {
 
 func validCost(v float64) bool { return v > 0 && !math.IsNaN(v) && !math.IsInf(v, 0) }
 
+type inflightServiceTierOption struct {
+	model string
+	tier  string
+}
+
+func (d inflightEstimateDeps) usesOpenAIServiceTiers(ctx context.Context, key *APIKey) bool {
+	if platform, _ := ctx.Value(ctxkey.ForcePlatform).(string); platform != "" {
+		return platform == PlatformOpenAI
+	}
+	if platform, ok := ResolvedTargetPlatformFromContext(ctx); ok {
+		return platform == PlatformOpenAI
+	}
+	platform := d.defaultPlatform
+	if key.Group != nil && key.Group.Platform != "" {
+		platform = key.Group.Platform
+	}
+	// A composite route not yet frozen may select OpenAI. Concrete non-OpenAI
+	// targets above must never inherit an OpenAI group-forced premium.
+	return platform == PlatformOpenAI || platform == PlatformComposite
+}
+
+// serviceTierOptions keeps the price model separate from possible sent models.
+// Mapping callbacks carry no account type, so evaluate both OpenAI scopes rather
+// than assuming a filter/block for one scope also applies to another account.
+// nil means the unchanged standard estimate. Blocked options contribute no tier
+// premium; the caller still reserves Standard until the wire protocol is known.
+func (d inflightEstimateDeps) serviceTierOptions(ctx context.Context, key *APIKey, req InflightEstimateRequest, upstreamInput string, mappedModels func() []string) []inflightServiceTierOption {
+	if req.Kind != InflightEstimateToken || !d.usesOpenAIServiceTiers(ctx, key) {
+		return nil
+	}
+	requested := optionalStringValue(extractOpenAIServiceTierFromBody(req.Body))
+	group, _ := ctx.Value(ctxkey.Group).(*Group)
+	forceFast, forceUltrafast := false, false
+	if IsGroupContextValid(group) && groupSupportsOpenAIFast(group.Platform) {
+		forceFast, forceUltrafast = group.ForceOpenAIFast, group.ForceOpenAIUltrafast
+	}
+	settings := openAIFastPolicySettingsFromContext(ctx)
+	if settings == nil && d.settingService != nil {
+		// Match forwarding's pass-through behavior if settings cannot be read.
+		settings, _ = d.settingService.GetOpenAIFastPolicySettings(ctx)
+	}
+	userID := openAIFastPolicyUserID(ctx)
+	policyRelevant, modelRules := false, false
+	if settings != nil {
+		for _, rule := range settings.Rules {
+			if rule.Scope == BetaPolicyScopeBedrock || !openAIFastPolicyUserMatches(rule.UserIDs, userID) {
+				continue
+			}
+			// An ordinary request without a forced tier can only be upgraded by
+			// a missing-tier rule. Keep its existing no-account-scan fast path.
+			if requested == "" && !forceFast && !forceUltrafast &&
+				(!strings.EqualFold(strings.TrimSpace(rule.ServiceTier), OpenAIFastTierMissing) ||
+					(rule.Action != OpenAIFastPolicyActionForcePriority && rule.FallbackAction != OpenAIFastPolicyActionForcePriority)) {
+				continue
+			}
+			policyRelevant = true
+			modelRules = modelRules || len(rule.ModelWhitelist) > 0
+		}
+	}
+	if requested == "" && !forceFast && !forceUltrafast && !policyRelevant {
+		return nil
+	}
+	models := []string{upstreamInput}
+	if forceUltrafast || requested == OpenAIFastTierUltrafast || modelRules {
+		// Even a priced requested alias can map to Sol/Astra on a later account.
+		// This is a request-local snapshot read, not a per-model cache or DB scan.
+		models = append(models, mappedModels()...)
+	}
+	// Protocol conversion can discard the client's tier before group/global
+	// policy runs. Cover both forms, including missing -> force_priority, rather
+	// than guessing which protocol the eventual account will use.
+	requestedVariants := []string{requested}
+	if requested != "" {
+		requestedVariants = append(requestedVariants, "")
+	}
+	options := make([]inflightServiceTierOption, 0, len(models)*2*len(requestedVariants))
+	seen := make(map[inflightServiceTierOption]bool, len(models)*2*len(requestedVariants))
+	for _, model := range models {
+		for _, accountType := range []string{AccountTypeOAuth, AccountTypeAPIKey} {
+			account := &Account{Platform: PlatformOpenAI, Type: accountType}
+			sentModel := normalizeOpenAIModelForUpstream(account, model)
+			for _, requestedTier := range requestedVariants {
+				tier := requestedTier
+				if forced := openAIGroupForcedServiceTier(ctx, account, sentModel); forced != "" {
+					tier = forced
+				}
+				if tier == "" {
+					if action, _ := evaluateOpenAIFastPolicyWithSettings(settings, userID, account, sentModel, OpenAIFastTierMissing); action == OpenAIFastPolicyActionForcePriority {
+						tier = OpenAIFastTierPriority
+					}
+				} else {
+					action, _ := evaluateOpenAIFastPolicyWithSettings(settings, userID, account, sentModel, tier)
+					switch action {
+					case BetaPolicyActionBlock:
+						continue
+					case BetaPolicyActionFilter:
+						tier = ""
+					case OpenAIFastPolicyActionForcePriority:
+						tier = OpenAIFastTierPriority
+					}
+				}
+				if groupBillsOpenAIFastAtStandard(key, account, tier) {
+					tier = ""
+				}
+				option := inflightServiceTierOption{model: sentModel, tier: tier}
+				if !seen[option] {
+					seen[option] = true
+					options = append(options, option)
+				}
+			}
+		}
+	}
+	return options
+}
+
+func inflightTokenCostWithServiceTier(pricing *ModelPricing, input, output int, option inflightServiceTierOption) float64 {
+	pricing = pricingWithServiceTierModel(pricing, option.model)
+	inputPrice, outputPrice := pricing.InputPricePerToken, pricing.OutputPricePerToken
+	multiplier := 1.0
+	if usePriorityServiceTierPricing(option.tier, pricing) {
+		if pricing.InputPricePerTokenPriority > 0 {
+			inputPrice = pricing.InputPricePerTokenPriority
+		}
+		if pricing.OutputPricePerTokenPriority > 0 {
+			outputPrice = pricing.OutputPricePerTokenPriority
+		}
+	} else {
+		multiplier = configuredServiceTierMultiplier(option.tier, pricing)
+	}
+	return (float64(input)*inputPrice + float64(output)*outputPrice) * multiplier
+}
+
 // estimateOne 估算单个候选计费模型（未乘倍率的 token 部分与按次部分分开返回，便于套用不同倍率）。
-func (d inflightEstimateDeps) estimateOne(ctx context.Context, apiKey *APIKey, model string, req InflightEstimateRequest, textRate, imageRate float64) (float64, bool) {
+func (d inflightEstimateDeps) estimateOne(ctx context.Context, apiKey *APIKey, model string, req InflightEstimateRequest, textRate, imageRate float64, serviceTiers func() []inflightServiceTierOption) (float64, bool) {
 	cfg := inflightReservationCfg(d.cfg)
 	units := req.Units
 	if units <= 0 {
@@ -607,7 +742,17 @@ func (d inflightEstimateDeps) estimateOne(ctx context.Context, apiKey *APIKey, m
 			return 0
 		}
 		priced = true
-		return (float64(inputTokens)*pricing.InputPricePerToken + float64(outputTokens)*pricing.OutputPricePerToken) * textRate
+		standard := float64(inputTokens)*pricing.InputPricePerToken + float64(outputTokens)*pricing.OutputPricePerToken
+		if options := serviceTiers(); options != nil {
+			// The actual protocol is not known at precharge. Never discount below
+			// Standard, even if the original tier is Flex or all its options block.
+			best := standard
+			for _, option := range options {
+				best = math.Max(best, inflightTokenCostWithServiceTier(pricing, inputTokens, outputTokens, option))
+			}
+			return best * textRate
+		}
+		return standard * textRate
 	}
 
 	var cost float64
@@ -699,11 +844,43 @@ func (d inflightEstimateDeps) estimate(ctx context.Context, apiKey *APIKey, req 
 		return 0, true
 	}
 	primary, fallbacks, upstreamInput := inflightBillingModelCandidates(ctx, d, apiKey, req.Model)
+	// Group aliases are resolved before channel/account mappings on the wire;
+	// keep the original primary price candidates, including explicit alias prices.
+	if req.Kind == InflightEstimateToken && d.usesOpenAIServiceTiers(ctx, apiKey) {
+		if target, matched := apiKey.Group.ResolveModelAlias(req.Model); matched {
+			upstreamInput = target
+			if d.resolveMapping != nil && apiKey.GroupID != nil {
+				if mapping := d.resolveMapping(ctx, *apiKey.GroupID, target); mapping.MappedModel != "" {
+					upstreamInput = mapping.MappedModel
+				}
+			}
+		}
+	}
+	var mapped []string
+	mappingsLoaded := false
+	mappedModels := func() []string {
+		if !mappingsLoaded {
+			mappingsLoaded = true
+			if d.accountMappedModels != nil {
+				mapped = d.accountMappedModels(ctx, apiKey, upstreamInput)
+			}
+		}
+		return mapped
+	}
+	var options []inflightServiceTierOption
+	tiersLoaded := false
+	serviceTiers := func() []inflightServiceTierOption {
+		if !tiersLoaded {
+			tiersLoaded = true
+			options = d.serviceTierOptions(ctx, apiKey, req, upstreamInput, mappedModels)
+		}
+		return options
+	}
 	bestOf := func(models []string) (float64, bool) {
 		best := 0.0
 		priced := false
 		for _, m := range models {
-			c, known := d.estimateOne(ctx, apiKey, m, req, textRate, imageRate)
+			c, known := d.estimateOne(ctx, apiKey, m, req, textRate, imageRate, serviceTiers)
 			priced = priced || known
 			if c > best {
 				best = c
@@ -722,9 +899,9 @@ func (d inflightEstimateDeps) estimate(ctx context.Context, apiKey *APIKey, req 
 		if c > best {
 			best = c
 		}
-		// 账号级映射候选（读调度器快照）仅在仍无法定价或 composite 时才查，已定价模型不触发。
+		// 价格回退保留原顺序；若 tier 已读取映射，复用同一请求快照。
 		if (!priced || composite) && d.accountMappedModels != nil {
-			c, known = bestOf(d.accountMappedModels(ctx, apiKey, upstreamInput))
+			c, known = bestOf(mappedModels())
 			priced = priced || known
 			if c > best {
 				best = c
@@ -769,7 +946,8 @@ func inflightReservationCfg(cfg *config.Config) config.InflightReservationConfig
 }
 
 func (s *GatewayService) inflightEstimateDeps() inflightEstimateDeps {
-	d := inflightEstimateDeps{cfg: s.cfg, billing: s.billingService, resolver: s.resolver}
+	d := inflightEstimateDeps{cfg: s.cfg, billing: s.billingService, resolver: s.resolver,
+		settingService: s.settingService, defaultPlatform: PlatformAnthropic}
 	if s.channelService != nil {
 		d.resolveMapping = s.channelService.ResolveChannelMapping
 	}
@@ -800,7 +978,8 @@ func (s *GatewayService) EstimateInflightReservation(ctx context.Context, apiKey
 }
 
 func (s *OpenAIGatewayService) inflightEstimateDeps() inflightEstimateDeps {
-	d := inflightEstimateDeps{cfg: s.cfg, billing: s.billingService, resolver: s.resolver}
+	d := inflightEstimateDeps{cfg: s.cfg, billing: s.billingService, resolver: s.resolver,
+		settingService: s.settingService, defaultPlatform: PlatformOpenAI}
 	if s.channelService != nil {
 		d.resolveMapping = s.channelService.ResolveChannelMapping
 	}
