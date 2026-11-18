@@ -181,14 +181,14 @@ func configuredServiceTierMultiplier(serviceTier string, pricing *ModelPricing) 
 
 // pricingWithServiceTierModel keeps operator prices while applying the tier
 // multiplier owned by the actual upstream model, even when billing uses an alias.
-func pricingWithServiceTierModel(pricing *ModelPricing, upstreamModel string) *ModelPricing {
+func pricingWithServiceTierModel(pricing *ModelPricing, upstreamModel string, pricingAt time.Time) *ModelPricing {
 	if pricing == nil || strings.TrimSpace(upstreamModel) == "" {
 		return pricing
 	}
 	cloned := *pricing
 	cloned.UltrafastMultiplier = serviceTierCostMultiplier(OpenAIFastTierUltrafast)
 	if openAIModelSupportsUltrafast(upstreamModel) {
-		cloned.UltrafastMultiplier = 6
+		cloned.UltrafastMultiplier = openAIUltrafastMultiplier(upstreamModel, pricingAt)
 	}
 	return &cloned
 }
@@ -1810,7 +1810,7 @@ func (s *BillingService) CalculateCostUnified(input CostInput) (*CostBreakdown, 
 		if err != nil {
 			return nil, err
 		}
-		pricing = pricingWithServiceTierModel(pricing, input.ServiceTierModel)
+		pricing = pricingWithServiceTierModel(pricing, input.ServiceTierModel, input.PricingAt)
 		breakdown := s.computeTokenBreakdown(pricing, input.Tokens, input.RateMultiplier, input.ServiceTier, applyLongContextBilling && !input.DisableModelLongContextPricing)
 		applyCostBreakdownMultiplier(breakdown, reasoningEffortBillingMultiplier(input.ReasoningEffort, pricing.ReasoningEffortMultipliers))
 		return breakdown, nil
@@ -1881,7 +1881,7 @@ func (s *BillingService) calculateTokenCost(resolved *ResolvedPricing, input Cos
 	// 默认价卡（Source=LiteLLM）应用 DeepSeek 官方价强制覆盖（幂等，GetModelPricing
 	// 内部已强制过）；分组/渠道自定义定价保留运营者配置，不强制覆盖官方价。
 	pricing = s.applyModelSpecificPricingPolicyEx(input.Model, pricing, resolved.Source == PricingSourceLiteLLM, pricingAt)
-	pricing = pricingWithServiceTierModel(pricing, input.ServiceTierModel)
+	pricing = pricingWithServiceTierModel(pricing, input.ServiceTierModel, input.PricingAt)
 
 	// DeepSeek 模型默认价卡按官方峰谷口径调整：高峰时段（01:00–04:00 与
 	// 06:00–10:00 UTC，仅工作日；北京时间周末全天低谷）按 2× 低谷价计费。

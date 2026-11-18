@@ -7,6 +7,7 @@ func addClaudeUsage(dst *ClaudeUsage, src ClaudeUsage) {
 	dst.InputTokens += src.InputTokens
 	dst.OutputTokens += src.OutputTokens
 	dst.CacheCreationInputTokens += src.CacheCreationInputTokens
+	dst.cacheCreationInputTokensPresent = dst.cacheCreationInputTokensPresent || src.cacheCreationInputTokensPresent
 	dst.CacheReadInputTokens += src.CacheReadInputTokens
 	dst.CacheCreation5mTokens += src.CacheCreation5mTokens
 	dst.CacheCreation1hTokens += src.CacheCreation1hTokens

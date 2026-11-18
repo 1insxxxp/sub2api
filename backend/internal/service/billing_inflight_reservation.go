@@ -703,7 +703,7 @@ func (d inflightEstimateDeps) serviceTierOptions(ctx context.Context, key *APIKe
 }
 
 func inflightTokenCostWithServiceTier(pricing *ModelPricing, input, output int, option inflightServiceTierOption) float64 {
-	pricing = pricingWithServiceTierModel(pricing, option.model)
+	pricing = pricingWithServiceTierModel(pricing, option.model, time.Time{})
 	inputPrice, outputPrice := pricing.InputPricePerToken, pricing.OutputPricePerToken
 	multiplier := 1.0
 	if usePriorityServiceTierPricing(option.tier, pricing) {
