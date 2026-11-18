@@ -370,6 +370,13 @@ func (s *OpenAIGatewayService) streamRawChatCompletions(
 	var firstTokenMs *int
 	clientDisconnected := false
 	clientOutputStarted := false
+	flushPending := false
+	flushToClient := func() {
+		if flushPending && !clientDisconnected && clientOutputStarted {
+			c.Writer.Flush()
+		}
+		flushPending = false
+	}
 	pendingLines := make([]string, 0, 8)
 	refusalDetector := newOpenAIChatSilentRefusalDetector(requestBodyLen)
 	var terminal openAIRawStreamTerminalState
@@ -437,6 +444,7 @@ func (s *OpenAIGatewayService) streamRawChatCompletions(
 			return
 		}
 		capture.deliveredLine(line)
+		flushPending = true
 	}
 
 	resultWithUsage := func() *OpenAIForwardResult {
@@ -477,7 +485,7 @@ func (s *OpenAIGatewayService) streamRawChatCompletions(
 		terminalLines := make([]string, 0, 4)
 		terminalContentLines := make([]string, 0, 1)
 		var payloadErr error
-		scanner := s.newUpstreamSSEScanner(resp.Body)
+		scanner := s.newUpstreamSSEScanner(&flushBeforeUpstreamRead{r: resp.Body, flush: flushToClient})
 		for scanner.Scan() {
 			line := scanner.Text()
 			refusalDetector.ObserveSSELine(line)
@@ -547,16 +555,8 @@ func (s *OpenAIGatewayService) streamRawChatCompletions(
 			} else {
 				writeLine(line)
 			}
-			if line == "" {
-				if !clientDisconnected && clientOutputStarted {
-					c.Writer.Flush()
-				}
-				continue
-			}
-			if !clientDisconnected && clientOutputStarted {
-				c.Writer.Flush()
-			}
 		}
+		flushToClient()
 		scanErr = scanner.Err()
 		if scanErr == nil {
 			scanErr = payloadErr
