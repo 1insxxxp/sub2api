@@ -239,12 +239,27 @@ func (h *OpsHandler) GetDashboardOpenAITokenStats(c *gin.Context) {
 		return
 	}
 
-	data, err := h.opsService.GetOpenAITokenStats(c.Request.Context(), filter)
+	// This endpoint accepts named rolling windows. Reuse the measured start and
+	// end in the cached response, along with its statistics.
+	var groupID int64
+	if filter.GroupID != nil {
+		groupID = *filter.GroupID
+	}
+	key := fmt.Sprintf("%s:%q:%d:%d:%d:%d", filter.TimeRange, strings.ToLower(filter.Platform),
+		groupID, filter.TopN, filter.Page, filter.PageSize)
+	entry, hit, err := h.tokenStatsCache.GetOrLoad(key, func() (any, error) {
+		return h.opsService.GetOpenAITokenStats(c.Request.Context(), filter)
+	})
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
-	response.Success(c, data)
+	if hit {
+		c.Header("X-Snapshot-Cache", "hit")
+	} else {
+		c.Header("X-Snapshot-Cache", "miss")
+	}
+	response.Success(c, entry.Payload)
 }
 
 func parseOpsOpenAITokenStatsFilter(c *gin.Context) (*service.OpsOpenAITokenStatsFilter, error) {

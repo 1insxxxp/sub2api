@@ -33,8 +33,8 @@ func (r *opsRepository) GetOpenAITokenStats(ctx context.Context, filter *service
 
 	join, where, baseArgs, next := buildUsageWhere(dashboardFilter, dashboardFilter.StartTime, dashboardFilter.EndTime, 1)
 
-	baseCTE := `
-WITH stats AS (
+	querySQL := `
+WITH stats AS MATERIALIZED (
   SELECT
     ul.model AS model,
     COUNT(*)::bigint AS request_count,
@@ -55,26 +55,9 @@ WITH stats AS (
   ` + join + `
   ` + where + `
   GROUP BY ul.model
-)
-`
-
-	countSQL := baseCTE + `SELECT COUNT(*) FROM stats`
-	var total int64
-	if err := r.db.QueryRowContext(ctx, countSQL, baseArgs...).Scan(&total); err != nil {
-		return nil, err
-	}
-
-	querySQL := baseCTE + `
-SELECT
-  model,
-  request_count,
-  avg_tokens_per_sec,
-  avg_first_token_ms,
-  total_output_tokens,
-  avg_duration_ms,
-  requests_with_first_token
-FROM stats
-ORDER BY request_count DESC, model ASC`
+), page AS (
+  SELECT * FROM stats
+  ORDER BY request_count DESC, model ASC`
 
 	args := make([]any, 0, len(baseArgs)+2)
 	args = append(args, baseArgs...)
@@ -88,18 +71,31 @@ ORDER BY request_count DESC, model ASC`
 		args = append(args, filter.PageSize, offset)
 	}
 
+	// Keep the pre-pagination total even when the requested page is empty.
+	querySQL += `
+)
+SELECT t.total, COALESCE(p.model, ''), COALESCE(p.request_count, 0),
+       p.avg_tokens_per_sec, p.avg_first_token_ms,
+       COALESCE(p.total_output_tokens, 0), COALESCE(p.avg_duration_ms, 0),
+       COALESCE(p.requests_with_first_token, 0)
+FROM (SELECT COUNT(*) AS total FROM stats) t
+LEFT JOIN page p ON TRUE
+ORDER BY p.request_count DESC, p.model ASC`
+
 	rows, err := r.db.QueryContext(ctx, querySQL, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
 
+	var total int64
 	items := make([]*service.OpsOpenAITokenStatsItem, 0, 32)
 	for rows.Next() {
 		item := &service.OpsOpenAITokenStatsItem{}
 		var avgTPS sql.NullFloat64
 		var avgFirstToken sql.NullFloat64
 		if err := rows.Scan(
+			&total,
 			&item.Model,
 			&item.RequestCount,
 			&avgTPS,
@@ -109,6 +105,9 @@ ORDER BY request_count DESC, model ASC`
 			&item.RequestsWithFirstToken,
 		); err != nil {
 			return nil, err
+		}
+		if item.RequestCount == 0 {
+			continue // Outer join produced only the total.
 		}
 		if avgTPS.Valid {
 			v := avgTPS.Float64

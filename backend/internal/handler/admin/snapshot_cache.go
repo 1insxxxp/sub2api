@@ -18,10 +18,11 @@ type snapshotCacheEntry struct {
 }
 
 type snapshotCache struct {
-	mu    sync.RWMutex
-	ttl   time.Duration
-	items map[string]snapshotCacheEntry
-	sf    singleflight.Group
+	mu         sync.RWMutex
+	ttl        time.Duration
+	items      map[string]snapshotCacheEntry
+	sf         singleflight.Group
+	maxEntries int // zero leaves the cache uncapped
 }
 
 type snapshotCacheLoadResult struct {
@@ -53,7 +54,9 @@ func (c *snapshotCache) Get(key string) (snapshotCacheEntry, bool) {
 	}
 	if now.After(entry.ExpiresAt) {
 		c.mu.Lock()
-		delete(c.items, key)
+		if current, exists := c.items[key]; exists && !now.Before(current.ExpiresAt) {
+			delete(c.items, key)
+		}
 		c.mu.Unlock()
 		return snapshotCacheEntry{}, false
 	}
@@ -73,6 +76,18 @@ func (c *snapshotCache) Set(key string, payload any) snapshotCacheEntry {
 		return entry
 	}
 	c.mu.Lock()
+	if c.maxEntries > 0 && len(c.items) >= c.maxEntries {
+		if _, replacing := c.items[key]; !replacing {
+			var oldestKey string
+			var oldest time.Time
+			for k, v := range c.items {
+				if oldest.IsZero() || v.ExpiresAt.Before(oldest) {
+					oldestKey, oldest = k, v.ExpiresAt
+				}
+			}
+			delete(c.items, oldestKey)
+		}
+	}
 	c.items[key] = entry
 	c.mu.Unlock()
 	return entry

@@ -41,7 +41,7 @@ func TestOpsRepositoryGetOpenAITokenStats_PlatformScope(t *testing.T) {
 				TopN:      20,
 			}
 
-			// Match the complete filtering clause in both queries so an implicit
+			// Match the complete filtering clause in the single aggregation so an implicit
 			// model restriction cannot silently narrow the selected platform scope.
 			where := "WHERE ul.created_at >= $1 AND ul.created_at < $2"
 			args := []driver.Value{start, end}
@@ -58,18 +58,15 @@ func TestOpsRepositoryGetOpenAITokenStats_PlatformScope(t *testing.T) {
 				args = append(args, tt.platform)
 			}
 			queryPrefix := regexp.QuoteMeta(where) + `\s+GROUP BY ul.model\s+\)`
-			mock.ExpectQuery(queryPrefix + `\s+SELECT COUNT\(\*\) FROM stats`).
-				WithArgs(args...).
-				WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(len(tt.models)))
 
 			rows := sqlmock.NewRows([]string{
-				"model", "request_count", "avg_tokens_per_sec", "avg_first_token_ms",
+				"total", "model", "request_count", "avg_tokens_per_sec", "avg_first_token_ms",
 				"total_output_tokens", "avg_duration_ms", "requests_with_first_token",
 			})
 			for _, model := range tt.models {
-				rows.AddRow(model, int64(2), 10.0, 100.0, int64(20), int64(1000), int64(2))
+				rows.AddRow(len(tt.models), model, int64(2), 10.0, 100.0, int64(20), int64(1000), int64(2))
 			}
-			mock.ExpectQuery(queryPrefix + `\s+SELECT model,`).
+			mock.ExpectQuery(queryPrefix + `,\s*page AS`).
 				WithArgs(append(args, 20)...).
 				WillReturnRows(rows)
 
@@ -105,12 +102,8 @@ func TestOpsRepositoryGetOpenAITokenStats_PaginationMode(t *testing.T) {
 		PageSize:  10,
 	}
 
-	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM stats`).
-		WithArgs(start, end, groupID, "openai").
-		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(int64(3)))
-
 	rows := sqlmock.NewRows([]string{
-		"model",
+		"total", "model",
 		"request_count",
 		"avg_tokens_per_sec",
 		"avg_first_token_ms",
@@ -118,8 +111,8 @@ func TestOpsRepositoryGetOpenAITokenStats_PaginationMode(t *testing.T) {
 		"avg_duration_ms",
 		"requests_with_first_token",
 	}).
-		AddRow("gpt-4o-mini", int64(20), 21.56, 120.34, int64(3000), int64(850), int64(18)).
-		AddRow("gpt-4.1", int64(20), 10.2, 240.0, int64(2500), int64(900), int64(20))
+		AddRow(3, "gpt-4o-mini", int64(20), 21.56, 120.34, int64(3000), int64(850), int64(18)).
+		AddRow(3, "gpt-4.1", int64(20), 10.2, 240.0, int64(2500), int64(900), int64(20))
 
 	mock.ExpectQuery(`ORDER BY request_count DESC, model ASC\s+LIMIT \$5 OFFSET \$6`).
 		WithArgs(start, end, groupID, "openai", 10, 10).
@@ -158,12 +151,8 @@ func TestOpsRepositoryGetOpenAITokenStats_TopNMode(t *testing.T) {
 		TopN:      5,
 	}
 
-	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM stats`).
-		WithArgs(start, end).
-		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(int64(1)))
-
 	rows := sqlmock.NewRows([]string{
-		"model",
+		"total", "model",
 		"request_count",
 		"avg_tokens_per_sec",
 		"avg_first_token_ms",
@@ -171,7 +160,7 @@ func TestOpsRepositoryGetOpenAITokenStats_TopNMode(t *testing.T) {
 		"avg_duration_ms",
 		"requests_with_first_token",
 	}).
-		AddRow("gpt-4o", int64(5), nil, nil, int64(0), int64(0), int64(0))
+		AddRow(1, "gpt-4o", int64(5), nil, nil, int64(0), int64(0), int64(0))
 
 	mock.ExpectQuery(`ORDER BY request_count DESC, model ASC\s+LIMIT \$3`).
 		WithArgs(start, end, 5).
@@ -205,21 +194,17 @@ func TestOpsRepositoryGetOpenAITokenStats_EmptyResult(t *testing.T) {
 		PageSize:  20,
 	}
 
-	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM stats`).
-		WithArgs(start, end).
-		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(int64(0)))
-
 	mock.ExpectQuery(`ORDER BY request_count DESC, model ASC\s+LIMIT \$3 OFFSET \$4`).
 		WithArgs(start, end, 20, 0).
 		WillReturnRows(sqlmock.NewRows([]string{
-			"model",
+			"total", "model",
 			"request_count",
 			"avg_tokens_per_sec",
 			"avg_first_token_ms",
 			"total_output_tokens",
 			"avg_duration_ms",
 			"requests_with_first_token",
-		}))
+		}).AddRow(0, "", 0, nil, nil, 0, 0, 0))
 
 	resp, err := repo.GetOpenAITokenStats(context.Background(), filter)
 	require.NoError(t, err)
@@ -229,5 +214,18 @@ func TestOpsRepositoryGetOpenAITokenStats_EmptyResult(t *testing.T) {
 	require.Equal(t, 1, resp.Page)
 	require.Equal(t, 20, resp.PageSize)
 
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestOpsRepositoryGetOpenAITokenStats_PastLastPageKeepsTotal(t *testing.T) {
+	db, mock := newSQLMock(t)
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	filter := &service.OpsOpenAITokenStatsFilter{StartTime: start, EndTime: start.Add(time.Hour), Page: 3, PageSize: 10}
+	rows := sqlmock.NewRows([]string{"total", "model", "request_count", "avg_tokens_per_sec", "avg_first_token_ms", "total_output_tokens", "avg_duration_ms", "requests_with_first_token"}).AddRow(13, "", 0, nil, nil, 0, 0, 0)
+	mock.ExpectQuery(`WITH stats AS MATERIALIZED`).WithArgs(start, filter.EndTime, 10, 20).WillReturnRows(rows)
+	resp, err := (&opsRepository{db: db}).GetOpenAITokenStats(context.Background(), filter)
+	require.NoError(t, err)
+	require.EqualValues(t, 13, resp.Total)
+	require.Empty(t, resp.Items)
 	require.NoError(t, mock.ExpectationsWereMet())
 }

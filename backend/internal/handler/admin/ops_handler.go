@@ -14,7 +14,8 @@ import (
 )
 
 type OpsHandler struct {
-	opsService *service.OpsService
+	opsService      *service.OpsService
+	tokenStatsCache *snapshotCache
 }
 
 // GetErrorLogByID returns ops error log detail.
@@ -69,7 +70,9 @@ func parseOpsViewParam(c *gin.Context) string {
 }
 
 func NewOpsHandler(opsService *service.OpsService) *OpsHandler {
-	return &OpsHandler{opsService: opsService}
+	cache := newSnapshotCache(time.Minute)
+	cache.maxEntries = 128
+	return &OpsHandler{opsService: opsService, tokenStatsCache: cache}
 }
 
 // GetErrorLogs lists ops error logs.

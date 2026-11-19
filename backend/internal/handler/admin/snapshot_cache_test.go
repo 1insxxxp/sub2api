@@ -183,3 +183,19 @@ func TestParseBoolQueryWithDefault(t *testing.T) {
 		})
 	}
 }
+
+func TestSnapshotCache_BoundedEntries(t *testing.T) {
+	c := newSnapshotCache(time.Minute)
+	c.maxEntries = 2
+	c.Set("first", 1)
+	c.Set("second", 2)
+	c.Set("second", 3)
+	require.Len(t, c.items, 2)
+	c.Set("third", 4)
+	require.Len(t, c.items, 2)
+	_, ok := c.Get("first")
+	require.False(t, ok)
+	entry, ok := c.Get("second")
+	require.True(t, ok)
+	require.Equal(t, 3, entry.Payload)
+}
