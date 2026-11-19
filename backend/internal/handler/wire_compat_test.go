@@ -62,6 +62,7 @@ func TestProvideAdminHandlersPreservesLegacyConstructor(t *testing.T) {
 		userHandler,
 		&admin.UserSupportHandler{},
 		modelProbeHandler,
+		nil, // channelAcceptanceHandler
 		&admin.AdminWorkbenchAccessHandler{},
 		groupHandler,
 		systemCustomGroupHandler,

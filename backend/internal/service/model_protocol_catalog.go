@@ -190,6 +190,14 @@ func (s *OpenAIGatewayService) modelCatalogProtocols(ctx context.Context, accoun
 	}
 	url := buildOpenAIModelsURL(base)
 	key := modelProtocolCatalogKey(account, url)
+	if isChannelAcceptanceAudit(ctx) {
+		upstreamModelProtocols.mu.Lock()
+		defer upstreamModelProtocols.mu.Unlock()
+		if entry := upstreamModelProtocols.entries[key]; entry != nil {
+			return entry.models[strings.ToLower(strings.TrimSpace(model))]
+		}
+		return nil
+	}
 	headers := modelProtocolCatalogHeaders(account, url)
 	proxyURL := ""
 	if account.ProxyID != nil && account.Proxy != nil {

@@ -18,6 +18,11 @@ var ErrOpenAIChatUsageOutOfRange = errors.New("chat usage token count is outside
 // FinalizeOpenAIChatUsage resolves usage for each raw Chat Completions round.
 // Financial effects remain in RecordUsage and its existing request dedup.
 func (s *OpenAIGatewayService) FinalizeOpenAIChatUsage(ctx context.Context, input *OpenAIRecordUsageInput) {
+	// Synthetic acceptance samples must not train production calibration or
+	// initiate ledger/count recovery, even if a caller reaches settlement.
+	if isChannelAcceptanceAudit(ctx) {
+		return
+	}
 	if input != nil && input.Result != nil && len(input.Result.ContinuationResults) > 0 {
 		if validateOpenAIContinuationResults(input.Result) != nil {
 			return

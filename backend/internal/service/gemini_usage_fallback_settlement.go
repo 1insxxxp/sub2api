@@ -9,6 +9,11 @@ import (
 // never changes a reported zero or labels an estimate as a provider measurement.
 // Financial effects remain exclusively in RecordUsage and its original dedup.
 func (s *GatewayService) FinalizeGeminiUsageFallback(ctx context.Context, input *RecordUsageInput) {
+	// Synthetic acceptance samples must not train production calibration or
+	// initiate ledger/count recovery, even if a caller reaches settlement.
+	if isChannelAcceptanceAudit(ctx) {
+		return
+	}
 	if input != nil && input.Result != nil && len(input.Result.ContinuationResults) > 0 {
 		if validateForwardContinuationResults(input.Result) != nil {
 			return

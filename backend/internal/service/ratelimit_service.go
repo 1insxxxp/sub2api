@@ -331,6 +331,9 @@ func (s *RateLimitService) CheckErrorPolicy(ctx context.Context, account *Accoun
 // HandleUpstreamError 处理上游错误响应，标记账号状态
 // 返回是否应该停止该账号的调度
 func (s *RateLimitService) HandleUpstreamError(ctx context.Context, account *Account, statusCode int, headers http.Header, responseBody []byte, requestedModel ...string) (shouldDisable bool) {
+	if isChannelAcceptanceAudit(ctx) {
+		return false
+	}
 	ctx = withTempUnschedulableModel(ctx, requestedModel)
 	// Team 联动熔断必须先于池模式/自定义错误码/临时不可调度的各类早退；
 	// 同请求内与 fastpath 调用点的重复触发由方法内去重吸收。
@@ -2108,6 +2111,9 @@ func (s *RateLimitService) handle529(ctx context.Context, account *Account) {
 
 // UpdateSessionWindow 从成功响应更新5h窗口状态并采样可用的额度窗口。
 func (s *RateLimitService) UpdateSessionWindow(ctx context.Context, account *Account, headers http.Header) {
+	if isChannelAcceptanceAudit(ctx) {
+		return
+	}
 	status := headers.Get("anthropic-ratelimit-unified-5h-status")
 	if status == "" {
 		// Ultra 等账号可能仅返回周窗口；不能因缺少 5h 状态而丢弃真实的 7d 用量。
@@ -2645,6 +2651,9 @@ const tempUnschedMessageMaxBytes = 2048
 // cooldown expires, instead of re-selecting an account that can never serve
 // the model.
 func (s *RateLimitService) HandleUpstreamModelNotFound(ctx context.Context, account *Account, requestedModel string, statusCode int, responseBody []byte) bool {
+	if isChannelAcceptanceAudit(ctx) {
+		return false
+	}
 	if s == nil || account == nil || s.accountRepo == nil {
 		return false
 	}

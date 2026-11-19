@@ -224,7 +224,7 @@ func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Co
 
 		// 模型兜底：模型不存在且开启 fallback 时，自动用 fallback 模型重试一次
 		if s.settingService != nil && s.settingService.IsModelFallbackEnabled(ctx) &&
-			isModelNotFoundError(resp.StatusCode, respBody) {
+			resp.StatusCode != http.StatusNotFound && isUpstreamModelNotFoundError(resp.StatusCode, respBody) {
 			fallbackModel := s.settingService.GetFallbackModel(ctx, PlatformAntigravity)
 			if fallbackModel != "" && fallbackModel != mappedModel {
 				logger.LegacyPrintf("service.antigravity_gateway", "[Antigravity] Model not found (%s), retrying with fallback model %s (account: %s)", mappedModel, fallbackModel, account.Name)
@@ -455,7 +455,7 @@ handleSuccess:
 		usage = streamRes.usage
 		firstTokenMs = streamRes.firstTokenMs
 		if firstTokenMs != nil {
-			recordGeminiFirstOutput(account.ID, originalModel, time.Duration(*firstTokenMs)*time.Millisecond, false)
+			recordGeminiFirstOutput(ctx, account.ID, originalModel, time.Duration(*firstTokenMs)*time.Millisecond, false)
 		}
 		clientDisconnect = streamRes.clientDisconnect
 		outcomeSnapshot := streamRes.outcome

@@ -1250,7 +1250,7 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 		clientDisconnect = streamRes.clientDisconnect
 		streamFinished = streamRes.finished
 		if firstTokenMs != nil {
-			recordGeminiFirstOutput(account.ID, originalModel, time.Duration(*firstTokenMs)*time.Millisecond, false)
+			recordGeminiFirstOutput(ctx, account.ID, originalModel, time.Duration(*firstTokenMs)*time.Millisecond, false)
 		}
 	} else {
 		if useUpstreamStream {
@@ -1865,7 +1865,7 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 		clientDisconnect = streamRes.clientDisconnect
 		streamFinished = streamRes.finished
 		if firstTokenMs != nil {
-			recordGeminiFirstOutput(account.ID, originalModel, time.Duration(*firstTokenMs)*time.Millisecond, false)
+			recordGeminiFirstOutput(ctx, account.ID, originalModel, time.Duration(*firstTokenMs)*time.Millisecond, false)
 		}
 	} else {
 		if useUpstreamStream {

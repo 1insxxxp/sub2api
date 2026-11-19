@@ -528,6 +528,9 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 			})
 		}
 
+		if isChannelAcceptanceAudit(ctx) {
+			break
+		}
 		if resp.StatusCode == http.StatusUnauthorized && !retriedRotatedToken &&
 			attempt < maxRetryAttempts && time.Since(retryStart) < maxRetryElapsed {
 			if rotatedToken := s.rotatedClaudeAccessToken(ctx, account, token); rotatedToken != "" {

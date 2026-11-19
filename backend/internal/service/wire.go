@@ -954,6 +954,9 @@ func ProvideImageStorageSettingService(
 
 // ProviderSet is the Wire provider set for all services
 var ProviderSet = wire.NewSet(
+	ProvideChannelAcceptanceService,
+	NewAccountAcceptanceExecutor,
+	wire.Bind(new(ChannelAcceptanceExecutor), new(*AccountAcceptanceExecutor)),
 	ProvideUserSupportService,
 	ProvideModelProbeService,
 	NewAdminWorkbenchAccessService,
@@ -1098,7 +1101,7 @@ var ProviderSet = wire.NewSet(
 	NewModelPricingResolver,
 	NewGroupPricingCoverageService,
 	NewModelPlazaService,
-	NewModelStatusService,
+	ProvideModelStatusService,
 	NewContentModerationService,
 	NewAffiliateService,
 	ProvideAffiliateQualificationRecoveryWorker,

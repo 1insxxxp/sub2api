@@ -9,8 +9,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// A missing model cannot recover by retrying the same account. Leave the client
-// response untouched so the handler can select another eligible account.
+// Keep upstream 404 responses uncommitted so the handler can try another account.
+// Only an explicit model rejection updates the model cooldown.
 func (s *GatewayService) handleUpstreamModelNotFound(ctx context.Context, c *gin.Context, account *Account, resp *http.Response, requestedModel string, event OpsUpstreamErrorEvent) *UpstreamFailoverError {
 	if resp == nil || resp.StatusCode != http.StatusNotFound || resp.Body == nil {
 		return nil
@@ -18,12 +18,12 @@ func (s *GatewayService) handleUpstreamModelNotFound(ctx context.Context, c *gin
 	body, err := s.readUpstreamErrorBody(resp)
 	_ = resp.Body.Close()
 	resp.Body = io.NopCloser(bytes.NewReader(body))
-	if err != nil || !isUpstreamModelNotFoundError(resp.StatusCode, body) {
+	if err != nil {
 		return nil
 	}
 
 	// Reuse the model-scoped cooldown; other models on this account stay available.
-	if s.rateLimitService != nil {
+	if s.rateLimitService != nil && isUpstreamModelNotFoundError(resp.StatusCode, body) {
 		s.rateLimitService.HandleUpstreamModelNotFound(ctx, account, requestedModel, resp.StatusCode, body)
 	}
 	event.ProxyID, event.ProxyName = opsUpstreamProxyAttribution(account)

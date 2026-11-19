@@ -136,6 +136,9 @@ func (s *GatewayService) handleBedrockStreamingResponse(
 			if sseData == nil {
 				continue
 			}
+			if observer, ok := resp.Body.(*acceptanceBedrockBody); ok {
+				observer.observeChunk(sseData)
+			}
 
 			if firstTokenMs == nil {
 				ms := int(time.Since(startTime).Milliseconds())

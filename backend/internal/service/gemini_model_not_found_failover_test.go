@@ -154,6 +154,13 @@ func TestGeminiModelNotFoundPreservesTerminalErrors(t *testing.T) {
 
 				require.Error(t, err)
 				var failoverErr *UpstreamFailoverError
+				if tc.name == "endpoint_missing" {
+					require.ErrorAs(t, err, &failoverErr)
+					require.True(t, failoverErr.ShouldRetryNextAccount())
+					require.False(t, failoverErr.RetryableOnSameAccount)
+					require.False(t, c.Writer.Written())
+					return
+				}
 				require.False(t, errors.As(err, &failoverErr))
 				require.Equal(t, 1, upstream.calls)
 				require.True(t, c.Writer.Written())

@@ -103,6 +103,13 @@ func TestGatewayModelNotFoundFailoverPreservesTerminalErrors(t *testing.T) {
 
 				require.Error(t, err)
 				var failoverErr *UpstreamFailoverError
+				if tc.name == "endpoint missing" {
+					require.ErrorAs(t, err, &failoverErr)
+					require.True(t, failoverErr.ShouldRetryNextAccount())
+					require.False(t, failoverErr.RetryableOnSameAccount)
+					require.False(t, c.Writer.Written())
+					return
+				}
 				require.False(t, errors.As(err, &failoverErr))
 				require.Equal(t, 1, upstream.callCount)
 				require.True(t, c.Writer.Written())

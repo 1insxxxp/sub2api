@@ -178,10 +178,15 @@ AND NOT EXISTS (SELECT 1 FROM usage_billing_dedup billed WHERE billed.request_id
 AND NOT EXISTS (SELECT 1 FROM usage_billing_dedup_archive billed WHERE billed.request_id = p.request_id AND billed.api_key_id = p.api_key_id)`
 
 func (r *usageLogRepository) listUsageHistoryWithPending(ctx context.Context, where string, args []any, params pagination.PaginationParams, fast bool) ([]service.UsageLog, *pagination.PaginationResult, error) {
-	from := " FROM (SELECT " + usageLogSelectColumns + " FROM usage_logs UNION ALL SELECT " + pendingUsageSelectColumns() + " FROM usage_pending_records p WHERE " + pendingUsageUnsettledPredicate + ") usage_logs "
+	settled := " FROM usage_logs " + where
+	// The empty settled arm gives the pending projection the same types
+	// as usage_logs, including columns that are NULL for pending rows.
+	pending := " FROM (SELECT " + usageLogSelectColumns + " FROM usage_logs WHERE FALSE UNION ALL SELECT " +
+		pendingUsageSelectColumns() + " FROM usage_pending_records p WHERE " + pendingUsageUnsettledPredicate + ") usage_logs " + where
 	var total int64
 	if !fast {
-		if err := scanSingleRow(ctx, r.sql, "SELECT COUNT(*)"+from+where, args, &total); err != nil {
+		countQuery := "SELECT (SELECT COUNT(*)" + settled + ") + (SELECT COUNT(*)" + pending + ")"
+		if err := scanSingleRow(ctx, r.sql, countQuery, args, &total); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -192,11 +197,19 @@ func (r *usageLogRepository) listUsageHistoryWithPending(ctx context.Context, wh
 	orderParams := params
 	// Numeric IDs come from separate namespaces; chronological order is the
 	// meaningful default for a combined request history.
-	if orderParams.SortBy == "" || strings.EqualFold(orderParams.SortBy, "id") {
+	if strings.TrimSpace(orderParams.SortBy) == "" || strings.EqualFold(orderParams.SortBy, "id") {
 		orderParams.SortBy = "created_at"
 	}
-	query := fmt.Sprintf("SELECT %s%s%s ORDER BY %s LIMIT $%d OFFSET $%d", usageLogSelectColumns, from, where, usageLogOrderBy(orderParams), len(args)+1, len(args)+2)
-	listArgs := append(append([]any{}, args...), limit, params.Offset())
+	order := usageLogOrderBy(orderParams)
+	offset := params.Offset()
+	limitParam, offsetParam := len(args)+1, len(args)+2
+	// A row outside the first offset+limit rows of either source cannot
+	// appear on this page. Bound both arms before sorting their union.
+	sourceLimit := fmt.Sprintf(" ORDER BY %s LIMIT ($%d::bigint + $%d::bigint)", order, limitParam, offsetParam)
+	query := fmt.Sprintf("SELECT %s FROM ((SELECT %s%s%s) UNION ALL (SELECT %s%s%s)) usage_logs ORDER BY %s LIMIT $%d OFFSET $%d",
+		usageLogSelectColumns, usageLogSelectColumns, settled, sourceLimit,
+		usageLogSelectColumns, pending, sourceLimit, order, limitParam, offsetParam)
+	listArgs := append(append([]any{}, args...), limit, offset)
 	logs, err := r.queryUsageLogs(ctx, query, listArgs...)
 	if err != nil {
 		return nil, nil, err

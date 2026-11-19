@@ -15,6 +15,10 @@
               <Icon name="play" size="sm" class="text-green-500" :stroke-width="2" />
               {{ t('admin.accounts.testConnection') }}
             </button>
+            <button v-if="canAccept" data-testid="account-acceptance" @click="$emit('acceptance', account); $emit('close')" class="admin-action-menu-item">
+              <Icon name="shield" size="sm" class="text-primary-500" />
+              {{ t('admin.accounts.acceptance.title') }}
+            </button>
             <button @click="$emit('stats', account); $emit('close')" class="admin-action-menu-item">
               <Icon name="chart" size="sm" class="text-indigo-500" />
               {{ t('admin.accounts.viewStats') }}
@@ -71,8 +75,8 @@ import { useVisibleViewport } from '@/composables/useVisibleViewport'
 import type { Account } from '@/types'
 import { supportsAccountQuota } from '@/utils/accountQuota'
 
-const props = defineProps<{ show: boolean; account: Account | null; anchorRect: DOMRect | null }>()
-const emit = defineEmits(['close', 'test', 'stats', 'schedule', 'duplicate', 'reauth', 'refresh-token', 'recover-state', 'reset-quota', 'set-privacy', 'create-spark-shadow'])
+const props = defineProps<{ show: boolean; account: Account | null; anchorRect: DOMRect | null; canAccept?: boolean }>()
+const emit = defineEmits(['close', 'acceptance', 'test', 'stats', 'schedule', 'duplicate', 'reauth', 'refresh-token', 'recover-state', 'reset-quota', 'set-privacy', 'create-spark-shadow'])
 const { t } = useI18n()
 const menuRef = ref<HTMLElement | null>(null)
 const viewport = useVisibleViewport()

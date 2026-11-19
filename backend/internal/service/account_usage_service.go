@@ -11,9 +11,11 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/adminaccess"
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	httppool "github.com/Wei-Shaw/sub2api/internal/pkg/httpclient"
 	openaipkg "github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
@@ -350,6 +352,7 @@ type AccountUsageService struct {
 	cache                   *UsageCache
 	identityCache           IdentityCache
 	tlsFPProfileService     *TLSFingerprintProfileService
+	todayStatsActive        atomic.Int32
 	agentIdentityTaskMu     sync.Mutex
 	agentIdentityWS         agentIdentityWSConnectionInvalidator
 }
@@ -1553,7 +1556,7 @@ func (s *AccountUsageService) GetTodayStats(ctx context.Context, accountID int64
 	}, nil
 }
 
-// GetTodayStatsBatch 批量获取账号今日统计，优先走批量 SQL，失败时回退单账号查询。
+// GetTodayStatsBatch 批量获取账号今日统计。批量查询失败时直接返回错误。
 func (s *AccountUsageService) GetTodayStatsBatch(ctx context.Context, accountIDs []int64) (map[int64]*WindowStats, error) {
 	if adminaccess.RestrictedFromContext(ctx) != nil {
 		if len(accountIDs) > 100 {
@@ -1583,15 +1586,23 @@ func (s *AccountUsageService) GetTodayStatsBatch(ctx context.Context, accountIDs
 		return result, nil
 	}
 
+	if s.todayStatsActive.Add(1) > 2 {
+		s.todayStatsActive.Add(-1)
+		return nil, infraerrors.ServiceUnavailable("ACCOUNT_TODAY_STATS_BUSY", "今日统计繁忙，请稍后重试")
+	}
+	defer s.todayStatsActive.Add(-1)
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 	startTime := timezone.Today()
 	if batchReader, ok := s.usageLogRepo.(accountWindowStatsBatchReader); ok {
 		statsByAccount, err := batchReader.GetAccountWindowStatsBatch(ctx, uniqueIDs, startTime)
-		if err == nil {
-			for _, accountID := range uniqueIDs {
-				result[accountID] = windowStatsFromAccountStats(statsByAccount[accountID])
-			}
-			return result, nil
+		if err != nil {
+			return nil, infraerrors.ServiceUnavailable("ACCOUNT_TODAY_STATS_UNAVAILABLE", "今日统计暂不可用，请稍后重试").WithCause(err)
 		}
+		for _, accountID := range uniqueIDs {
+			result[accountID] = windowStatsFromAccountStats(statsByAccount[accountID])
+		}
+		return result, nil
 	}
 
 	var mu sync.Mutex

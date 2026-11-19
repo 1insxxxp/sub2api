@@ -460,6 +460,22 @@ func (s *AntigravityGatewayService) handleSingleAccountRetryInPlace(
 
 // antigravityRetryLoop 执行带 URL fallback 的重试循环
 func (s *AntigravityGatewayService) antigravityRetryLoop(p antigravityRetryLoopParams) (*antigravityRetryLoopResult, error) {
+	// Acceptance samples must neither retry into a different model/endpoint nor
+	// write cooldown/health state. Request construction remains the production path.
+	if isChannelAcceptanceAudit(p.ctx) {
+		req, err := antigravity.NewAPIRequestWithURL(p.ctx, resolveAntigravityForwardBaseURL(p.account), p.action, p.accessToken, p.body)
+		if err != nil {
+			return nil, err
+		}
+		resp, err := p.httpUpstream.Do(req, p.proxyURL, p.account.ID, p.account.Concurrency)
+		if err != nil {
+			return nil, err
+		}
+		if resp == nil {
+			return nil, errors.New("upstream returned nil response")
+		}
+		return &antigravityRetryLoopResult{resp: resp}, nil
+	}
 	// 预检查：模型限流 + overages 启用 + 积分未耗尽 → 直接注入 AI Credits
 	overagesInjected := false
 	if p.requestedModel != "" && p.account.Platform == PlatformAntigravity &&
@@ -779,7 +795,7 @@ func logPrefix(sessionID, accountName string) string {
 
 func (s *AntigravityGatewayService) shouldFailoverUpstreamError(statusCode int) bool {
 	switch statusCode {
-	case 401, 403, 429, 529:
+	case 401, 403, 404, 429, 529:
 		return true
 	default:
 		return statusCode >= 500
@@ -1268,6 +1284,9 @@ func (s *AntigravityGatewayService) handleUpstreamError(
 	}
 	// 其他错误码继续使用 rateLimitService
 	if s.rateLimitService == nil {
+		return nil
+	}
+	if statusCode == http.StatusNotFound && !isUpstreamModelNotFoundError(statusCode, body) {
 		return nil
 	}
 	shouldDisable := s.rateLimitService.HandleUpstreamError(ctx, account, statusCode, headers, body)

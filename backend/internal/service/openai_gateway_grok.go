@@ -1626,6 +1626,9 @@ func (s *OpenAIGatewayService) updateGrokUsageSnapshot(ctx context.Context, acco
 }
 
 func (s *OpenAIGatewayService) updateGrokUsageSnapshotWithRateLimit(ctx context.Context, account *Account, snapshot *xai.QuotaSnapshot, installRateLimit bool) {
+	if isChannelAcceptanceAudit(ctx) {
+		return
+	}
 	if s == nil || account == nil || account.ID <= 0 || snapshot == nil {
 		return
 	}

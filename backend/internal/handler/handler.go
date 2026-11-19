@@ -11,6 +11,7 @@ type AdminHandlers struct {
 	User                   *admin.UserHandler
 	UserSupport            *admin.UserSupportHandler
 	ModelProbe             *admin.ModelProbeHandler
+	ChannelAcceptance      *admin.ChannelAcceptanceHandler
 	WorkbenchAccess        *admin.AdminWorkbenchAccessHandler
 	Group                  *admin.GroupHandler
 	SystemCustomGroup      *admin.SystemCustomGroupHandler

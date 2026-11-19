@@ -125,25 +125,35 @@ type ModelStatusRepository interface {
 }
 
 type ModelStatusService struct {
-	repo     ModelStatusRepository
-	groups   PublicGroupRepository
-	accounts AccountRepository
-	ops      *OpsService
-	mu       sync.Mutex
-	cached   *ModelStatusReport
-	cachedAt time.Time
-	flight   singleflight.Group
+	repo          ModelStatusRepository
+	groups        PublicGroupRepository
+	accounts      AccountRepository
+	ops           *OpsService
+	snapshotCache ModelStatusSnapshotCache
+	mu            sync.Mutex
+	cached        *ModelStatusReport
+	cachedAt      time.Time
+	retryAfter    time.Time
+	refreshErr    error
+	flight        singleflight.Group
 }
 
 func NewModelStatusService(repo ModelStatusRepository, groups PublicGroupRepository, accounts AccountRepository, ops *OpsService) *ModelStatusService {
 	return &ModelStatusService{repo: repo, groups: groups, accounts: accounts, ops: ops}
 }
 
+func ProvideModelStatusService(repo ModelStatusRepository, groups PublicGroupRepository, accounts AccountRepository, ops *OpsService, cache ModelStatusSnapshotCache) *ModelStatusService {
+	s := NewModelStatusService(repo, groups, accounts, ops)
+	if os.Getenv("SERVER_MODE") != "debug" || os.Getenv("MODEL_STATUS_SNAPSHOT_AT") == "" {
+		s.snapshotCache = cache
+	}
+	return s
+}
+
 func (s *ModelStatusService) Report(ctx context.Context) (*ModelStatusReport, error) {
 	ctx, cancel := context.WithTimeout(ctx, modelStatusQueryTimeout)
 	defer cancel()
-	// Recheck group visibility even while metrics are cached: making a group
-	// private must immediately remove both its cards and its summary counts.
+	// Apply current public visibility to both local and shared snapshots.
 	groups, err := s.groups.ListActivePublic(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("load model status groups: %w", err)
@@ -151,44 +161,34 @@ func (s *ModelStatusService) Report(ctx context.Context) (*ModelStatusReport, er
 	if report := s.loadCached(); report != nil {
 		return filterModelStatusReport(report, groups), nil
 	}
-	if report := s.loadStale(); report != nil {
-		s.refreshInBackground(groups)
-		return filterModelStatusReport(report, groups), nil
+	stale := s.loadStale()
+	if err := s.modelStatusRefreshBackoff(); err != nil {
+		if stale != nil {
+			return filterModelStatusReport(stale, groups), nil
+		}
+		return nil, err
 	}
 	result := s.flight.DoChan("report", func() (any, error) {
-		if report := s.loadCached(); report != nil {
-			return report, nil
-		}
 		queryCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), modelStatusQueryTimeout)
 		defer cancel()
-		report, err := s.buildReport(queryCtx, groups)
-		if err != nil {
-			return nil, err
-		}
-		s.mu.Lock()
-		s.cached, s.cachedAt = report, time.Now()
-		s.mu.Unlock()
-		return report, nil
+		return s.refreshReport(queryCtx, groups)
 	})
+	if stale != nil {
+		return filterModelStatusReport(stale, groups), nil
+	}
 	select {
 	case <-ctx.Done():
-		if report := s.loadStale(); report != nil {
-			return filterModelStatusReport(report, groups), nil
+		err = ctx.Err()
+	case next := <-result:
+		err = next.Err
+		if err == nil {
+			return filterModelStatusReport(next.Val.(*ModelStatusReport), groups), nil
 		}
-		return nil, ctx.Err()
-	case result := <-result:
-		if result.Err != nil {
-			if report := s.loadStale(); report != nil {
-				return filterModelStatusReport(report, groups), nil
-			}
-			return nil, result.Err
-		}
-		report, ok := result.Val.(*ModelStatusReport)
-		if !ok {
-			return nil, fmt.Errorf("unexpected model status report type %T", result.Val)
-		}
+	}
+	if report := s.loadStale(); report != nil {
 		return filterModelStatusReport(report, groups), nil
 	}
+	return nil, err
 }
 
 func (s *ModelStatusService) loadCached() *ModelStatusReport {
@@ -204,26 +204,6 @@ func (s *ModelStatusService) loadStale() *ModelStatusReport {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.cached
-}
-
-func (s *ModelStatusService) refreshInBackground(groups []Group) {
-	go func() {
-		_, _, _ = s.flight.Do("report", func() (any, error) {
-			if report := s.loadCached(); report != nil {
-				return report, nil
-			}
-			ctx, cancel := context.WithTimeout(context.Background(), modelStatusQueryTimeout)
-			defer cancel()
-			report, err := s.buildReport(ctx, groups)
-			if err != nil {
-				return nil, err
-			}
-			s.mu.Lock()
-			s.cached, s.cachedAt = report, time.Now()
-			s.mu.Unlock()
-			return report, nil
-		})
-	}()
 }
 
 func (s *ModelStatusService) buildReport(ctx context.Context, groups []Group) (*ModelStatusReport, error) {

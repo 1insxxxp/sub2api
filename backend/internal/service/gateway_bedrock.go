@@ -214,6 +214,9 @@ func (s *GatewayService) executeBedrockUpstream(
 			})
 		}
 
+		if isChannelAcceptanceAudit(ctx) {
+			break
+		}
 		if resp.StatusCode >= 400 && resp.StatusCode != 400 && s.shouldRetryUpstreamError(account, resp.StatusCode) {
 			if attempt < maxRetryAttempts {
 				elapsed := time.Since(retryStart)

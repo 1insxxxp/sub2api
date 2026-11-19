@@ -14,10 +14,10 @@ func (s *GeminiMessagesCompatService) handleGeminiModelNotFound(ctx context.Cont
 		return nil
 	}
 	body = unwrapIfNeeded(account.Type == AccountTypeOAuth, body)
-	if isGeminiCachedContentNotFound(resp.StatusCode, body) || !isUpstreamModelNotFoundError(resp.StatusCode, body) {
+	if isGeminiCachedContentNotFound(resp.StatusCode, body) || (resp.StatusCode != http.StatusNotFound && !isUpstreamModelNotFoundError(resp.StatusCode, body)) {
 		return nil
 	}
-	if s.rateLimitService != nil {
+	if s.rateLimitService != nil && isUpstreamModelNotFoundError(resp.StatusCode, body) {
 		s.rateLimitService.HandleUpstreamModelNotFound(ctx, account, requestedModel, resp.StatusCode, body)
 	}
 	requestID := resp.Header.Get("x-request-id")

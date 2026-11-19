@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"sort"
 	"strings"
 	"sync"
@@ -160,7 +161,12 @@ func (t *geminiFirstOutputTracker) keyCount() int {
 	return len(t.data)
 }
 
-func recordGeminiFirstOutput(accountID int64, model string, ttft time.Duration, timeout bool) {
+func recordGeminiFirstOutput(ctx context.Context, accountID int64, model string, ttft time.Duration, timeout bool) {
+	// Synthetic probes must not influence production account routing, including
+	// successful TTFT samples and first-output timeout samples.
+	if isChannelAcceptanceAudit(ctx) {
+		return
+	}
 	defaultGeminiFirstOutputTracker.recordAt(accountID, model, ttft, timeout, time.Now())
 }
 

@@ -44,6 +44,16 @@ func RegisterAdminRoutes(
 	admin.Use(middleware.AdminComplianceGuard(settingService))
 	if h != nil && h.Admin != nil {
 		adminHandlers := h.Admin
+		if adminHandlers.ChannelAcceptance != nil {
+			acceptance := admin.Group("/channel-acceptance")
+			acceptance.GET("/targets", adminHandlers.ChannelAcceptance.Targets)
+			acceptance.POST("/previews", adminHandlers.ChannelAcceptance.Preview)
+			acceptance.POST("/runs", adminHandlers.ChannelAcceptance.Start)
+			acceptance.GET("/runs", adminHandlers.ChannelAcceptance.History)
+			acceptance.GET("/runs/:id", adminHandlers.ChannelAcceptance.Get)
+			acceptance.POST("/runs/:id/cancel", adminHandlers.ChannelAcceptance.Cancel)
+			acceptance.GET("/runs/:id/export", adminHandlers.ChannelAcceptance.Export)
+		}
 		if adminHandlers.UserSupport != nil {
 			admin.GET("/users/:id/support-access", adminHandlers.UserSupport.GetUserAccess)
 			admin.PUT("/users/:id/support-access", adminHandlers.UserSupport.SetUserAccess)

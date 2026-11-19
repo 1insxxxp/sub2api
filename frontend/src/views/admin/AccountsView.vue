@@ -203,6 +203,8 @@
             </div>
             <AccountBulkActionsBar
               class="account-bulk-bar"
+              :can-accept="authStore.isAdmin"
+              @acceptance="openAcceptance(selIds)"
               :selected-ids="selIds"
               :total-results="pagination.total"
               :selecting-all="selectingAllResults"
@@ -514,7 +516,8 @@
     <AccountTestModal v-if="showTest" :show="showTest" :account="testingAcc" @close="closeTestModal" />
     <AccountStatsModal v-if="showStats" :show="showStats" :account="statsAcc" @close="closeStatsModal" />
     <ScheduledTestsPanel v-if="showSchedulePanel" :show="showSchedulePanel" :account-id="scheduleAcc?.id ?? null" :model-options="scheduleModelOptions" @close="closeSchedulePanel" />
-    <AccountActionMenu :show="menu.show" :account="menu.acc" :anchor-rect="menu.anchorRect" @close="menu.show = false" @test="handleTest" @stats="handleViewStats" @schedule="handleSchedule" @duplicate="handleDuplicateAccount" @reauth="handleReAuth" @refresh-token="handleRefresh" @recover-state="handleRecoverState" @reset-quota="handleResetQuota" @set-privacy="handleSetPrivacy" @create-spark-shadow="handleCreateSparkShadow" />
+    <AccountAcceptanceDialog v-if="showAcceptance && authStore.isAdmin" :show="showAcceptance" :account-ids="acceptanceAccountIds" @close="showAcceptance = false" />
+    <AccountActionMenu :can-accept="authStore.isAdmin" @acceptance="openAccountAcceptance" :show="menu.show" :account="menu.acc" :anchor-rect="menu.anchorRect" @close="menu.show = false" @test="handleTest" @stats="handleViewStats" @schedule="handleSchedule" @duplicate="handleDuplicateAccount" @reauth="handleReAuth" @refresh-token="handleRefresh" @recover-state="handleRecoverState" @reset-quota="handleResetQuota" @set-privacy="handleSetPrivacy" @create-spark-shadow="handleCreateSparkShadow" />
     <SyncFromCrsModal v-if="showSync" :show="showSync" @close="showSync = false" @synced="reload" />
     <ImportDataModal v-if="showImportData" :show="showImportData" @close="showImportData = false" @imported="handleDataImported" />
     <BulkEditAccountModal
@@ -596,6 +599,7 @@ const SyncFromCrsModal = lazyAsyncComponent(() => import('@/components/account/S
 const TempUnschedStatusModal = lazyAsyncComponent(() => import('@/components/account/TempUnschedStatusModal.vue'))
 const ImportDataModal = lazyAsyncComponent(() => import('@/components/admin/account/ImportDataModal.vue'))
 const ReAuthAccountModal = lazyAsyncComponent(() => import('@/components/admin/account/ReAuthAccountModal.vue'))
+const AccountAcceptanceDialog = lazyAsyncComponent(() => import('@/components/admin/account/AccountAcceptanceDialog.vue'))
 const AccountTestModal = lazyAsyncComponent(() => import('@/components/admin/account/AccountTestModal.vue'))
 const AccountStatsModal = lazyAsyncComponent(() => import('@/components/admin/account/AccountStatsModal.vue'))
 const ScheduledTestsPanel = lazyAsyncComponent(() => import('@/components/admin/account/ScheduledTestsPanel.vue'))
@@ -820,6 +824,7 @@ const todayStatsByAccountId = ref<Record<string, WindowStats>>({})
 const todayStatsLoading = ref(false)
 const todayStatsError = ref<string | null>(null)
 const todayStatsReqSeq = ref(0)
+let nextAutomaticTodayStatsAt = 0
 const pendingTodayStatsRefresh = ref(false)
 const usageManualRefreshToken = ref(0)
 
@@ -1002,6 +1007,7 @@ const refreshTodayStatsBatch = async () => {
   }
 
   todayStatsLoading.value = true
+  nextAutomaticTodayStatsAt = Date.now() + 30_000
   todayStatsError.value = null
 
   try {
@@ -1016,6 +1022,7 @@ const refreshTodayStatsBatch = async () => {
     todayStatsByAccountId.value = nextStats
   } catch (error) {
     if (reqSeq !== todayStatsReqSeq.value) return
+    nextAutomaticTodayStatsAt = Date.now() + 60_000
     todayStatsError.value = 'Failed'
     console.error('Failed to load account today stats:', error)
   } finally {
@@ -1627,7 +1634,9 @@ const refreshAccountsIncrementally = async () => {
     }
     upstreamBillingNow.value = Date.now()
 
-    await refreshTodayStatsBatch()
+    if (!todayStatsLoading.value && Date.now() >= nextAutomaticTodayStatsAt) {
+      await refreshTodayStatsBatch()
+    }
   } catch (error) {
     console.error('Auto refresh failed:', error)
   } finally {
@@ -2464,6 +2473,14 @@ const handleExportData = async () => {
   }
 }
 const accountExportStepUp = useStepUp()
+const showAcceptance = ref(false)
+const acceptanceAccountIds = ref<number[]>([])
+const openAcceptance = (ids: number[]) => {
+  if (!authStore.isAdmin || ids.length === 0) return
+  acceptanceAccountIds.value = [...new Set(ids)]
+  showAcceptance.value = true
+}
+const openAccountAcceptance = (account: AccountListItem) => openAcceptance([account.id])
 const closeTestModal = () => { showTest.value = false; testingAcc.value = null }
 const closeStatsModal = () => { showStats.value = false; statsAcc.value = null }
 const closeReAuthModal = () => { showReAuth.value = false; reAuthAcc.value = null }

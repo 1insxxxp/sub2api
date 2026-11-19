@@ -400,3 +400,53 @@ func TestModelStatusDebugSnapshotRejectsInvalidTime(t *testing.T) {
 	require.ErrorContains(t, err, "MODEL_STATUS_SNAPSHOT_AT")
 	require.Nil(t, report)
 }
+
+func TestModelStatusFailedColdRefreshBacksOff(t *testing.T) {
+	groups, accounts := modelStatusFixtures()
+	repo := &modelStatusRepoStub{err: errors.New("database unavailable")}
+	svc := NewModelStatusService(repo, groups, accounts, nil)
+	for range 5 {
+		report, err := svc.Report(context.Background())
+		require.ErrorContains(t, err, "database unavailable")
+		require.Nil(t, report)
+	}
+	require.Equal(t, int64(1), repo.calls.Load(), "polling during a failure must not rerun aggregation")
+}
+
+type modelStatusSharedReportStub struct {
+	report *ModelStatusReport
+}
+
+func (s modelStatusSharedReportStub) Load(context.Context) (*ModelStatusReport, error) {
+	return s.report, nil
+}
+
+func (modelStatusSharedReportStub) TryRefresh(context.Context, string, time.Duration) (bool, error) {
+	return false, errors.New("unexpected refresh for a fresh peer snapshot")
+}
+
+func (modelStatusSharedReportStub) FinishRefresh(context.Context, string, *ModelStatusReport, time.Duration) error {
+	return errors.New("unexpected snapshot publication")
+}
+
+func TestModelStatusUsesPeerSnapshotAndCurrentVisibility(t *testing.T) {
+	groups, accounts := modelStatusFixtures()
+	groups.groups[0].IsExclusive = true
+	now := time.Now().UTC()
+	cache := modelStatusSharedReportStub{report: &ModelStatusReport{
+		GeneratedAt: now,
+		Groups: []ModelStatusGroup{
+			{ID: 1, Platform: PlatformOpenAI, Models: []ModelStatusModel{{Name: "shared", Metrics: ModelStatusMetrics{Total: 5, Success: 5}}}},
+			{ID: 2, Platform: PlatformOpenAI, Models: []ModelStatusModel{{Name: "shared", Metrics: ModelStatusMetrics{Total: 1, Success: 1}}}},
+		},
+	}}
+	repo := &modelStatusRepoStub{}
+	svc := ProvideModelStatusService(repo, groups, accounts, nil, cache)
+	report, err := svc.Report(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, now, report.GeneratedAt)
+	require.Len(t, report.Groups, 1)
+	require.Equal(t, int64(2), report.Groups[0].ID)
+	require.Equal(t, int64(1), report.Summary.Total)
+	require.Zero(t, repo.calls.Load())
+}

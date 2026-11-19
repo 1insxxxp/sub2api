@@ -175,7 +175,7 @@ func TestPendingUsageHistoryPaginationFiltersAndLateSettlement(t *testing.T) {
 	settled := &service.UsageLog{UserID: user.ID, APIKeyID: key.ID, AccountID: account.ID, GroupID: &group.ID, RequestID: "client:already-settled", Model: "gemini-settled", InputTokens: 10, OutputTokens: 2, ActualCost: 0.12, CreatedAt: now.Add(-2 * time.Minute)}
 	_, err := repo.Create(ctx, settled)
 	require.NoError(t, err)
-	filter := usagestats.UsageLogFilters{UserID: user.ID, IncludePending: true, ExactTotal: true}
+	filter := usagestats.UsageLogFilters{UserID: user.ID, APIKeyID: key.ID, IncludePending: true, ExactTotal: true}
 	params := pagination.PaginationParams{Page: 1, PageSize: 2, SortBy: "created_at", SortOrder: "desc"}
 	logs, page, err := repo.ListWithFilters(ctx, params, filter)
 	require.NoError(t, err)
@@ -197,6 +197,13 @@ func TestPendingUsageHistoryPaginationFiltersAndLateSettlement(t *testing.T) {
 	require.EqualValues(t, 3, page.Total)
 	require.Len(t, logs, 1)
 	require.Equal(t, settled.ID, logs[0].ID)
+	params.SortOrder = "asc"
+	logs, page, err = repo.ListWithFilters(ctx, params, filter)
+	require.NoError(t, err)
+	require.EqualValues(t, 3, page.Total)
+	require.Len(t, logs, 1)
+	require.Equal(t, firstID, logs[0].ID, "ascending page merges both sources before applying the offset")
+	params.SortOrder = "desc"
 	params.Page, params.PageSize = 1, 100
 	start, end := now.Add(-time.Second), now.Add(time.Second)
 	for name, f := range map[string]usagestats.UsageLogFilters{

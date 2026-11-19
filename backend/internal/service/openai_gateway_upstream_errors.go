@@ -338,7 +338,7 @@ func (s *OpenAIGatewayService) shouldFailoverOpenAIUpstreamResponse(account *Acc
 		isOpenAICompatibleModelNotFound400(upstreamBody) {
 		return true
 	}
-	if s.shouldFailoverUpstreamError(statusCode) {
+	if statusCode == http.StatusNotFound || s.shouldFailoverUpstreamError(statusCode) {
 		return true
 	}
 	return isOpenAITransientProcessingError(statusCode, upstreamMsg, upstreamBody)

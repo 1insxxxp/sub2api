@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"errors"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -268,5 +270,30 @@ func TestAccountUsageService_OpenAIQueriesPreserveRefreshError(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+type unavailableTodayStatsRepo struct {
+	usageBatchLogRepoStub
+	batchErr    error
+	singleCalls atomic.Int32
+}
+
+func (r *unavailableTodayStatsRepo) GetAccountWindowStatsBatch(context.Context, []int64, time.Time) (map[int64]*usagestats.AccountStats, error) {
+	return nil, r.batchErr
+}
+
+func (r *unavailableTodayStatsRepo) GetAccountWindowStats(context.Context, int64, time.Time) (*usagestats.AccountStats, error) {
+	r.singleCalls.Add(1)
+	return nil, r.batchErr
+}
+
+func TestAccountTodayStatsBatchFailureDoesNotFanOut(t *testing.T) {
+	errBusy := errors.New("database connection pool exhausted")
+	repo := &unavailableTodayStatsRepo{batchErr: errBusy}
+	svc := &AccountUsageService{usageLogRepo: repo}
+	stats, err := svc.GetTodayStatsBatch(context.Background(), []int64{1, 2, 3, 4, 5})
+	if !errors.Is(err, errBusy) || stats != nil || repo.singleCalls.Load() != 0 {
+		t.Fatalf("stats=%v err=%v per-account queries=%d", stats, err, repo.singleCalls.Load())
 	}
 }

@@ -214,7 +214,11 @@ func newModelFirstOutputTimeoutFailoverError(c *gin.Context, account *Account, m
 	}
 	if account != nil {
 		if account.Platform == PlatformGemini || account.Platform == PlatformAntigravity {
-			recordGeminiFirstOutput(account.ID, model, 0, true)
+			var ctx context.Context
+			if c != nil && c.Request != nil {
+				ctx = c.Request.Context()
+			}
+			recordGeminiFirstOutput(ctx, account.ID, model, 0, true)
 		}
 		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
 			ProxyID:            opsUpstreamProxyID(account),

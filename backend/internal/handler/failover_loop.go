@@ -92,7 +92,7 @@ func sameAccountRetryDelayFor(failoverErr *service.UpstreamFailoverError, retryC
 }
 
 func sameAccountRetryAllowed(failoverErr *service.UpstreamFailoverError, retryCount, retryLimit int) bool {
-	if failoverErr == nil || failoverErr.PreferNextAccount || !failoverErr.RetryableOnSameAccount {
+	if failoverErr == nil || failoverErr.StatusCode == http.StatusNotFound || failoverErr.PreferNextAccount || !failoverErr.RetryableOnSameAccount {
 		return false
 	}
 	if !sameAccountRetryDeadlineAllows(failoverErr) {
@@ -255,7 +255,7 @@ func (s *FailoverState) HandleFailoverError(
 	}
 
 	// 同账号重试用尽，执行临时封禁
-	if failoverErr.RetryableOnSameAccount && !failoverErr.PreferNextAccount {
+	if failoverErr.RetryableOnSameAccount && failoverErr.StatusCode != http.StatusNotFound && !failoverErr.PreferNextAccount {
 		gatewayService.TempUnscheduleRetryableError(ctx, accountID, failoverErr)
 	}
 
