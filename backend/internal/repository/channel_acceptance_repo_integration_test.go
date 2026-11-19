@@ -435,7 +435,12 @@ func TestChannelAcceptanceRepositoryServiceWorkersEndToEnd(t *testing.T) {
 			Request: service.AcceptancePreviewRequest{Targets: []service.AcceptanceTargetRequest{target}},
 			Samples: []service.AcceptanceSample{{ID: uuid.NewString(), Ordinal: 0, Status: "pending", Category: "protocol", Protocol: "gemini",
 				Prompt: "Return worker verification", Expected: "worker verification", MaxOutputTokens: 2048, TimeoutSeconds: 180, EstimatedCostUSD: .002048,
-				Snapshot: service.AcceptanceSnapshot{AccountID: account.ID, AccountName: account.Name, Platform: account.Platform, Model: target.Model, UpstreamModel: target.Model, Price: price, Fingerprint: service.AcceptanceAccountFingerprint(account, nil)}}}}
+				Snapshot: service.AcceptanceSnapshot{
+					AccountID: account.ID, AccountName: account.Name, Platform: account.Platform, AccountType: account.Type,
+					Protocols: []string{"gemini", "chat", "messages"},
+					Model:     target.Model, UpstreamModel: target.Model, Price: price,
+					Fingerprint: service.AcceptanceAccountFingerprint(account, nil),
+				}}}}
 	}
 
 	for _, fullPreview := range []bool{false, true} {
