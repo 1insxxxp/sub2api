@@ -7,7 +7,7 @@ export default {
     searchPlaceholder: '搜索模型名称',
   clearSearch: '清除搜索',
   noSearchMatches: '没有匹配的模型',
-  allGroups: '全部公开分组',
+  allGroups: '全部分组',
     customGroupPrefix: '我的自定义分组',
     customGroupLoading: '正在加载自定义分组...',
     modelCount: '{count} 个模型',

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -108,5 +109,25 @@ func (h *ModelStatusHandler) Get(c *gin.Context) {
 		response.Error(c, http.StatusServiceUnavailable, "Model status data is temporarily unavailable")
 		return
 	}
-	response.Success(c, report)
+	if report == nil {
+		response.Success(c, report)
+		return
+	}
+	publicReport := *report
+	publicReport.Groups = slices.Clone(report.Groups)
+	// Keep the legacy array fields empty for older clients. Copy slices before
+	// clearing request details, because reports are shared across requests.
+	for i := range publicReport.Groups {
+		group := &publicReport.Groups[i]
+		group.Models = slices.Clone(group.Models)
+		for j := range group.Models {
+			model := &group.Models[j]
+			model.Recent = []service.ModelStatusRecent{}
+			model.Buckets = slices.Clone(model.Buckets)
+			for k := range model.Buckets {
+				model.Buckets[k].Requests = []service.ModelStatusRecent{}
+			}
+		}
+	}
+	response.Success(c, &publicReport)
 }

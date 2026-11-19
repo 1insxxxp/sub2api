@@ -1,53 +1,43 @@
 <template>
-  <component :is="authStore.isAuthenticated ? AppLayout : 'div'" class="model-status-page model-status-workspace" :class="{ 'status-guest': !authStore.isAuthenticated, 'status-group-context-active': showGroupContext, 'status-capture-mode': captureMode }">
-    <PlazaNavBar v-if="!authStore.isAuthenticated && !captureMode" login-redirect="/model-status" />
+  <component :is="authStore.isAuthenticated ? AppLayout : 'div'" class="model-status-page model-status-workspace" :class="{ 'status-guest': !authStore.isAuthenticated, 'status-capture-mode': captureMode }">
+    <PlazaNavBar v-if="!standalone && !authStore.isAuthenticated && !captureMode" login-redirect="/model-status" />
     <component :is="authStore.isAuthenticated ? 'section' : 'main'" class="status-content" :class="{ 'status-content-embedded': authStore.isAuthenticated }" :aria-busy="loading">
-      <div class="status-toolbar-shell workspace-toolbar">
-        <header class="page-header status-header">
-        <div class="min-w-0">
-          <h1 class="page-title flex items-center gap-2">
-            <span class="status-title-icon"><Icon name="chart" size="md" /></span>
-            {{ t('modelStatus.title') }}
-          </h1>
-        </div>
-        <div v-if="!captureMode" class="status-header-actions">
-          <span class="refresh-countdown" data-testid="refresh-countdown" aria-live="polite" aria-atomic="true">
-            {{ loading ? t('modelStatus.refreshing') : t('modelStatus.autoRefreshIn', { seconds: refreshCountdown }) }}
-          </span>
-          <button
-            class="btn btn-secondary btn-icon refresh-button"
-            type="button"
-            data-testid="refresh"
-            :disabled="loading"
-            :title="t('common.refresh')"
-            :aria-label="t('common.refresh')"
-            @click="refreshAll"
-          >
-            <Icon name="refresh" size="md" :class="{ 'animate-spin': loading }" />
-          </button>
-        </div>
-        </header>
-
-        <template v-if="report">
-          <div v-if="!captureMode" class="status-filters" :class="{ 'group-context-active': showGroupContext }">
-            <label v-if="!captureMode" class="model-search"><Icon name="search" size="sm" aria-hidden="true" /><input v-model="modelSearch" type="text" role="searchbox" inputmode="search" :placeholder="t('modelStatus.searchPlaceholder')" :aria-label="t('modelStatus.searchPlaceholder')" data-testid="model-search" /><button v-if="modelSearch" type="button" class="model-search-clear" :aria-label="t('modelStatus.clearSearch')" @click="modelSearch = ''"><Icon name="x" size="sm" /></button></label>
-            <Select v-model="groupFilter" class="group-filter" :options="groupOptions" :aria-label="t('modelStatus.group')" mobile-sheet>
-              <template #selected>
-                <span class="group-filter-selected-text">{{ groupOptions.find(option => option.value === groupFilter)?.label ?? t('modelStatus.allGroups') }}</span>
-                <span class="group-filter-mobile-icon" aria-hidden="true"><Icon name="filter" size="sm" /></span>
-              </template>
-            </Select>
-            <div v-if="activeGroup && showGroupContext" class="group-context" aria-live="polite">
-              <span class="group-context-accent" aria-hidden="true" />
-              <span class="group-context-name">{{ activeGroup.name }}</span>
-            </div>
-            <span class="model-count">{{ t('modelStatus.modelCount', { count: filteredModelCount }) }}</span>
+      <h1 class="status-page-title" :class="{ 'sr-only': authStore.isAuthenticated }">{{ t('modelStatus.title') }}</h1>
+      <div v-if="!captureMode" class="status-toolbar-shell workspace-toolbar">
+        <div class="status-filters">
+          <label class="model-search"><Icon name="search" size="sm" aria-hidden="true" /><input v-model="modelSearch" type="text" role="searchbox" inputmode="search" :placeholder="t('modelStatus.searchPlaceholder')" :aria-label="t('modelStatus.searchPlaceholder')" data-testid="model-search" /><button v-if="modelSearch" type="button" class="model-search-clear" :aria-label="t('modelStatus.clearSearch')" @click="modelSearch = ''"><Icon name="x" size="sm" /></button></label>
+          <Select v-model="groupFilter" class="group-filter" :options="groupOptions" :aria-label="t('modelStatus.group')" mobile-sheet>
+            <template #selected>
+              <span class="group-filter-selected-text">{{ groupOptions.find(option => option.value === groupFilter)?.label ?? t('modelStatus.allGroups') }}</span>
+              <span class="group-filter-mobile-icon" aria-hidden="true"><Icon name="filter" size="sm" /></span>
+            </template>
+          </Select>
+          <div v-if="activeGroup && showGroupContext" class="group-context" aria-live="polite">
+            <span class="group-context-name">{{ activeGroup.name }}</span>
           </div>
-          <div v-if="customGroupsLoadFailed" data-testid="custom-group-load-warning" role="status" class="status-notice status-notice-warning custom-group-load-warning">
-            <Icon name="exclamationTriangle" size="sm" class="shrink-0" />
-            <span>{{ t('modelStatus.customGroupsLoadFailed') }}</span>
+          <span v-if="report" class="model-count">{{ t('modelStatus.modelCount', { count: filteredModelCount }) }}</span>
+          <div class="status-toolbar-actions">
+            <span class="refresh-countdown" data-testid="refresh-countdown" aria-live="polite" aria-atomic="true">
+              {{ loading ? t('modelStatus.refreshing') : t('modelStatus.autoRefreshIn', { seconds: refreshCountdown }) }}
+            </span>
+            <a v-if="standalone" class="status-home-link" href="https://api.passionapi.com/">Passion API</a>
+            <button
+              class="btn btn-secondary btn-icon refresh-button"
+              type="button"
+              data-testid="refresh"
+              :disabled="loading"
+              :title="t('common.refresh')"
+              :aria-label="t('common.refresh')"
+              @click="refreshAll"
+            >
+              <Icon name="refresh" size="md" :class="{ 'animate-spin': loading }" />
+            </button>
           </div>
-        </template>
+        </div>
+        <div v-if="customGroupsLoadFailed" data-testid="custom-group-load-warning" role="status" class="status-notice status-notice-warning custom-group-load-warning">
+          <Icon name="exclamationTriangle" size="sm" class="shrink-0" />
+          <span>{{ t('modelStatus.customGroupsLoadFailed') }}</span>
+        </div>
       </div>
 
       <div v-if="loadFailed" role="alert" class="status-notice status-notice-error">
@@ -78,10 +68,9 @@
         </div>
 
         <div v-if="visibleGroups.length" ref="statusGroups" class="status-groups">
-          <section v-for="group in visibleGroups" :key="group.id" class="status-group" :aria-labelledby="`status-group-${group.id}`">
+          <section v-for="group in visibleGroups" :key="group.id" v-memo="[group, locale, bucketAnchorKey.startsWith(`${group.id}:`) ? bucketAnchorKey : '']" class="status-group" :aria-labelledby="`status-group-${group.id}`">
             <header class="group-heading" :data-group-id="group.id">
               <div class="group-title">
-                <span class="group-accent" aria-hidden="true" />
                 <h2 :id="`status-group-${group.id}`">{{ group.name }}</h2>
               </div>
             </header>
@@ -104,7 +93,7 @@
                   <span class="recent-heading-label">
                     <span>{{ t('modelStatus.fifteenMinuteBuckets') }}</span>
                   </span>
-                  <span class="model-status-rate"><strong>{{ formatRate(modelMetricsForDisplay(model).success_rate) }}</strong></span>
+                  <span class="model-status-rate"><strong>{{ formatRate(modelMetricsForDisplay(model)) }}</strong></span>
                 </div>
               <div class="recent-bars status-bucket-grid" :aria-label="t('modelStatus.fifteenMinuteBuckets')">
                 <button
@@ -113,17 +102,21 @@
                   type="button"
                   class="recent-bar bucket-light"
                   data-testid="status-bucket"
-                  :class="[`bucket-${bucketOutcome(bucket)}`, { 'bucket-pressed': pressedBucketKey === bucketKey(`${group.id}:${model.platform}:${model.name}`, bucket) }]"
-                  :data-outcome="bucketOutcome(bucket) === 'unknown' ? undefined : bucketOutcome(bucket)"
-                  :title="bucketLabel(bucket)"
+                  :class="`bucket-${bucketOutcome(bucket)}`"
+                  :data-outcome="bucketOutcome(bucket) === 'unknown' || bucket.total <= 0 ? undefined : bucketOutcome(bucket)"
+                  :aria-expanded="bucketAnchorKey === bucketKey(`${group.id}:${model.platform}:${model.name}`, bucket)"
                   :aria-label="bucketLabel(bucket)"
-                  @click="handleBucketClick(model.name, bucket, `${group.id}:${model.platform}:${model.name}`)"
+                  @pointerenter="$event.pointerType === 'mouse' && showBucket($event, bucket, `${group.id}:${model.platform}:${model.name}`)"
+                  @pointerleave="$event.pointerType === 'mouse' && closeBucket()"
+                  @pointerup="$event.isPrimary && $event.pointerType !== 'mouse' && showBucket($event, bucket, `${group.id}:${model.platform}:${model.name}`)"
+                  @click="$event.detail === 0 && toggleBucket($event, bucket, `${group.id}:${model.platform}:${model.name}`)"
+                  @blur="$event.currentTarget === bucketAnchor && closeBucket()"
                 />
               </div>
               <div class="recent-heading recent-heading-axis"><span>{{ t('modelStatus.older') }}</span><span>{{ t('modelStatus.newer') }}</span></div>
               </template>
               <template v-else>
-                <div class="recent-heading"><span>{{ t('modelStatus.recentRequests', { count: 30 }) }}</span><span class="model-status-rate"><strong>{{ formatRate(modelMetricsForDisplay(model).success_rate) }}</strong></span></div>
+                <div class="recent-heading"><span>{{ t('modelStatus.recentRequests', { count: 30 }) }}</span><span class="model-status-rate"><strong>{{ formatRate(modelMetricsForDisplay(model)) }}</strong></span></div>
                 <div class="recent-bars" :aria-label="t('modelStatus.recentRequests', { count: 30 })">
                   <span v-for="index in Math.max(0, 30 - (model.recent?.length ?? 0))" :key="`placeholder-${index}`" class="recent-placeholder" aria-hidden="true" />
                   <span v-for="(result, index) in model.recent ?? []" :key="`${result.at}:${index}`" class="recent-bar" :class="result.outcome === 'unknown' ? 'recent-incomplete' : `outcome-${result.outcome}`" :data-outcome="result.outcome === 'unknown' ? undefined : result.outcome" :title="resultLabel(result.at, result.outcome, result.status_code)" />
@@ -165,41 +158,24 @@
     >
       <Icon name="arrowUp" size="sm" aria-hidden="true" />
     </button>
-    <BaseDialog
-      :show="Boolean(selectedBucket)"
-      :title="selectedModelName ? `${selectedModelName} · ${t('modelStatus.bucketDetails')}` : t('modelStatus.bucketDetails')"
-      width="wide"
-      :close-on-click-outside="true"
-      @close="closeBucket"
-    >
-      <template v-if="selectedBucket">
-        <div class="bucket-detail">
-          <p class="bucket-detail-range">{{ formatRange(selectedBucket.start_at, selectedBucket.end_at) }}</p>
-          <div class="bucket-detail-stats">
-            <div><span>{{ t('modelStatus.requestTotal') }}</span><strong>{{ formatCount(selectedBucket.total) }}</strong></div>
-            <div><span class="stat-success">{{ t('modelStatus.outcome.success') }}</span><strong>{{ formatCount(selectedBucket.success) }}</strong></div>
-            <div><span class="stat-failure">{{ t('modelStatus.outcome.failure') }}</span><strong>{{ formatCount(selectedBucket.failure) }}</strong></div>
-            <div><span class="stat-empty">{{ t('modelStatus.outcome.empty') }}</span><strong>{{ formatCount(selectedBucket.empty) }}</strong></div>
-          </div>
-          <div class="bucket-detail-list">
-            <div class="bucket-detail-list-header"><span>{{ t('modelStatus.requestDetails') }}</span><span v-if="selectedBucket.total > selectedBucketRequests.length">{{ t('modelStatus.showingLatest', { count: selectedBucketRequests.length, total: selectedBucket.total }) }}</span></div>
-            <div v-if="!selectedBucketRequests.length" class="bucket-detail-empty">{{ t('modelStatus.noRequestsInBucket') }}</div>
-            <div v-for="(requestItem, index) in selectedBucketRequests" :key="`${requestItem.at}:${index}`" class="bucket-request-row">
-              <div class="bucket-request-info">
-                <span>{{ new Date(requestItem.at).toLocaleString(locale, { hour12: false }) }}</span>
-                <span v-if="requestItem.status_code" class="bucket-request-status">{{ t('modelStatus.statusCode', { code: requestItem.status_code }) }}</span>
-              </div>
-              <span class="badge" :class="requestOutcomeClass(requestItem.outcome)">{{ requestOutcomeLabel(requestItem.outcome, requestItem.status_code) }}</span>
-            </div>
-          </div>
+    <Teleport to="body">
+      <div v-if="selectedBucket" ref="bucketPopover" data-testid="bucket-popover" class="bucket-popover" :style="bucketPosition" role="status">
+        <p class="bucket-popover-time">{{ formatRange(selectedBucket.start_at, selectedBucket.end_at) }}</p>
+        <div class="bucket-popover-status">
+          <span class="bucket-popover-dot" :class="`bucket-${bucketOutcome(selectedBucket)}`" aria-hidden="true" />
+          {{ bucketStatusLabel(selectedBucket) }}
         </div>
-      </template>
-    </BaseDialog>
+        <dl class="bucket-popover-counts">
+          <div><dt>{{ t('modelStatus.outcome.success') }}</dt><dd>{{ formatCount(selectedBucket.success) }}</dd></div>
+          <div><dt>{{ t('modelStatus.outcome.failure') }}</dt><dd>{{ formatCount(selectedBucket.failure) }}</dd></div>
+        </dl>
+      </div>
+    </Teleport>
   </component>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type CSSProperties } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getModelStatus, type ModelStatusBucket, type ModelStatusHealth, type ModelStatusMetrics, type ModelStatusModel, type ModelStatusOutcome, type ModelStatusResponse } from '@/api/modelStatus'
 import { filterModelStatusGroups, normalizeModelStatusSearch } from './modelStatusSearch'
@@ -209,11 +185,20 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import PlazaNavBar from '@/components/modelPlaza/PlazaNavBar.vue'
 import Icon from '@/components/icons/Icon.vue'
 import Select from '@/components/common/Select.vue'
-import BaseDialog from '@/components/common/BaseDialog.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
 
+defineProps<{ standalone?: boolean }>()
+
 const { t, locale } = useI18n()
+const countFormatter = computed(() => new Intl.NumberFormat(locale.value))
+const rateFormatter = computed(() => new Intl.NumberFormat(locale.value, { maximumFractionDigits: 1 }))
+const bucketStartFormatter = computed(() => new Intl.DateTimeFormat(locale.value, {
+  month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
+}))
+const bucketEndFormatter = computed(() => new Intl.DateTimeFormat(locale.value, {
+  hour: '2-digit', minute: '2-digit', hour12: false,
+}))
 const authStore = useAuthStore()
 const appStore = useAppStore()
 const report = ref<ModelStatusResponse | null>(null)
@@ -348,10 +333,10 @@ async function loadCustomGroups() {
 const staleReportThresholdMs = 6 * 60 * 1000
 const stale = computed(() => !!report.value && !report.value.snapshot_at && now.value - Date.parse(report.value.generated_at) > staleReportThresholdMs)
 const selectedBucket = ref<ModelStatusBucket | null>(null)
-const selectedBucketRequests = computed(() => selectedBucket.value ? latestBucketRequests(selectedBucket.value) : [])
-const selectedModelName = ref('')
-const pressedBucketKey = ref('')
-let pressedBucketTimer: ReturnType<typeof setTimeout> | undefined
+const bucketPopover = ref<HTMLElement | null>(null)
+const bucketAnchorKey = ref('')
+const bucketPosition = ref<CSSProperties>({ top: '0px', left: '0px', visibility: 'hidden' })
+let bucketAnchor: HTMLElement | null = null
 const activeCustomGroups = computed(() => customGroups.value.filter(group => group.status === 'active'))
 const selectedCustomGroup = computed(() => {
   if (captureMode || !groupFilter.value.startsWith('custom:')) return null
@@ -413,14 +398,15 @@ const visibleGroups = computed(() => {
 const activeGroup = computed(() => visibleGroups.value.find(group => String(group.id) === activeGroupId.value) ?? visibleGroups.value[0] ?? null)
 const renderedModelCount = computed(() => visibleGroups.value.reduce((count, group) => count + group.visibleModels.length, 0))
 const hasMoreModels = computed(() => renderedModelCount.value < filteredModelCount.value)
-type ModelStatusBucketOutcome = ModelStatusOutcome | 'degraded'
+type ModelStatusBucketOutcome = ModelStatusOutcome | 'degraded' | 'no-data'
 
 function formatCount(value: number): string {
-  return new Intl.NumberFormat(locale.value).format(value)
+  return countFormatter.value.format(value)
 }
 
-function formatRate(value: number | null): string {
-  return value === null ? '100%' : `${new Intl.NumberFormat(locale.value, { maximumFractionDigits: 1 }).format(value)}%`
+function formatRate(metrics: ModelStatusMetrics): string {
+  const value = metrics.success_rate
+  return metrics.total === 0 || value == null ? '-' : `${rateFormatter.value.format(value)}%`
 }
 
 // The API metrics are the rolling 24-hour aggregate. Buckets are only the
@@ -431,9 +417,9 @@ function modelMetricsForDisplay(model: ModelStatusModel): ModelStatusMetrics {
 }
 
 function modelHealthForDisplay(model: ModelStatusModel): ModelStatusHealth {
-  if (!model.buckets?.length) return model.status
   const metrics = modelMetricsForDisplay(model)
   if (metrics.total === 0) return 'no_data'
+  if (!model.buckets?.length) return model.status
   const knownTotal = observedOutcomeTotal(metrics)
   if (knownTotal === 0) return 'unknown'
   // Match the backend health thresholds using the same bucket as the card metrics.
@@ -468,9 +454,7 @@ function modelBuckets(model: ModelStatusModel): ModelStatusBucket[] {
 }
 
 function bucketOutcome(bucket: ModelStatusBucket): ModelStatusBucketOutcome {
-  // An empty interval means no evidence of an outage. Keep the default
-  // presentation healthy while reserving amber for observed but unrated data.
-  if (bucket.total <= 0) return 'success'
+  if (bucket.total <= 0) return 'no-data'
   const knownTotal = bucket.success + bucket.failure + bucket.empty
   if (knownTotal <= 0) return 'unknown'
   if (bucket.success === 0 && bucket.failure === 0 && bucket.empty > 0) return 'empty'
@@ -480,53 +464,67 @@ function bucketOutcome(bucket: ModelStatusBucket): ModelStatusBucketOutcome {
   return 'failure'
 }
 
-function bucketLabel(bucket: ModelStatusBucket): string {
+function bucketStatusLabel(bucket: ModelStatusBucket): string {
   const outcome = bucketOutcome(bucket)
-  const status = outcome === 'unknown'
-    ? t(bucket.total > 0 ? 'modelStatus.noRatedRequests' : 'modelStatus.noRequestsInBucket')
-    : outcome === 'degraded'
-      ? t('modelStatus.bucketStatus.degraded')
-      : t(`modelStatus.outcome.${outcome}`)
-  return `${formatRange(bucket.start_at, bucket.end_at)} · ${status} · ${formatCount(bucket.total)}`
+  return outcome === 'no-data'
+    ? t('modelStatus.noRequestsInBucket')
+    : outcome === 'unknown'
+      ? t('modelStatus.noRatedRequests')
+      : outcome === 'degraded'
+        ? t('modelStatus.bucketStatus.degraded')
+        : t(`modelStatus.outcome.${outcome}`)
+}
+
+function bucketLabel(bucket: ModelStatusBucket): string {
+  return `${formatRange(bucket.start_at, bucket.end_at)} · ${bucketStatusLabel(bucket)}`
 }
 
 function bucketKey(modelName: string, bucket: ModelStatusBucket): string {
   return `${modelName}:${bucket.start_at}`
 }
 
-function latestBucketRequests(bucket: ModelStatusBucket) {
-  return [...bucket.requests]
-    .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
-    .slice(0, 10)
-}
-
 function formatRange(start: string, end: string): string {
-  const options: Intl.DateTimeFormatOptions = { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }
-  return `${new Date(start).toLocaleString(locale.value, options)} - ${new Date(end).toLocaleTimeString(locale.value, { hour: '2-digit', minute: '2-digit', hour12: false })}`
+  return `${bucketStartFormatter.value.format(new Date(start))} - ${bucketEndFormatter.value.format(new Date(end))}`
 }
 
-function openBucket(modelName: string, bucket: ModelStatusBucket) {
-  selectedModelName.value = modelName
+function toggleBucket(event: MouseEvent, bucket: ModelStatusBucket, modelIdentity: string) {
+  if (event.currentTarget === bucketAnchor) closeBucket()
+  else void showBucket(event, bucket, modelIdentity)
+}
+
+async function showBucket(event: MouseEvent, bucket: ModelStatusBucket, modelIdentity: string) {
+  const anchor = event.currentTarget as HTMLElement
+  bucketAnchor = anchor
+  bucketAnchorKey.value = bucketKey(modelIdentity, bucket)
   selectedBucket.value = bucket
-}
+  bucketPosition.value = { top: '0px', left: '0px', visibility: 'hidden' }
+  await nextTick()
+  if (anchor !== bucketAnchor || !bucketPopover.value) return
 
-function handleBucketClick(modelName: string, bucket: ModelStatusBucket, modelIdentity = modelName) {
-  pressedBucketKey.value = bucketKey(modelIdentity, bucket)
-  if (pressedBucketTimer) clearTimeout(pressedBucketTimer)
-  pressedBucketTimer = setTimeout(() => {
-    pressedBucketKey.value = ''
-    pressedBucketTimer = undefined
-  }, 420)
-  openBucket(modelName, bucket)
+  const rect = anchor.getBoundingClientRect()
+  const { width, height } = bucketPopover.value.getBoundingClientRect()
+  const margin = 8
+  const left = Math.max(margin, Math.min(rect.left + (rect.width - width) / 2, window.innerWidth - width - margin))
+  const top = rect.bottom + height + margin <= window.innerHeight - margin
+    ? rect.bottom + margin
+    : Math.max(margin, rect.top - height - margin)
+  bucketPosition.value = { top: `${top}px`, left: `${left}px`, visibility: 'visible' }
 }
 
 function closeBucket() {
   selectedBucket.value = null
-  selectedModelName.value = ''
+  bucketAnchorKey.value = ''
+  bucketAnchor = null
 }
 
-function requestOutcomeClass(outcome: ModelStatusOutcome): string {
-  return outcome === 'success' ? 'badge-success' : outcome === 'failure' ? 'badge-danger' : outcome === 'empty' ? 'badge-warning' : 'badge-gray'
+function handleBucketOutsideClick(event: PointerEvent) {
+  if (bucketAnchor && event.target instanceof Node && !bucketAnchor.contains(event.target) && !bucketPopover.value?.contains(event.target)) {
+    closeBucket()
+  }
+}
+
+function handleBucketEscape(event: KeyboardEvent) {
+  if (event.key === 'Escape') closeBucket()
 }
 
 function requestOutcomeLabel(outcome: ModelStatusOutcome, statusCode?: number): string {
@@ -640,6 +638,7 @@ watch(() => `${authStore.isAuthenticated}:${authStore.user?.id ?? ''}`, () => {
 }, { flush: 'post' })
 
 watch(visibleGroups, () => {
+  closeBucket()
   void nextTick().then(observeStatusGroups)
 }, { flush: 'post' })
 
@@ -677,6 +676,10 @@ onMounted(() => {
   updateMobileStatusChrome()
   window.addEventListener('scroll', updateMobileStatusChrome, { passive: true })
   window.addEventListener('resize', handleWindowResize)
+  window.addEventListener('resize', closeBucket)
+  window.addEventListener('scroll', closeBucket, true)
+  document.addEventListener('pointerdown', handleBucketOutsideClick)
+  document.addEventListener('keydown', handleBucketEscape)
 })
 
 onBeforeUnmount(() => {
@@ -685,13 +688,16 @@ onBeforeUnmount(() => {
   customGroupsRequest?.abort()
   loadMoreObserver?.disconnect()
   if (loadMoreTimer) clearTimeout(loadMoreTimer)
-  if (pressedBucketTimer) clearTimeout(pressedBucketTimer)
   clearInterval(timer)
   clearInterval(refreshCountdownTimer)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   groupContextObserver?.disconnect()
   window.removeEventListener('scroll', updateMobileStatusChrome)
   window.removeEventListener('resize', handleWindowResize)
+  window.removeEventListener('resize', closeBucket)
+  window.removeEventListener('scroll', closeBucket, true)
+  document.removeEventListener('pointerdown', handleBucketOutsideClick)
+  document.removeEventListener('keydown', handleBucketEscape)
   document.documentElement.classList.remove('model-status-mobile-header-hidden')
 })
 </script>
@@ -702,20 +708,17 @@ onBeforeUnmount(() => {
 .status-content { container: model-status / inline-size; max-width: 1280px; min-width: 0; margin: 0 auto; padding: 28px 24px; }
 .status-content-embedded { max-width: none; margin: 0; padding: 0; }
 .status-toolbar-shell { min-width: 0; }
-.model-status-workspace { --status-surface: rgb(255 255 255 / 84%); --status-surface-muted: rgb(248 250 252 / 72%); --status-border: rgb(226 232 240 / 86%); --status-shadow: 0 12px 28px rgb(15 23 42 / 6%), inset 0 1px 0 rgb(255 255 255 / 68%); }
-.dark .model-status-workspace { --status-surface: rgb(15 23 42 / 76%); --status-surface-muted: rgb(15 23 42 / 68%); --status-border: rgb(71 85 105 / 58%); --status-shadow: 0 14px 30px rgb(0 0 0 / 22%), inset 0 1px 0 rgb(255 255 255 / 4%); }
-.workspace-surface { border: 1px solid var(--status-border); background: var(--status-surface); box-shadow: var(--status-shadow); }
+.model-status-workspace { --status-surface: #fff; --status-surface-muted: #f8fafc; --status-border: #e2e8f0; }
+.dark .model-status-workspace { --status-surface: #111827; --status-surface-muted: #0f172a; --status-border: #283548; }
 .workspace-toolbar { position: relative; }
+.status-page-title { margin: 0 0 16px; font-size: 21px; font-weight: 650; line-height: 1.3; }
 .status-recovery-action { min-height: 44px; }
 .status-recovery-action:focus-visible, .refresh-button:focus-visible { outline: 2px solid var(--brand-500); outline-offset: 3px; }
-.status-header { @apply rounded-xl border px-4 py-3; border-color: var(--status-border); background: var(--status-surface); box-shadow: var(--status-shadow); display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
-.dark .model-status-page .status-header { border-color: var(--status-border); background: var(--status-surface); box-shadow: var(--status-shadow); }
-.dark .model-status-page .status-header .page-title { color: #e0f2fe; text-shadow: 0 0 18px rgba(34, 211, 238, 0.14); }
-.status-title-icon { @apply rounded-lg bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-400; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; flex: 0 0 32px; }
-.status-header-actions { display: inline-flex; min-width: 0; align-items: center; gap: 10px; }
-.refresh-countdown { @apply text-slate-500 dark:text-dark-400; min-width: 94px; font-size: 12px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.refresh-button { width: 44px; height: 44px; flex: 0 0 44px; }
-.dark .model-status-page .refresh-button { @apply bg-dark-800 text-slate-200 shadow-none; border-color: rgba(96, 165, 250, 0.2); }
+.status-toolbar-actions { display: inline-flex; flex-shrink: 0; align-items: center; gap: 12px; margin-left: auto; }
+.model-count + .status-toolbar-actions { margin-left: 0; }
+.status-home-link { @apply text-slate-600 hover:underline dark:text-slate-300; font-size: 12px; white-space: nowrap; }
+.refresh-countdown { @apply text-slate-500 dark:text-dark-400; font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.refresh-button { width: 44px; height: 44px; flex: 0 0 44px; border-color: var(--status-border); background: var(--status-surface); box-shadow: none; }
 .recent-bar:focus-visible { outline: 2px solid var(--brand-500); outline-offset: 3px; }
 .status-notice { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 0; font-size: 13px; }
 .status-notice-error { @apply text-red-700 dark:text-red-400; }
@@ -724,9 +727,9 @@ onBeforeUnmount(() => {
 .outcome-success { @apply bg-emerald-600 dark:bg-emerald-400; }
 .outcome-failure { @apply bg-red-500 dark:bg-red-400; }
 .outcome-empty { @apply bg-amber-500 dark:bg-amber-400; }
-.status-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 0 0 24px; }
+.status-filters { display: flex; align-items: center; gap: 10px; padding: 0 0 18px; }
 .group-filter { width: 240px; min-width: 0; }
-.model-search { display: flex; width: min(100%, 320px); min-height: 44px; align-items: center; gap: 8px; padding: 0 12px; color: var(--status-muted, #64748b); border: 1px solid var(--status-border); border-radius: 10px; background: var(--status-surface); box-shadow: inset 0 1px 0 rgb(255 255 255 / 45%); }
+.model-search { display: flex; width: min(100%, 320px); min-height: 44px; align-items: center; gap: 8px; padding: 0 12px; color: var(--status-muted, #64748b); border: 1px solid var(--status-border); border-radius: 8px; background: var(--status-surface); }
 .model-search:focus-within { outline: 2px solid color-mix(in srgb, var(--brand-500) 55%, transparent); outline-offset: 2px; }
 .model-search input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: inherit; font-size: 13px; }
 .model-search-clear { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border-radius: 6px; }
@@ -737,15 +740,12 @@ onBeforeUnmount(() => {
 .model-count { @apply text-slate-500 dark:text-dark-400; margin-left: auto; font-size: 12px; white-space: nowrap; }
 .status-empty { @apply text-slate-500 dark:text-dark-400; display: flex; min-height: 200px; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; font-size: 14px; }
 .workspace-empty-state { padding: 28px 16px; border: 1px dashed var(--status-border); border-radius: 14px; background: var(--status-surface-muted); }
-.status-group { margin-bottom: 18px; }
-.group-heading { @apply rounded-xl border border-primary-100/70 bg-primary-50/45 dark:border-primary-500/15 dark:bg-primary-900/10; display: flex; min-width: 0; align-items: center; padding: 11px 12px 10px; margin: 0 0 16px; }
-.group-title { display: flex; min-width: 0; flex: 1 1 auto; align-items: flex-start; gap: 9px; }
-.group-accent { @apply bg-primary-500 dark:bg-primary-400; display: block; width: 3px; min-width: 3px; min-height: 24px; border-radius: 999px; margin-top: 1px; }
-.group-heading h2 { @apply text-slate-900 dark:text-slate-100; min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; font-weight: 650; line-height: 24px; }
-.model-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; overflow: hidden; border: 1px solid var(--status-border); border-radius: 12px; background: var(--status-surface); box-shadow: var(--status-shadow); }
-.model-row { @apply rounded-xl; display: flex; min-width: 0; flex-direction: column; align-items: stretch; gap: 6px; padding: 9px 16px; border: 0; border-bottom: 1px solid var(--status-border); border-radius: 0; background: transparent; box-shadow: none; }
-.model-row:last-child { border-bottom: 0; }
-.dark .model-status-page .model-row { border-color: var(--status-border); background: var(--status-surface); box-shadow: var(--status-shadow); }
+.status-group { margin-bottom: 24px; }
+.group-heading { display: flex; min-width: 0; align-items: center; margin: 0 0 8px; }
+.group-title { min-width: 0; }
+.group-heading h2 { @apply text-slate-700 dark:text-slate-200; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 650; line-height: 22px; }
+.model-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; overflow: hidden; border: 1px solid var(--status-border); border-radius: 8px; background: var(--status-surface); }
+.model-row { display: flex; min-width: 0; flex-direction: column; gap: 4px; padding: 10px 14px; border: 0; border-radius: 0; background: var(--status-surface); box-shadow: 0 0 0 1px var(--status-border); }
 .load-more-models { display: flex; width: min(100%, 280px); min-height: 40px; margin: 4px auto 28px; align-items: center; justify-content: center; gap: 7px; }
 .load-more-models.is-loading { cursor: wait; opacity: .78; }
 .load-more-wrap { position: relative; min-height: 60px; }
@@ -793,17 +793,12 @@ onBeforeUnmount(() => {
 .recent-bars { position: relative; display: grid; grid-template-columns: repeat(48, minmax(0, 1fr)); width: 100%; gap: 2px; height: 16px; margin: 5px 0; overflow: visible; }
 .recent-bars:not(.status-bucket-grid) { grid-template-columns: repeat(30, minmax(0, 1fr)); }
 .status-bucket-grid { isolation: isolate; }
-.recent-bar { position: relative; display: block; justify-self: center; min-width: 0; width: 6px; height: 16px; padding: 0; border: 0; border-radius: 0; cursor: pointer; touch-action: manipulation; transition: transform .18s ease, opacity .18s ease, box-shadow .18s ease, border-color .18s ease; }
+.recent-bar { position: relative; display: block; justify-self: center; min-width: 0; width: 6px; height: 16px; padding: 0; border: 0; border-radius: 0; cursor: pointer; touch-action: manipulation; }
 .status-bucket-grid > .recent-bar { justify-self: stretch; width: 100%; }
-.recent-bar::after { position: absolute; inset: 0; border: 1px solid currentColor; border-radius: inherit; content: ''; opacity: 0; pointer-events: none; transform: scale(.78); transition: opacity .18s ease, transform .18s ease; }
-.recent-placeholder { @apply bg-amber-400 dark:bg-amber-300; display: block; justify-self: center; min-width: 0; width: 6px; height: 16px; border-radius: 0; }
+.recent-placeholder { @apply bg-slate-300 dark:bg-slate-600; display: block; justify-self: center; min-width: 0; width: 6px; height: 16px; border-radius: 0; }
 .recent-incomplete { @apply border border-amber-400 dark:border-amber-300; background: transparent; }
-.recent-bar:hover, .recent-bar:focus-visible, .recent-bar:active { z-index: 1; }
-.recent-bar:hover { opacity: .96; transform: translateY(-2px) scaleX(1.08); box-shadow: 0 4px 10px color-mix(in srgb, currentColor 28%, transparent), inset 0 1px 0 rgb(255 255 255 / 32%); }
-.recent-bar:hover::after, .recent-bar:focus-visible::after { opacity: .62; transform: scale(1); }
-.recent-bar:active { transform: translateY(-1px) scaleX(1.16) scaleY(1.04); box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 72%, transparent), 0 3px 8px color-mix(in srgb, currentColor 38%, transparent); }
-.bucket-pressed { z-index: 2; animation: bucket-pop .42s ease both; box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 72%, transparent), 0 3px 8px color-mix(in srgb, currentColor 38%, transparent); filter: saturate(1.25) brightness(.94); }
 .recent-bar:focus-visible { outline: 2px solid var(--brand-500); outline-offset: 2px; }
+.bucket-no-data { @apply bg-slate-300 text-slate-400 dark:bg-slate-600 dark:text-slate-500; }
 .bucket-success { @apply bg-emerald-500 text-emerald-500 dark:bg-emerald-400 dark:text-emerald-400; }
 .bucket-failure { @apply bg-red-500 text-red-500 dark:bg-red-400 dark:text-red-400; }
 .bucket-degraded { @apply bg-amber-400 text-amber-400 dark:bg-amber-300 dark:text-amber-300; }
@@ -814,37 +809,31 @@ onBeforeUnmount(() => {
 .dark .model-status-page .bucket-degraded { box-shadow: 0 0 9px rgba(251, 191, 36, 0.24); }
 .dark .model-status-page .bucket-empty { box-shadow: 0 0 9px rgba(251, 191, 36, 0.24); }
 .dark .model-status-page .bucket-unknown { box-shadow: 0 0 9px rgba(251, 191, 36, 0.18); }
+.bucket-light:is(:hover, [aria-expanded="true"]) { background-color: color-mix(in srgb, currentColor 80%, white); }
+.bucket-light.bucket-no-data:is(:hover, [aria-expanded="true"]) { @apply bg-slate-200 dark:bg-slate-500; }
 
-@keyframes bucket-pop {
-  0% { transform: scale(1); }
-  38% { transform: scaleX(1.16) scaleY(1.06); }
-  72% { transform: scaleX(1.1) scaleY(1.03); }
-  100% { transform: scale(1); }
+.bucket-popover {
+  @apply border border-slate-200 bg-white text-slate-900 shadow-lg dark:border-dark-600 dark:bg-dark-800 dark:text-white;
+  position: fixed;
+  z-index: 60;
+  width: min(216px, calc(100vw - 16px));
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 12px;
 }
-
-.bucket-detail { display: flex; flex-direction: column; gap: 18px; }
-.bucket-detail-range { @apply text-slate-500 dark:text-dark-300; margin: 0; font-size: 13px; }
-.bucket-detail-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
-.bucket-detail-stats > div { @apply border border-slate-200 bg-slate-50 dark:border-dark-700 dark:bg-dark-800/60; display: flex; min-width: 0; flex-direction: column; gap: 4px; border-radius: 10px; padding: 12px; }
-.dark .model-status-page .bucket-detail-stats > div { border-color: rgba(96, 165, 250, 0.16); background: rgba(30, 41, 59, 0.7); }
-.bucket-detail-stats span { @apply text-slate-500 dark:text-dark-300; font-size: 12px; }
-.bucket-detail-stats strong { @apply text-slate-900 dark:text-white; font-size: 18px; font-weight: 600; }
-.stat-success { @apply text-emerald-600 dark:text-emerald-400 !important; }
-.stat-failure { @apply text-red-600 dark:text-red-400 !important; }
-.stat-empty { @apply text-amber-600 dark:text-amber-400 !important; }
-.bucket-detail-list { @apply border-t border-slate-200 dark:border-dark-700; max-height: 360px; overflow: auto; padding-top: 14px; }
-.bucket-detail-list-header { @apply text-slate-500 dark:text-dark-300; display: flex; justify-content: space-between; gap: 12px; margin-bottom: 8px; font-size: 12px; }
-.bucket-detail-empty { @apply text-slate-500 dark:text-dark-400; padding: 24px 0; text-align: center; font-size: 13px; }
-.bucket-request-row { @apply border-b border-slate-100 dark:border-dark-700/70; display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 0; font-size: 12px; }
-.bucket-request-info { display: flex; min-width: 0; flex: 1 1 auto; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
-.bucket-request-status { @apply text-slate-400 dark:text-dark-400; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bucket-popover-time { @apply text-slate-500 dark:text-dark-300; margin: 0 0 6px; }
+.bucket-popover-status { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+.bucket-popover-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.bucket-popover-counts { @apply border-slate-100 dark:border-dark-700; display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; border-top-width: 1px; margin: 8px 0 0; padding-top: 7px; }
+.bucket-popover-counts > div { display: flex; justify-content: space-between; gap: 4px; }
+.bucket-popover-counts dt { @apply text-slate-500 dark:text-dark-300; }
+.bucket-popover-counts dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
 .dark .model-status-page .model-title :deep(.model-icon path[fill="#000000"]),
 .dark .model-status-page .model-title :deep(.model-icon path[fill="#16191E"]) { fill: #f1f5f9; }
 
 @media (prefers-reduced-motion: reduce) {
-  .model-row, .recent-bar, .load-more-models { transition: none; }
+  .model-row, .load-more-models { transition: none; }
   .load-more-models .animate-spin { animation: none; }
-  .recent-bar::after, .bucket-pressed { animation: none; transition: none; }
 }
 
 @container model-status (min-width: 1400px) {
@@ -856,13 +845,12 @@ onBeforeUnmount(() => {
 }
 
 @container model-status (max-width: 1040px) {
-  .model-grid { grid-template-columns: minmax(0, 1fr); }
+  .model-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 767px) {
-  .model-grid { grid-template-columns: minmax(0, 1fr); gap: 8px; overflow: visible; border: 0; background: transparent; box-shadow: none; }
-  .model-row { display: flex; gap: 6px; padding: 9px 10px; border: 1px solid var(--status-border); border-radius: 10px; background: var(--status-surface); box-shadow: var(--status-shadow); }
-  .model-row:last-child { border-bottom: 1px solid var(--status-border); }
+  .model-grid { grid-template-columns: minmax(0, 1fr); }
+  .model-row { padding: 10px 12px; }
   .model-row-header { align-items: center; }
   .model-status-page .model-identity { flex-direction: row; align-items: center; gap: 10px; }
   .model-identity-minimal { width: 100%; }
@@ -873,9 +861,8 @@ onBeforeUnmount(() => {
 }
 
 @container model-status (max-width: 640px) {
-  .group-filter, .model-search { width: 100%; max-width: none; flex: auto; }
   .model-count { display: none; }
-  .model-grid { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .model-grid { grid-template-columns: minmax(0, 1fr); }
   .model-row { display: flex; gap: 8px; padding: 12px 14px; }
   .model-title { gap: 10px; }
   .recent-bars { grid-template-columns: repeat(48, minmax(0, 1fr)); height: 16px; gap: 2px; margin: 4px 0; }
@@ -891,212 +878,23 @@ onBeforeUnmount(() => {
   .recent-bar, .recent-placeholder { height: 16px; }
 }
 
-@media (max-width: 560px) {
-  .bucket-detail-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-
 @media (max-width: 640px) {
   .status-guest .status-content { padding: 12px; }
-  .status-header { margin-bottom: 10px; padding: 9px 10px; }
 }
 
 @media (max-width: 767px) {
-  .status-toolbar-shell {
-    --status-toolbar-bleed: var(--app-content-padding-x, 24px);
-    position: sticky;
-    top: 0;
-    z-index: 20;
-    width: auto;
-    margin-right: calc(-1 * var(--status-toolbar-bleed));
-    margin-left: calc(-1 * var(--status-toolbar-bleed));
-    padding: 0 var(--status-toolbar-bleed);
-    background: linear-gradient(to bottom, var(--status-surface-muted) 0%, var(--status-surface-muted) 88%, transparent 100%);
-    backdrop-filter: blur(14px);
-  }
-  .status-guest .status-toolbar-shell { --status-toolbar-bleed: 16px; }
-  .status-header {
-    width: auto;
-    margin-right: 0;
-    margin-left: 0;
-    padding-right: 12px;
-    padding-left: 12px;
-    margin-bottom: 0;
-    max-height: 6rem;
-    overflow: hidden;
-    border-right: 0;
-    border-left: 0;
-    border-radius: 0;
-    transition: max-height 180ms ease, margin 180ms ease, padding 180ms ease, border-color 180ms ease, opacity 140ms ease, transform 180ms ease, visibility 180ms ease;
-  }
-  :global(html.model-status-mobile-header-hidden .model-status-page .status-header) {
-    max-height: 0;
-    min-height: 0;
-    margin-top: 0;
-    margin-bottom: 0;
-    padding-top: 0;
-    padding-bottom: 0;
-    border-top-color: transparent;
-    border-bottom-color: transparent;
-    opacity: 0;
-    pointer-events: none;
-    transform: translateY(-12px);
-    visibility: hidden;
-  }
-  .status-filters {
-    max-height: 8rem;
-    position: static;
-    z-index: auto;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: 8px;
-    width: 100%;
-    margin: 0 0 14px;
-    padding: 6px 0 10px;
-    border: 0;
-    border-radius: 0;
-    background: linear-gradient(to bottom, var(--status-surface-muted) 0%, var(--status-surface-muted) 78%, transparent 100%);
-    backdrop-filter: blur(14px);
-    box-shadow: none;
-    transition: max-height 180ms ease, margin 180ms ease, padding 180ms ease, border-color 180ms ease, opacity 140ms ease, transform 180ms ease, visibility 180ms ease;
-  }
-  .status-filters .group-filter { width: 100%; max-width: none; }
-  .status-filters.group-context-active {
-    display: flex;
-    align-items: center;
-    flex-wrap: nowrap;
-    gap: 8px;
-    padding-top: 5px;
-    padding-bottom: 7px;
-    border-bottom: 1px solid rgba(203, 213, 225, 0.6);
-    background: rgb(248 250 252 / 92%);
-  }
-  .status-filters.group-context-active .model-search {
-    width: auto;
-    min-width: 150px;
-    flex: 1 1 220px;
-  }
-  .status-filters.group-context-active .group-filter {
-    width: 40px;
-    flex: 0 0 40px;
-  }
-  .status-filters.group-context-active .group-filter :deep(.select-trigger) {
-    width: 40px;
-    height: 36px;
-    min-height: 36px;
-    justify-content: center;
-    padding: 0;
-    border-color: rgba(148, 163, 184, 0.38);
-    border-radius: 10px;
-    background: rgb(255 255 255 / 86%);
-    box-shadow: none;
-  }
-  .status-filters.group-context-active .group-filter :deep(.select-trigger:hover),
-  .status-filters.group-context-active .group-filter :deep(.select-trigger-open) {
-    border-color: color-mix(in srgb, var(--brand-500) 42%, #cbd5e1);
-    background: #fff;
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-500) 10%, transparent);
-  }
-  .status-filters.group-context-active .group-filter :deep(.select-value) {
-    flex: 0 0 auto;
-  }
-  .status-filters.group-context-active .group-filter :deep(.select-icon) {
-    display: none;
-  }
-  .status-filters.group-context-active .group-filter-selected-text {
-    display: none;
-  }
-  .status-filters.group-context-active .group-filter-mobile-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .status-filters .group-filter :deep(.select-trigger) {
-    height: 42px;
-    min-height: 42px;
-    border-color: rgba(203, 213, 225, 0.9);
-    border-radius: 0.7rem;
-    background: #fff;
-    box-shadow: 0 1px 2px rgb(15 23 42 / 4%);
-  }
-  .status-filters .group-filter :deep(.select-trigger-open) {
-    border-color: var(--brand-border-strong);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-500) 18%, transparent);
-  }
-  .group-context {
-    display: flex;
-    flex: 1 1 120px;
-    min-width: clamp(96px, 24vw, 140px);
-    align-items: center;
-    gap: 6px;
-    min-height: 20px;
-    overflow: hidden;
-    padding: 0 3px;
-  }
-  .group-context-accent {
-    @apply bg-primary-500 dark:bg-primary-400;
-    width: 2px;
-    height: 15px;
-    flex: 0 0 2px;
-    border-radius: 999px;
-  }
-  .group-context-name {
-    @apply text-slate-700 dark:text-slate-200;
-    display: block;
-    flex: 1 1 auto;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 12px;
-    font-weight: 550;
-  }
-  .dark .model-status-page .status-filters {
-    background: linear-gradient(to bottom, #0f172a 0%, #0f172a 78%, rgb(15 23 42 / 0%) 100%);
-    box-shadow: none;
-  }
-  .dark .status-filters.group-context-active {
-    border-bottom-color: rgba(51, 65, 85, 0.72);
-    background: rgb(15 23 42 / 88%);
-  }
-  .dark .status-filters.group-context-active .group-filter :deep(.select-trigger) {
-    border-color: rgba(100, 116, 139, 0.5);
-    background: rgb(15 23 42 / 82%);
-  }
-  .model-status-page .group-heading {
-    position: relative;
-    z-index: 0;
-    min-height: 36px;
-    margin: 14px 0 12px;
-    padding: 8px 10px;
-    border: 0;
-    border-radius: 0;
-    background: transparent;
-    box-shadow: none;
-    backdrop-filter: none;
-  }
-  .status-group-context-active .group-heading {
-    visibility: visible;
-  }
-  .model-status-page .group-heading .group-title {
-    gap: 7px;
-  }
-  .model-status-page .group-heading .group-accent {
-    width: 2px;
-    min-width: 2px;
-    min-height: 18px;
-    margin-top: 0;
-  }
-  .model-status-page .group-heading h2 {
-    @apply text-slate-500 dark:text-dark-400;
-    font-size: 13px;
-    font-weight: 600;
-    line-height: 20px;
-  }
-  .dark .model-status-page .status-filters .group-filter :deep(.select-trigger) {
-    border-color: rgba(51, 65, 85, 0.95);
-    background: rgba(15, 23, 42, 0.75);
-    box-shadow: 0 1px 2px rgb(0 0 0 / 16%);
-  }
+  .status-toolbar-shell { position: sticky; top: 0; z-index: 20; background: var(--status-surface-muted); }
+  .status-filters { display: grid; grid-template-columns: minmax(0, 1fr) 44px auto; gap: 8px; padding: 6px 0 8px; }
+  .status-filters .model-search { width: 100%; min-width: 0; }
+  .status-filters .group-filter { width: 44px; }
+  .status-filters .group-filter :deep(.select-trigger) { width: 44px; min-height: 44px; justify-content: center; padding: 0; border-color: var(--status-border); border-radius: 8px; background: var(--status-surface); box-shadow: none; }
+  .status-filters .group-filter :deep(.select-value) { flex: 0 0 auto; }
+  .status-filters .group-filter :deep(.select-icon), .group-filter-selected-text { display: none; }
+  .group-filter-mobile-icon { display: inline-flex; align-items: center; }
+  .status-toolbar-actions { grid-area: 1 / 3; gap: 8px; }
+  .refresh-countdown, .model-count { display: none; }
+  .group-context { @apply text-slate-600 dark:text-slate-300; display: flex; grid-column: 1 / -1; min-width: 0; align-items: center; gap: 6px; font-size: 12px; }
+  .group-context-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .model-status-page .model-identity {
     display: flex;
     flex-direction: column;
@@ -1105,7 +903,7 @@ onBeforeUnmount(() => {
   }
   .model-status-page .model-title {
     grid-column: 1 / -1;
-    min-height: 38px;
+    min-height: 24px;
   }
   .model-status-page .model-meta {
     min-width: 0;

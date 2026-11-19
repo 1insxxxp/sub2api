@@ -160,8 +160,8 @@ describe('ModelStatusView', () => {
   })
 
   it.each([
-    { success: 0, failure: 0, empty: 0, unknown: 0, status: 'no_data', rate: '100%', hue: null },
-    { success: 0, failure: 0, empty: 0, unknown: 5, status: 'unknown', rate: '100%', hue: null },
+    { success: 0, failure: 0, empty: 0, unknown: 0, status: 'no_data', rate: '-', hue: null },
+    { success: 0, failure: 0, empty: 0, unknown: 5, status: 'unknown', rate: '-', hue: null },
     { success: 4, failure: 0, empty: 0, unknown: 20, status: 'insufficient_data', rate: '100%', hue: 120 },
     { success: 5, failure: 0, empty: 0, unknown: 0, status: 'healthy', rate: '100%', hue: 120 },
     { success: 99, failure: 1, empty: 0, unknown: 0, status: 'healthy', rate: '99%', hue: 119 },
@@ -452,7 +452,7 @@ describe('ModelStatusView', () => {
     expect(wrapper.text()).not.toContain('modelStatus.snapshot')
     expect(wrapper.text()).not.toContain('modelStatus.snapshotWindow')
     expect(wrapper.findAll('[data-outcome]').map(bar => bar.attributes('data-outcome')).slice(0, 2)).toEqual(['empty', 'success'])
-    expect(wrapper.find('[data-outcome="empty"]').attributes('title')).toContain('modelStatus.outcome.empty')
+    expect(wrapper.find('[data-outcome="empty"]').attributes('aria-label')).toContain('modelStatus.outcome.empty')
   })
 
   it('uses the sidebar layout for authenticated users', async () => {
@@ -463,52 +463,53 @@ describe('ModelStatusView', () => {
     expect(wrapper.find('[data-testid="public-nav"]').exists()).toBe(false)
   })
 
-  it('opens bucket details when a signal light is clicked', async () => {
+  it('opens an anchored summary and closes it on Escape', async () => {
     const wrapper = render()
     await flushPromises()
-    const bucket = wrapper.find('[data-testid="status-bucket"]')
-    expect(wrapper.find('.bucket-help').exists()).toBe(false)
-    expect(bucket.element.tagName).toBe('BUTTON')
+    const bucket = wrapper.get('[data-testid="status-bucket"]')
     await bucket.trigger('click')
-    expect(bucket.classes()).toContain('bucket-pressed')
-    await flushPromises()
-    expect(document.body.textContent).toContain('modelStatus.bucketDetails')
-    expect(document.body.textContent).toContain('modelStatus.requestDetails')
-    expect(document.body.textContent).toContain('modelStatus.outcome.empty')
-    const close = document.body.querySelector('.brand-floating-close') as HTMLElement | null
-    close?.click()
-    await vi.advanceTimersByTimeAsync(400)
-    expect(document.body.querySelector('.bucket-detail')).toBeNull()
+    expect(bucket.attributes('aria-expanded')).toBe('true')
+    expect(document.body.querySelector('.bucket-popover-status')?.textContent).toContain('modelStatus.outcome.empty')
+    expect(document.body.querySelector('[data-testid="bucket-popover"]')?.getAttribute('style')).toContain('visibility: visible')
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await nextTick()
+    expect(document.body.querySelector('[data-testid="bucket-popover"]')).toBeNull()
+    expect(bucket.attributes('aria-expanded')).toBe('false')
   })
 
-  it.each([12, 10, 3, 0])('shows only the latest ten of %i bucket requests without changing totals', async count => {
+  it('opens on mouse hover or touch without requiring a click', async () => {
+    const wrapper = render()
+    await flushPromises()
+    const bucket = wrapper.get('[data-testid="status-bucket"]')
+
+    await bucket.trigger('pointerenter', { pointerType: 'mouse' })
+    expect(bucket.attributes('aria-expanded')).toBe('true')
+    await bucket.trigger('pointerleave', { pointerType: 'mouse' })
+    expect(bucket.attributes('aria-expanded')).toBe('false')
+    await bucket.trigger('pointerup', { pointerType: 'touch', isPrimary: true })
+    expect(bucket.attributes('aria-expanded')).toBe('true')
+  })
+
+  it('shows aggregate success and failure counts without exposing request details', async () => {
     const data = report()
-    const requests = Array.from({ length: count }, (_, index) => ({
-      at: new Date(Date.UTC(2026, 8, 6, 0, index)).toISOString(),
-      outcome: 'success' as const,
-      status_code: 200 + index,
-    }))
-    const originalOrder = requests.map(request => request.at)
     data.groups[0].models[0].buckets![0] = {
       ...data.groups[0].models[0].buckets![0],
-      total: count, success: count, failure: 0, empty: 0, unknown: 0, requests,
+      total: 14, success: 10, failure: 4, empty: 0, unknown: 0,
+      requests: [{ at: '2026-09-06T00:01:00Z', outcome: 'failure', status_code: 502 }],
     }
     getModelStatus.mockResolvedValueOnce(data)
     const wrapper = render()
     await flushPromises()
-    await wrapper.get('[data-testid="status-bucket"]').trigger('click')
+    const bucket = wrapper.get('[data-testid="status-bucket"]')
+    await bucket.trigger('click')
     await flushPromises()
 
-    const rows = [...document.body.querySelectorAll('.bucket-request-row')]
-    expect(rows).toHaveLength(Math.min(count, 10))
-    expect(rows.map(row => row.querySelector('.bucket-request-status')?.textContent)).toEqual(
-      requests.slice(-10).reverse().map(request => `modelStatus.statusCode ${request.status_code}`),
-    )
-    expect(document.body.querySelector('.bucket-detail-stats strong')?.textContent).toBe(String(count))
-    const header = document.body.querySelector('.bucket-detail-list-header')?.textContent
-    if (count > 10) expect(header).toContain(`modelStatus.showingLatest 10 ${count}`)
-    else expect(header).not.toContain('modelStatus.showingLatest')
-    expect(requests.map(request => request.at)).toEqual(originalOrder)
+    const popover = document.body.querySelector('[data-testid="bucket-popover"]')
+    expect(popover?.textContent).toContain('modelStatus.bucketStatus.degraded')
+    expect([...popover!.querySelectorAll('dd')].map(count => count.textContent)).toEqual(['10', '4'])
+    expect(popover?.textContent).not.toContain('502')
+    await bucket.trigger('click')
+    expect(document.body.querySelector('[data-testid="bucket-popover"]')).toBeNull()
   })
 
   it('colors recent buckets by their success-rate thresholds', async () => {
@@ -532,7 +533,7 @@ describe('ModelStatusView', () => {
     const bucket = wrapper.get('[data-testid="status-bucket"]')
     expect(bucket.classes()).toContain('bucket-success')
     expect(bucket.attributes('data-outcome')).toBe('success')
-    expect(bucket.attributes('title')).toContain('modelStatus.outcome.success')
+    expect(bucket.attributes('aria-label')).toContain('modelStatus.outcome.success')
   })
 
   it.each([
@@ -570,7 +571,7 @@ describe('ModelStatusView', () => {
     expect(wrapper.find('[data-testid="incomplete-records"]').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('modelStatus.outcome.unknown')
     expect(wrapper.find('[data-outcome="unknown"]').exists()).toBe(false)
-    expect(wrapper.find('.bucket-success').exists()).toBe(true)
+    expect(wrapper.find('.bucket-no-data').attributes('aria-label')).toContain('modelStatus.noRequestsInBucket')
     expect(wrapper.findAll('[data-outcome]').map(bar => bar.attributes('data-outcome')).slice(0, 2)).toEqual(['empty', 'success'])
     expect(wrapper.findAll('.recent-bars').at(0)?.element.children).toHaveLength(48)
 
@@ -578,20 +579,6 @@ describe('ModelStatusView', () => {
     await flushPromises()
     expect(wrapper.find('[data-testid="incomplete-records"]').exists()).toBe(false)
     expect(wrapper.find('.recent-incomplete').exists()).toBe(false)
-  })
-
-  it('shows the request status code in bucket details', async () => {
-    const data = report()
-    data.groups[0].models[0].buckets![0].requests = [{ at: '2026-09-06T03:54:00Z', outcome: 'failure', status_code: 502 }]
-    data.groups[0].models[0].buckets![0].total = 1
-    data.groups[0].models[0].buckets![0].failure = 1
-    getModelStatus.mockResolvedValueOnce(data)
-    const wrapper = render()
-    await flushPromises()
-
-    await wrapper.get('[data-testid="status-bucket"]').trigger('click')
-    await flushPromises()
-    expect(document.body.textContent).toContain('modelStatus.statusCode 502')
   })
 
   it('keeps incomplete-only model records out of the failure rate', async () => {
@@ -604,11 +591,11 @@ describe('ModelStatusView', () => {
     expect(wrapper.find('.status-summary').exists()).toBe(false)
     expect(wrapper.find('[data-testid="incomplete-records"]').exists()).toBe(false)
     expect(wrapper.find('.model-row .model-status-rate').exists()).toBe(true)
-    expect(wrapper.find('.model-row .model-status-rate strong').text()).toBe('100%')
+    expect(wrapper.find('.model-row .model-status-rate strong').text()).toBe('-')
     expect(wrapper.find('.model-row .incomplete-note').exists()).toBe(false)
   })
 
-  it.each([400, 401, 403, 404, 408, 429, 499])('labels excluded HTTP %i records without lowering the success rate', async statusCode => {
+  it.each([400, 401, 403, 404, 408, 429, 499])('keeps excluded HTTP %i out of visible details and the success rate', async statusCode => {
     const data = report()
     data.groups[0].models[0].metrics = { ...metrics, total: 6, success: 5, failure: 0, empty: 0, unknown: 1, success_rate: 100 }
     data.groups[0].models[0].buckets![47] = {
@@ -625,8 +612,8 @@ describe('ModelStatusView', () => {
     expect(bucket.classes()).toContain('bucket-success')
     await bucket.trigger('click')
     await flushPromises()
-    expect(document.body.textContent).toContain(`modelStatus.statusCode ${statusCode}`)
-    expect(document.body.textContent).toContain('modelStatus.clientErrorExcluded')
+    expect(document.body.querySelector('[data-testid="bucket-popover"]')?.textContent).not.toContain('modelStatus.statusCode')
+    expect(document.body.textContent).not.toContain('modelStatus.clientErrorExcluded')
     expect(document.body.textContent).not.toContain('modelStatus.incompleteResult')
   })
 
@@ -672,7 +659,7 @@ describe('ModelStatusView', () => {
   })
 
   it('polls every 30 seconds, warns on stale live reports, and stops after unmounting', async () => {
-    getModelStatus.mockResolvedValue({ ...report(), snapshot_at: undefined })
+    getModelStatus.mockResolvedValue({ ...report(), groups: [], snapshot_at: undefined })
     const wrapper = render()
     await flushPromises()
     await vi.advanceTimersByTimeAsync(420000)
@@ -719,7 +706,7 @@ describe('ModelStatusView', () => {
     expect(wrapper.get('.model-status-rate strong').text()).toBe('75%')
     expect(wrapper.get('.outcome-counts').text()).toContain('3')
     expect(wrapper.get('.outcome-counts').text()).toContain('1')
-    expect(wrapper.findAll('[data-testid="status-bucket"]')[0].attributes('title')).toContain('9/5')
+    expect(wrapper.findAll('[data-testid="status-bucket"]')[0].attributes('aria-label')).toContain('9/5')
   })
 
   it('renders large catalogs in batches and appends the next batch on demand', async () => {

@@ -50,6 +50,7 @@ function mountHome(settings: Record<string, unknown> = {}) {
   return mount(HomeView, {
     global: {
       stubs: {
+        DaySkyScene: true,
         RouterLink: RouterLinkStub,
         LocaleSwitcher: { template: '<div data-testid="locale-switcher" />' },
         Icon: { template: '<span data-testid="icon" />' },

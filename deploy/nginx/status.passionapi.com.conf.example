@@ -1,0 +1,61 @@
+# Serve a production frontend build and proxy the existing public status API.
+# Adjust the build directory, certificate paths and Sub2API listener as needed.
+server {
+    listen 80;
+    server_name status.passionapi.com;
+
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+        default_type text/plain;
+        try_files $uri =404;
+    }
+
+    location / {
+        return 301 https://status.passionapi.com$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    server_name status.passionapi.com;
+
+    ssl_certificate /etc/letsencrypt/live/status.passionapi.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/status.passionapi.com/privkey.pem;
+    root /var/www/passion-model-status/current;
+
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header Authorization "";
+    proxy_set_header Cookie "";
+    proxy_hide_header Set-Cookie;
+
+    location = / {
+        add_header Cache-Control "no-cache";
+        try_files /index.html =404;
+    }
+
+    location = /model-status {
+        add_header Cache-Control "no-cache";
+        try_files /index.html =404;
+    }
+
+    location ^~ /assets/ {
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        try_files $uri =404;
+    }
+
+    location ~ ^/(?:logo(?:-passion-api(?:-[a-z]+)?)?\.(?:svg|png)|manifest\.json|favicon\.ico)$ {
+        try_files $uri =404;
+    }
+
+    location ~ ^/api/v1/(?:model-status(?:/png)?|settings/public)$ {
+        proxy_pass http://127.0.0.1:8080;
+    }
+
+    location / {
+        return 404;
+    }
+}

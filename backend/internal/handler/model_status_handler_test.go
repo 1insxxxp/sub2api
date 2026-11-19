@@ -79,13 +79,24 @@ func (s modelStatusReporterStub) Report(context.Context) (*service.ModelStatusRe
 
 func TestModelStatusHandlerAnonymous(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	h := &ModelStatusHandler{reporter: modelStatusReporterStub{report: &service.ModelStatusReport{}}}
+	requests := []service.ModelStatusRecent{{StatusCode: http.StatusBadGateway}}
+	report := &service.ModelStatusReport{Groups: []service.ModelStatusGroup{{Models: []service.ModelStatusModel{{
+		Recent:  requests,
+		Buckets: []service.ModelStatusBucket{{Failure: 4, Requests: requests}},
+	}}}}}
+	h := &ModelStatusHandler{reporter: modelStatusReporterStub{report: report}}
 	r := gin.New()
 	r.GET("/api/v1/model-status", h.Get)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/v1/model-status", nil))
 	require.Equal(t, http.StatusOK, w.Code)
 	require.Contains(t, w.Body.String(), `"code":0`)
+	require.Contains(t, w.Body.String(), `"failure":4`)
+	require.Contains(t, w.Body.String(), `"requests":[]`)
+	require.Contains(t, w.Body.String(), `"recent":[]`)
+	require.NotContains(t, w.Body.String(), `"status_code"`)
+	require.Len(t, report.Groups[0].Models[0].Buckets[0].Requests, 1)
+	require.Len(t, report.Groups[0].Models[0].Recent, 1)
 	require.Equal(t, "no-store", w.Header().Get("Cache-Control"))
 }
 

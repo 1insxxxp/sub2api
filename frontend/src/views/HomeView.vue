@@ -107,13 +107,8 @@
     :class="{ 'home-theme-transitioning': isThemeTransitioning }"
     :data-theme="isDark ? 'cosmic' : 'solar'"
   >
-    <div class="home-minimal-grid pointer-events-none absolute inset-0" aria-hidden="true"></div>
-    <div class="home-tech-noise pointer-events-none absolute inset-0" aria-hidden="true"></div>
-    <div
-      class="home-theme-transition pointer-events-none fixed inset-0 z-[60]"
-      :class="{ 'is-active': isThemeTransitioning }"
-      aria-hidden="true"
-    ></div>
+    <div v-if="isDark" class="home-minimal-grid pointer-events-none absolute inset-0" aria-hidden="true"></div>
+    <div v-if="isDark" class="home-tech-noise pointer-events-none absolute inset-0" aria-hidden="true"></div>
     <header
       class="home-minimal-header fixed inset-x-0 top-0 z-30 border-b border-transparent px-4 py-3 transition-all duration-300 sm:px-6"
       :class="{ 'home-minimal-header-scrolled': isHeaderScrolled }"
@@ -168,9 +163,35 @@
     </header>
 
     <main class="relative z-10">
-      <section class="home-minimal-hero home-tech-stage home-new-hero mx-0 grid min-h-[calc(100vh-6rem)] w-full max-w-none items-center gap-12 overflow-hidden px-5 pb-16 pt-32 sm:px-8 lg:grid-cols-[1.05fr_0.95fr] lg:gap-8 lg:px-12 lg:pb-24 lg:pt-36">
-        <div class="home-relay-stage pointer-events-none absolute inset-0" aria-hidden="true">
-          <RelayScene :dark="isDark" />
+      <section class="home-minimal-hero home-tech-stage home-new-hero mx-0 grid w-full max-w-none items-center gap-12 overflow-hidden px-5 pb-16 pt-32 sm:px-8 lg:grid-cols-[1.05fr_0.95fr] lg:gap-8 lg:px-12 lg:pb-24 lg:pt-36">
+        <Transition name="home-scene" @after-leave="retainNightScene = false">
+          <div v-show="isDark" class="home-night-sky home-scene-layer pointer-events-none absolute inset-0" aria-hidden="true">
+            <div v-if="isDark || retainNightScene" class="home-relay-stage absolute inset-0">
+              <RelayScene :dark="true" />
+            </div>
+          </div>
+        </Transition>
+        <Transition name="home-scene" @after-leave="retainDayScene = false">
+          <div v-show="!isDark" data-testid="home-day-sky" class="home-day-sky home-scene-layer pointer-events-none absolute inset-0" aria-hidden="true">
+            <template v-if="!isDark || retainDayScene">
+              <img class="home-sky-cloud home-sky-cloud-distant" :src="homeCloudImage" width="1380" height="920" alt="" decoding="async" draggable="false" />
+              <img class="home-sky-cloud home-sky-cloud-near" :src="homeCloudImage" width="1380" height="920" alt="" decoding="async" draggable="false" />
+              <DaySkyScene />
+              <div class="home-sky-flock">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+            </template>
+          </div>
+        </Transition>
+        <div v-if="isDark && retainDayScene" class="home-cloud-reveal" aria-hidden="true">
+          <div class="home-cloud-reveal-bank home-cloud-reveal-left">
+            <img :src="homeCloudImage" alt="" />
+          </div>
+          <div class="home-cloud-reveal-bank home-cloud-reveal-right">
+            <img :src="homeCloudImage" alt="" />
+          </div>
         </div>
         <div class="relative z-10 max-w-2xl">
           <p class="home-minimal-reveal mb-6 inline-flex items-center gap-2 rounded-full border border-cyan-300/25 bg-cyan-300/[0.08] px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-[0.24em] text-blue-600 dark:text-cyan-200" style="--motion-index: 0">
@@ -203,7 +224,7 @@
           </div>
           <div class="home-minimal-reveal mt-12 flex flex-wrap gap-x-6 gap-y-3 text-xs font-medium text-slate-400" style="--motion-index: 4">
             <span v-for="item in valueItems" :key="item.title" class="home-minimal-proof inline-flex items-center gap-2">
-              <span class="flex h-6 w-6 items-center justify-center rounded-full bg-white/10 text-cyan-200"><Icon :name="item.icon" size="xs" /></span>
+              <span class="home-proof-icon flex h-6 w-6 items-center justify-center rounded-full bg-white/10 text-cyan-200"><Icon :name="item.icon" size="xs" /></span>
               {{ item.title }}
             </span>
           </div>
@@ -282,6 +303,8 @@ import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import WechatServiceButton from '@/components/common/WechatServiceButton.vue'
 import Icon from '@/components/icons/Icon.vue'
 import RelayScene from '@/components/home/RelayScene.vue'
+import DaySkyScene from '@/components/home/DaySkyScene.vue'
+import homeCloudImage from '@/assets/home-cumulus.webp'
 import { sanitizeUrl } from '@/utils/url'
 import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
 
@@ -319,6 +342,8 @@ const isHomeContentUrl = computed(() => {
 
 const isDark = ref(document.documentElement.classList.contains('dark'))
 const isThemeTransitioning = ref(false)
+const retainDayScene = ref(false)
+const retainNightScene = ref(false)
 const isHeaderScrolled = ref(false)
 let revealObserver: IntersectionObserver | null = null
 let themeTransitionTimer: number | null = null
@@ -364,6 +389,9 @@ const workflowItems = computed(() => [
 
 function toggleTheme() {
   const nextTheme = !isDark.value
+  const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+  retainDayScene.value = !reducedMotion && nextTheme && !compactHomeEnabled.value
+  retainNightScene.value = !reducedMotion && !nextTheme && !compactHomeEnabled.value
   isDark.value = nextTheme
   isThemeTransitioning.value = true
   appStore.setTheme(nextTheme)
@@ -371,7 +399,6 @@ function toggleTheme() {
   if (themeTransitionTimer) {
     window.clearTimeout(themeTransitionTimer)
   }
-  const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
   if (reducedMotion) {
     isThemeTransitioning.value = false
     themeTransitionTimer = null
@@ -453,10 +480,7 @@ onBeforeUnmount(() => {
 }
 
 .home-new-layout {
-  background:
-    radial-gradient(circle at 12% 18%, rgba(6, 182, 212, 0.1), transparent 28rem),
-    radial-gradient(circle at 88% 4%, rgba(251, 191, 36, 0.12), transparent 24rem),
-    linear-gradient(180deg, #fffdf8 0%, #f4f8ff 44%, #edfaff 100%);
+  background: linear-gradient(180deg, #eaf5ff 0%, #f6faff 60%, #fff 100%);
   transition: background-color 680ms ease, opacity 680ms ease;
 }
 
@@ -482,19 +506,82 @@ onBeforeUnmount(() => {
 
 .home-new-hero {
   border-radius: 0;
-  background:
-    radial-gradient(circle at 78% 42%, rgba(14, 165, 233, 0.2), transparent 31%),
-    radial-gradient(circle at 20% 18%, rgba(251, 191, 36, 0.18), transparent 30%),
-    linear-gradient(180deg, rgba(255, 253, 248, 0.98), rgba(239, 248, 255, 0.9));
   box-shadow: none;
-  transition: background-color 680ms ease, box-shadow 680ms ease, filter 680ms ease;
+  min-height: calc(100vh - 6rem);
 }
 
-.dark .home-new-hero {
+.home-new-layout[data-theme="solar"] .home-new-hero {
+  min-height: 100vh;
+  min-height: 100svh;
+}
+
+.home-scene-layer { z-index: 1; }
+
+.home-night-sky {
   background:
     radial-gradient(circle at 78% 42%, rgba(37, 99, 235, 0.22), transparent 31%),
     radial-gradient(circle at 18% 18%, rgba(236, 72, 153, 0.12), transparent 28%),
-    linear-gradient(180deg, rgba(8, 13, 22, 0.96), rgba(13, 23, 35, 0.94));
+    linear-gradient(180deg, #080d16, #0d1723);
+}
+
+.home-scene-enter-active {
+  z-index: 2;
+  transition: opacity 680ms ease-in-out;
+}
+
+.home-scene-leave-active {
+  transition: opacity 680ms step-end;
+}
+
+.home-scene-enter-from,
+.home-scene-leave-to { opacity: 0; }
+
+.home-night-sky.home-scene-enter-active {
+  transition-timing-function: ease-in-out;
+  transition-duration: 600ms;
+}
+
+.home-cloud-reveal {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.home-cloud-reveal-bank {
+  position: absolute;
+  top: -6%;
+  bottom: -6%;
+  width: 65%;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(ellipse at center, rgb(247 252 255 / 80%), rgb(217 237 255 / 52%) 45%, transparent 74%);
+  animation: home-cloud-dissolve 680ms ease-in-out both;
+}
+
+.home-cloud-reveal-bank img {
+  width: 120%;
+  height: 100%;
+  max-width: none;
+  object-fit: cover;
+}
+
+.home-cloud-reveal-left { --cloud-drift-x: 15%; --cloud-drift-y: -12%; left: -8%; top: -14%; }
+.home-cloud-reveal-right { --cloud-drift-x: 27%; --cloud-drift-y: -8%; right: -8%; top: 8%; }
+.home-cloud-reveal-left img { transform: scaleX(-1) rotate(-8deg); }
+.home-cloud-reveal-right img { transform: rotate(-6deg); }
+
+@keyframes home-cloud-dissolve {
+  0% { opacity: 0; transform: translate(0, 0); }
+  26% { opacity: .52; }
+  100% { opacity: 0; transform: translate(var(--cloud-drift-x), var(--cloud-drift-y)); }
+}
+
+.home-new-hero h1,
+.home-new-hero p,
+.home-new-hero .home-minimal-proof {
+  transition: color 400ms ease;
 }
 
 .home-theme-transition {
@@ -548,6 +635,169 @@ onBeforeUnmount(() => {
   mask-image: linear-gradient(to bottom, black 0%, transparent 85%);
   pointer-events: none;
 }
+
+.home-new-layout[data-theme="solar"] .home-tech-stage::before,
+.home-new-layout[data-theme="solar"]::before,
+.home-new-layout[data-theme="solar"]::after {
+  content: none;
+}
+
+.home-day-sky {
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 82% 21%, rgb(255 239 206 / 63%), transparent 42%),
+    linear-gradient(155deg, #e9f6ff 0%, #b5ddff 53%, #6eace6 100%);
+}
+
+.home-day-sky::before {
+  position: absolute;
+  top: 21%;
+  left: 82%;
+  width: clamp(220px, 34vw, 560px);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  content: '';
+  background: radial-gradient(
+    circle,
+    #fffdf6 0%,
+    #fffdf6 8%,
+    rgb(255 248 223 / 95%) 10%,
+    rgb(255 243 209 / 49%) 18%,
+    rgb(255 236 197 / 16%) 42%,
+    transparent 68%
+  );
+}
+
+.home-day-sky::after {
+  position: absolute;
+  inset: 0;
+  content: '';
+  background: linear-gradient(90deg, rgb(243 250 255 / 88%) 0%, rgb(234 247 255 / 65%) 32%, transparent 69%);
+}
+
+.home-sky-flock {
+  --flock-opacity: .56;
+  position: absolute;
+  top: 28%;
+  left: 73%;
+  width: 80px;
+  height: 34px;
+  color: #385c7a;
+  opacity: var(--flock-opacity);
+  animation: home-sky-flight 24s linear infinite;
+}
+
+.home-sky-flock span {
+  --bird-size: 19px;
+  --wing-period: 1.16s;
+  --wing-delay: -.42s;
+  position: absolute;
+  top: 0;
+  left: 50px;
+  width: var(--bird-size);
+  height: 8px;
+}
+
+.home-sky-flock span:nth-child(2) { --bird-size: 15px; --wing-period: 1.03s; --wing-delay: -.82s; top: 13px; left: 25px; }
+.home-sky-flock span:nth-child(3) { --bird-size: 12px; --wing-period: 1.31s; --wing-delay: -.13s; top: 22px; left: 4px; }
+
+.home-sky-flock span::before,
+.home-sky-flock span::after {
+  position: absolute;
+  top: 0;
+  width: 54%;
+  height: 100%;
+  border-top: 1.4px solid currentColor;
+  border-radius: 70% 65% 0 0;
+  content: '';
+  animation: home-bird-wing var(--wing-period) ease-in-out var(--wing-delay) infinite;
+}
+
+.home-sky-flock span::before {
+  --wing-up: 34deg;
+  --wing-down: -29deg;
+  left: 0;
+  transform-origin: right 45%;
+  transform: rotate(19deg);
+}
+
+.home-sky-flock span::after {
+  --wing-up: -34deg;
+  --wing-down: 29deg;
+  right: 0;
+  transform-origin: left 45%;
+  transform: rotate(-19deg);
+}
+
+@keyframes home-bird-wing {
+  0%, 100% { transform: rotate(var(--wing-up)); }
+  34% { transform: rotate(var(--wing-down)) scaleX(.86); }
+  65% { transform: rotate(var(--wing-up)); }
+}
+
+@keyframes home-sky-flight {
+  0% { opacity: 0; transform: translate(11vw, 10px); }
+  18%, 82% { opacity: var(--flock-opacity); }
+  100% { opacity: 0; transform: translate(-7vw, -32px); }
+}
+
+.home-sky-cloud {
+  position: absolute;
+  max-width: none;
+  height: auto;
+}
+
+.home-sky-cloud-distant {
+  top: -5%;
+  right: 17%;
+  width: clamp(300px, 43vw, 740px);
+  opacity: .58;
+}
+
+.home-sky-cloud-near {
+  top: 19%;
+  right: -9%;
+  width: clamp(620px, 79vw, 1440px);
+}
+
+.home-new-layout[data-theme="solar"] .home-hero-secondary {
+  border-color: rgb(37 99 235 / 24%);
+  background: rgb(255 255 255 / 58%);
+  color: #1e3a5f;
+}
+
+.home-new-layout[data-theme="solar"] .home-hero-secondary:hover {
+  background: #fff;
+}
+
+.home-new-layout[data-theme="solar"] .home-proof-icon {
+  background: #e0efff;
+  color: #2563a5;
+}
+
+.home-new-layout[data-theme="solar"] .home-relay-overlay {
+  border-color: rgb(67 124 176 / 20%);
+  background: rgb(250 254 255 / 88%);
+  box-shadow: 0 16px 40px rgb(23 72 113 / 15%);
+}
+
+.home-new-layout[data-theme="solar"] .home-minimal-connection {
+  border-color: #d5e6f5;
+  background: #eef7ff;
+  color: #264762;
+}
+
+.home-new-layout[data-theme="solar"] .home-tech-route-card {
+  border-color: #d5e6f5;
+  background: rgb(255 255 255 / 64%);
+}
+
+.home-new-layout[data-theme="solar"] .home-tech-route-card .text-cyan-200,
+.home-new-layout[data-theme="solar"] .home-relay-overlay .text-slate-400 {
+  color: #4c6b86;
+}
+
+.home-day-sky:has(.day-sky-canvas.is-ready) .home-sky-cloud { visibility: hidden; }
 
 .home-relay-stage {
   z-index: 1;
@@ -812,10 +1062,58 @@ onBeforeUnmount(() => {
   50% { border-color: rgba(34, 211, 238, 0.35); }
 }
 
+@media (min-width: 1024px) {
+  .home-new-layout[data-theme="solar"] .home-new-hero {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr);
+    column-gap: clamp(32px, 4vw, 64px);
+    padding-inline: max(44px, calc((100% - 1000px) / 2));
+    padding-block: 8.5rem 5rem;
+  }
+
+  .home-new-layout[data-theme="solar"] .home-new-hero h1 {
+    font-size: clamp(4.25rem, 6.4vw, 6rem);
+  }
+
+  .home-new-layout[data-theme="solar"] .home-tech-console {
+    position: relative;
+    inset: auto;
+    justify-self: end;
+    max-width: 25rem;
+  }
+}
+
 @media (max-width: 640px) {
   .home-minimal-header {
     padding-top: 0.65rem;
     padding-bottom: 0.65rem;
+  }
+
+  .home-new-layout[data-theme="solar"] .home-new-hero {
+    gap: 2rem;
+  }
+
+  .home-sky-flock {
+    --flock-opacity: .76;
+    top: 17%;
+    left: 60%;
+    scale: .9;
+    animation-delay: -6s;
+  }
+
+  .home-sky-flock { z-index: 1; }
+
+  .home-day-sky::after {
+    background: linear-gradient(180deg, rgb(239 249 255 / 82%) 0%, rgb(230 244 255 / 68%) 39%, transparent 84%);
+  }
+
+  .home-sky-cloud-distant {
+    top: 1%;
+    right: 14%;
+  }
+
+  .home-sky-cloud-near {
+    top: 31%;
+    right: -58%;
   }
 
   .home-relay-stage {
@@ -836,6 +1134,10 @@ onBeforeUnmount(() => {
 
 @media (prefers-reduced-motion: reduce) {
   .home-minimal-grid,
+  .home-sky-flock,
+  .home-sky-flock span::before,
+  .home-sky-flock span::after,
+  .home-cloud-reveal-bank,
   .home-tech-route-card,
   .home-minimal-root::after,
   .home-minimal-reveal,
@@ -854,6 +1156,13 @@ onBeforeUnmount(() => {
   .home-minimal-card,
   .home-minimal-steps,
   .home-scroll-reveal {
+    transition: none;
+  }
+
+  .home-scene-enter-active,
+  .home-scene-leave-active,
+  .home-new-hero h1,
+  .home-new-hero p {
     transition: none;
   }
 

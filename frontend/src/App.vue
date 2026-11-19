@@ -7,6 +7,7 @@ import Toast from '@/components/common/Toast.vue'
 import NavigationProgress from '@/components/common/NavigationProgress.vue'
 import AdminComplianceDialog from '@/components/admin/AdminComplianceDialog.vue'
 import { resolveRouteDocumentTitle } from '@/router/title'
+import { standaloneStatusHost } from '@/router'
 import AnnouncementPopup from '@/components/common/AnnouncementPopup.vue'
 import { useAppStore, useAuthStore, useSubscriptionStore, useAnnouncementStore, useAdminComplianceStore, useAdminSettingsStore } from '@/stores'
 import { getSetupStatus } from '@/api/setup'
@@ -155,10 +156,12 @@ onMounted(async () => {
 
   // Check if setup is needed
   try {
-    const status = await getSetupStatus()
-    if (status.needs_setup && route.path !== '/setup') {
-      router.replace('/setup')
-      return
+    if (!standaloneStatusHost) {
+      const status = await getSetupStatus()
+      if (status.needs_setup && route.path !== '/setup') {
+        router.replace('/setup')
+        return
+      }
     }
   } catch {
     // If setup endpoint fails, assume normal mode and continue

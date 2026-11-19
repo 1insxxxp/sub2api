@@ -90,6 +90,7 @@ const mountHome = async () => {
         LocaleSwitcher: {
           template: '<button type="button">Locale</button>',
         },
+        DaySkyScene: true,
         RelayScene: {
           props: ['dark', 'paused'],
           template: '<div data-testid="relay-scene" :data-dark="dark" :data-paused="paused" />',
@@ -162,7 +163,8 @@ describe('HomeView default homepage', () => {
     expect(wrapper.find('.home-minimal-root').exists()).toBe(true)
     expect(wrapper.find('.home-minimal-header').classes()).toContain('fixed')
     expect(wrapper.find('.home-minimal-logo').exists()).toBe(true)
-    expect(wrapper.find('.home-relay-stage').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="home-day-sky"]').exists()).toBe(true)
+    expect(wrapper.find('.home-relay-stage').exists()).toBe(false)
     expect(wrapper.findAll('.home-minimal-reveal').length).toBeGreaterThanOrEqual(6)
   })
 
@@ -180,8 +182,9 @@ describe('HomeView default homepage', () => {
 
     expect(appStoreState.setTheme).toHaveBeenCalledWith(true)
     expect(root.attributes('data-theme')).toBe('cosmic')
+    expect(wrapper.find('.home-relay-stage').exists()).toBe(true)
+    expect(wrapper.find('.home-sky-cloud').exists()).toBe(true)
     expect(root.classes()).toContain('home-theme-transitioning')
-    expect(root.find('.home-theme-transition').classes()).toContain('is-active')
 
     vi.advanceTimersByTime(760)
     await wrapper.vm.$nextTick()

@@ -7,7 +7,7 @@ export default {
     searchPlaceholder: 'Search models',
   clearSearch: 'Clear search',
   noSearchMatches: 'No matching models',
-  allGroups: 'All public groups',
+  allGroups: 'All groups',
     customGroupPrefix: 'My custom group',
     customGroupLoading: 'Loading custom groups...',
     modelCount: '{count} models',

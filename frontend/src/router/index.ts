@@ -15,6 +15,18 @@ import { resolveCompletedSetupRedirectPath } from './setupRedirect'
 import { resolveRouteDocumentTitle } from './title'
 import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
 
+const standaloneStatusHost = typeof window !== 'undefined' && window.location.hostname === 'status.passionapi.com'
+const modelStatusRoute: RouteRecordRaw = {
+  path: '/model-status',
+  name: 'ModelStatus',
+  component: () => import('@/views/ModelStatusView.vue'),
+  meta: {
+    requiresAuth: false,
+    title: 'Model Status',
+    titleKey: 'modelStatus.title'
+  }
+}
+
 /**
  * Route definitions with lazy loading
  */
@@ -187,16 +199,7 @@ const routes: RouteRecordRaw[] = [
     }
   },
 
-  {
-    path: '/model-status',
-    name: 'ModelStatus',
-    component: () => import('@/views/ModelStatusView.vue'),
-    meta: {
-      requiresAuth: false,
-      title: 'Model Status',
-      titleKey: 'modelStatus.title'
-    }
-  },
+  modelStatusRoute,
 
   // ==================== User Routes ====================
   {
@@ -878,7 +881,7 @@ const routes: RouteRecordRaw[] = [
  */
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
-  routes,
+  routes: standaloneStatusHost ? [{ ...modelStatusRoute, path: '/', alias: '/model-status', props: { standalone: true } }] : routes,
   scrollBehavior(_to, _from, savedPosition) {
     // Scroll to saved position when using browser back/forward
     if (savedPosition) {
@@ -929,6 +932,12 @@ function isBackendModePublicRouteAllowed(path: string, hasPendingAuthSession: bo
 router.beforeEach(async (to, _from, next) => {
   // 开始导航加载状态
   navigationLoading.startNavigation()
+
+  if (standaloneStatusHost) {
+    document.title = resolveRouteDocumentTitle(to, useAppStore().siteName, [])
+    next()
+    return
+  }
 
   const authStore = useAuthStore()
 
@@ -1185,6 +1194,8 @@ router.afterEach((to) => {
   // 结束导航加载状态
   navigationLoading.endNavigation()
 
+  if (standaloneStatusHost) return
+
   // 懒初始化预加载（首次导航时创建，传入 router 实例）
   if (!routePrefetch) {
     routePrefetch = useRoutePrefetch(router)
@@ -1224,4 +1235,5 @@ router.onError((error) => {
   }
 })
 
+export { standaloneStatusHost }
 export default router
