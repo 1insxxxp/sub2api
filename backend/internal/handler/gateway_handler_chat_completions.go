@@ -89,6 +89,9 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 	}
 	bindRequestedReasoningEffort(c, body, reqModel)
 	ensureCompositeTargetPlatform(c, apiKey, reqModel)
+	if effectiveAPIKeyPlatform(c, apiKey) == service.PlatformGemini && !admitGeminiRequestBody(c, len(body), true) {
+		return
+	}
 	if !compositeTargetPlatformResolved(c, apiKey, reqModel) {
 		h.chatCompletionsErrorResponse(c, http.StatusBadRequest, "invalid_request_error", "Model is not supported by composite groups")
 		return

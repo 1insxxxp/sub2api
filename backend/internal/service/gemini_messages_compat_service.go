@@ -940,10 +940,7 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 		}
 		requestIDHeader = idHeader
 
-		upstreamAttempt = BeginGeminiUpstreamAttempt(c, account, mappedModel, useUpstreamStream)
-		upstreamAttempt.ObserveRequest(upstreamReq)
-		resp, err = s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
-		upstreamAttempt.ObserveResponse(resp)
+		resp, upstreamAttempt, err = s.sendGeminiInference(c, upstreamReq, proxyURL, account, mappedModel, useUpstreamStream)
 		if err != nil {
 			if req.Stream && firstOutputGuard != nil && firstOutputGuard.TimedOut() && (ctx.Err() == nil || ModelFirstOutputTraversalBudgetExceeded(ctx)) {
 				return nil, newModelFirstOutputTimeoutFailoverError(c, account, originalModel, firstOutputPolicy, nil)
@@ -1010,7 +1007,9 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 					// 降级只改写历史块，思考参数沿用客户端原始请求。
 					geminiReq = applyGeminiCompatThinkingConfig(retryGeminiReq, originalClaudeBody, mappedModel, includeThoughts)
 					upstreamAttempt.End(fmt.Errorf("gemini upstream HTTP status %d", resp.StatusCode))
-					sleepGeminiBackoff(1)
+					if err := sleepGeminiBackoff(ctx, 1); err != nil {
+						return nil, err
+					}
 					continue
 				}
 			}
@@ -1050,7 +1049,7 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 			}
 			retryAttempt := attempt - signatureRetryStage
 			retryLimit := geminiRetryLimit(resp.StatusCode, maxAttempts)
-			if retryAttempt < retryLimit {
+			if retryAttempt < retryLimit && !GeminiLargeRequestSwitchOn503(ctx, resp.StatusCode) && GeminiLargeRequestRetryAllowed(ctx, 0) {
 				upstreamReqID := resp.Header.Get(requestIDHeader)
 				if upstreamReqID == "" {
 					upstreamReqID = resp.Header.Get("x-goog-request-id")
@@ -1080,7 +1079,9 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 
 				logger.LegacyPrintf("service.gemini_messages_compat", "Gemini account %d: upstream status %d, retry %d/%d", account.ID, resp.StatusCode, retryAttempt, retryLimit)
 				upstreamAttempt.End(fmt.Errorf("gemini upstream HTTP status %d", resp.StatusCode))
-				sleepGeminiBackoff(retryAttempt)
+				if err := sleepGeminiBackoff(ctx, retryAttempt); err != nil {
+					return nil, err
+				}
 				continue
 			}
 			// Final attempt: surface the upstream error body (mapped below) instead of a generic retry error.
@@ -1577,12 +1578,11 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 		}
 		requestIDHeader = idHeader
 
-		if action != "countTokens" {
-			upstreamAttempt = BeginGeminiUpstreamAttempt(c, account, mappedModel, useUpstreamStream)
-			upstreamAttempt.ObserveRequest(upstreamReq)
+		if action == "countTokens" {
+			resp, err = s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
+		} else {
+			resp, upstreamAttempt, err = s.sendGeminiInference(c, upstreamReq, proxyURL, account, mappedModel, useUpstreamStream)
 		}
-		resp, err = s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
-		upstreamAttempt.ObserveResponse(resp)
 		if err != nil {
 			if stream && firstOutputGuard != nil && firstOutputGuard.TimedOut() && (ctx.Err() == nil || ModelFirstOutputTraversalBudgetExceeded(ctx)) {
 				return nil, newModelFirstOutputTimeoutFailoverError(c, account, originalModel, firstOutputPolicy, nil)
@@ -1639,7 +1639,7 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 				s.handleGeminiUpstreamErrorForModel(ctx, account, resp.StatusCode, resp.Header, respBody, originalModel)
 			}
 			retryLimit := geminiRetryLimit(resp.StatusCode, maxAttempts)
-			if attempt < retryLimit {
+			if attempt < retryLimit && !GeminiLargeRequestSwitchOn503(ctx, resp.StatusCode) && GeminiLargeRequestRetryAllowed(ctx, 0) {
 				upstreamReqID := resp.Header.Get(requestIDHeader)
 				if upstreamReqID == "" {
 					upstreamReqID = resp.Header.Get("x-goog-request-id")
@@ -1669,7 +1669,9 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 
 				logger.LegacyPrintf("service.gemini_messages_compat", "Gemini account %d: upstream status %d, retry %d/%d", account.ID, resp.StatusCode, attempt, retryLimit)
 				upstreamAttempt.End(fmt.Errorf("gemini upstream HTTP status %d", resp.StatusCode))
-				sleepGeminiBackoff(attempt)
+				if err := sleepGeminiBackoff(ctx, attempt); err != nil {
+					return nil, err
+				}
 				continue
 			}
 			if action == "countTokens" {
@@ -2204,7 +2206,7 @@ func (s *GeminiMessagesCompatService) recordGeminiNativeUpstreamError(c *gin.Con
 	return upstreamMsg
 }
 
-func sleepGeminiBackoff(attempt int) {
+func sleepGeminiBackoff(ctx context.Context, attempt int) error {
 	delay := geminiRetryBaseDelay * time.Duration(1<<uint(attempt-1))
 	if delay > geminiRetryMaxDelay {
 		delay = geminiRetryMaxDelay
@@ -2217,7 +2219,7 @@ func sleepGeminiBackoff(attempt int) {
 	if sleepFor < 0 {
 		sleepFor = 0
 	}
-	time.Sleep(sleepFor)
+	return waitGeminiRetry(ctx, sleepFor)
 }
 
 var (

@@ -12,11 +12,14 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
+	pkghttputil "github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
 	middleware "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
@@ -32,9 +35,10 @@ const (
 // reach a provider. Capture the actual request built by the real Gemini adapter.
 type geminiNativeAliasUpstream struct {
 	service.HTTPUpstream
-	requests []*http.Request
-	bodies   [][]byte
-	accounts []int64
+	requests       []*http.Request
+	bodies         [][]byte
+	accounts       []int64
+	beforeResponse func()
 }
 
 func (u *geminiNativeAliasUpstream) Do(req *http.Request, _ string, accountID int64, _ int) (*http.Response, error) {
@@ -45,6 +49,9 @@ func (u *geminiNativeAliasUpstream) Do(req *http.Request, _ string, accountID in
 	u.requests = append(u.requests, req.Clone(context.Background()))
 	u.bodies = append(u.bodies, body)
 	u.accounts = append(u.accounts, accountID)
+	if u.beforeResponse != nil {
+		u.beforeResponse()
+	}
 	header := http.Header{"Content-Type": {"application/json"}, "X-Goog-Request-Id": {"native-alias-request"}}
 	response := `{"candidates":[{"content":{"role":"model","parts":[{"text":"local test answer"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":12,"candidatesTokenCount":7,"totalTokenCount":19}}`
 	if strings.HasSuffix(req.URL.Path, ":countTokens") {
@@ -269,6 +276,67 @@ func TestGeminiNativeAliasRejectsUnsafeRoutesBeforeUpstream(t *testing.T) {
 			require.Empty(t, fixture.upstream.requests)
 			require.Empty(t, fixture.wallet.commands)
 			require.Empty(t, fixture.usage.logs)
+		})
+	}
+}
+
+func TestGeminiNativePressureRejectsConcurrentBodiesBeforeForwarding(t *testing.T) {
+	f := newGeminiNativeAliasFixture(t, "direct", geminiNativeAlias, geminiNativeAlias, geminiNativeAliasTarget)
+	body := `{"contents":[{"parts":[{"text":"` + strings.Repeat("x", 4<<20) + `"}]}]}`
+	path := "/v1beta/models/" + url.PathEscape(geminiNativeAlias) + ":generateContent"
+	budget := pkghttputil.NewBodyMemoryBudget(int64(len(body)) * 7)
+	entered, resume := make(chan struct{}), make(chan struct{})
+	release := sync.OnceFunc(func() { close(resume) })
+	defer release()
+	f.upstream.beforeResponse = func() {
+		if len(f.upstream.requests) == 1 {
+			close(entered)
+			<-resume
+		}
+	}
+	post := func() *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+		ctx, done := pkghttputil.WithRequestBodyMemoryBudget(req.Context(), budget)
+		defer done()
+		w := httptest.NewRecorder()
+		f.router.ServeHTTP(w, req.WithContext(ctx))
+		return w
+	}
+	first := make(chan *httptest.ResponseRecorder, 1)
+	go func() { first <- post() }()
+	select {
+	case <-entered:
+	case <-time.After(10 * time.Second):
+		t.Fatal("first request did not reach upstream")
+	}
+	blocked := post()
+	release()
+	require.Equal(t, http.StatusOK, (<-first).Code)
+	require.Equal(t, http.StatusServiceUnavailable, blocked.Code)
+	require.Equal(t, "1", blocked.Header().Get("Retry-After"))
+	require.Len(t, f.upstream.requests, 1)
+	require.Equal(t, http.StatusOK, post().Code, "capacity is reusable once a request finishes")
+	require.Len(t, f.upstream.requests, 2)
+}
+
+func TestGeminiCompatibilityRejectsBodyPressureBeforeRouting(t *testing.T) {
+	for _, ep := range geminiImageGateEndpoints("gemini-2.5-flash")[:2] {
+		t.Run(ep.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(recorder)
+			ctx, release := pkghttputil.WithRequestBodyMemoryBudget(context.Background(), pkghttputil.NewBodyMemoryBudget(int64(len(ep.body))*2))
+			defer release()
+			req := httptest.NewRequest(http.MethodPost, ep.path, strings.NewReader(ep.body))
+			// Routing middleware may already have buffered and decoded the body.
+			req.Body = pkghttputil.NewPrereadBody([]byte(ep.body))
+			c.Request = req.WithContext(ctx)
+			id := int64(121)
+			c.Set(string(middleware.ContextKeyAPIKey), &service.APIKey{GroupID: &id, Group: &service.Group{ID: id, Platform: service.PlatformGemini}})
+			c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: 1})
+			ep.call(&GatewayHandler{}, c)
+			require.Equal(t, http.StatusServiceUnavailable, recorder.Code)
+			require.Equal(t, "1", recorder.Header().Get("Retry-After"))
+			require.True(t, c.IsAborted())
 		})
 	}
 }

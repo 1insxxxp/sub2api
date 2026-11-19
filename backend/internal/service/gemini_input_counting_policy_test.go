@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/geminitokens"
 	"github.com/stretchr/testify/require"
 )
 
@@ -181,4 +182,14 @@ func TestGeminiInputCounting_RejectsGeneratedMedia(t *testing.T) {
 		require.Equal(t, 100, got)
 		require.False(t, discount)
 	}
+}
+
+func TestGeminiOversizedUsageEvidenceSkipsBodyReplay(t *testing.T) {
+	req := inputCountingTestRequest(t, inputCountingTestBody)
+	req.ContentLength = int64(max(geminitokens.MaxTextBytes, geminiInputCountMaxRequestBytes)) + 1
+	opens := 0
+	req.GetBody = func() (io.ReadCloser, error) { opens++; return nil, io.EOF }
+	require.False(t, prepareGeminiInputUsageFallback(req, 6021, inputCountingTestModel).Known)
+	require.Nil(t, prepareGeminiInputCountingPolicy(req, inputCountingTestAccount(), inputCountingTestModel))
+	require.Zero(t, opens, "a known oversized outbound body cannot supply evidence to either reader")
 }

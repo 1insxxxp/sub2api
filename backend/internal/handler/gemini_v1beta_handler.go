@@ -573,6 +573,10 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 		return
 	}
 
+	if !admitGeminiRequestBody(c, len(body), action != "countTokens") {
+		return
+	}
+
 	setOpsRequestContext(c, publicModel, stream)
 	setOpsEndpointContext(c, "", int16(service.RequestTypeFromLegacy(stream, false)))
 	deliveredOutputTokens, restoreDeliveredOutputTokens := service.AttachDownstreamOutputTokenCollector(c, publicModel)

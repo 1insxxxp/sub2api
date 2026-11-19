@@ -223,7 +223,7 @@ func (s *FailoverState) HandleFailoverError(
 		return FailoverCanceled
 	}
 	s.LastFailoverErr = failoverErr
-	if failoverErr == nil || !failoverErr.ShouldRetryNextAccount() {
+	if failoverErr == nil || !failoverErr.ShouldRetryNextAccount() || !service.GeminiLargeRequestRetryAllowed(ctx, 0) {
 		return FailoverExhausted
 	}
 	if failoverErr.PreferNextAccount || failoverErr.Reason == service.GatewayFailureReason("first_output_timeout") {
@@ -231,7 +231,8 @@ func (s *FailoverState) HandleFailoverError(
 	}
 	// 同账号重试不算切换账号，粘性会话仅在实际切换时强制缓存计费。
 	retryCount := s.SameAccountRetryCount[accountID]
-	sameAccountRetry := sameAccountRetryAllowed(failoverErr, retryCount, retryLimit)
+	switchOn503 := service.GeminiLargeRequestSwitchOn503(ctx, failoverErr.StatusCode) && s.SwitchCount < s.MaxSwitches
+	sameAccountRetry := !switchOn503 && sameAccountRetryAllowed(failoverErr, retryCount, retryLimit)
 	if needForceCacheBilling(s.hasBoundSession, failoverErr, sameAccountRetry) {
 		s.ForceCacheBilling = true
 	}
@@ -248,6 +249,9 @@ func (s *FailoverState) HandleFailoverError(
 			zap.Int("same_account_retry_max", retryLimit),
 			zap.Duration("retry_delay", retryDelay),
 		)
+		if !service.GeminiLargeRequestRetryAllowed(ctx, retryDelay) {
+			return FailoverExhausted
+		}
 		if !sleepWithContext(ctx, retryDelay) {
 			return FailoverCanceled
 		}
@@ -255,7 +259,7 @@ func (s *FailoverState) HandleFailoverError(
 	}
 
 	// 同账号重试用尽，执行临时封禁
-	if failoverErr.RetryableOnSameAccount && failoverErr.StatusCode != http.StatusNotFound && !failoverErr.PreferNextAccount {
+	if !switchOn503 && failoverErr.RetryableOnSameAccount && failoverErr.StatusCode != http.StatusNotFound && !failoverErr.PreferNextAccount {
 		gatewayService.TempUnscheduleRetryableError(ctx, accountID, failoverErr)
 	}
 
@@ -279,6 +283,9 @@ func (s *FailoverState) HandleFailoverError(
 	// Antigravity 平台换号线性递增延时
 	if platform == service.PlatformAntigravity {
 		delay := time.Duration(s.SwitchCount-1) * time.Second
+		if !service.GeminiLargeRequestRetryAllowed(ctx, delay) {
+			return FailoverExhausted
+		}
 		if !sleepWithContext(ctx, delay) {
 			return FailoverCanceled
 		}
@@ -302,7 +309,7 @@ func (s *FailoverState) HandleSelectionExhausted(ctx context.Context) FailoverAc
 	}
 	// A bounded pre-output traversal visits each eligible account once. Do
 	// not clear its exclusions and send another round to the same failed pool.
-	if s.firstOutputTimeoutPoolTraversal {
+	if s.firstOutputTimeoutPoolTraversal || !service.GeminiLargeRequestRetryAllowed(ctx, singleAccountBackoffDelay) {
 		return FailoverExhausted
 	}
 

@@ -101,6 +101,12 @@ type smartRetryResult struct {
 // handleSmartRetry 处理 OAuth 账号的智能重试逻辑
 // 将 429/503 限流处理逻辑抽取为独立函数，减少 antigravityRetryLoop 的复杂度
 func (s *AntigravityGatewayService) handleSmartRetry(p antigravityRetryLoopParams, resp *http.Response, respBody []byte, baseURL string, urlIdx int, availableURLs []string) *smartRetryResult {
+	// Give admitted large requests a chance on another account before entering
+	// the capacity and single-account retry loops.
+	if GeminiLargeRequestSwitchOn503(p.ctx, resp.StatusCode) {
+		resp.Body = io.NopCloser(bytes.NewReader(respBody))
+		return &smartRetryResult{action: smartRetryActionBreakWithResp, resp: resp}
+	}
 	// "Resource has been exhausted" 是 URL 级别限流，切换 URL（仅 429）
 	if resp.StatusCode == http.StatusTooManyRequests && isURLLevelRateLimit(respBody) && urlIdx < len(availableURLs)-1 {
 		logger.LegacyPrintf("service.antigravity_gateway", "%s URL fallback (429): %s -> %s", p.prefix, baseURL, availableURLs[urlIdx+1])
@@ -199,13 +205,8 @@ func (s *AntigravityGatewayService) handleSmartRetry(p antigravityRetryLoopParam
 			log.Printf("%s status=%d oauth_smart_retry attempt=%d/%d delay=%v model=%s account=%d",
 				p.prefix, resp.StatusCode, attempt, maxAttempts, waitDuration, modelName, p.account.ID)
 
-			timer := time.NewTimer(waitDuration)
-			select {
-			case <-p.ctx.Done():
-				timer.Stop()
-				log.Printf("%s status=context_canceled_during_smart_retry", p.prefix)
-				return &smartRetryResult{action: smartRetryActionBreakWithResp, err: p.ctx.Err()}
-			case <-timer.C:
+			if err := waitGeminiRetry(p.ctx, waitDuration); err != nil {
+				return &smartRetryResult{action: smartRetryActionBreakWithResp, err: err}
 			}
 
 			// 智能重试：创建新请求
@@ -223,7 +224,10 @@ func (s *AntigravityGatewayService) handleSmartRetry(p antigravityRetryLoopParam
 				}
 			}
 
-			retryResp, retryErr := p.httpUpstream.Do(retryReq, p.proxyURL, p.account.ID, p.account.Concurrency)
+			retryResp, retryErr := doGeminiInference(p.httpUpstream, retryReq, p.proxyURL, p.account, nil)
+			if retryErr == nil && retryResp != nil && GeminiLargeRequestSwitchOn503(p.ctx, retryResp.StatusCode) {
+				return &smartRetryResult{action: smartRetryActionBreakWithResp, resp: retryResp}
+			}
 			if retryErr == nil && retryResp != nil && retryResp.StatusCode != http.StatusTooManyRequests && retryResp.StatusCode != http.StatusServiceUnavailable {
 				log.Printf("%s status=%d smart_retry_success attempt=%d/%d", p.prefix, retryResp.StatusCode, attempt, maxAttempts)
 				// 重试成功，清除 MODEL_CAPACITY_EXHAUSTED cooldown
@@ -381,13 +385,8 @@ func (s *AntigravityGatewayService) handleSingleAccountRetryInPlace(
 		logger.LegacyPrintf("service.antigravity_gateway", "%s status=%d single_account_503_retry attempt=%d/%d delay=%v total_waited=%v model=%s account=%d",
 			p.prefix, resp.StatusCode, attempt, antigravitySingleAccountSmartRetryMaxAttempts, waitDuration, totalWaited, modelName, p.account.ID)
 
-		timer := time.NewTimer(waitDuration)
-		select {
-		case <-p.ctx.Done():
-			timer.Stop()
-			logger.LegacyPrintf("service.antigravity_gateway", "%s status=context_canceled_during_single_account_retry", p.prefix)
-			return &smartRetryResult{action: smartRetryActionBreakWithResp, err: p.ctx.Err()}
-		case <-timer.C:
+		if err := waitGeminiRetry(p.ctx, waitDuration); err != nil {
+			return &smartRetryResult{action: smartRetryActionBreakWithResp, err: err}
 		}
 		totalWaited += waitDuration
 
@@ -398,7 +397,10 @@ func (s *AntigravityGatewayService) handleSingleAccountRetryInPlace(
 			break
 		}
 
-		retryResp, retryErr := p.httpUpstream.Do(retryReq, p.proxyURL, p.account.ID, p.account.Concurrency)
+		retryResp, retryErr := doGeminiInference(p.httpUpstream, retryReq, p.proxyURL, p.account, nil)
+		if retryErr == nil && retryResp != nil && GeminiLargeRequestSwitchOn503(p.ctx, retryResp.StatusCode) {
+			return &smartRetryResult{action: smartRetryActionBreakWithResp, resp: retryResp}
+		}
 		if retryErr == nil && retryResp != nil && retryResp.StatusCode != http.StatusTooManyRequests && retryResp.StatusCode != http.StatusServiceUnavailable {
 			logger.LegacyPrintf("service.antigravity_gateway", "%s status=%d single_account_503_retry_success attempt=%d/%d total_waited=%v",
 				p.prefix, retryResp.StatusCode, attempt, antigravitySingleAccountSmartRetryMaxAttempts, totalWaited)
@@ -467,7 +469,7 @@ func (s *AntigravityGatewayService) antigravityRetryLoop(p antigravityRetryLoopP
 		if err != nil {
 			return nil, err
 		}
-		resp, err := p.httpUpstream.Do(req, p.proxyURL, p.account.ID, p.account.Concurrency)
+		resp, err := doGeminiInference(p.httpUpstream, req, p.proxyURL, p.account, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -552,11 +554,14 @@ urlFallbackLoop:
 				return nil, err
 			}
 
-			resp, err = p.httpUpstream.Do(upstreamReq, p.proxyURL, p.account.ID, p.account.Concurrency)
+			resp, err = doGeminiInference(p.httpUpstream, upstreamReq, p.proxyURL, p.account, nil)
 			if err == nil && resp == nil {
 				err = errors.New("upstream returned nil response")
 			}
 			if err != nil {
+				if _, terminal := err.(*UpstreamFailoverError); terminal {
+					return nil, err
+				}
 				safeErr := sanitizeUpstreamErrorMessage(err.Error())
 				appendOpsUpstreamError(p.c, OpsUpstreamErrorEvent{
 					ProxyID:            opsUpstreamProxyID(p.account),
@@ -575,9 +580,8 @@ urlFallbackLoop:
 				}
 				if attempt < antigravityMaxRetries {
 					logger.LegacyPrintf("service.antigravity_gateway", "%s status=request_failed retry=%d/%d error=%v", p.prefix, attempt, antigravityMaxRetries, err)
-					if !sleepAntigravityBackoffWithContext(p.ctx, attempt) {
-						logger.LegacyPrintf("service.antigravity_gateway", "%s status=context_canceled_during_backoff", p.prefix)
-						return nil, p.ctx.Err()
+					if err := sleepAntigravityBackoffWithContext(p.ctx, attempt); err != nil {
+						return nil, err
 					}
 					continue
 				}
@@ -651,9 +655,8 @@ urlFallbackLoop:
 							Detail:             getUpstreamDetail(respBody),
 						})
 						logger.LegacyPrintf("service.antigravity_gateway", "%s status=%d retry=%d/%d body=%s", p.prefix, resp.StatusCode, attempt, antigravityMaxRetries, truncateForLog(respBody, 200))
-						if !sleepAntigravityBackoffWithContext(p.ctx, attempt) {
-							logger.LegacyPrintf("service.antigravity_gateway", "%s status=context_canceled_during_backoff", p.prefix)
-							return nil, p.ctx.Err()
+						if err := sleepAntigravityBackoffWithContext(p.ctx, attempt); err != nil {
+							return nil, err
 						}
 						continue
 					}
@@ -688,9 +691,8 @@ urlFallbackLoop:
 							Detail:             getUpstreamDetail(respBody),
 						})
 						logger.LegacyPrintf("service.antigravity_gateway", "%s status=%d retry=%d/%d body=%s", p.prefix, resp.StatusCode, attempt, antigravityMaxRetries, truncateForLog(respBody, 500))
-						if !sleepAntigravityBackoffWithContext(p.ctx, attempt) {
-							logger.LegacyPrintf("service.antigravity_gateway", "%s status=context_canceled_during_backoff", p.prefix)
-							return nil, p.ctx.Err()
+						if err := sleepAntigravityBackoffWithContext(p.ctx, attempt); err != nil {
+							return nil, err
 						}
 						// 追踪 INTERNAL 500：非匹配的 attempt 清除标记
 						if !isAntigravityInternalServerError(resp.StatusCode, respBody) {
@@ -841,8 +843,7 @@ func tempUnscheduleEmptyResponse(ctx context.Context, repo AccountRepository, ac
 }
 
 // sleepAntigravityBackoffWithContext 带 context 取消检查的退避等待
-// 返回 true 表示正常完成等待，false 表示 context 已取消
-func sleepAntigravityBackoffWithContext(ctx context.Context, attempt int) bool {
+func sleepAntigravityBackoffWithContext(ctx context.Context, attempt int) error {
 	delay := antigravityRetryBaseDelay * time.Duration(1<<uint(attempt-1))
 	if delay > antigravityRetryMaxDelay {
 		delay = antigravityRetryMaxDelay
@@ -856,14 +857,7 @@ func sleepAntigravityBackoffWithContext(ctx context.Context, attempt int) bool {
 		sleepFor = 0
 	}
 
-	timer := time.NewTimer(sleepFor)
-	select {
-	case <-ctx.Done():
-		timer.Stop()
-		return false
-	case <-timer.C:
-		return true
-	}
+	return waitGeminiRetry(ctx, sleepFor)
 }
 
 // isSingleAccountRetry 检查是否处于单账号退避重试模式：显式标记优先，否则使用请求挂载的延迟判定。

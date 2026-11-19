@@ -52,6 +52,7 @@ func TestRequestBodyMemoryRejectsOverloadAndReleasesAfterHandler(t *testing.T) {
 	}
 	w := request("/v1/responses")
 	require.Equal(t, http.StatusServiceUnavailable, w.Code)
+	require.Contains(t, w.Body.String(), `"code":"service_unavailable"`)
 	require.Equal(t, "1", w.Header().Get("Retry-After"))
 	releaseHeld()
 	select {

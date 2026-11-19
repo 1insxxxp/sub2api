@@ -50,7 +50,7 @@ type geminiInputCountRequest struct {
 
 func prepareGeminiInputUsageFallback(req *http.Request, accountID int64, model string) *GeminiInputUsageFallback {
 	fallback := &GeminiInputUsageFallback{}
-	if req == nil || req.GetBody == nil {
+	if req == nil || req.GetBody == nil || req.ContentLength > geminiInputCountMaxRequestBytes {
 		return fallback
 	}
 	body, err := req.GetBody()

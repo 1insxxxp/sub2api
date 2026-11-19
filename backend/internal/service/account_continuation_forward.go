@@ -156,6 +156,9 @@ func runAccountContinuation[T any](
 			_, _ = assistant.WriteString(round.Text)
 			currentBody, finalErr = BuildAccountContinuationBody(protocol, body, assistant.String(), budget.RemainingOutputTokens(budgetOutput))
 			if finalErr == nil {
+				if b := geminiLargeBudget(ctx); b != nil && roundErr == nil {
+					b.continuation.Store(true)
+				}
 				continue
 			}
 		}

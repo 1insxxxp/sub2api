@@ -988,9 +988,11 @@ func TestAntigravityGatewayService_ForwardGemini_FallbackReportsActualUpstreamMo
 	)
 	upstream := &queuedHTTPUpstreamStub{responses: []*http.Response{
 		{
-			StatusCode: http.StatusNotFound,
+			// A 404 selects the next account. This provider error exercises
+			// the separate same-account model fallback.
+			StatusCode: http.StatusBadRequest,
 			Header:     http.Header{"Content-Type": []string{"application/json"}},
-			Body:       io.NopCloser(strings.NewReader(`{"error":{"code":404,"message":"model not found"}}`)),
+			Body:       io.NopCloser(strings.NewReader(`{"error":{"code":400,"message":"unknown provider for model gemini-primary-upstream"}}`)),
 		},
 		{
 			StatusCode: http.StatusOK,

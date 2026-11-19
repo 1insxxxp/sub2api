@@ -127,13 +127,17 @@ func GoogleErrorWriter(c *gin.Context, status int, message string) {
 	})
 }
 
-// OpenAIErrorWriter 按 OpenAI API 规范输出模型级错误（model_not_found）。
+// OpenAIErrorWriter returns gateway errors in the Chat Completions envelope.
 func OpenAIErrorWriter(c *gin.Context, status int, message string) {
+	errorType, code := "invalid_request_error", "model_not_found"
+	if status == http.StatusServiceUnavailable {
+		errorType, code = "server_error", "service_unavailable"
+	}
 	c.JSON(status, gin.H{
 		"error": gin.H{
 			"message": message,
-			"type":    "invalid_request_error",
-			"code":    "model_not_found",
+			"type":    errorType,
+			"code":    code,
 		},
 	})
 }

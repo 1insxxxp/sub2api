@@ -106,7 +106,18 @@ bodies even after their upload has finished. The budget is not just the number
 of simultaneous uploads, and releasing an allocation's charge does not force Go
 to reclaim that unreachable memory immediately.
 
-For example, 200 long-lived streams retaining 4 MiB each account for about
+Gemini native model calls, plus Chat Completions and Messages on Gemini groups,
+reserve three additional bytes per decoded request byte for parsing and
+forwarding. A 32 MiB Gemini payload therefore occupies about 128 MiB of the
+shared budget while it is in flight. This allowance estimates conversion memory.
+It has no effect on token counts or billing.
+
+Gemini generation payloads of 4 MiB or larger share four upstream attempts
+and a 90-second retry window across accounts. A transient 503 can move a large
+request to another account within that budget. The initial generation and
+responses already returning successful headers keep their ordinary timeouts.
+
+For example, 200 long-lived non-Gemini streams retaining 4 MiB each account for about
 800 MiB before new uploads and decoding. Another 32 concurrent Zstd decoders
 can reserve 256 MiB of window space alone, exceeding a 1 GiB budget (the
 auto-sized value on instances with 4 GiB or less) before their input/output

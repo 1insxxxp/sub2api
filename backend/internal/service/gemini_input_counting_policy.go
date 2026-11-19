@@ -119,7 +119,7 @@ func requestGeminiInputCountingEnabled(c *gin.Context, account *Account, model s
 }
 
 func prepareGeminiInputCountingPolicyForRequest(req *http.Request, account *Account, model string, enabled bool) *GeminiInputCountingEvidence {
-	if !enabled || !geminiInputCountingAccountEligible(account, model) || req == nil || req.Method != http.MethodPost || req.URL == nil || req.GetBody == nil {
+	if !enabled || !geminiInputCountingAccountEligible(account, model) || req == nil || req.Method != http.MethodPost || req.URL == nil || req.GetBody == nil || req.ContentLength > geminitokens.MaxTextBytes {
 		return nil
 	}
 	if !strings.HasSuffix(req.URL.Path, "/models/"+model+":generateContent") && !strings.HasSuffix(req.URL.Path, "/models/"+model+":streamGenerateContent") {

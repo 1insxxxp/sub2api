@@ -196,10 +196,7 @@ func (s *GeminiMessagesCompatService) forwardClaudeBodyAsChatCompletions(
 		}
 		requestIDHeader = idHeader
 
-		upstreamAttempt = BeginGeminiUpstreamAttempt(c, account, mappedModel, useUpstreamStream)
-		upstreamAttempt.ObserveRequest(upstreamReq)
-		resp, err = s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
-		upstreamAttempt.ObserveResponse(resp)
+		resp, upstreamAttempt, err = s.sendGeminiInference(c, upstreamReq, proxyURL, account, mappedModel, useUpstreamStream)
 		if err != nil {
 			if firstOutputGuard != nil && firstOutputGuard.TimedOut() && (ctx.Err() == nil || ModelFirstOutputTraversalBudgetExceeded(ctx)) {
 				return nil, newModelFirstOutputTimeoutFailoverError(c, account, originalModel, firstOutputPolicy, nil)
@@ -229,7 +226,7 @@ func (s *GeminiMessagesCompatService) forwardClaudeBodyAsChatCompletions(
 				s.handleGeminiUpstreamErrorForModel(ctx, account, resp.StatusCode, resp.Header, respBody, originalModel)
 			}
 			retryLimit := geminiRetryLimit(resp.StatusCode, maxAttempts)
-			if attempt < retryLimit {
+			if attempt < retryLimit && !GeminiLargeRequestSwitchOn503(ctx, resp.StatusCode) && GeminiLargeRequestRetryAllowed(ctx, 0) {
 				upstreamReqID := resp.Header.Get(requestIDHeader)
 				if upstreamReqID == "" {
 					upstreamReqID = resp.Header.Get("x-goog-request-id")
@@ -249,7 +246,9 @@ func (s *GeminiMessagesCompatService) forwardClaudeBodyAsChatCompletions(
 				})
 				logger.LegacyPrintf("service.gemini_chat_completions", "Gemini account %d: upstream status %d, retry %d/%d", account.ID, resp.StatusCode, attempt, retryLimit)
 				upstreamAttempt.End(fmt.Errorf("gemini upstream HTTP status %d", resp.StatusCode))
-				sleepGeminiBackoff(attempt)
+				if err := sleepGeminiBackoff(ctx, attempt); err != nil {
+					return nil, err
+				}
 				continue
 			}
 			resp = &http.Response{
