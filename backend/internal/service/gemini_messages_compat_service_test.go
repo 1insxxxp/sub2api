@@ -1676,21 +1676,31 @@ func TestConvertClaudeMessagesToGeminiGenerateContent_ExtractsToolResultImages(t
 	require.NoError(t, json.Unmarshal(converted, &geminiReq))
 	contents, ok := geminiReq["contents"].([]any)
 	require.True(t, ok)
+	require.Len(t, contents, 3)
 	content, ok := contents[1].(map[string]any)
 	require.True(t, ok)
 	parts, ok := content["parts"].([]any)
 	require.True(t, ok)
-	require.Len(t, parts, 4)
+	// Gemini 拒绝 functionResponse 之后仍带其它 part 的轮次
+	//（"Requests ending with a model turn are not supported."），
+	// 工具结果图片因此被拆到紧随其后的独立 user 轮。
+	require.Len(t, parts, 2)
 
 	firstResponse := requireGeminiMap(t, requireGeminiMap(t, parts[0])["functionResponse"])
 	require.Equal(t, "inspect", firstResponse["name"])
 	require.Equal(t, "found it", requireGeminiMap(t, firstResponse["response"])["content"])
 	secondResponse := requireGeminiMap(t, requireGeminiMap(t, parts[1])["functionResponse"])
 	require.Equal(t, "[image attached below]", requireGeminiMap(t, secondResponse["response"])["content"])
-	firstImage := requireGeminiMap(t, parts[2])["inlineData"]
+
+	imageContent := requireGeminiMap(t, contents[2])
+	require.Equal(t, "user", imageContent["role"])
+	imageParts, ok := imageContent["parts"].([]any)
+	require.True(t, ok)
+	require.Len(t, imageParts, 2)
+	firstImage := requireGeminiMap(t, imageParts[0])["inlineData"]
 	require.Equal(t, "image/png", requireGeminiMap(t, firstImage)["mimeType"])
 	require.Equal(t, "aGVsbG8=", requireGeminiMap(t, firstImage)["data"])
-	secondImage := requireGeminiMap(t, parts[3])["inlineData"]
+	secondImage := requireGeminiMap(t, imageParts[1])["inlineData"]
 	require.Equal(t, "image/jpeg", requireGeminiMap(t, secondImage)["mimeType"])
 	require.Equal(t, "d29ybGQ=", requireGeminiMap(t, secondImage)["data"])
 }

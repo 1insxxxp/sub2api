@@ -665,32 +665,44 @@ func TestForwardGrokRawChat429PreservesRetryAfter(t *testing.T) {
 func TestForwardGrokRawChatErrorRecordsActualEndpoint(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	body := []byte(`{"model":"grok","messages":[{"role":"user","content":"hi"}],"stream":false,"stop":"done"}`)
-	recorder := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(recorder)
-	c.Request = httptest.NewRequest(http.MethodPost, grokChatRawEndpoint, bytes.NewReader(body))
-	c.Set("api_key", &APIKey{ID: 7601})
+	for _, status := range []int{http.StatusBadRequest, http.StatusNotFound} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			body := []byte(`{"model":"grok","messages":[{"role":"user","content":"hi"}],"stream":false,"stop":"done"}`)
+			recorder := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(recorder)
+			c.Request = httptest.NewRequest(http.MethodPost, grokChatRawEndpoint, bytes.NewReader(body))
+			c.Set("api_key", &APIKey{ID: 7601})
 
-	account := grokChatBridgeTestAccount(76)
-	repo := &grokQuotaAccountRepo{mockAccountRepoForPlatform: &mockAccountRepoForPlatform{
-		accountsByID: map[int64]*Account{account.ID: account},
-	}}
-	upstream := &httpUpstreamRecorder{resp: &http.Response{
-		StatusCode: http.StatusBadRequest,
-		Header:     http.Header{"Content-Type": []string{"application/json"}},
-		Body:       io.NopCloser(strings.NewReader(`{"error":{"message":"bad request"}}`)),
-	}}
-	svc := &OpenAIGatewayService{
-		httpUpstream:      upstream,
-		grokTokenProvider: NewGrokTokenProvider(repo, nil),
-		accountRepo:       repo,
+			account := grokChatBridgeTestAccount(76)
+			repo := &grokQuotaAccountRepo{mockAccountRepoForPlatform: &mockAccountRepoForPlatform{
+				accountsByID: map[int64]*Account{account.ID: account},
+			}}
+			upstream := &httpUpstreamRecorder{resp: &http.Response{
+				StatusCode: status,
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body:       io.NopCloser(strings.NewReader(http.StatusText(status))),
+			}}
+			svc := &OpenAIGatewayService{
+				httpUpstream:      upstream,
+				grokTokenProvider: NewGrokTokenProvider(repo, nil),
+				accountRepo:       repo,
+			}
+
+			result, err := svc.ForwardAsChatCompletions(context.Background(), c, account, body, "", "")
+			require.Error(t, err)
+			require.Nil(t, result)
+			require.Equal(t, xai.DefaultCLIBaseURL+"/chat/completions", upstream.lastReq.URL.String())
+			require.Equal(t, grokChatRawEndpoint, GetActualOpenAIUpstreamEndpoint(c))
+			var failover *UpstreamFailoverError
+			if status == http.StatusNotFound {
+				require.ErrorAs(t, err, &failover)
+				require.True(t, failover.ShouldRetryNextAccount())
+				require.False(t, c.Writer.Written())
+			} else {
+				require.NotErrorAs(t, err, &failover)
+			}
+		})
 	}
-
-	result, err := svc.ForwardAsChatCompletions(context.Background(), c, account, body, "", "")
-	require.Error(t, err)
-	require.Nil(t, result)
-	require.Equal(t, xai.DefaultCLIBaseURL+"/chat/completions", upstream.lastReq.URL.String())
-	require.Equal(t, grokChatRawEndpoint, GetActualOpenAIUpstreamEndpoint(c))
 }
 
 func grokChatBridgeTestAccount(id int64) *Account {

@@ -37,7 +37,7 @@
                 <Icon name="link" size="sm" />
                 {{ t('admin.accounts.reAuthorize') }}
               </button>
-              <button @click="$emit('refresh-token', account); $emit('close')" class="admin-action-menu-item text-purple-600 dark:text-purple-300">
+              <button @click="$emit('refresh-token', account); $emit('close')" :title="t('admin.accounts.refreshTokenHint')" class="admin-action-menu-item text-purple-600 dark:text-purple-300">
                 <Icon name="refresh" size="sm" />
                 {{ t('admin.accounts.refreshToken') }}
               </button>

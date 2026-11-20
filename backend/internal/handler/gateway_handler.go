@@ -1305,9 +1305,25 @@ func (h *GatewayHandler) Models(c *gin.Context) {
 	if apiKey != nil && apiKey.Group != nil {
 		availableModels = appendAvailableGroupModelAliases(availableModels, apiKey.Group)
 	}
+	if platform == service.PlatformAnthropic {
+		var group *service.Group
+		if apiKey != nil {
+			group = apiKey.Group
+		}
+		source := availableModels
+		if group != nil && group.ModelAllowlistEnabled() {
+			source = modelListingSource(platform, availableModels, defaultModelIDsForPlatform(platform))
+		} else if len(source) == 0 {
+			source = defaultModelIDsForPlatform(platform)
+		}
+		expanded := h.gatewayService.ExpandAnthropicLongContextModels(c.Request.Context(), group, source)
+		if len(availableModels) > 0 || len(expanded) > len(source) || (group != nil && group.ModelAllowlistEnabled()) {
+			availableModels = expanded
+		}
+	}
 	if apiKey != nil && apiKey.Group != nil && apiKey.Group.ModelAllowlistEnabled() {
 		source := modelListingSource(platform, availableModels, defaultModelIDsForPlatform(platform))
-		writeAllowlistedModelsList(c, platform, apiKey.Group.ModelAllowlist.FilterForListing(source))
+		writeAllowlistedModelsList(c, platform, apiKey.Group.EffectiveModelAllowlist().FilterForListing(source))
 		return
 	}
 

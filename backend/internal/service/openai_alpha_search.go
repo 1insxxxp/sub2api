@@ -91,8 +91,10 @@ func (s *OpenAIGatewayService) ForwardAlphaSearch(ctx context.Context, c *gin.Co
 
 	if resp.StatusCode >= http.StatusBadRequest {
 		upstreamMessage := sanitizeUpstreamErrorMessage(strings.TrimSpace(extractUpstreamErrorMessage(respBody)))
-		if s.shouldFailoverOpenAIUpstreamResponse(account, resp.StatusCode, upstreamMessage, respBody) ||
-			isOpenAIAlphaSearchEndpointUnsupported(account, resp.StatusCode) {
+		// Standalone OAuth search has a fixed endpoint. Its 404 is a tool response;
+		// a missing API-key endpoint can be retried on another account.
+		if isOpenAIAlphaSearchEndpointUnsupported(account, resp.StatusCode) ||
+			(resp.StatusCode != http.StatusNotFound && s.shouldFailoverOpenAIUpstreamResponse(account, resp.StatusCode, upstreamMessage, respBody)) {
 			resp.Body = io.NopCloser(bytes.NewReader(respBody))
 			// alpha/search 是独立的工具端点，单次 401 不能证明账号的模型调用
 			// 凭据全局失效。若沿用通用 401 逻辑，PAT 会因没有 refresh_token
@@ -100,7 +102,7 @@ func (s *OpenAIGatewayService) ForwardAlphaSearch(ctx context.Context, c *gin.Co
 			// 漏过 PAT 类型判断。这里仍允许本次请求换号，但不修改任何账号状态；
 			// 真正的凭据失效由普通 Responses 请求或 whoami 校验判定。
 			shouldDisable := false
-			if shouldApplyOpenAIAlphaSearchAccountErrorSideEffects(resp.StatusCode) {
+			if shouldApplyOpenAIAlphaSearchAccountErrorSideEffects(resp.StatusCode, upstreamMessage, respBody) {
 				shouldDisable = s.handleFailoverSideEffects(ctx, resp, account, respBody, openAIAlphaSearchSchedulingModel(account, requestedModel))
 			}
 			retryableOnSameAccount := !shouldDisable && account.IsPoolMode() && account.IsPoolModeRetryableStatus(resp.StatusCode)
@@ -182,7 +184,7 @@ func (s *OpenAIGatewayService) forwardAlphaSearchViaResponsesWebSearch(
 			resp.Body = io.NopCloser(bytes.NewReader(respBody))
 			// 仍按 alpha/search 工具请求处理：PAT 的工具链路失败不能直接永久置错。
 			shouldDisable := false
-			if shouldApplyOpenAIAlphaSearchAccountErrorSideEffects(resp.StatusCode) {
+			if shouldApplyOpenAIAlphaSearchAccountErrorSideEffects(resp.StatusCode, upstreamMessage, respBody) {
 				shouldDisable = s.handleFailoverSideEffects(ctx, resp, account, respBody, openAIAlphaSearchSchedulingModel(account, requestedModel))
 			}
 			retryableOnSameAccount := !shouldDisable && account.IsPoolMode() && account.IsPoolModeRetryableStatus(resp.StatusCode)
@@ -530,12 +532,7 @@ func (s *OpenAIGatewayService) ensureOpenAIAlphaSearchAuthMetadata(ctx context.C
 	return nil
 }
 
-// isOpenAIAlphaSearchEndpointUnsupported 识别「API key 上游没有实现
-// /v1/alpha/search 端点」的响应。404/405 不在通用 failover 状态集里（模型
-// 调用中的 404 通常是用户请求问题），但对这个独立工具端点而言，它几乎只
-// 意味着所选上游（官方平台或第三方中转）不提供该端点——应换号重试，而
-// 不是把 404 透传给客户端，否则混合分组里 OAuth 账号明明可以承接搜索，
-// 请求却可能死在先被选中的 API key 账号上。
+// isOpenAIAlphaSearchEndpointUnsupported identifies API-key upstreams that lack the standalone search endpoint.
 func isOpenAIAlphaSearchEndpointUnsupported(account *Account, statusCode int) bool {
 	if account == nil || account.Type != AccountTypeAPIKey {
 		return false
@@ -543,13 +540,20 @@ func isOpenAIAlphaSearchEndpointUnsupported(account *Account, statusCode int) bo
 	return statusCode == http.StatusNotFound || statusCode == http.StatusMethodNotAllowed
 }
 
-func shouldApplyOpenAIAlphaSearchAccountErrorSideEffects(statusCode int) bool {
+func shouldApplyOpenAIAlphaSearchAccountErrorSideEffects(statusCode int, upstreamMessage string, responseBody []byte) bool {
 	switch statusCode {
 	case http.StatusUnauthorized, http.StatusNotFound, http.StatusMethodNotAllowed:
 		// 401：工具端点的 access enforcement 不代表凭据全局失效；
 		// 404/405：端点不存在只说明该上游不支持独立搜索，账号本身健康。
 		// 两类都只换号，不写账号错误状态。
 		return false
+	case http.StatusForbidden:
+		// 403 只有在明确是账号/工作区访问状态错误（停用、禁用等）时才是账号级
+		// 证据。其余 403 是搜索工具本身的拒绝，例如套餐不含文献检索时的
+		// {"detail":"Literature search is unavailable."}：同一请求会在 failover
+		// 中逐号重放，若按通用 403 处理（首次冷却 10 分钟、3 次永久置错），
+		// 一条请求就能停掉整个号池。这类 403 只换号，不写账号状态。
+		return isOpenAIHTTPUpstreamAccessStateError(statusCode, upstreamMessage, responseBody)
 	default:
 		return true
 	}

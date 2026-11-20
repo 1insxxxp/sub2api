@@ -33,8 +33,16 @@ const (
 	GrokMediaEndpointVideoContent      GrokMediaEndpoint = "video_content"
 
 	// Official xAI Imagine image-edit limit.
-	grokMediaMaxEditSourceImages = 3
+	grokMediaMaxEditSourceImages = 5
 )
+
+type GrokMediaInputValidationError struct {
+	Reason string
+}
+
+func (e *GrokMediaInputValidationError) Error() string {
+	return e.Reason
+}
 
 func (e GrokMediaEndpoint) RequiresRequestBody() bool {
 	return !e.IsVideoLookupRequest()
@@ -740,7 +748,7 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 	requestIDHeader := firstNonEmpty(resp.Header.Get("x-request-id"), resp.Header.Get("xai-request-id"))
 	requestModel := requestInfo.Model
 	if resp.StatusCode >= 400 {
-		return s.handleGrokMediaErrorResponse(ctx, resp, c, account, requestIDHeader, requestModel)
+		return s.handleGrokMediaErrorResponse(ctx, resp, c, account, requestIDHeader, endpoint.IsGenerationRequest())
 	}
 
 	s.updateGrokUsageFromResponse(withGrokTeamRateLimitModel(ctx, requestModel), account, resp.Header, resp.StatusCode)
@@ -846,7 +854,7 @@ func (s *OpenAIGatewayService) forwardGrokMediaVideoContent(
 		if statusResp.StatusCode < 400 {
 			return nil, fmt.Errorf("grok media status redirect is not allowed")
 		}
-		return s.handleGrokMediaErrorResponse(ctx, statusResp, c, account, statusRequestID, "")
+		return s.handleGrokMediaErrorResponse(ctx, statusResp, c, account, statusRequestID, false)
 	}
 	statusBody, err := ReadUpstreamResponseBody(statusResp.Body, s.cfg, c, openAITooLargeError)
 	_ = statusResp.Body.Close()
@@ -904,7 +912,7 @@ func (s *OpenAIGatewayService) forwardGrokMediaVideoContent(
 		return nil, fmt.Errorf("grok media signed content redirect is not allowed")
 	}
 	if contentResp.StatusCode >= 400 && contentResp.StatusCode != http.StatusRequestedRangeNotSatisfiable {
-		return s.handleGrokMediaErrorResponse(ctx, contentResp, c, account, contentRequestID, "")
+		return s.handleGrokMediaErrorResponse(ctx, contentResp, c, account, contentRequestID, false)
 	}
 
 	s.updateGrokUsageFromResponse(withGrokTeamRateLimitModel(ctx, ""), account, contentResp.Header, contentResp.StatusCode)
@@ -1006,7 +1014,7 @@ func prepareGrokMediaForwardBody(endpoint GrokMediaEndpoint, body []byte, conten
 		images = append(images, grokMediaImageObject(dataURL))
 	}
 	if len(images) > grokMediaMaxEditSourceImages {
-		return nil, "", fmt.Errorf("a maximum of %d source images is supported for image edits", grokMediaMaxEditSourceImages)
+		return nil, "", &GrokMediaInputValidationError{Reason: fmt.Sprintf("a maximum of %d source images is supported for image edits", grokMediaMaxEditSourceImages)}
 	}
 	if len(images) > 0 {
 		payload["image"] = images[0]
@@ -1037,7 +1045,7 @@ func prepareGrokMediaForwardBody(endpoint GrokMediaEndpoint, body []byte, conten
 func normalizeGrokMediaJSONImageRefs(body []byte) ([]byte, error) {
 	info := ParseGrokMediaRequest("application/json", body)
 	if len(info.InputImageURLs) > grokMediaMaxEditSourceImages {
-		return nil, fmt.Errorf("a maximum of %d source images is supported for image edits", grokMediaMaxEditSourceImages)
+		return nil, &GrokMediaInputValidationError{Reason: fmt.Sprintf("a maximum of %d source images is supported for image edits", grokMediaMaxEditSourceImages)}
 	}
 	out := body
 	var err error
@@ -1260,7 +1268,7 @@ func (s *OpenAIGatewayService) handleGrokMediaErrorResponse(
 	c *gin.Context,
 	account *Account,
 	requestIDHeader string,
-	requestedModel string,
+	generation bool,
 ) (*OpenAIForwardResult, error) {
 	body := s.readUpstreamErrorBody(resp)
 	// Reconcile readiness before configurable passthrough branches can return;
@@ -1333,7 +1341,7 @@ func (s *OpenAIGatewayService) handleGrokMediaErrorResponse(
 	}
 
 	kind := "http_error"
-	if s.shouldFailoverGrokUpstreamError(resp.StatusCode, body) {
+	if s.shouldFailoverGrokRequestError(resp.StatusCode, body, generation) {
 		kind = "failover"
 	}
 	appendOpsUpstreamError(c, OpsUpstreamErrorEvent{

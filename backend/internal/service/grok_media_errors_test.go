@@ -42,7 +42,7 @@ func TestGrokMediaUpstreamErrorFields(t *testing.T) {
 			account := &Account{ID: 1, Platform: PlatformGrok, Type: AccountTypeOAuth}
 			_, err := svc.handleGrokMediaErrorResponse(context.Background(), &http.Response{
 				StatusCode: tt.status, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(tt.body)),
-			}, c, account, "request-id", "grok-imagine-image")
+			}, c, account, "request-id", true)
 			require.Error(t, err)
 			var failover *UpstreamFailoverError
 			require.False(t, errors.As(err, &failover))
@@ -96,7 +96,7 @@ func TestGrokMediaErrorRewritesKeepPriority(t *testing.T) {
 			_, err := svc.handleGrokMediaErrorResponse(context.Background(), &http.Response{
 				StatusCode: http.StatusBadRequest, Header: http.Header{},
 				Body: io.NopCloser(strings.NewReader(`{"code":"invalid_image","error":"Original error: https://example.test?access_token=secret"}`)),
-			}, c, account, "request-id", "grok-imagine-image")
+			}, c, account, "request-id", true)
 			require.Error(t, err)
 			require.Equal(t, wantStatus, recorder.Code)
 			require.Equal(t, wantMessage, gjson.GetBytes(recorder.Body.Bytes(), "error.message").String())
@@ -115,7 +115,7 @@ func TestGrokMediaRetryableErrorKeepsOriginalBody(t *testing.T) {
 	_, err := svc.handleGrokMediaErrorResponse(context.Background(), &http.Response{
 		StatusCode: http.StatusServiceUnavailable, Header: http.Header{"X-Request-Id": {"request-id"}},
 		Body: io.NopCloser(strings.NewReader(body)),
-	}, c, &Account{ID: 1, Platform: PlatformGrok, Type: AccountTypeOAuth}, "request-id", "grok-imagine-image")
+	}, c, &Account{ID: 1, Platform: PlatformGrok, Type: AccountTypeOAuth}, "request-id", true)
 	var failover *UpstreamFailoverError
 	require.ErrorAs(t, err, &failover)
 	require.Equal(t, http.StatusServiceUnavailable, failover.StatusCode)

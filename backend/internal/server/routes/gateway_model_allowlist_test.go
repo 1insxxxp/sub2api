@@ -3,8 +3,7 @@ package routes
 import (
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -16,9 +15,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newGatewayRoutesTestRouterWithGroup(group *service.Group) *gin.Engine {
+func newGatewayRoutesTestRouterWithGroup(group *service.Group, before ...gin.HandlerFunc) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
+	router.Use(before...)
 	RegisterGatewayRoutes(
 		router,
 		&handler.Handlers{
@@ -26,14 +26,7 @@ func newGatewayRoutesTestRouterWithGroup(group *service.Group) *gin.Engine {
 			OpenAIGateway: &handler.OpenAIGatewayHandler{},
 			AsyncImage:    handler.NewAsyncImageHandler(nil, nil),
 		},
-		servermiddleware.APIKeyAuthMiddleware(func(c *gin.Context) {
-			groupID := int64(1)
-			c.Set(string(servermiddleware.ContextKeyAPIKey), &service.APIKey{
-				GroupID: &groupID,
-				Group:   group,
-			})
-			c.Next()
-		}),
+		gatewayTestAPIKeyAuth(group),
 		nil,
 		nil,
 		nil,
@@ -59,48 +52,67 @@ func allowlistGroup(platform string, enabled bool, models ...string) *service.Gr
 	}
 }
 
-// TestGatewayRoutesGroupModelAllowlistMountedOnEveryGatewayRoute follows the
-// source-level route assertion convention of prompt_audit_route_coverage_test.go:
-// every gateway chain must mount groupModelAllowlist after api key auth and
-// before the composite rewrite (gateway.go + rootRoute helper).
+func gatewayTestAPIKeyAuth(group *service.Group) servermiddleware.APIKeyAuthMiddleware {
+	return func(c *gin.Context) {
+		groupID := int64(1)
+		c.Set(string(servermiddleware.ContextKeyAPIKey), &service.APIKey{GroupID: &groupID, Group: group})
+		c.Next()
+	}
+}
+
+// Capture the registered chain before auth or a handler can use its dependencies.
+func forEachGatewayAdmissionChain(t *testing.T, check func(*testing.T, string, []string)) {
+	t.Helper()
+	var path string
+	var names []string
+	router := newGatewayRoutesTestRouterWithGroup(nil, func(c *gin.Context) {
+		path, names = c.FullPath(), c.HandlerNames()
+		c.AbortWithStatus(http.StatusNoContent)
+	})
+	for _, route := range router.Routes() {
+		// Billing and the standalone Antigravity catalogue only require authentication.
+		if route.Method == http.MethodGet && (route.Path == "/v1/sub2api/billing" || route.Path == "/antigravity/models") {
+			continue
+		}
+		t.Run(route.Method+" "+route.Path, func(t *testing.T) {
+			segments := strings.Split(route.Path, "/")
+			for i, part := range segments {
+				if strings.HasPrefix(part, ":") || strings.HasPrefix(part, "*") {
+					segments[i] = "fixture"
+				}
+			}
+			req := httptest.NewRequest(route.Method, strings.Join(segments, "/"), nil)
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+			require.Equal(t, http.StatusNoContent, rec.Code)
+			require.Equal(t, route.Path, path)
+			check(t, path, names)
+		})
+	}
+}
+
+// Gin may include the inlining caller in a closure's name. Match the declaring
+// function between dots, independently of the package path and closure number.
+func gatewayMiddlewareIndex(names []string, factory string) int {
+	return slices.IndexFunc(names, func(name string) bool {
+		return strings.Contains(name, "."+factory+".")
+	})
+}
+
 func TestGatewayRoutesGroupModelAllowlistMountedOnEveryGatewayRoute(t *testing.T) {
-	routeSource, err := os.ReadFile("gateway.go")
-	require.NoError(t, err)
-	source := string(routeSource)
-
-	// rootRoute helper：apiKeyAuth 之后、compositeTarget 之前。
-	rootHelper := regexp.MustCompile(regexp.QuoteMeta(`r.Handle(method, path, limit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), groupModelAllowlist, compositeTarget, requireGroupAnthropic, handler)`))
-	require.Regexp(t, rootHelper, source,
-		"root alias helper must place the allowlist between apiKeyAuth and compositeTarget")
-
-	chains := []struct {
-		group     string
-		auth      string
-		marker    string
-		composite string
-	}{
-		{group: "gateway", auth: "gin.HandlerFunc(apiKeyAuth)", marker: "gateway.Use(groupModelAllowlist)", composite: "gateway.Use(compositeTarget)"},
-		{group: "gemini", auth: "middleware.APIKeyAuthWithSubscriptionGoogle(apiKeyService, subscriptionService, cfg)", marker: "gemini.Use(groupModelAllowlist)", composite: "gemini.Use(compositeGeminiTarget)"},
-		{group: "antigravityV1", auth: "gin.HandlerFunc(apiKeyAuth)", marker: "antigravityV1.Use(groupModelAllowlist)", composite: "antigravityV1.Use(requireGroupAnthropic)"},
-		{group: "antigravityV1Beta", auth: "middleware.APIKeyAuthWithSubscriptionGoogle(apiKeyService, subscriptionService, cfg)", marker: "antigravityV1Beta.Use(groupModelAllowlist)", composite: "antigravityV1Beta.Use(requireGroupGoogle)"},
-	}
-	for _, chain := range chains {
-		re := regexp.MustCompile(
-			regexp.QuoteMeta(chain.group+".Use("+chain.auth) +
-				`[\s\S]{0,400}?` + regexp.QuoteMeta(chain.marker) +
-				`[\s\S]{0,400}?` + regexp.QuoteMeta(chain.composite))
-		require.Regexp(t, re, source,
-			"%s chain must mount groupModelAllowlist after auth and before %s", chain.group, chain.composite)
-	}
-
-	// codexDirect 链是一条 Use 调用，直接断言顺序。
-	codexDirect := regexp.MustCompile(regexp.QuoteMeta(`codexDirect.Use(bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), groupModelAllowlist, compositeTarget, requireGroupAnthropic)`))
-	require.Regexp(t, codexDirect, source, "codexDirect chain must mount the allowlist after auth and before compositeTarget")
-
-	// 所有带 apiKeyAuth 的根路径路由必须收敛到 rootRoute，避免漏挂。
-	stray := regexp.MustCompile(`\br\.(GET|POST|PUT|PATCH|DELETE)\("[^"]+",[^(]*apiKeyAuth`)
-	require.NotRegexp(t, stray, source,
-		"root alias routes must use rootRoute so the allowlist cannot be forgotten")
+	forEachGatewayAdmissionChain(t, func(t *testing.T, path string, names []string) {
+		authFactory := "gatewayTestAPIKeyAuth"
+		if strings.HasPrefix(path, "/v1beta/") || strings.HasPrefix(path, "/antigravity/v1beta/") {
+			authFactory = "APIKeyAuthWithSubscriptionGoogle"
+		}
+		auth := gatewayMiddlewareIndex(names, authFactory)
+		category := gatewayMiddlewareIndex(names, "categoryDefaultGroupTargetMiddleware")
+		allowlist := gatewayMiddlewareIndex(names, "GroupModelAllowlist")
+		require.NotEqual(t, -1, auth, "missing %s in %v", authFactory, names)
+		require.Less(t, auth, category)
+		require.Less(t, category, allowlist)
+		require.Less(t, allowlist, gatewayMiddlewareIndex(names, "RequireGroupAssignment"))
+	})
 }
 
 // TestGatewayRoutesGroupModelAllowlistBlocksCompositeModelBeforeRewrite asserts

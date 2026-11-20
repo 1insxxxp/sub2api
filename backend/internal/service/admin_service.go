@@ -755,6 +755,7 @@ type adminServiceImpl struct {
 	channelRepo           accountModelAliasRenameCascadeRepository
 	userCustomGroupRepo   accountModelAliasRenameCascadeRepository
 	systemCustomGroupRepo accountModelAliasRenameCascadeRepository
+	userPlatformQuotaRepo UserPlatformQuotaRepository
 	// 分组平台变更后用来失效渠道缓存；可为 nil（缓存会在 TTL 到期后自然重建）
 	channelCacheInvalidator ChannelCacheInvalidator
 }
@@ -802,6 +803,7 @@ func NewAdminService(
 	userCustomGroupRepo UserCustomGroupRepository,
 	systemCustomGroupRepo SystemCustomGroupRepository,
 	groupPricingCoverage *GroupPricingCoverageService,
+	userPlatformQuotaRepo UserPlatformQuotaRepository,
 ) AdminService {
 	service := &adminServiceImpl{
 		cfg:                     cfg,
@@ -832,6 +834,7 @@ func NewAdminService(
 		compositeResolver:       compositeResolver,
 		groupPricingCoverage:    groupPricingCoverage,
 		channelCacheInvalidator: channelCacheInvalidator,
+		userPlatformQuotaRepo:   userPlatformQuotaRepo,
 	}
 	service.channelRepo = accountModelAliasRenameCascadeRepositoryFrom(channelRepo)
 	service.userCustomGroupRepo = accountModelAliasRenameCascadeRepositoryFrom(userCustomGroupRepo)

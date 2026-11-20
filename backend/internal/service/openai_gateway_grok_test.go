@@ -1158,13 +1158,15 @@ func TestPrepareGrokImageEditNormalizesOfficialImageObjects(t *testing.T) {
 	}
 }
 
-func TestPrepareGrokImageEditRejectsMoreThanThreeSources(t *testing.T) {
-	body := []byte(`{"images":["https://example.com/1.png","https://example.com/2.png","https://example.com/3.png","https://example.com/4.png"]}`)
+func TestPrepareGrokImageEditRejectsMoreThanFiveSources(t *testing.T) {
+	body := []byte(`{"images":["https://example.com/1.png","https://example.com/2.png","https://example.com/3.png","https://example.com/4.png","https://example.com/5.png","https://example.com/6.png"]}`)
 
 	out, _, err := prepareGrokMediaForwardBody(GrokMediaEndpointImagesEdits, body, "application/json")
 	require.Error(t, err)
 	require.Nil(t, out)
-	require.Contains(t, err.Error(), "maximum of 3 source images")
+	var validationErr *GrokMediaInputValidationError
+	require.ErrorAs(t, err, &validationErr)
+	require.Contains(t, err.Error(), "maximum of 5 source images")
 }
 
 func TestNormalizeGrokMediaModelForEndpoint(t *testing.T) {
@@ -1708,6 +1710,40 @@ func TestForwardGrokMediaOAuthImageToVideoUsesOfficialAPIForLargeBody(t *testing
 	require.False(t, gjson.GetBytes(upstream.lastBody, "image.image_url").Exists())
 }
 
+func TestForwardGrokMedia404OnlyRetriesGeneration(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, tc := range []struct {
+		endpoint       GrokMediaEndpoint
+		path, id, body string
+		wantFailover   bool
+	}{
+		{GrokMediaEndpointImagesGenerations, "/v1/images/generations", "", `{"model":"grok-imagine","prompt":"draw a cat"}`, true},
+		{GrokMediaEndpointVideoStatus, "/v1/videos/request-123", "request-123", "", false},
+	} {
+		t.Run(string(tc.endpoint), func(t *testing.T) {
+			c, _ := gin.CreateTestContext(httptest.NewRecorder())
+			c.Request = httptest.NewRequest(tc.endpoint.httpMethod(), tc.path, strings.NewReader(tc.body))
+			account := &Account{ID: 62, Platform: PlatformGrok, Type: AccountTypeAPIKey, Credentials: map[string]any{"api_key": "test-key"}}
+			svc := &OpenAIGatewayService{httpUpstream: &httpUpstreamRecorder{resp: &http.Response{
+				StatusCode: http.StatusNotFound, Header: http.Header{},
+				Body: io.NopCloser(strings.NewReader(`{"error":"Not found"}`)),
+			}}}
+			_, err := svc.ForwardGrokMedia(context.Background(), c, account, tc.endpoint, tc.id, []byte(tc.body), "application/json")
+			require.Error(t, err)
+			var failover *UpstreamFailoverError
+			if tc.wantFailover {
+				require.ErrorAs(t, err, &failover)
+				require.True(t, failover.ShouldRetryNextAccount())
+				require.False(t, c.Writer.Written())
+			} else {
+				require.NotErrorAs(t, err, &failover)
+				require.Equal(t, http.StatusNotFound, c.Writer.Status())
+				require.True(t, c.Writer.Written())
+			}
+		})
+	}
+}
+
 func TestForwardGrokMediaVideoStatusUsesGETWithoutBody(t *testing.T) {
 	t.Setenv(xai.EnvAllowUnsafeURLOverrides, "true")
 	gin.SetMode(gin.TestMode)
@@ -1897,7 +1933,7 @@ func TestGrokMedia429FailoverPreservesRetryAfter(t *testing.T) {
 		Body:       io.NopCloser(strings.NewReader(`{"error":{"message":"rate limited"}}`)),
 	}
 
-	result, err := svc.handleGrokMediaErrorResponse(context.Background(), resp, c, account, "request-id", "grok-imagine")
+	result, err := svc.handleGrokMediaErrorResponse(context.Background(), resp, c, account, "request-id", true)
 
 	require.Nil(t, result)
 	var failoverErr *UpstreamFailoverError
