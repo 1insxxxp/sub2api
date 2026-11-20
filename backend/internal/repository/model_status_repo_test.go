@@ -74,6 +74,7 @@ SELECT 1, 11, 'traffic-' || n, 'shared', 'mapped-private', TIMESTAMPTZ '2026-09-
 INSERT INTO usage_logs (group_id, api_key_id, request_id, requested_model, model, created_at, output_tokens) VALUES
  (1,11,'terminal','shared','mapped-private','2026-09-06 11:56:00Z',7),
  (1,11,'recovered','shared','mapped-private','2026-09-06 11:56:01Z',7),
+ (1,11,'recovered-rate-limit','shared','mapped-private','2026-09-06 11:56:01Z',7),
  (1,11,'cancelled','shared','mapped-private','2026-09-06 11:56:02Z',7),
  (1,11,'empty','shared','mapped-private','2026-09-06 11:56:03Z',99),
  (1,11,'unknown','shared','mapped-private','2026-09-06 11:56:04Z',0),
@@ -98,6 +99,8 @@ INSERT INTO ops_error_logs (group_id, api_key_id, request_id, requested_model, m
  (1,11,'missing-usage','shared','mapped-private','2026-09-06 11:56:24Z',503,'upstream_error',300),
  (1,11,'client-cancel','shared','mapped-private','2026-09-06 11:56:25Z',499,'upstream_error',400),
  (1,11,'','shared','mapped-private','2026-09-06 11:56:26Z',500,'upstream_error',500);
+INSERT INTO ops_error_logs (group_id, api_key_id, request_id, requested_model, created_at, status_code, upstream_status_code)
+ VALUES (1,11,'recovered-rate-limit','shared','2026-09-06 11:56:22Z',200,429);
 INSERT INTO ops_error_logs (group_id, api_key_id, request_id, requested_model, created_at, status_code, is_count_tokens)
  VALUES (1,11,'count-tokens','shared','2026-09-06 11:56:27Z',500,true);
 `)
@@ -208,7 +211,7 @@ func TestModelStatusPostgresExcludesClientErrorsWithoutHidingServerFailures(t *t
 		wantStatus           int
 	}
 	samples := []sample{}
-	for _, status := range []int{400, 401, 403, 404, 408, 429, 499} {
+	for _, status := range []int{400, 401, 403, 404, 408, 499} {
 		samples = append(samples,
 			sample{name: fmt.Sprintf("terminal-%d-over-success", status), http: 200, upstream: 200, completed: true, opsHTTP: status, want: service.UsageOutcomeUnknown, wantStatus: status},
 			sample{name: fmt.Sprintf("usage-http-%d", status), http: status, upstream: 200, completed: true, want: service.UsageOutcomeUnknown, wantStatus: status},
@@ -216,6 +219,15 @@ func TestModelStatusPostgresExcludesClientErrorsWithoutHidingServerFailures(t *t
 		)
 	}
 	samples = append(samples,
+		sample{name: "terminal-429-over-usage", http: 200, upstream: 200, completed: true, opsHTTP: 429, want: service.UsageOutcomeFailure, wantStatus: 429},
+		sample{name: "rate-limit-without-usage", noUsage: true, opsHTTP: 429, want: service.UsageOutcomeFailure, wantStatus: 429},
+		sample{name: "usage-http-429", http: 429, upstream: 400, want: service.UsageOutcomeFailure, wantStatus: 429},
+		sample{name: "usage-upstream-429", http: 400, upstream: 429, opsHTTP: 400, want: service.UsageOutcomeFailure, wantStatus: 429},
+		sample{name: "ops-upstream-429", noUsage: true, opsHTTP: 400, opsUpstream: 429, want: service.UsageOutcomeFailure, wantStatus: 429},
+		sample{name: "recovered-after-429", http: 200, upstream: 200, completed: true, opsHTTP: 200, opsUpstream: 429, want: service.UsageOutcomeSuccess, wantStatus: 200},
+		sample{name: "client-cancel-over-429", disconnect: "client", http: 200, opsHTTP: 429, want: service.UsageOutcomeUnknown, wantStatus: 200},
+		sample{name: "usage-http-499-over-upstream-429", http: 499, upstream: 429, want: service.UsageOutcomeUnknown, wantStatus: 429},
+		sample{name: "terminal-503-over-upstream-429", noUsage: true, opsHTTP: 503, opsUpstream: 429, want: service.UsageOutcomeFailure, wantStatus: 503},
 		sample{name: "routing-503-without-usage", noUsage: true, opsHTTP: 503, want: service.UsageOutcomeFailure, wantStatus: 503},
 		sample{name: "ops-client-499-over-upstream-502", noUsage: true, opsHTTP: 499, opsUpstream: 502, want: service.UsageOutcomeUnknown, wantStatus: 502},
 		sample{name: "ops-upstream-502-wrapped-as-400", http: 200, upstream: 200, completed: true, opsHTTP: 400, opsUpstream: 502, want: service.UsageOutcomeFailure, wantStatus: 502},

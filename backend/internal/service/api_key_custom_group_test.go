@@ -44,13 +44,9 @@ func TestListCustomGroupModelsExposesAliasesOnly(t *testing.T) {
 		customGroupRepo: customGroupRouteRepoStub{group: &UserCustomGroup{
 			ID: customGroupID, UserID: 9, Status: StatusActive,
 			Models: []UserCustomGroupModel{
-				{PublicModel: "claude-balance", SourceModel: "claude-sonnet-4-5", SourceGroupID: 11},
-				{PublicModel: "claude-discount", SourceModel: "claude-sonnet-4-5", SourceGroupID: 12},
+				{PublicModel: "claude-balance", SourceModel: "claude-sonnet-4-5", SourceGroupID: 11, SourceGroup: &Group{ID: 11, Status: StatusActive, Platform: PlatformAnthropic}},
+				{PublicModel: "claude-discount", SourceModel: "claude-sonnet-4-5", SourceGroupID: 12, SourceGroup: &Group{ID: 12, Status: StatusActive, Platform: PlatformAnthropic}},
 			},
-		}},
-		groupRepo: customGroupSourceRepoStub{groups: map[int64]*Group{
-			11: {ID: 11, Status: StatusActive, Platform: PlatformAnthropic},
-			12: {ID: 12, Status: StatusActive, Platform: PlatformAnthropic},
 		}},
 	}
 
@@ -68,13 +64,9 @@ func TestListCustomGroupModelsForPlatformFiltersOtherSources(t *testing.T) {
 	key := &APIKey{UserID: 9, CustomGroupID: &customGroupID, User: &User{ID: 9}}
 	svc := &APIKeyService{
 		customGroupRepo: customGroupRouteRepoStub{group: &UserCustomGroup{ID: customGroupID, UserID: 9, Status: StatusActive, Models: []UserCustomGroupModel{
-			{PublicModel: "gemini-fast", SourceModel: "gemini-2.5-flash", SourceGroupID: 11},
-			{PublicModel: "claude-fast", SourceModel: "claude-sonnet-4-5", SourceGroupID: 12},
+			{PublicModel: "gemini-fast", SourceModel: "gemini-2.5-flash", SourceGroupID: 11, SourceGroup: &Group{ID: 11, Status: StatusActive, Platform: PlatformGemini}},
+			{PublicModel: "claude-fast", SourceModel: "claude-sonnet-4-5", SourceGroupID: 12, SourceGroup: &Group{ID: 12, Status: StatusActive, Platform: PlatformAnthropic}},
 		}}},
-		groupRepo: customGroupSourceRepoStub{groups: map[int64]*Group{
-			11: {ID: 11, Status: StatusActive, Platform: PlatformGemini},
-			12: {ID: 12, Status: StatusActive, Platform: PlatformAnthropic},
-		}},
 	}
 
 	models, err := svc.ListCustomGroupModelsForPlatform(context.Background(), key, PlatformGemini)
@@ -149,5 +141,26 @@ func TestResolveCustomGroupModelRejectsUnavailableSourceWithoutFallback(t *testi
 	}
 	if resolution != nil {
 		t.Fatalf("ResolveCustomGroupModel() resolution = %#v, want nil (no fallback)", resolution)
+	}
+}
+
+func TestCustomGroupRemovedModelIsNeitherListedNorRoutable(t *testing.T) {
+	source := &Group{ID: 42, Status: StatusActive, Platform: PlatformAnthropic}
+	route := UserCustomGroupModel{PublicModel: "my-alias", SourceModel: "retired", SourceGroupID: source.ID, SourceGroup: source}
+	group := &UserCustomGroup{ID: 7, Status: StatusActive, Models: []UserCustomGroupModel{route}}
+	svc := &APIKeyService{
+		customGroupRepo: customGroupRouteRepoStub{route: &route, group: group},
+		groupRepo:       customGroupSourceRepoStub{groups: map[int64]*Group{42: source}},
+		customGroupGateway: &GatewayService{accountRepo: customGroupAvailabilityAccountRepoStub{accountsByGroupID: map[int64][]Account{
+			42: {{Platform: PlatformAnthropic, Credentials: map[string]any{"model_mapping": map[string]any{"current": "current"}}}},
+		}}},
+	}
+	key := &APIKey{UserID: 9, CustomGroupID: &group.ID, User: &User{ID: 9}}
+	models, err := svc.ListCustomGroupModels(context.Background(), key)
+	if err != nil || len(models) != 0 {
+		t.Fatalf("listed unavailable route: models=%v err=%v", models, err)
+	}
+	if resolution, err := svc.ResolveCustomGroupModel(context.Background(), key, "my-alias"); err != ErrUserCustomGroupInvalidModel || resolution != nil {
+		t.Fatalf("resolved unavailable route: resolution=%v err=%v", resolution, err)
 	}
 }

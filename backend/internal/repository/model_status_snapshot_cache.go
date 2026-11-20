@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	modelStatusSnapshotKey = "model-status:{report-v1}:snapshot"
-	modelStatusRefreshKey  = "model-status:{report-v1}:refresh"
+	modelStatusSnapshotKey = "model-status:{report-v2}:snapshot"
+	modelStatusRefreshKey  = "model-status:{report-v2}:refresh"
 	modelStatusSnapshotTTL = 24 * time.Hour
 )
 

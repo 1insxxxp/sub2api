@@ -45,25 +45,7 @@ const groups = [{
   updated_at: '2026-08-08T00:00:00Z',
 }]
 
-const groupsWithStaleSource = [{
-  ...groups[0],
-  models: [
-    {
-      ...groups[0].models[0],
-      source_available: true,
-      source_group: { id: 11, name: 'Claude 满血', status: 'active', platform: 'anthropic' },
-    },
-    {
-      id: 32,
-      custom_group_id: 21,
-      public_model: 'claude-opus-backup',
-      source_group_id: 98,
-      source_model: 'claude-opus-4-6',
-      source_available: false,
-      source_issue: 'source_group_unavailable',
-    },
-  ],
-}]
+const groupsWithPausedSource = [{ ...groups[0], suspended_model_ids: [32] }]
 
 const mountManager = async () => {
   const wrapper = mount(CustomGroupsManager)
@@ -267,15 +249,11 @@ describe('CustomGroupsManager', () => {
     expect(wrapper.find('[data-test="custom-group-source-models-11"]').exists()).toBe(false)
   })
 
-  it('marks stale source mappings in the group list', async () => {
-    apiMocks.list.mockResolvedValue(groupsWithStaleSource)
-
+  it('counts only currently available models', async () => {
+    apiMocks.list.mockResolvedValue(groupsWithPausedSource)
     const wrapper = await mountManager()
-
-    expect(wrapper.get('[data-test="custom-group-stale-summary-21"]').text()).toContain('1 个来源失效')
-    const staleModel = wrapper.get('[data-test="custom-group-stale-model-32"]')
-    expect(staleModel.text()).toContain('claude-opus-backup')
-    expect(staleModel.classes()).toContain('text-red-700')
+    expect(wrapper.text()).toContain('1 个模型')
+    expect(wrapper.text()).not.toContain('失效')
   })
 
   it.each([
@@ -353,12 +331,11 @@ describe('CustomGroupsManager', () => {
     expect(wrapper.findAll('[data-test^="custom-group-source-toggle-"]')).toHaveLength(2)
   })
 
-  it('resets search on form entry and keeps stale route warnings visible during search', async () => {
-    apiMocks.list.mockResolvedValue(groupsWithStaleSource)
+  it('resets search on form entry', async () => {
+    apiMocks.list.mockResolvedValue(groupsWithPausedSource)
     const wrapper = await mountManager()
     await wrapper.get('[data-test="custom-groups-edit-21"]').trigger('click')
     await wrapper.get('input[aria-label="搜索模型及来源"]').setValue('gemini')
-    expect(wrapper.get('[data-test="custom-group-stale-sources"]').text()).toContain('claude-opus-backup')
     await wrapper.get('[data-test="custom-groups-back"]').trigger('click')
     await wrapper.get('[data-test="custom-groups-create"]').trigger('click')
     expect((wrapper.get('input[aria-label="搜索模型及来源"]').element as HTMLInputElement).value).toBe('')
@@ -368,79 +345,16 @@ describe('CustomGroupsManager', () => {
     expect((wrapper.get('input[aria-label="搜索模型及来源"]').element as HTMLInputElement).value).toBe('')
   })
 
-  it('saves valid mappings while automatically dropping stale source mappings', async () => {
-    apiMocks.list
-      .mockResolvedValueOnce(groupsWithStaleSource)
-      .mockResolvedValueOnce(groups)
+  it('preserves suspended selections when editing a group with no visible models', async () => {
+    apiMocks.list.mockResolvedValue([{ ...groupsWithPausedSource[0], models: [] }])
     const wrapper = await mountManager()
-    const app = useAppStore()
-    const showSuccess = vi.spyOn(app, 'showSuccess')
-
     await wrapper.get('[data-test="custom-groups-edit-21"]').trigger('click')
-
-    const warning = wrapper.get('[data-test="custom-group-stale-sources"]')
-    expect(warning.text()).toContain('存在失效来源线路')
-    expect(warning.text()).toContain('来源分组已下架或停用')
-    expect(warning.text()).toContain('claude-opus-backup')
     expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeUndefined()
-
     await wrapper.get('form').trigger('submit.prevent')
     await flushPromises()
-
     expect(apiMocks.update).toHaveBeenCalledWith(21, {
-      name: '酒馆统一模型',
-      models: [{
-        public_model: 'claude-sonnet-4-6',
-        source_group_id: 11,
-        source_model: 'claude-sonnet-4-6',
-      }],
+      name: '酒馆统一模型', models: [], preserve_model_ids: [32],
     })
-    expect(showSuccess).toHaveBeenCalledWith(expect.stringContaining('已移除 1 个失效线路'))
-  })
-
-  it('treats omitted source availability from an old backend as valid', async () => {
-    const wrapper = await mountManager()
-
-    expect(wrapper.find('[data-test="custom-group-stale-summary-21"]').exists()).toBe(false)
-    await wrapper.get('[data-test="custom-groups-edit-21"]').trigger('click')
-    expect(wrapper.find('[data-test="custom-group-stale-sources"]').exists()).toBe(false)
-    expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeUndefined()
-  })
-
-  it('distinguishes a source permission loss from a removed source group', async () => {
-    const deniedModel = {
-      ...groupsWithStaleSource[0].models[1],
-      source_issue: 'source_group_not_allowed',
-      source_group: { id: 98, name: '专属 Claude', status: 'active', platform: 'anthropic' },
-    }
-    apiMocks.list.mockResolvedValue([{
-      ...groupsWithStaleSource[0],
-      models: [groupsWithStaleSource[0].models[0], deniedModel],
-    }])
-    const wrapper = await mountManager()
-
-    await wrapper.get('[data-test="custom-groups-edit-21"]').trigger('click')
-
-    expect(wrapper.get('[data-test="custom-group-stale-sources"]').text()).toContain('已无权使用该来源分组')
-    expect(wrapper.get('[data-test="custom-group-stale-sources"]').text()).toContain('专属 Claude')
-  })
-
-  it('explains source model rename or removal separately from a removed group', async () => {
-    const renamedModel = {
-      ...groupsWithStaleSource[0].models[1],
-      source_issue: 'source_model_unavailable',
-      source_group: { id: 98, name: '反重力 Gemini', status: 'active', platform: 'gemini' },
-    }
-    apiMocks.list.mockResolvedValue([{
-      ...groupsWithStaleSource[0],
-      models: [groupsWithStaleSource[0].models[0], renamedModel],
-    }])
-    const wrapper = await mountManager()
-
-    await wrapper.get('[data-test="custom-groups-edit-21"]').trigger('click')
-
-    expect(wrapper.get('[data-test="custom-group-stale-sources"]').text()).toContain('来源模型已下架或改名')
-    expect(wrapper.get('[data-test="custom-group-stale-sources"]').text()).toContain('反重力 Gemini')
   })
 
   it('confirms the affected API keys before forcing a bound custom group deletion', async () => {

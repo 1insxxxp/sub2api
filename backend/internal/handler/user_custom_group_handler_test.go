@@ -75,7 +75,7 @@ func performCustomGroupDelete(t *testing.T, repo *customGroupHandlerRepoStub, qu
 	c.Request = httptest.NewRequest(http.MethodDelete, "/api/v1/custom-groups/21"+query, nil)
 	c.Params = gin.Params{{Key: "id", Value: "21"}}
 	c.Set(string(middleware2.ContextKeyUser), middleware2.AuthSubject{UserID: 9})
-	h := NewUserCustomGroupHandler(service.NewUserCustomGroupService(repo, nil, nil, nil, nil), nil, nil)
+	h := NewUserCustomGroupHandler(service.NewUserCustomGroupService(repo, nil, nil, nil, nil, nil), nil, nil)
 	h.Delete(c)
 	return w
 }

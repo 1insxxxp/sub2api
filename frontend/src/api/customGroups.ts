@@ -23,7 +23,7 @@ export const customGroupsAPI = {
     const { data } = await apiClient.post<UserCustomGroup>('/custom-groups', { name, models })
     return data
   },
-  async update(id: number, payload: { name?: string; status?: 'active' | 'disabled'; models?: CustomGroupModelInput[] }): Promise<UserCustomGroup> {
+  async update(id: number, payload: { name?: string; status?: 'active' | 'disabled'; models?: CustomGroupModelInput[]; preserve_model_ids?: number[] }): Promise<UserCustomGroup> {
     const { data } = await apiClient.put<UserCustomGroup>(`/custom-groups/${id}`, payload)
     return data
   },

@@ -23,11 +23,16 @@ type acceptanceGroupReader interface {
 	GetByID(context.Context, int64) (*Group, error)
 }
 
+type acceptanceChannelPricingReader interface {
+	GetChannelModelPricing(context.Context, int64, string) *ChannelModelPricing
+}
+
 type ChannelAcceptanceService struct {
 	repo     ChannelAcceptanceRepository
 	accounts acceptanceAccountReader
 	groups   acceptanceGroupReader
 	billing  *BillingService
+	channels acceptanceChannelPricingReader
 	executor ChannelAcceptanceExecutor
 	mu       sync.Mutex
 	cancel   context.CancelFunc
@@ -38,21 +43,90 @@ func NewChannelAcceptanceService(repo ChannelAcceptanceRepository, accounts acce
 	return &ChannelAcceptanceService{repo: repo, accounts: accounts, groups: groups, billing: billing, executor: executor}
 }
 
-func (s *ChannelAcceptanceService) price(a *Account, model string) *AcceptancePrice {
-	if s.billing == nil || !s.billing.HasIdentifiedTokenPricing(model) {
+func (s *ChannelAcceptanceService) price(ctx context.Context, a *Account, requested, upstream string, groupID *int64) *AcceptancePrice {
+	canonical := upstream
+	if a.Platform == PlatformGemini {
+		canonical = strings.TrimSpace(strings.TrimPrefix(upstream, "[量]"))
+	}
+	names := []string{upstream, requested, canonical}
+	if s.channels != nil {
+		var estimate *AcceptancePrice
+		for _, id := range acceptanceAccountGroupIDs(a, groupID) {
+			for _, name := range names {
+				configured := s.channels.GetChannelModelPricing(ctx, id, name)
+				if configured == nil {
+					continue
+				}
+				if price := acceptanceChannelTokenPrice(configured, a.BillingRateMultiplier()); price != nil {
+					if estimate == nil {
+						estimate = price
+					} else {
+						estimate.InputPerMillion = math.Max(estimate.InputPerMillion, price.InputPerMillion)
+						estimate.OutputPerMillion = math.Max(estimate.OutputPerMillion, price.OutputPerMillion)
+						estimate.CachePerMillion = math.Max(estimate.CachePerMillion, price.CachePerMillion)
+						estimate.CacheWritePerMillion = math.Max(estimate.CacheWritePerMillion, price.CacheWritePerMillion)
+					}
+				}
+				break
+			}
+		}
+		if estimate != nil {
+			return estimate
+		}
+	}
+	if s.billing == nil {
 		return nil
 	}
-	p, err := s.billing.GetModelPricing(model)
-	if err != nil || p == nil {
+	for _, name := range []string{upstream, canonical, requested} {
+		if !s.billing.HasIdentifiedTokenPricing(name) {
+			continue
+		}
+		p, err := s.billing.GetModelPricing(name)
+		if err != nil || p == nil {
+			continue
+		}
+		rate := a.BillingRateMultiplier()
+		price := &AcceptancePrice{InputPerMillion: p.InputPricePerToken * 1e6 * rate, OutputPerMillion: p.OutputPricePerToken * 1e6 * rate, CachePerMillion: p.CacheReadPricePerToken * 1e6 * rate, Source: "catalog_x_account_rate_estimate"}
+		writePrice := p.CacheCreation5mPrice
+		if writePrice <= 0 {
+			writePrice = p.CacheCreationPricePerToken
+		}
+		price.CacheWritePerMillion = writePrice * 1e6 * rate
+		if acceptanceValidPrice(price) {
+			return price
+		}
+	}
+	return nil
+}
+
+func acceptanceAccountGroupIDs(a *Account, groupID *int64) []int64 {
+	if groupID != nil {
+		return []int64{*groupID}
+	}
+	ids := append([]int64(nil), a.GroupIDs...)
+	for _, group := range a.AccountGroups {
+		ids = append(ids, group.GroupID)
+	}
+	slices.Sort(ids)
+	return slices.Compact(ids)
+}
+
+func acceptanceChannelTokenPrice(configured *ChannelModelPricing, rate float64) *AcceptancePrice {
+	if (configured.BillingMode != "" && configured.BillingMode != BillingModeToken) ||
+		configured.InputPrice == nil || configured.OutputPrice == nil || len(configured.Intervals) != 0 || configured.TimePricing != nil {
 		return nil
 	}
-	rate := a.BillingRateMultiplier()
-	price := &AcceptancePrice{InputPerMillion: p.InputPricePerToken * 1e6 * rate, OutputPerMillion: p.OutputPricePerToken * 1e6 * rate, CachePerMillion: p.CacheReadPricePerToken * 1e6 * rate, Source: "catalog_x_account_rate_estimate"}
-	writePrice := p.CacheCreation5mPrice
-	if writePrice <= 0 {
-		writePrice = p.CacheCreationPricePerToken
+	input := *configured.InputPrice * 1e6 * rate
+	price := &AcceptancePrice{
+		InputPerMillion: input, OutputPerMillion: *configured.OutputPrice * 1e6 * rate,
+		CachePerMillion: input, CacheWritePerMillion: input, Source: "channel_x_account_rate_estimate",
 	}
-	price.CacheWritePerMillion = writePrice * 1e6 * rate
+	if configured.CacheReadPrice != nil {
+		price.CachePerMillion = *configured.CacheReadPrice * 1e6 * rate
+	}
+	if configured.CacheWritePrice != nil {
+		price.CacheWritePerMillion = *configured.CacheWritePrice * 1e6 * rate
+	}
 	if !acceptanceValidPrice(price) {
 		return nil
 	}
@@ -98,7 +172,7 @@ func (s *ChannelAcceptanceService) Targets(ctx context.Context, ids []int64) ([]
 			for _, id := range acceptanceModelIDs(a, groupModels) {
 				model := acceptanceModelPlan(a, id, nil)
 				if model.UnavailableReason == "" {
-					model.Price = s.price(a, model.UpstreamModel)
+					model.Price = s.price(ctx, a, model.Model, model.UpstreamModel, nil)
 				}
 				target.Models = append(target.Models, model)
 			}
@@ -197,7 +271,7 @@ func (s *ChannelAcceptanceService) targetSnapshot(ctx context.Context, t Accepta
 		return AcceptanceSnapshot{}, ErrAcceptanceInvalid
 	}
 	mapped := plan.UpstreamModel
-	price := s.price(a, mapped)
+	price := s.price(ctx, a, t.Model, mapped, t.GroupID)
 	if t.Price != nil && t.Price.Source == "manual" {
 		if !acceptanceValidPrice(t.Price) {
 			return AcceptanceSnapshot{}, ErrAcceptanceInvalid

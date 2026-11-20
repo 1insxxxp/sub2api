@@ -160,10 +160,7 @@ func (h *UserCustomGroupHandler) Candidates(c *gin.Context) {
 		if g.Platform == service.PlatformComposite || g.Status != service.StatusActive {
 			continue
 		}
-		models := h.gateway.GetAvailableModels(c.Request.Context(), &g.ID, g.Platform)
-		if g.CustomModelsListEnabled() {
-			models = filterModelsByCustomList(models, defaultModelIDsForPlatform(g.Platform), g.ModelsListConfig.Models)
-		}
+		models := h.gateway.CustomGroupSourceModels(c.Request.Context(), &g)
 		if models == nil {
 			models = make([]string, 0)
 		}

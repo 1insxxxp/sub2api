@@ -97,7 +97,7 @@ func TestUserCustomGroupRepositoryDeleteAndUnbindAPIKeys(t *testing.T) {
 	require.Nil(t, unrelatedKey.CustomGroupID)
 }
 
-func TestUserCustomGroupRepositoryListTreatsSoftDeletedSourceGroupAsUnavailable(t *testing.T) {
+func TestUserCustomGroupRepositoryUnlinksSoftDeletedSource(t *testing.T) {
 	ctx := context.Background()
 	client := testEntClient(t)
 	suffix := fmt.Sprintf("%d", time.Now().UnixNano())
@@ -146,6 +146,66 @@ func TestUserCustomGroupRepositoryListTreatsSoftDeletedSourceGroupAsUnavailable(
 	groups, err := repo.ListByUserID(ctx, owner.ID)
 	require.NoError(t, err)
 	require.Len(t, groups, 1)
-	require.Len(t, groups[0].Models, 1)
-	require.Nil(t, groups[0].Models[0].SourceGroup)
+	require.Empty(t, groups[0].Models)
+}
+
+func TestUserCustomGroupEditWhileSourcePaused(t *testing.T) {
+	f := newGroupCascadeFixture(t)
+	ctx := context.Background()
+	client := testEntClient(t)
+	svc := service.NewUserCustomGroupService(NewUserCustomGroupRepository(client, integrationDB), NewUserRepository(client, integrationDB), NewGroupRepository(client, integrationDB), nil, nil, nil)
+	setStatus := func(status string) {
+		t.Helper()
+		_, err := client.Group.UpdateOneID(f.source).SetStatus(status).Save(ctx)
+		require.NoError(t, err)
+	}
+	get := func() *service.UserCustomGroup {
+		t.Helper()
+		g, err := svc.Get(ctx, f.owner, f.mixed)
+		require.NoError(t, err)
+		return g
+	}
+
+	setStatus(service.StatusDisabled)
+	paused := get()
+	require.Len(t, paused.Models, 1)
+	require.Equal(t, "kept", paused.Models[0].PublicModel)
+	require.Len(t, paused.SuspendedModelIDs, 1)
+
+	// An editor opened before the pause can still include the exact old route.
+	selected := []service.UserCustomGroupModelInput{
+		{PublicModel: "my-choice", SourceGroupID: f.kept, SourceModel: "kept"},
+		{PublicModel: "removed", SourceGroupID: f.source, SourceModel: "removed"},
+	}
+	g, err := svc.Update(ctx, f.owner, f.mixed, service.UpdateUserCustomGroupRequest{Models: &selected})
+	require.NoError(t, err)
+	require.Len(t, g.Models, 1)
+	require.Equal(t, "my-choice", g.Models[0].PublicModel)
+	require.Equal(t, paused.SuspendedModelIDs, g.SuspendedModelIDs)
+
+	setStatus(service.StatusActive)
+	_, err = client.Group.UpdateOneID(f.source).SetName(fmt.Sprintf("renamed-%d", f.source)).Save(ctx)
+	require.NoError(t, err)
+	// An editor opened during the pause saves after the source is restored.
+	selected = selected[:1]
+	g, err = svc.Update(ctx, f.owner, f.mixed, service.UpdateUserCustomGroupRequest{Models: &selected, PreserveModelIDs: paused.SuspendedModelIDs})
+	require.NoError(t, err)
+	require.Len(t, g.Models, 2)
+	require.Empty(t, g.SuspendedModelIDs)
+	restored, err := svc.Get(ctx, f.owner, f.emptied)
+	require.NoError(t, err)
+	require.Len(t, restored.Models, 1)
+	require.Equal(t, "removed", restored.Models[0].PublicModel)
+	require.Equal(t, fmt.Sprintf("renamed-%d", f.source), restored.Models[0].SourceGroup.Name)
+
+	_, err = client.Group.UpdateOneID(f.source).SetDeletedAt(time.Now()).Save(ctx)
+	require.NoError(t, err)
+	g = get()
+	require.Len(t, g.Models, 1)
+	require.Equal(t, "my-choice", g.Models[0].PublicModel)
+	require.Empty(t, g.SuspendedModelIDs)
+	empty, err := svc.Get(ctx, f.owner, f.emptied)
+	require.NoError(t, err)
+	require.Empty(t, empty.Models)
+	require.Empty(t, empty.SuspendedModelIDs)
 }

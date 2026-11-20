@@ -14,7 +14,7 @@ export default {
         "selectedModels": "已选 {selected} / {total} 个模型",
         "noCostEstimate": "暂无可用成本估价，暂不能检测；可先取消勾选此模型。",
         "missingEstimate": "{model} 暂无可用成本估价，请先取消勾选，或补齐系统价格后重试。",
-        "estimateSource": "估价来源：模型目录价格 × 账号成本倍率",
+        "estimateSource": "估价来源：已配置的渠道 Token 单价或模型目录价格，再乘账号成本倍率",
         "measurementHint": "Token 计量正常不代表最终扣费一定正确；单价、倍率和分组优惠需另行核对。",
 
         "title": "渠道验收",

@@ -155,8 +155,9 @@ WITH scope AS MATERIALIZED (
       ELSE 'usage:' || ul.id::text END AS identity,
     ul.created_at, 1 AS source_rank,
     CASE
-      WHEN outcome.disconnect_source = 'client' THEN 'unknown'
-      WHEN outcome.http_status >= 500 OR outcome.upstream_status >= 500 THEN 'failure'
+      WHEN outcome.disconnect_source = 'client' OR outcome.http_status = 499 THEN 'unknown'
+      WHEN outcome.http_status >= 500 OR outcome.upstream_status >= 500
+        OR outcome.http_status = 429 OR outcome.upstream_status = 429 THEN 'failure'
       WHEN outcome.http_status >= 400 OR outcome.upstream_status >= 400 THEN 'unknown'
       WHEN ul.request_type = 4 THEN 'unknown'
       WHEN outcome.id IS NOT NULL AND outcome.stream_completed
@@ -175,13 +176,15 @@ WITH scope AS MATERIALIZED (
     CASE
       WHEN outcome.upstream_status >= 500 THEN outcome.upstream_status
       WHEN outcome.http_status >= 500 THEN outcome.http_status
+      WHEN outcome.http_status = 429 OR outcome.upstream_status = 429 THEN 429
       WHEN outcome.upstream_status >= 400 THEN outcome.upstream_status
       WHEN outcome.http_status >= 400 THEN outcome.http_status
       ELSE COALESCE(NULLIF(outcome.upstream_status, 0), NULLIF(outcome.http_status, 0), 0)
     END AS status_code,
     CASE
-      WHEN outcome.disconnect_source = 'client' THEN 5
-      WHEN outcome.http_status >= 500 OR outcome.upstream_status >= 500 THEN 4
+      WHEN outcome.disconnect_source = 'client' OR outcome.http_status = 499 THEN 5
+      WHEN outcome.http_status >= 500 OR outcome.upstream_status >= 500
+        OR outcome.http_status = 429 OR outcome.upstream_status = 429 THEN 4
       WHEN outcome.http_status >= 400 OR outcome.upstream_status >= 400 OR ul.request_type = 4 THEN 3
       ELSE 1
     END AS priority,
@@ -201,23 +204,26 @@ WITH scope AS MATERIALIZED (
       THEN 'request:' || e.api_key_id::text || ':local:' || TRIM(e.request_id)
       ELSE 'error:' || e.id::text END AS identity,
     e.created_at, 2 AS source_rank,
-    -- Keep client errors as evidence so their usage rows cannot become successes.
+    -- Keep terminal client errors as evidence, including rate limits that count as failures.
     -- A real server failure takes precedence over a translated client status.
     CASE
       WHEN e.status_code = 499 THEN 'unknown'
-      WHEN e.status_code >= 500 OR e.upstream_status_code >= 500 THEN 'failure'
+      WHEN e.status_code >= 500 OR e.upstream_status_code >= 500
+        OR e.status_code = 429 OR e.upstream_status_code = 429 THEN 'failure'
       ELSE 'unknown'
     END AS outcome,
     CASE
       WHEN e.upstream_status_code >= 500 THEN e.upstream_status_code
       WHEN e.status_code >= 500 THEN e.status_code
+      WHEN e.status_code = 429 OR e.upstream_status_code = 429 THEN 429
       WHEN e.upstream_status_code >= 400 THEN e.upstream_status_code
       WHEN e.status_code >= 400 THEN e.status_code
       ELSE COALESCE(NULLIF(e.upstream_status_code, 0), NULLIF(e.status_code, 0), 0)
     END AS status_code,
     CASE
       WHEN e.status_code = 499 THEN 5
-      WHEN e.status_code >= 500 OR e.upstream_status_code >= 500 THEN 4
+      WHEN e.status_code >= 500 OR e.upstream_status_code >= 500
+        OR e.status_code = 429 OR e.upstream_status_code = 429 THEN 4
       ELSE 3
     END AS priority,
     CASE WHEN e.time_to_first_token_ms >= 0 THEN e.time_to_first_token_ms END AS ttft_ms,

@@ -297,6 +297,7 @@ type APIKeyService struct {
 	groupRepo                 GroupRepository
 	customGroupRepo           UserCustomGroupRepository
 	systemCustomGroupRepo     SystemCustomGroupRepository
+	customGroupGateway        *GatewayService
 	systemCustomModelCatalog  SystemCustomGroupRuntimeModelCatalog
 	categoryDefaultGroups     categoryDefaultGroupResolver
 	userSubRepo               UserSubscriptionRepository
@@ -646,6 +647,9 @@ func (s *APIKeyService) ResolveCustomGroupModel(ctx context.Context, key *APIKey
 	if group.Status != StatusActive || group.Platform == PlatformComposite || key.User == nil || !s.canUserBindGroup(ctx, key.User, group) {
 		return nil, ErrGroupNotAllowed
 	}
+	if !newCustomSourceCatalog(s.customGroupGateway).contains(ctx, group, route.SourceModel) {
+		return nil, ErrUserCustomGroupInvalidModel
+	}
 	clone := *key
 	clone.GroupID = &group.ID
 	clone.Group = group
@@ -672,9 +676,19 @@ func (s *APIKeyService) ListCustomGroupModelsForPlatform(ctx context.Context, ke
 		return nil, ErrUserCustomGroupNotFound
 	}
 	out := make([]string, 0, len(group.Models))
+	catalog := newCustomSourceCatalog(s.customGroupGateway)
+	allowed := make(map[int64]bool)
 	for _, route := range group.Models {
-		source, err := s.groupRepo.GetByIDLite(ctx, route.SourceGroupID)
-		if err == nil && source.Status == StatusActive && (platform == "" || source.Platform == platform) && s.canUserBindGroup(ctx, key.User, source) {
+		source := route.SourceGroup
+		if source == nil {
+			continue
+		}
+		canUse, checked := allowed[source.ID]
+		if !checked {
+			canUse = source.Status == StatusActive && source.Platform != PlatformComposite && (platform == "" || source.Platform == platform) && s.canUserBindGroup(ctx, key.User, source)
+			allowed[source.ID] = canUse
+		}
+		if canUse && catalog.contains(ctx, source, route.SourceModel) {
 			out = append(out, route.PublicModel)
 		}
 	}

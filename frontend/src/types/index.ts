@@ -1067,6 +1067,7 @@ export interface UserCustomGroup {
   user_id: number
   name: string
   status: 'active' | 'disabled'
+  suspended_model_ids?: number[]
   models: UserCustomGroupModel[]
   created_at: string
   updated_at: string

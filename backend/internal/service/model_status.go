@@ -401,7 +401,7 @@ func cloneModelStatusMetrics(source ModelStatusMetrics) ModelStatusMetrics {
 
 func finalizeModelStatusMetrics(metrics ModelStatusMetrics) ModelStatusMetrics {
 	metrics.SuccessRate = nil
-	if known := metrics.Success + metrics.Failure + metrics.Empty; known > 0 {
+	if known := metrics.Success + metrics.Failure; known > 0 {
 		rate := float64(metrics.Success) * 100 / float64(known)
 		metrics.SuccessRate = &rate
 	}
@@ -412,7 +412,7 @@ func modelStatusHealth(metrics ModelStatusMetrics) ModelStatusHealth {
 	if metrics.Total == 0 {
 		return ModelStatusNoData
 	}
-	known := metrics.Success + metrics.Failure + metrics.Empty
+	known := metrics.Success + metrics.Failure
 	if known == 0 {
 		return ModelStatusUnknown
 	}

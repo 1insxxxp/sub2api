@@ -24,7 +24,7 @@ vi.mock('vue-i18n', async importOriginal => ({
 }))
 
 const metrics = {
-  total: 10, success: 1, failure: 0, empty: 9, unknown: 0,
+  total: 10, success: 1, failure: 9, empty: 0, unknown: 0,
   success_rate: 10, avg_ttft_ms: null, avg_duration_ms: 1500,
   ttft_samples: 0, duration_samples: 1,
 }
@@ -101,7 +101,7 @@ describe('ModelStatusView', () => {
       ...data.groups[0],
       models: [
         { ...baseModel, name: 'mostly-successful', status: 'degraded', metrics: { ...metrics, total: 100, success: 95, failure: 5, empty: 0, success_rate: 95 } },
-        { ...baseModel, name: 'balanced', status: 'degraded', metrics: { ...metrics, total: 100, success: 50, failure: 0, empty: 50, success_rate: 50 } },
+        { ...baseModel, name: 'balanced', status: 'degraded', metrics: { ...metrics, total: 106, success: 50, failure: 50, empty: 6, success_rate: 50 } },
         { ...baseModel, name: 'mostly-failed', status: 'unavailable', metrics: { ...metrics, total: 100, success: 0, failure: 100, empty: 0, success_rate: 0 } },
         { ...baseModel, name: 'no-data', status: 'no_data', metrics: { ...metrics, total: 0, success: 0, failure: 0, empty: 0, unknown: 0, success_rate: null } },
       ].map((model, index) => ({
@@ -109,7 +109,7 @@ describe('ModelStatusView', () => {
         metrics: index === 0
           ? { ...metrics, total: 100, success: 95, failure: 5, empty: 0, success_rate: 95 }
           : index === 1
-            ? { ...metrics, total: 100, success: 50, failure: 0, empty: 50, success_rate: 50 }
+            ? { ...metrics, total: 106, success: 50, failure: 50, empty: 6, success_rate: 50 }
             : index === 2
               ? { ...metrics, total: 100, success: 0, failure: 100, empty: 0, success_rate: 0 }
               : { ...metrics, total: 0, success: 0, failure: 0, empty: 0, unknown: 0, success_rate: null },
@@ -169,15 +169,15 @@ describe('ModelStatusView', () => {
     { success: 4, failure: 1, empty: 0, unknown: 10, status: 'degraded', rate: '80%', hue: 96 },
     { success: 79, failure: 21, empty: 0, unknown: 0, status: 'unavailable', rate: '79%', hue: 95 },
     { success: 0, failure: 5, empty: 0, unknown: 0, status: 'unavailable', rate: '0%', hue: 0 },
-    { success: 0, failure: 0, empty: 5, unknown: 0, status: 'unavailable', rate: '0%', hue: 0 },
+    { success: 0, failure: 0, empty: 5, unknown: 0, status: 'unknown', rate: '-', hue: null },
   ])('derives $status from the rolling 24-hour metrics ($success/$failure/$empty/$unknown)', async ({ success, failure, empty, unknown, status, rate, hue }) => {
     const data = report()
     const model = data.groups[0].models[0]
     model.status = status === 'healthy' ? 'unavailable' : 'healthy'
-    const known = success + failure + empty
+    const known = success + failure
     model.metrics = {
       ...metrics,
-      total: known + unknown,
+      total: known + empty + unknown,
       success,
       failure,
       empty,
@@ -595,7 +595,17 @@ describe('ModelStatusView', () => {
     expect(wrapper.find('.model-row .incomplete-note').exists()).toBe(false)
   })
 
-  it.each([400, 401, 403, 404, 408, 429, 499])('keeps excluded HTTP %i out of visible details and the success rate', async statusCode => {
+  it('keeps a bucket green with one success and two empty responses', async () => {
+    const data = report()
+    const bucket = data.groups[0].models[0].buckets![0]
+    Object.assign(bucket, { total: 3, success: 1, empty: 2 })
+    getModelStatus.mockResolvedValueOnce(data)
+    const wrapper = render()
+    await flushPromises()
+    expect(wrapper.get('[data-testid="status-bucket"]').classes()).toContain('bucket-success')
+  })
+
+  it.each([400, 401, 403, 404, 408, 499])('keeps excluded HTTP %i out of visible details and the success rate', async statusCode => {
     const data = report()
     data.groups[0].models[0].metrics = { ...metrics, total: 6, success: 5, failure: 0, empty: 0, unknown: 1, success_rate: 100 }
     data.groups[0].models[0].buckets![47] = {

@@ -25,13 +25,14 @@ type UserCustomGroupModel struct {
 }
 
 type UserCustomGroup struct {
-	ID        int64                  `json:"id"`
-	UserID    int64                  `json:"user_id"`
-	Name      string                 `json:"name"`
-	Status    string                 `json:"status"`
-	Models    []UserCustomGroupModel `json:"models"`
-	CreatedAt time.Time              `json:"created_at"`
-	UpdatedAt time.Time              `json:"updated_at"`
+	ID                int64                  `json:"id"`
+	UserID            int64                  `json:"user_id"`
+	Name              string                 `json:"name"`
+	Status            string                 `json:"status"`
+	Models            []UserCustomGroupModel `json:"models"`
+	SuspendedModelIDs []int64                `json:"suspended_model_ids,omitempty"`
+	CreatedAt         time.Time              `json:"created_at"`
+	UpdatedAt         time.Time              `json:"updated_at"`
 }
 
 type UserCustomGroupModelInput struct {
@@ -46,7 +47,8 @@ type CreateUserCustomGroupRequest struct {
 }
 
 type UpdateUserCustomGroupRequest struct {
-	Name   *string                      `json:"name,omitempty"`
-	Status *string                      `json:"status,omitempty"`
-	Models *[]UserCustomGroupModelInput `json:"models,omitempty"`
+	Name             *string                      `json:"name,omitempty"`
+	Status           *string                      `json:"status,omitempty"`
+	Models           *[]UserCustomGroupModelInput `json:"models,omitempty"`
+	PreserveModelIDs []int64                      `json:"preserve_model_ids,omitempty"`
 }

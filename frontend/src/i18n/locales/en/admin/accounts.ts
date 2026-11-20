@@ -14,7 +14,7 @@ export default {
         "selectedModels": "{selected} / {total} models selected",
         "noCostEstimate": "No cost estimate is available. Deselect this model to test the others.",
         "missingEstimate": "No cost estimate is available for {model}. Deselect it, or update system pricing and retry.",
-        "estimateSource": "Estimate: model catalog price × account cost multiplier",
+        "estimateSource": "Estimates use configured channel token prices or catalog prices, multiplied by the account cost multiplier",
         "measurementHint": "Correct token counts do not guarantee correct charges. Prices, multipliers and group discounts need separate checks.",
 
         "title": "Channel acceptance",

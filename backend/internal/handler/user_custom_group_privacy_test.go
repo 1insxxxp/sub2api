@@ -101,7 +101,7 @@ func newCustomGroupPrivacyHandler() *UserCustomGroupHandler {
 		{PublicModel: "alias", SourceGroupID: 11, SourceModel: "model"},
 		{PublicModel: "revoked-alias", SourceGroupID: 12, SourceModel: "model"},
 	})
-	svc := service.NewUserCustomGroupService(repo, customGroupCandidateUserRepoStub{}, customGroupPrivacySources{sources: sources}, nil, nil)
+	svc := service.NewUserCustomGroupService(repo, customGroupCandidateUserRepoStub{}, customGroupPrivacySources{sources: sources}, nil, nil, nil)
 	return NewUserCustomGroupHandler(svc, nil, nil)
 }
 
@@ -151,10 +151,9 @@ func TestUserCustomGroupHandlerResponsesOnlyExposePublicSourceFields(t *testing.
 			require.Equal(t, true, first["source_available"])
 			require.Equal(t, map[string]any{"id": float64(11), "name": "Public source", "platform": service.PlatformAnthropic, "status": service.StatusActive}, first["source_group"])
 			if test.hasRevoked {
-				revoked := models[1].(map[string]any)
-				require.Equal(t, false, revoked["source_available"])
-				require.Equal(t, service.UserCustomGroupSourceIssueNotAllowed, revoked["source_issue"])
-				require.Equal(t, map[string]any{"id": float64(12), "name": "Revoked source", "platform": service.PlatformAnthropic, "status": service.StatusActive}, revoked["source_group"])
+				require.Len(t, models, 1)
+				require.Equal(t, []any{float64(2)}, group["suspended_model_ids"])
+				require.NotContains(t, w.Body.String(), "Revoked source")
 			}
 			for _, forbidden := range []string{"ModelRouting", "CodexModelsManifestConfig", "ProfitMinMargin", "ProfitSafetyBuffer", "DuplicateOperationID", "synthetic-private", "90001", "90002", "90003"} {
 				require.NotContains(t, w.Body.String(), forbidden)

@@ -229,3 +229,48 @@ func TestAcceptanceFailedCounterStopsOnlySameSource(t *testing.T) {
 		t.Fatal("valid counter suppressed")
 	}
 }
+
+type acceptanceChannelPricingStub map[int64]map[string]*ChannelModelPricing
+
+func (s acceptanceChannelPricingStub) GetChannelModelPricing(_ context.Context, groupID int64, model string) *ChannelModelPricing {
+	return s[groupID][model]
+}
+
+func TestAcceptanceMappedModelUsesChannelPriceWithoutChangingDispatch(t *testing.T) {
+	const alias, upstream = "enp/gemini-4-argon", "[量]gemini-4-argon"
+	account := &Account{
+		ID: 6021, Platform: PlatformGemini, Type: AccountTypeAPIKey,
+		GroupIDs:    []int64{12, 27},
+		Credentials: map[string]any{"model_mapping": map[string]any{alias: upstream}},
+	}
+	input, output, higherInput := 0.000002, 0.000008, 0.000003
+	s := NewChannelAcceptanceService(&acceptanceRepoStub{}, &acceptanceAccountsStub{account: account}, nil, nil, nil)
+	s.channels = acceptanceChannelPricingStub{
+		12: {alias: {InputPrice: &input, OutputPrice: &output}},
+		27: {upstream: {InputPrice: &higherInput, OutputPrice: &output}},
+	}
+	ctx := context.Background()
+	targets, err := s.Targets(ctx, []int64{account.ID})
+	if err != nil || len(targets) != 1 || len(targets[0].Models) != 1 {
+		t.Fatal(targets, err)
+	}
+	model := targets[0].Models[0]
+	if model.UpstreamModel != upstream || model.Price == nil || model.Price.Source != "channel_x_account_rate_estimate" || model.Price.InputPerMillion != 3 {
+		t.Fatalf("unexpected model: %+v", model)
+	}
+	preview, err := s.Preview(ctx, 1, AcceptancePreviewRequest{Targets: []AcceptanceTargetRequest{{AccountID: account.ID, Model: alias}}})
+	if err != nil || !preview.CanStart || len(preview.Samples) == 0 || preview.Samples[0].Snapshot.UpstreamModel != upstream || preview.Samples[0].Snapshot.Price != *model.Price {
+		t.Fatal(preview, err)
+	}
+}
+
+func TestAcceptanceGeminiCostCatalogStripsENPMarker(t *testing.T) {
+	billing := &BillingService{fallbackPrices: map[string]*ModelPricing{
+		"gemini-4-argon": {InputPricePerToken: 0.000002, OutputPricePerToken: 0.00001},
+	}}
+	s := NewChannelAcceptanceService(nil, nil, nil, billing, nil)
+	got := s.price(context.Background(), &Account{Platform: PlatformGemini}, "enp/gemini-4-argon", "[量]gemini-4-argon", nil)
+	if got == nil || got.Source != "catalog_x_account_rate_estimate" || got.InputPerMillion != 2 || got.OutputPerMillion != 10 {
+		t.Fatalf("unexpected catalog estimate: %+v", got)
+	}
+}

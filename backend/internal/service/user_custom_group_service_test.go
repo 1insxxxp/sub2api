@@ -186,14 +186,8 @@ func TestUserCustomGroupServiceListAnnotatesSourceAvailability(t *testing.T) {
 	models := groups[0].Models
 	require.True(t, models[0].SourceAvailable)
 	require.Empty(t, models[0].SourceIssue)
-	require.False(t, models[1].SourceAvailable)
-	require.Equal(t, UserCustomGroupSourceIssueUnavailable, models[1].SourceIssue)
-	require.False(t, models[2].SourceAvailable)
-	require.Equal(t, UserCustomGroupSourceIssueUnavailable, models[2].SourceIssue)
-	require.False(t, models[3].SourceAvailable)
-	require.Equal(t, UserCustomGroupSourceIssueUnavailable, models[3].SourceIssue)
-	require.False(t, models[4].SourceAvailable)
-	require.Equal(t, UserCustomGroupSourceIssueNotAllowed, models[4].SourceIssue)
+	require.Len(t, models, 1)
+	require.ElementsMatch(t, []int64{3, 4, 5}, groups[0].SuspendedModelIDs)
 }
 
 func TestUserCustomGroupServiceListAnnotatesMissingSourceModelsAsUnavailable(t *testing.T) {
@@ -229,8 +223,8 @@ func TestUserCustomGroupServiceListAnnotatesMissingSourceModelsAsUnavailable(t *
 
 	require.NoError(t, err)
 	require.Len(t, groups, 1)
-	require.False(t, groups[0].Models[0].SourceAvailable)
-	require.Equal(t, "source_model_unavailable", groups[0].Models[0].SourceIssue)
+	require.Empty(t, groups[0].Models)
+	require.Equal(t, []int64{1}, groups[0].SuspendedModelIDs)
 }
 
 func TestUserCustomGroupServiceGetAnnotatesAllowedExclusiveSource(t *testing.T) {
@@ -280,4 +274,21 @@ func TestUserCustomGroupForceDeleteUnbindsAtomically(t *testing.T) {
 	require.Zero(t, repo.deleteCalls)
 	require.Equal(t, 1, repo.forceDeleteCalls)
 	require.Equal(t, []int64{9}, cache.invalidatedUserIDs)
+}
+
+func TestUserCustomGroupAutomaticallyTracksSourceLifecycle(t *testing.T) {
+	source := &Group{ID: 11, Name: "before", Platform: PlatformGemini, Status: StatusDisabled}
+	repo := customGroupReadRepoStub{group: &UserCustomGroup{ID: 21, UserID: 9, Models: []UserCustomGroupModel{
+		{ID: 31, PublicModel: "my-model", SourceGroupID: source.ID, SourceModel: "gemini-model", SourceGroup: source},
+	}}}
+	svc := &UserCustomGroupService{repo: repo, userRepo: customGroupValidationUserRepoStub{user: &User{ID: 9}}}
+	paused, err := svc.Get(context.Background(), 9, 21)
+	require.NoError(t, err)
+	require.Empty(t, paused.Models)
+	source.Status, source.Name = StatusActive, "renamed"
+	restored, err := svc.Get(context.Background(), 9, 21)
+	require.NoError(t, err)
+	require.Len(t, restored.Models, 1)
+	require.Equal(t, "my-model", restored.Models[0].PublicModel)
+	require.Equal(t, "renamed", restored.Models[0].SourceGroup.Name)
 }

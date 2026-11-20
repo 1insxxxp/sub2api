@@ -92,7 +92,11 @@ func (r *userCustomGroupRepository) Update(ctx context.Context, group *service.U
 		return service.ErrUserCustomGroupNotFound
 	}
 	if models != nil {
-		if _, err = tx.UserCustomGroupModel.Delete().Where(usercustomgroupmodel.CustomGroupIDEQ(group.ID)).Exec(ctx); err != nil {
+		remove := tx.UserCustomGroupModel.Delete().Where(usercustomgroupmodel.CustomGroupIDEQ(group.ID))
+		if len(group.SuspendedModelIDs) > 0 {
+			remove = remove.Where(usercustomgroupmodel.IDNotIn(group.SuspendedModelIDs...))
+		}
+		if _, err = remove.Exec(ctx); err != nil {
 			return err
 		}
 		for _, m := range *models {

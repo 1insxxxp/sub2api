@@ -33,12 +33,17 @@ type UserCustomGroupService struct {
 	repo                 UserCustomGroupRepository
 	userRepo             UserRepository
 	groupRepo            GroupRepository
+	apiKeys              *APIKeyService
 	gateway              *GatewayService
 	authCacheInvalidator APIKeyAuthCacheInvalidator
 }
 
-func NewUserCustomGroupService(repo UserCustomGroupRepository, userRepo UserRepository, groupRepo GroupRepository, gateway *GatewayService, authCacheInvalidator APIKeyAuthCacheInvalidator) *UserCustomGroupService {
-	return &UserCustomGroupService{repo: repo, userRepo: userRepo, groupRepo: groupRepo, gateway: gateway, authCacheInvalidator: authCacheInvalidator}
+func NewUserCustomGroupService(repo UserCustomGroupRepository, userRepo UserRepository, groupRepo GroupRepository, gateway *GatewayService, authCacheInvalidator APIKeyAuthCacheInvalidator, apiKeys *APIKeyService) *UserCustomGroupService {
+	// Both the API key runtime and the editor use this gateway's source catalog.
+	if apiKeys != nil {
+		apiKeys.customGroupGateway = gateway
+	}
+	return &UserCustomGroupService{apiKeys: apiKeys, repo: repo, userRepo: userRepo, groupRepo: groupRepo, gateway: gateway, authCacheInvalidator: authCacheInvalidator}
 }
 
 func (s *UserCustomGroupService) List(ctx context.Context, userID int64) ([]UserCustomGroup, error) {
@@ -46,7 +51,7 @@ func (s *UserCustomGroupService) List(ctx context.Context, userID int64) ([]User
 	if err != nil {
 		return nil, err
 	}
-	if err := s.annotateSourceAvailability(ctx, userID, groups); err != nil {
+	if err := s.selectAvailableSources(ctx, userID, groups); err != nil {
 		return nil, err
 	}
 	return groups, nil
@@ -58,7 +63,7 @@ func (s *UserCustomGroupService) Get(ctx context.Context, userID, id int64) (*Us
 		return nil, err
 	}
 	annotated := []UserCustomGroup{*group}
-	if err := s.annotateSourceAvailability(ctx, userID, annotated); err != nil {
+	if err := s.selectAvailableSources(ctx, userID, annotated); err != nil {
 		return nil, err
 	}
 	return &annotated[0], nil
@@ -105,8 +110,46 @@ func (s *UserCustomGroupService) Update(ctx context.Context, userID, id int64, r
 		g.Status = *req.Status
 	}
 	if req.Models != nil {
-		if err := s.validateModels(ctx, userID, *req.Models); err != nil {
+		if len(req.PreserveModelIDs) > MaxUserCustomGroupModels || len(*req.Models) > MaxUserCustomGroupModels {
+			return nil, ErrUserCustomGroupLimit
+		}
+		// A source can go offline while the editor is open. Preserve unchanged
+		// suspended rows by ID without revalidating or recreating those routes.
+		current := []UserCustomGroup{*g}
+		if err := s.selectAvailableSources(ctx, userID, current); err != nil {
 			return nil, err
+		}
+		suspended := make(map[int64]bool, len(current[0].SuspendedModelIDs))
+		for _, id := range current[0].SuspendedModelIDs {
+			suspended[id] = true
+		}
+		pausedInputs := make(map[UserCustomGroupModelInput]bool)
+		for _, m := range g.Models {
+			if suspended[m.ID] {
+				pausedInputs[UserCustomGroupModelInput{PublicModel: m.PublicModel, SourceModel: m.SourceModel, SourceGroupID: m.SourceGroupID}] = true
+			}
+		}
+		selected := make([]UserCustomGroupModelInput, 0, len(*req.Models))
+		for _, m := range *req.Models {
+			if !pausedInputs[m] {
+				selected = append(selected, m)
+			}
+		}
+		req.Models = &selected
+		if len(selected) > 0 {
+			if err := s.validateModels(ctx, userID, selected); err != nil {
+				return nil, err
+			}
+		}
+		// Also retain rows suspended in the editor snapshot which have since
+		// recovered. Only IDs still owned by this custom group are eligible.
+		preserve := append(current[0].SuspendedModelIDs, req.PreserveModelIDs...)
+		g.SuspendedModelIDs = retainedCustomGroupModels(g.Models, preserve, selected)
+		if len(selected) == 0 && len(g.SuspendedModelIDs) == 0 && len(g.Models) > 0 {
+			return nil, ErrUserCustomGroupInvalidModel
+		}
+		if len(g.SuspendedModelIDs)+len(selected) > MaxUserCustomGroupModels {
+			return nil, ErrUserCustomGroupLimit
 		}
 	}
 	if err := s.repo.Update(ctx, g, req.Models); err != nil {
@@ -115,33 +158,70 @@ func (s *UserCustomGroupService) Update(ctx context.Context, userID, id int64, r
 	return s.Get(ctx, userID, id)
 }
 
-func (s *UserCustomGroupService) annotateSourceAvailability(ctx context.Context, userID int64, groups []UserCustomGroup) error {
+func (s *UserCustomGroupService) selectAvailableSources(ctx context.Context, userID int64, groups []UserCustomGroup) error {
 	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
 		return err
 	}
-	for groupIndex := range groups {
-		for modelIndex := range groups[groupIndex].Models {
-			model := &groups[groupIndex].Models[modelIndex]
-			model.SourceAvailable = false
-			model.SourceIssue = UserCustomGroupSourceIssueUnavailable
+	catalog := newCustomSourceCatalog(s.gateway)
+	allowed := make(map[int64]bool)
+	for i := range groups {
+		group := &groups[i]
+		visible := make([]UserCustomGroupModel, 0, len(group.Models))
+		group.SuspendedModelIDs = nil
+		for _, model := range group.Models {
 			source := model.SourceGroup
-			if source == nil || source.Status != StatusActive || source.Platform == PlatformComposite {
+			if source == nil {
 				continue
 			}
-			if !user.CanBindGroup(source.ID, source.IsExclusive) {
-				model.SourceIssue = UserCustomGroupSourceIssueNotAllowed
-				continue
+			canUse, checked := allowed[source.ID]
+			if !checked {
+				canUse = source.Status == StatusActive && source.Platform != PlatformComposite && s.canUseSource(ctx, user, source)
+				allowed[source.ID] = canUse
 			}
-			if s.gateway != nil && !s.sourceModelAvailable(ctx, source, model.SourceModel) {
-				model.SourceIssue = UserCustomGroupSourceIssueModelUnavailable
+			if !canUse || !catalog.contains(ctx, source, model.SourceModel) {
+				group.SuspendedModelIDs = append(group.SuspendedModelIDs, model.ID)
 				continue
 			}
 			model.SourceAvailable = true
 			model.SourceIssue = ""
+			visible = append(visible, model)
 		}
+		group.Models = visible
 	}
 	return nil
+}
+
+type customGroupSourceKey struct {
+	groupID int64
+	model   string
+}
+
+func retainedCustomGroupModels(existing []UserCustomGroupModel, preserve []int64, selected []UserCustomGroupModelInput) []int64 {
+	keep := make(map[int64]bool, len(preserve))
+	for _, id := range preserve {
+		keep[id] = true
+	}
+	aliases := make(map[string]bool, len(selected))
+	sources := make(map[customGroupSourceKey]bool, len(selected))
+	for _, m := range selected {
+		aliases[strings.ToLower(m.PublicModel)] = true
+		sources[customGroupSourceKey{m.SourceGroupID, strings.ToLower(m.SourceModel)}] = true
+	}
+	var ids []int64
+	for _, m := range existing {
+		if keep[m.ID] && !aliases[strings.ToLower(m.PublicModel)] && !sources[customGroupSourceKey{m.SourceGroupID, strings.ToLower(m.SourceModel)}] {
+			ids = append(ids, m.ID)
+		}
+	}
+	return ids
+}
+
+func (s *UserCustomGroupService) canUseSource(ctx context.Context, user *User, group *Group) bool {
+	if s.apiKeys != nil {
+		return s.apiKeys.canUserBindGroup(ctx, user, group)
+	}
+	return user.CanBindGroup(group.ID, group.IsExclusive)
 }
 
 func (s *UserCustomGroupService) Delete(ctx context.Context, userID, id int64, force bool) (int, error) {
@@ -180,6 +260,8 @@ func (s *UserCustomGroupService) validateModels(ctx context.Context, userID int6
 	}
 	seen := make(map[string]struct{}, len(models))
 	seenSources := make(map[string]struct{}, len(models))
+	catalog := newCustomSourceCatalog(s.gateway)
+	verified := make(map[int64]*Group)
 	for i := range models {
 		m := &models[i]
 		m.PublicModel = strings.TrimSpace(m.PublicModel)
@@ -197,29 +279,54 @@ func (s *UserCustomGroupService) validateModels(ctx context.Context, userID int6
 			return ErrUserCustomGroupInvalidModel
 		}
 		seenSources[sourceKey] = struct{}{}
-		group, err := s.groupRepo.GetByIDLite(ctx, m.SourceGroupID)
-		if err != nil || group.Status != StatusActive || group.Platform == PlatformComposite || !user.CanBindGroup(group.ID, group.IsExclusive) {
-			return ErrGroupNotAllowed
+		group := verified[m.SourceGroupID]
+		if group == nil {
+			group, err = s.groupRepo.GetByIDLite(ctx, m.SourceGroupID)
+			if err != nil || group == nil || group.Status != StatusActive || group.Platform == PlatformComposite || !s.canUseSource(ctx, user, group) {
+				return ErrGroupNotAllowed
+			}
+			verified[m.SourceGroupID] = group
 		}
-		if s.gateway != nil && !s.sourceModelAvailable(ctx, group, m.SourceModel) {
+		if !catalog.contains(ctx, group, m.SourceModel) {
 			return ErrUserCustomGroupInvalidModel
 		}
 	}
 	return nil
 }
 
-func (s *UserCustomGroupService) sourceModelAvailable(ctx context.Context, group *Group, sourceModel string) bool {
-	if s.gateway == nil || group == nil {
+// CustomGroupSourceModels is shared by the editor, discovery and routing.
+func (s *GatewayService) CustomGroupSourceModels(ctx context.Context, group *Group) []string {
+	available := s.GetAvailableModels(ctx, &group.ID, group.Platform)
+	if !group.CustomModelsListEnabled() {
+		return available
+	}
+	if len(available) == 0 && (available != nil || !s.HasSchedulableAccountsForGroupPlatform(ctx, group.ID, group.Platform)) {
+		return nil
+	}
+	return ResolveCustomModelsList(group.Platform, available, group.EffectiveModelAllowlist().Models)
+}
+
+// One catalog lookup per distinct source group within this request.
+type customSourceCatalog struct {
+	gateway *GatewayService
+	models  map[int64]map[string]bool
+}
+
+func newCustomSourceCatalog(gateway *GatewayService) customSourceCatalog {
+	return customSourceCatalog{gateway: gateway, models: make(map[int64]map[string]bool)}
+}
+
+func (c customSourceCatalog) contains(ctx context.Context, group *Group, model string) bool {
+	if c.gateway == nil {
 		return true
 	}
-	available := s.gateway.GetAvailableModels(ctx, &group.ID, group.Platform)
-	if group.CustomModelsListEnabled() {
-		available = ResolveCustomModelsList(group.Platform, available, group.ModelsListConfig.Models)
-	}
-	for _, candidate := range available {
-		if strings.EqualFold(candidate, sourceModel) {
-			return true
+	names, loaded := c.models[group.ID]
+	if !loaded {
+		names = make(map[string]bool)
+		for _, name := range c.gateway.CustomGroupSourceModels(ctx, group) {
+			names[strings.ToLower(name)] = true
 		}
+		c.models[group.ID] = names
 	}
-	return false
+	return names[strings.ToLower(model)]
 }

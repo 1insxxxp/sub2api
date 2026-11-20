@@ -104,13 +104,14 @@ func TestModelStatusHealthUsesKnownSuccessRate(t *testing.T) {
 	}{
 		{"no traffic", ModelStatusMetrics{}, ModelStatusNoData, nil},
 		{"one success", ModelStatusMetrics{Total: 1, Success: 1}, ModelStatusInsufficientData, modelStatusFloat(100)},
-		{"empty lowers success", ModelStatusMetrics{Total: 100, Success: 1, Empty: 99}, ModelStatusUnavailable, modelStatusFloat(1)},
+		{"empty does not affect success rate or sample threshold", ModelStatusMetrics{Total: 100, Success: 1, Empty: 99}, ModelStatusInsufficientData, modelStatusFloat(100)},
 		{"unknown evidence does not override healthy rate", ModelStatusMetrics{Total: 6, Success: 5, Unknown: 1}, ModelStatusHealthy, modelStatusFloat(100)},
 		{"unknown evidence does not override degraded rate", ModelStatusMetrics{Total: 7, Success: 4, Failure: 1, Unknown: 2}, ModelStatusDegraded, modelStatusFloat(80)},
+		{"only empty responses", ModelStatusMetrics{Total: 8, Empty: 8}, ModelStatusUnknown, nil},
 		{"only unknown evidence is unknown", ModelStatusMetrics{Total: 6, Unknown: 6}, ModelStatusUnknown, nil},
 		{"healthy", ModelStatusMetrics{Total: 100, Success: 99, Failure: 1}, ModelStatusHealthy, modelStatusFloat(99)},
-		{"degraded", ModelStatusMetrics{Total: 10, Success: 9, Empty: 1}, ModelStatusDegraded, modelStatusFloat(90)},
-		{"80 percent remains degraded", ModelStatusMetrics{Total: 10, Success: 8, Empty: 2}, ModelStatusDegraded, modelStatusFloat(80)},
+		{"degraded", ModelStatusMetrics{Total: 15, Success: 9, Failure: 1, Empty: 5}, ModelStatusDegraded, modelStatusFloat(90)},
+		{"80 percent remains degraded", ModelStatusMetrics{Total: 10, Success: 8, Failure: 2}, ModelStatusDegraded, modelStatusFloat(80)},
 		{"below 80 percent is unavailable", ModelStatusMetrics{Total: 100, Success: 79, Failure: 21}, ModelStatusUnavailable, modelStatusFloat(79)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -150,9 +151,9 @@ func TestModelStatusReportScopesSummaryAndPreservesTemporarilyLimitedModels(t *t
 	require.Len(t, report.Groups, 2)
 	require.Equal(t, int64(2), report.Groups[0].ID)
 	require.Equal(t, int64(105), report.Summary.Total)
-	require.InDelta(t, 100.0*6/105, *report.Summary.SuccessRate, 0.00001)
+	require.InDelta(t, 100.0, *report.Summary.SuccessRate, 0.00001)
 	require.Equal(t, ModelStatusHealthy, report.Groups[0].Models[0].Status)
-	require.Equal(t, ModelStatusUnavailable, report.Groups[1].Models[0].Status)
+	require.Equal(t, ModelStatusInsufficientData, report.Groups[1].Models[0].Status)
 	require.WithinDuration(t, time.Now(), repo.end, 2*time.Second)
 	require.Equal(t, "partial", report.Coverage.Status)
 	require.Contains(t, report.Coverage.Reasons, "terminal_errors_disabled")

@@ -429,8 +429,8 @@ function modelHealthForDisplay(model: ModelStatusModel): ModelStatusHealth {
   return 'unavailable'
 }
 
-function observedOutcomeTotal(metrics: ModelStatusModel['metrics']): number {
-  return metrics.success + metrics.failure + metrics.empty
+function observedOutcomeTotal(metrics: Pick<ModelStatusMetrics, 'success' | 'failure'>): number {
+  return metrics.success + metrics.failure
 }
 
 function hasObservedOutcomes(metrics: ModelStatusModel['metrics']): boolean {
@@ -455,9 +455,8 @@ function modelBuckets(model: ModelStatusModel): ModelStatusBucket[] {
 
 function bucketOutcome(bucket: ModelStatusBucket): ModelStatusBucketOutcome {
   if (bucket.total <= 0) return 'no-data'
-  const knownTotal = bucket.success + bucket.failure + bucket.empty
-  if (knownTotal <= 0) return 'unknown'
-  if (bucket.success === 0 && bucket.failure === 0 && bucket.empty > 0) return 'empty'
+  const knownTotal = observedOutcomeTotal(bucket)
+  if (knownTotal === 0) return bucket.empty > 0 ? 'empty' : 'unknown'
   const successRate = bucket.success / knownTotal
   if (successRate > 0.8) return 'success'
   if (successRate >= 0.5) return 'degraded'

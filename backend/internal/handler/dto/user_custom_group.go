@@ -29,13 +29,14 @@ type UserCustomGroupModel struct {
 }
 
 type UserCustomGroup struct {
-	ID        int64                  `json:"id"`
-	UserID    int64                  `json:"user_id"`
-	Name      string                 `json:"name"`
-	Status    string                 `json:"status"`
-	Models    []UserCustomGroupModel `json:"models"`
-	CreatedAt time.Time              `json:"created_at"`
-	UpdatedAt time.Time              `json:"updated_at"`
+	ID                int64                  `json:"id"`
+	UserID            int64                  `json:"user_id"`
+	Name              string                 `json:"name"`
+	Status            string                 `json:"status"`
+	Models            []UserCustomGroupModel `json:"models"`
+	SuspendedModelIDs []int64                `json:"suspended_model_ids,omitempty"`
+	CreatedAt         time.Time              `json:"created_at"`
+	UpdatedAt         time.Time              `json:"updated_at"`
 }
 
 func UserCustomGroupFromService(group *service.UserCustomGroup) *UserCustomGroup {
@@ -45,7 +46,7 @@ func UserCustomGroupFromService(group *service.UserCustomGroup) *UserCustomGroup
 	out := &UserCustomGroup{
 		ID: group.ID, UserID: group.UserID, Name: group.Name, Status: group.Status,
 		Models:    make([]UserCustomGroupModel, 0, len(group.Models)),
-		CreatedAt: group.CreatedAt, UpdatedAt: group.UpdatedAt,
+		CreatedAt: group.CreatedAt, UpdatedAt: group.UpdatedAt, SuspendedModelIDs: group.SuspendedModelIDs,
 	}
 	for _, model := range group.Models {
 		out.Models = append(out.Models, userCustomGroupModelFromService(model))
