@@ -11,9 +11,10 @@ import (
 type UsageBillingStatus string
 
 const (
-	UsageBillingStatusSettled         UsageBillingStatus = "settled"
-	UsageBillingStatusPendingReview   UsageBillingStatus = "pending_review"
-	UsagePendingReasonUpstreamMissing                    = "upstream_usage_missing"
+	UsageBillingStatusSettled                  UsageBillingStatus = "settled"
+	UsageBillingStatusPendingReview            UsageBillingStatus = "pending_review"
+	UsagePendingReasonUpstreamMissing                             = "upstream_usage_missing"
+	UsagePendingReasonCustomerInputUnavailable                    = "customer_input_unavailable"
 )
 
 func (s UsageBillingStatus) Normalize() UsageBillingStatus {
@@ -31,6 +32,10 @@ type pendingUsageWriter interface {
 // billing, quota, outbox, or deduplication path. Its identity is exactly the
 // normal settlement identity, so a later measured settlement supersedes it.
 func (s *GatewayService) RecordPendingUsage(ctx context.Context, input *RecordUsageInput) error {
+	return s.recordPendingUsage(ctx, input, nil)
+}
+
+func (s *GatewayService) recordPendingUsage(ctx context.Context, input *RecordUsageInput, opts *recordUsageOpts) error {
 	if s == nil || input == nil || input.Result == nil || input.User == nil || input.APIKey == nil || input.Account == nil {
 		return errors.New("pending usage requires request and authenticated identity")
 	}
@@ -61,8 +66,9 @@ func (s *GatewayService) RecordPendingUsage(ctx context.Context, input *RecordUs
 		Model:     result.Model, RequestedModel: requestedModel,
 		UpstreamModel: optionalTrimmedStringPtr(result.UpstreamModel),
 		GroupID:       input.APIKey.GroupID, CustomGroupID: input.APIKey.CustomGroupID,
-		SubscriptionID: optionalSubscriptionID(input.Subscription),
-		BillingStatus:  UsageBillingStatusPendingReview, BillingPendingReason: UsagePendingReasonUpstreamMissing,
+		CategoryDefaultGroupID: input.APIKey.CategoryDefaultGroupID,
+		SubscriptionID:         optionalSubscriptionID(input.Subscription),
+		BillingStatus:          UsageBillingStatusPendingReview, BillingPendingReason: UsagePendingReasonUpstreamMissing,
 		InputTokensSource: UsageTokenSourceUnreported, OutputTokensSource: UsageTokenSourceUnreported,
 		Stream: result.Stream, RequestType: RequestTypeFromLegacy(result.Stream, false),
 		DurationMs: &durationMs, FirstTokenMs: result.FirstTokenMs,
@@ -101,6 +107,12 @@ func (s *GatewayService) RecordPendingUsage(ctx context.Context, input *RecordUs
 	}
 	persistCtx, cancel := detachedBillingContext(ctx)
 	defer cancel()
+	if p := result.InputTokenProtection; p != nil {
+		if err := validateForwardContinuationResults(result); err != nil {
+			return err
+		}
+		log.protectPendingInput(p, s.forwardPendingEvidence(persistCtx, input, opts))
+	}
 	if err := writer.UpsertPendingUsage(persistCtx, log); err != nil {
 		return fmt.Errorf("persist pending usage: %w", err)
 	}

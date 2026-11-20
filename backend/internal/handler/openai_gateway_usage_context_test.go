@@ -79,6 +79,20 @@ func TestOpenAISubmitUsageRecordTaskCopiesSystemCustomResolutionThroughRealWorke
 	}
 }
 
+func TestUsageRecordWorkerKeepsOriginalInputProtection(t *testing.T) {
+	for _, p := range []service.InputTokenProtection{{Limit: 137}, {Pending: true}} {
+		parent, cancel := context.WithCancel(service.WithInputTokenProtection(context.Background(), &p))
+		var got *service.InputTokenProtection
+		task, _ := wrapUsageRecordTaskContext(parent, func(worker context.Context) {
+			require.NoError(t, worker.Err())
+			got = service.InputTokenProtectionFromContext(worker)
+		})
+		cancel()
+		task(context.Background())
+		require.Equal(t, &p, got)
+	}
+}
+
 type systemCustomHandlerUsageLogRepo struct {
 	service.UsageLogRepository
 	logs chan *service.UsageLog

@@ -40,7 +40,7 @@ type Group struct {
 	RateMultiplier float64 `json:"rate_multiplier,omitempty"`
 	// 是否允许用户对该分组的空回请求申请补偿
 	EmptyResponseCompensationEnabled bool `json:"empty_response_compensation_enabled,omitempty"`
-	// 分组级 Gemini 纯文本输入 token 仅下调计费策略，默认关闭
+	// 按原始客户输入封顶分组的按量输入计费，新建分组默认开启
 	GeminiInputCountingEnabled bool `json:"gemini_input_counting_enabled,omitempty"`
 	// 是否启用高峰时段倍率
 	PeakRateEnabled bool `json:"peak_rate_enabled,omitempty"`

@@ -282,6 +282,11 @@ func (r *cachedBillingUsageRepo) Create(_ context.Context, log *service.UsageLog
 	return true, nil
 }
 
+func (r *cachedBillingUsageRepo) UpsertPendingUsage(ctx context.Context, log *service.UsageLog) error {
+	_, err := r.Create(ctx, log)
+	return err
+}
+
 func (r *cachedBillingUsageRepo) first() *service.UsageLog {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -504,6 +509,134 @@ func TestGeminiCachedContentsCreate_UnaffordableStorageDeletesUpstreamAndBillsIn
 	totals := env.waitForUsage(t, 1)
 	require.Len(t, totals, 1)
 	require.InDelta(t, cachedBillingTokens*cachedBillingInputPrice, totals[0], 1e-9, "只收已发生的缓存 token 输入费")
+}
+
+func TestGeminiCachedContentsCreate_ProtectionAtQuoteAndDetachedSettlement(t *testing.T) {
+	const path = "/v1beta/cachedContents"
+	const body = `{"model":"models/gemini-2.5-pro","ttl":"86400s","contents":[{"role":"user","parts":[{"text":"doc"}]}]}`
+	protection := service.EstimateCustomerInputTokenProtection(path, []byte(body))
+	require.False(t, protection.Pending)
+	require.Positive(t, protection.Limit)
+	require.Less(t, protection.Limit, cachedBillingTokens)
+	inputCost := float64(protection.Limit) * cachedBillingInputPrice
+	fullCost := inputCost + cachedBillingTokens*cachedBillingStoragePrice*24
+
+	// Bracket the exact quote by less than one input token. Storage uses the
+	// provider's full measured size for all 24 hours.
+	for _, tc := range []struct {
+		name            string
+		balance, charge float64
+		status, deletes int
+	}{
+		{"affordable", fullCost + cachedBillingInputPrice/2, fullCost, http.StatusOK, 0},
+		{"rollback", fullCost - cachedBillingInputPrice/2, inputCost, http.StatusForbidden, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			env := newCachedBillingEnv(t, tc.balance, 900)
+			env.upstream.createBody = cachedBillingCreateBody(time.Now().Add(24 * time.Hour))
+			pool := newUsageRecordTestPool(t)
+			env.h.usageRecordWorkerPool = pool
+			unblock := make(chan struct{})
+			release := sync.OnceFunc(func() { close(unblock) })
+			defer release()
+			require.False(t, pool.Submit(func(context.Context) { <-unblock }).Dropped())
+			rec := env.serve(http.MethodPost, path, body, nil, func(c *gin.Context) {
+				ctx, cancel := context.WithCancel(service.WithInputTokenProtection(c.Request.Context(), protection))
+				defer cancel()
+				c.Request = c.Request.WithContext(ctx)
+				env.h.GeminiCachedContentsCreate(c)
+			})
+			require.Equal(t, tc.status, rec.Code, rec.Body.String())
+			require.Equal(t, tc.deletes, env.upstream.methodCalls(http.MethodDelete))
+			require.Zero(t, env.billing.commandCount())
+			release()
+
+			totals := env.waitForUsage(t, 1)
+			require.InDelta(t, tc.charge, totals[0], 1e-9)
+			cmd := env.billing.lastCommand()
+			require.Equal(t, service.QuantizeUsageBillingAmount(tc.charge), cmd.BalanceCost)
+			log := env.usage.first()
+			require.True(t, strings.HasPrefix(log.RequestID, "gcache:create:"))
+			require.Equal(t, protection.Limit, log.InputTokens)
+			require.NotNil(t, log.Outcome)
+			require.Equal(t, cachedBillingTokens, *log.Outcome.UpstreamInputTokens)
+			require.Equal(t, protection.Limit, *log.Outcome.InputTokenPolicyCount)
+			require.Len(t, log.Outcome.ContinuationUsage, 1)
+			call := log.Outcome.ContinuationUsage[0]
+			require.Equal(t, cachedBillingTokens, call.InputTokens)
+			require.Equal(t, protection.Limit, call.CustomerInputTokens)
+			require.False(t, call.InputIncludesCache)
+			require.Zero(t, log.AntiTruncationRounds)
+		})
+	}
+}
+
+func TestGeminiCachedContentsCreate_PendingProtectionPreservesUpstreamInput(t *testing.T) {
+	const path = "/v1beta/cachedContents"
+	const body = `{"model":"models/gemini-2.5-pro","ttl":"86400s","contents":[{"parts":[{"fileData":{"fileUri":"gs://test/cache"}}]}]}`
+	protection := service.EstimateCustomerInputTokenProtection(path, []byte(body))
+	require.True(t, protection.Pending)
+	env := newCachedBillingEnv(t, 500, 900)
+	env.upstream.createBody = cachedBillingCreateBody(time.Now().Add(24 * time.Hour))
+	rec := env.serve(http.MethodPost, path, body, nil, func(c *gin.Context) {
+		c.Request = c.Request.WithContext(service.WithInputTokenProtection(c.Request.Context(), protection))
+		env.h.GeminiCachedContentsCreate(c)
+	})
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	require.Zero(t, env.billing.commandCount())
+	require.Len(t, env.usage.totals(), 1)
+	row := env.usage.first()
+	require.Equal(t, service.UsageBillingStatusPendingReview, row.BillingStatus)
+	require.Zero(t, row.InputTokens)
+	require.Equal(t, service.UsageTokenSourceUnreported, row.InputTokensSource)
+	require.Equal(t, service.UsagePendingReasonCustomerInputUnavailable, row.BillingPendingReason)
+	require.Equal(t, cachedBillingTokens, *row.PendingEvidence.InputTokens)
+	require.Positive(t, row.PendingEvidence.CacheStorageTokenHours)
+	require.Positive(t, row.PendingEvidence.CacheStorageCost)
+}
+
+func TestGeminiCachedContentsCreate_PendingInputReservesStorage(t *testing.T) {
+	const path = "/v1beta/cachedContents"
+	const body = `{"model":"models/gemini-2.5-pro","ttl":"86400s","contents":[{"parts":[{"fileData":{"fileUri":"gs://test/cache"}}]}]}`
+	protection := service.EstimateCustomerInputTokenProtection(path, []byte(body))
+	require.True(t, protection.Pending)
+	const hours = 24 * cachedBillingTokens
+	const rawStorageCost = hours * cachedBillingStoragePrice
+	const multiplier = 2
+	const reserve = rawStorageCost * multiplier
+
+	for _, tc := range []struct {
+		name            string
+		balance         float64
+		status, deletes int
+		storageHours    float64
+	}{
+		{"affordable", reserve + 0.01, http.StatusOK, 0, hours},
+		{"insufficient", reserve - 0.01, http.StatusForbidden, 1, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			env := newCachedBillingEnv(t, tc.balance, 900)
+			env.group.RateMultiplier = multiplier
+			env.upstream.createBody = cachedBillingCreateBody(time.Now().Add(24 * time.Hour))
+			rec := env.serve(http.MethodPost, path, body, nil, func(c *gin.Context) {
+				c.Request = c.Request.WithContext(service.WithInputTokenProtection(c.Request.Context(), protection))
+				env.h.GeminiCachedContentsCreate(c)
+			})
+			require.Equal(t, tc.status, rec.Code, rec.Body.String())
+			require.Equal(t, tc.deletes, env.upstream.methodCalls(http.MethodDelete))
+			require.Len(t, env.repo.records, 1-tc.deletes)
+			require.Zero(t, env.billing.commandCount())
+			require.Len(t, env.usage.totals(), 1)
+			row := env.usage.first()
+			require.Equal(t, service.UsageBillingStatusPendingReview, row.BillingStatus)
+			require.Zero(t, row.ActualCost)
+			require.NotNil(t, row.PendingEvidence)
+			require.NotNil(t, row.PendingEvidence.InputTokens)
+			require.Equal(t, cachedBillingTokens, *row.PendingEvidence.InputTokens)
+			require.Equal(t, tc.storageHours, row.PendingEvidence.CacheStorageTokenHours)
+			require.InDelta(t, tc.storageHours*cachedBillingStoragePrice, row.PendingEvidence.CacheStorageCost, 1e-9)
+		})
+	}
 }
 
 func TestGeminiCachedContentsCreate_UnusableUpstreamResponseCleansUpWithoutRetry(t *testing.T) {

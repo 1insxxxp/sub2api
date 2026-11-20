@@ -82,31 +82,33 @@ type SystemCustomGroupModelInput struct {
 }
 
 type CreateSystemCustomGroupRequest struct {
-	KeyDisplayCategory  string                        `json:"key_display_category"`
-	Tag                 string                        `json:"tag"`
-	TagColor            string                        `json:"tag_color"`
-	Name                string                        `json:"name"`
-	Description         *string                       `json:"description"`
-	DailyLimitUSD       *float64                      `json:"daily_limit_usd"`
-	WeeklyLimitUSD      *float64                      `json:"weekly_limit_usd"`
-	MonthlyLimitUSD     *float64                      `json:"monthly_limit_usd"`
-	DefaultValidityDays int                           `json:"default_validity_days"`
-	SourceGroupIDs      []int64                       `json:"source_group_ids"`
-	Models              []SystemCustomGroupModelInput `json:"models,omitempty"`
+	GeminiInputCountingEnabled *bool                         `json:"gemini_input_counting_enabled"`
+	KeyDisplayCategory         string                        `json:"key_display_category"`
+	Tag                        string                        `json:"tag"`
+	TagColor                   string                        `json:"tag_color"`
+	Name                       string                        `json:"name"`
+	Description                *string                       `json:"description"`
+	DailyLimitUSD              *float64                      `json:"daily_limit_usd"`
+	WeeklyLimitUSD             *float64                      `json:"weekly_limit_usd"`
+	MonthlyLimitUSD            *float64                      `json:"monthly_limit_usd"`
+	DefaultValidityDays        int                           `json:"default_validity_days"`
+	SourceGroupIDs             []int64                       `json:"source_group_ids"`
+	Models                     []SystemCustomGroupModelInput `json:"models,omitempty"`
 }
 
 type UpdateSystemCustomGroupRequest struct {
-	KeyDisplayCategory  *string                       `json:"key_display_category"`
-	Tag                 *string                       `json:"tag"`
-	TagColor            *string                       `json:"tag_color"`
-	Name                string                        `json:"name"`
-	Description         *string                       `json:"description"`
-	DailyLimitUSD       *float64                      `json:"daily_limit_usd"`
-	WeeklyLimitUSD      *float64                      `json:"weekly_limit_usd"`
-	MonthlyLimitUSD     *float64                      `json:"monthly_limit_usd"`
-	DefaultValidityDays int                           `json:"default_validity_days"`
-	SourceGroupIDs      []int64                       `json:"source_group_ids"`
-	Models              []SystemCustomGroupModelInput `json:"models,omitempty"`
+	GeminiInputCountingEnabled *bool                         `json:"gemini_input_counting_enabled"`
+	KeyDisplayCategory         *string                       `json:"key_display_category"`
+	Tag                        *string                       `json:"tag"`
+	TagColor                   *string                       `json:"tag_color"`
+	Name                       string                        `json:"name"`
+	Description                *string                       `json:"description"`
+	DailyLimitUSD              *float64                      `json:"daily_limit_usd"`
+	WeeklyLimitUSD             *float64                      `json:"weekly_limit_usd"`
+	MonthlyLimitUSD            *float64                      `json:"monthly_limit_usd"`
+	DefaultValidityDays        int                           `json:"default_validity_days"`
+	SourceGroupIDs             []int64                       `json:"source_group_ids"`
+	Models                     []SystemCustomGroupModelInput `json:"models,omitempty"`
 }
 
 type SystemCustomGroupSource struct {

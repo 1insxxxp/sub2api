@@ -58,6 +58,26 @@ func TestUsagePersistenceInputCountingAuditRoundTripPreservesReportedZeroAndUnkn
 	}
 }
 
+// The outbox stores the settled customer charge and provider evidence. A
+// replay after a group setting change must restore both without repricing.
+func TestUsagePersistenceGroupProtectionRestoresSettledSnapshot(t *testing.T) {
+	raw := inputCountingAuditSnapshot(3, `"upstream_input_tokens":1037,"input_token_policy":"group_input_token_protection","input_token_policy_count":667`)
+	log, err := decodeUsagePersistencePayload(raw, "audit-input", 2)
+	require.NoError(t, err)
+	log.ActualCost = 0.25
+	encoded, err := encodeUsagePersistencePayload(&service.UsageBillingCommand{
+		RequestID: log.RequestID, APIKeyID: 2, UserID: 1, AccountID: 3, UsageLog: log,
+	}, 0)
+	require.NoError(t, err)
+	replayed, err := decodeUsagePersistencePayload(encoded, log.RequestID, log.APIKeyID)
+	require.NoError(t, err)
+	require.Equal(t, 667, replayed.InputTokens)
+	require.Equal(t, 0.25, replayed.ActualCost)
+	require.Equal(t, "group_input_token_protection", replayed.Outcome.InputTokenPolicy)
+	require.Equal(t, 1037, *replayed.Outcome.UpstreamInputTokens)
+	require.Equal(t, 667, *replayed.Outcome.InputTokenPolicyCount)
+}
+
 func TestUsagePersistenceInputCountingAuditRetainsStrictLegacyContracts(t *testing.T) {
 	for _, version := range []int{1, 2} {
 		for _, field := range []string{"upstream_input_tokens", "input_token_policy", "input_token_policy_count", strings.ToUpper("upstream_input_tokens"), strings.ToUpper("input_token_policy"), strings.ToUpper("input_token_policy_count")} {

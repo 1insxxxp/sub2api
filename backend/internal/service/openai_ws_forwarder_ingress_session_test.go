@@ -148,9 +148,17 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_KeepLeaseAcrossT
 
 	serverErrCh := make(chan error, 1)
 	turnTerminalCh := make(chan string, 2)
+	rawUsage := make(chan OpenAIUsage, 2)
 	hooks := &OpenAIWSIngressHooks{
+		InputProtectionForTurn: func(turn int, raw []byte, _ string) *InputTokenProtection {
+			if turn == 1 {
+				return nil
+			}
+			return EstimateCustomerInputTokenProtection("response.create", raw)
+		},
 		AfterTurn: func(_ int, result *OpenAIForwardResult, turnErr error) {
 			if turnErr == nil && result != nil {
+				rawUsage <- result.Usage
 				turnTerminalCh <- result.UpstreamTerminalEvent
 			}
 		},
@@ -225,6 +233,10 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_KeepLeaseAcrossT
 	secondTurnEvent := readMessage()
 	require.Equal(t, "response.completed", gjson.GetBytes(secondTurnEvent, "type").String())
 	require.Equal(t, "resp_ingress_turn_2", gjson.GetBytes(secondTurnEvent, "response.id").String())
+	require.EqualValues(t, 1, gjson.GetBytes(firstTurnEvent, "response.usage.input_tokens").Int())
+	require.Zero(t, gjson.GetBytes(secondTurnEvent, "response.usage.input_tokens").Int())
+	require.Equal(t, 1, (<-rawUsage).InputTokens)
+	require.Equal(t, 1, (<-rawUsage).InputTokens)
 	require.Equal(t, "response.completed", <-turnTerminalCh, "首轮 turn 应保留成功终态")
 	require.Equal(t, "response.completed", <-turnTerminalCh, "第二轮 turn 应保留成功终态")
 
@@ -1445,6 +1457,7 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_HTTPBridgeModeRe
 	serverErrCh := make(chan error, 1)
 	resultCh := make(chan *OpenAIForwardResult, 1)
 	hooks := &OpenAIWSIngressHooks{
+		InputProtectionForTurn: func(int, []byte, string) *InputTokenProtection { return &InputTokenProtection{Limit: 1} },
 		AfterTurn: func(_ int, result *OpenAIForwardResult, turnErr error) {
 			if turnErr == nil && result != nil {
 				resultCh <- result
@@ -1517,6 +1530,8 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_HTTPBridgeModeRe
 	require.NoError(t, readErr2)
 	require.Equal(t, "response.done", gjson.GetBytes(event2, "type").String())
 	require.Equal(t, "resp_http_bridge_1", gjson.GetBytes(event2, "response.id").String())
+	require.EqualValues(t, 1, gjson.GetBytes(event2, "response.usage.input_tokens").Int())
+	require.EqualValues(t, 1, gjson.GetBytes(event2, "response.usage.input_tokens_details.cached_tokens").Int())
 	require.Equal(t, "completed", gjson.GetBytes(event2, "response.output.0.status").String())
 
 	_ = clientConn.Close(coderws.StatusNormalClosure, "done")
@@ -1532,6 +1547,7 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_HTTPBridgeModeRe
 	case result := <-resultCh:
 		require.Equal(t, "resp_http_bridge_1", result.RequestID)
 		require.True(t, result.OpenAIWSMode)
+		require.Equal(t, &InputTokenProtection{Limit: 1}, result.InputTokenProtection)
 		require.Equal(t, 2, result.Usage.InputTokens)
 		require.Equal(t, 1, result.Usage.OutputTokens)
 		require.Equal(t, 1, result.Usage.CacheReadInputTokens)

@@ -30,6 +30,7 @@ type SystemCustomGroupHandler struct {
 }
 
 type systemCustomGroupContainerResponse struct {
+	GeminiInputCountingEnabled bool      `json:"gemini_input_counting_enabled"`
 	KeyDisplayCategory         string    `json:"key_display_category"`
 	Tag                        string    `json:"tag"`
 	TagColor                   string    `json:"tag_color"`
@@ -246,7 +247,8 @@ func systemCustomGroupToResponse(group *service.SystemCustomGroup) systemCustomG
 
 func systemCustomGroupContainerToResponse(group service.Group) systemCustomGroupContainerResponse {
 	return systemCustomGroupContainerResponse{
-		ID: group.ID, Name: group.Name, Description: group.Description, Platform: group.Platform,
+		GeminiInputCountingEnabled: group.GeminiInputCountingEnabled,
+		ID:                         group.ID, Name: group.Name, Description: group.Description, Platform: group.Platform,
 		Tag:                group.Tag,
 		TagColor:           group.TagColor,
 		KeyDisplayCategory: group.KeyDisplayCategory,

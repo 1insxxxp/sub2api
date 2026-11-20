@@ -87,32 +87,26 @@ func geminiInputCountingAccountEligible(account *Account, model string) bool {
 		utf8.ValidString(model) && strings.TrimSpace(model) == model && isSafeGeminiAIStudioModelPathSegment(model)
 }
 
-// The frozen billing group owns the customer discount. Never read the current
-// scheduler group here: fallback/composite routing can replace it mid-request.
+// The account-level discount is only for legacy, unbound requests. Group
+// protection uses the original customer payload and never rewrites wire usage.
 func requestGeminiInputCountingEnabled(c *gin.Context, account *Account, model string) bool {
-	if !geminiInputCountingAccountEligible(account, model) {
-		return false
-	}
-	groupEnabled := func(group *Group) bool {
-		return IsGroupContextValid(group) && group.Status == StatusActive && group.GeminiInputCountingEnabled &&
-			(group.Platform == PlatformGemini || group.Platform == PlatformComposite)
+	hasGroup := func(key *APIKey) bool {
+		return key != nil && (key.GroupID != nil || key.Group != nil || key.CustomGroupID != nil ||
+			key.CustomGroup != nil || key.CategoryDefaultGroupID != nil)
 	}
 	if c != nil {
 		if c.Request != nil {
-			// System-custom middleware replaces the group with a source before
-			// pricing is frozen. These subscription containers have no opt-in
-			// control yet and must not inherit a source group's discount.
-			if c.Request.Context().Value(ctxkey.SystemCustomGroupResolution) != nil {
+			ctx := c.Request.Context()
+			group, _ := ctx.Value(ctxkey.Group).(*Group)
+			key, _ := ctx.Value(ctxkey.APIKey).(*APIKey)
+			if InputTokenProtectionFromContext(ctx) != nil || ctx.Value(ctxkey.SystemCustomGroupResolution) != nil ||
+				gatewayTokenRequestBillingGroupFromContext(ctx) != nil || group != nil ||
+				hasGroup(key) {
 				return false
 			}
-			if group := gatewayTokenRequestBillingGroupFromContext(c.Request.Context()); group != nil {
-				return groupEnabled(group)
-			}
 		}
-		if key := getAPIKeyFromContext(c); key != nil && (key.GroupID != nil || key.Group != nil) {
-			// Missing/stale bound-group data fails closed, including legacy
-			// account opt-ins. A disabled group's account cannot bypass it.
-			return key.GroupID != nil && key.Group != nil && key.Group.ID == *key.GroupID && groupEnabled(key.Group)
+		if hasGroup(getAPIKeyFromContext(c)) {
+			return false
 		}
 	}
 	return accountGeminiInputCountingEnabled(account, model)
@@ -252,7 +246,7 @@ func geminiCustomerInputTokens(result *ForwardResult) (int, bool) {
 	}
 	raw := result.Usage.InputTokens
 	evidence := result.GeminiInputCounting
-	if evidence == nil || evidence.AccountID <= 0 || evidence.Policy != GeminiInputCountingVertexLikeDiscountV1 ||
+	if result.InputTokenProtection != nil || evidence == nil || evidence.AccountID <= 0 || evidence.Policy != GeminiInputCountingVertexLikeDiscountV1 ||
 		evidence.CandidateInputTokens <= 0 || evidence.CandidateInputTokens >= raw || raw <= 0 ||
 		result.ImageEndpoint || result.ImageCount != 0 || result.Usage.ImageOutputTokens != 0 || result.AudioUsage != nil || (result.Outcome != nil && result.Outcome.HasMedia) ||
 		result.InputTokensSource != UsageTokenSourceUpstream || result.GeminiUsageFallback == nil || result.GeminiUsageFallback.UsageFields&8 == 0 ||

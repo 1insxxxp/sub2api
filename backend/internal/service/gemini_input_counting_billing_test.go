@@ -150,7 +150,7 @@ func TestGeminiInputCountingAuditWithoutCollectorStaysUnknown(t *testing.T) {
 	svc := &GatewayService{}
 	log := svc.buildRecordUsageLog(context.Background(), &recordUsageCoreInput{}, raw,
 		&APIKey{ID: 101}, &User{ID: 102}, &Account{ID: 103}, nil,
-		"gemini-4-argon", 1, 1, 1, BillingTypeBalance, false, &CostBreakdown{}, nil)
+		"gemini-4-argon", 1, 1, 1, BillingTypeBalance, false, &CostBreakdown{}, customerBillingForwardResult(raw), nil)
 	require.Equal(t, 421, log.InputTokens)
 	require.NotNil(t, log.Outcome)
 	require.Equal(t, 673, *log.Outcome.UpstreamInputTokens)

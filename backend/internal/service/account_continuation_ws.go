@@ -70,9 +70,12 @@ func accountContinuationWSAllowed(ctx context.Context, account *Account, body []
 	return configured && policy.Enabled && AccountContinuationRequestAllowed(AccountContinuationResponses, body)
 }
 
-func (s *OpenAIGatewayService) runAccountContinuationWSTurn(ctx context.Context, c *gin.Context, account *Account, body []byte, model string, send *func([]byte) error, relay func([]byte) (*OpenAIForwardResult, error)) (*OpenAIForwardResult, error) {
+func (s *OpenAIGatewayService) runAccountContinuationWSTurn(ctx context.Context, c *gin.Context, account *Account, body []byte, model string, send *func([]byte) error, protection *openAIWSTurnInputProtection, relay func([]byte) (*OpenAIForwardResult, error)) (*OpenAIForwardResult, error) {
 	if !accountContinuationWSAllowed(ctx, account, body, model) {
-		return relay(body)
+		protection.beginLeaf()
+		result, err := relay(body)
+		protection.apply(result)
+		return result, err
 	}
 	originalSend, originalWriter := *send, c.Writer
 	sink := &accountContinuationWSSink{ResponseWriter: originalWriter, send: originalSend, header: make(http.Header), status: http.StatusOK, size: -1}
@@ -80,7 +83,17 @@ func (s *OpenAIGatewayService) runAccountContinuationWSTurn(ctx context.Context,
 	*send = func(message []byte) error { _, err := fmt.Fprintf(c.Writer, "data: %s\n\n", message); return err }
 	defer func() { *send = originalSend; c.Writer = originalWriter }()
 	ctx = WithGatewayPublicModel(ctx, model)
-	result, err := runOpenAIWithAccountContinuation(ctx, c, account, body, AccountContinuationResponses, model, true, func(_ context.Context, round []byte) (*OpenAIForwardResult, error) { return relay(round) })
+	var rounds []*OpenAIForwardResult
+	result, err := runOpenAIWithAccountContinuation(ctx, c, account, body, AccountContinuationResponses, model, true, func(_ context.Context, round []byte) (*OpenAIForwardResult, error) {
+		protection.beginLeaf()
+		result, err := relay(round)
+		protection.apply(result)
+		if protection != nil && result != nil {
+			rounds = append(rounds, result)
+			protection.merged = rounds
+		}
+		return result, err
+	})
 	if result != nil && result.AntiTruncationRounds > 0 {
 		// The last actual response owns upstream context; the first public ID remains
 		// what clients see throughout this logical turn.

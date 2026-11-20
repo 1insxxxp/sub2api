@@ -44,6 +44,7 @@ func TestEnsureSimpleModeDefaultGroups_CreatesMissingDefaults(t *testing.T) {
 			Where(group.NameEQ(name), group.DeletedAtIsNil()).
 			Only(seedCtx)
 		require.NoError(t, err)
+		require.True(t, imageDefault.GeminiInputCountingEnabled)
 		require.True(t, imageDefault.AllowImageGeneration, "expected group %s to allow image generation", name)
 	}
 }
@@ -65,6 +66,7 @@ func TestEnsureSimpleModeDefaultGroups_BackfillsOnlyAutoCreatedGrokDefault(t *te
 		SetRateMultiplier(1.0).
 		SetIsExclusive(false).
 		SetAllowImageGeneration(false).
+		SetGeminiInputCountingEnabled(false).
 		Save(seedCtx)
 	require.NoError(t, err)
 
@@ -85,6 +87,7 @@ func TestEnsureSimpleModeDefaultGroups_BackfillsOnlyAutoCreatedGrokDefault(t *te
 	autoDefault, err = client.Group.Get(seedCtx, autoDefault.ID)
 	require.NoError(t, err)
 	require.True(t, autoDefault.AllowImageGeneration)
+	require.False(t, autoDefault.GeminiInputCountingEnabled)
 
 	operatorGroup, err = client.Group.Get(seedCtx, operatorGroup.ID)
 	require.NoError(t, err)

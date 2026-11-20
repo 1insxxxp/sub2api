@@ -221,7 +221,7 @@
             v-if="isUsageBillingPending(row)"
             data-testid="usage-billing-pending"
             class="inline-flex items-center rounded bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 dark:bg-dark-700 dark:text-gray-300"
-            :title="t('usage.billingPendingReviewHint')"
+            :title="pendingHint(row)"
           >{{ t('usage.billingPendingReview') }}</span>
           <div v-else class="text-sm">
             <div class="flex items-center gap-1.5">
@@ -429,7 +429,7 @@
             </div>
           </div>
           <div v-if="showUsageDiagnostics && tokenTooltipData" class="max-w-xs space-y-1 whitespace-normal border-t border-gray-700 pt-1.5 text-[11px] text-gray-300">
-            <p>{{ t('usage.inputTokensSource') }}: {{ usageTokenSourceHint(tokenTooltipData.input_tokens_source, 'input', t) }}</p>
+            <p>{{ t('usage.inputTokensSource') }}: {{ inputSourceHint(tokenTooltipData) }}</p>
             <p>{{ t('usage.outputTokensSource') }}: {{ usageTokenSourceHint(tokenTooltipData.output_tokens_source, 'output', t) }}</p>
           </div>
           <div class="flex items-center justify-between gap-6 border-t border-gray-700 pt-1.5">
@@ -708,7 +708,14 @@ const displayUsageTokenTotal = (row: AdminUsageLog | null): string => {
 }
 const tokenCountKnown = (row: AdminUsageLog, field: 'input' | 'output'): boolean =>
   isUsageTokenCountKnown(row[`${field}_tokens`], row[`${field}_tokens_source`], row[`${field}_tokens_known`])
+const pendingHint = (row: AdminUsageLog): string =>
+  t(row.billing_pending_reason === 'customer_input_unavailable' ? 'usage.customerInputPendingHint' : 'usage.billingPendingReviewHint')
+const pendingProtectedInput = (row: AdminUsageLog): boolean =>
+  isUsageBillingPending(row) && (row.billing_pending_reason === 'customer_input_unavailable' || !!row.pending_provider_evidence)
+const inputSourceHint = (row: AdminUsageLog): string =>
+  pendingProtectedInput(row) ? pendingHint(row) : usageTokenSourceHint(row.input_tokens_source, 'input', t)
 const usageTokenTitle = (row: AdminUsageLog, field: 'input' | 'output'): string | undefined => {
+  if (field === 'input' && pendingProtectedInput(row)) return pendingHint(row)
   if (props.showBilledTokens) return undefined
   if (!tokenCountKnown(row, field)) return t('usage.tokensNotReturned')
   return props.showUsageDiagnostics ? usageTokenSourceHint(row[`${field}_tokens_source`], field, t) : undefined

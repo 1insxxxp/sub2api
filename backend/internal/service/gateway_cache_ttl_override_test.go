@@ -394,3 +394,30 @@ func TestCacheTTLOverrideForwardPreservesAbsentDetails(t *testing.T) {
 		}
 	}
 }
+
+func TestProtectedPendingClaudeKeepsProviderTTLBeforeWireRewrite(t *testing.T) {
+	caseWithHour := cacheTTLOverrideBoundaryCases()[0]
+	for _, stream := range []bool{false, true} {
+		acc, settings, _ := cacheTTLOverrideBoundaryAccount(t, "account/5m")
+		rec := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(rec)
+		ctx := WithInputTokenProtection(context.Background(), &InputTokenProtection{Pending: true})
+		c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil).WithContext(ctx)
+		raw := cacheTTLOverrideBoundaryResponse(caseWithHour, stream, 8)
+		resp := &http.Response{StatusCode: 200, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(raw))}
+		s := &GatewayService{cfg: &config.Config{}, rateLimitService: &RateLimitService{}, settingService: settings}
+		var usage *ClaudeUsage
+		var err error
+		if stream {
+			result, streamErr := s.handleStreamingResponse(ctx, resp, c, acc, time.Now(), "k3", "k3", false)
+			require.NoError(t, streamErr)
+			usage = result.usage
+		} else {
+			usage, err = s.handleNonStreamingResponse(ctx, resp, c, acc, "k3", "k3")
+			require.NoError(t, err)
+		}
+		require.Equal(t, 3000, usage.CacheCreation1hTokens)
+		require.Zero(t, usage.CacheCreation5mTokens)
+		require.Contains(t, rec.Body.String(), `"ephemeral_1h_input_tokens":0`)
+	}
+}

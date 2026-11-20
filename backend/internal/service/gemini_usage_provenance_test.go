@@ -41,7 +41,7 @@ func TestGeminiUsageProvenancePreservesFieldPresenceAndSelectedOutput(t *testing
 				}
 			}
 			finishGeminiUpstreamAttempt(attempt, result, nil)
-			log := (&GatewayService{}).buildRecordUsageLog(context.Background(), &recordUsageCoreInput{}, result, &APIKey{ID: 1}, &User{ID: 2}, &Account{ID: 3, Platform: PlatformGemini}, nil, result.Model, 1, 1, 1, BillingTypeBalance, false, nil, &recordUsageOpts{})
+			log := (&GatewayService{}).buildRecordUsageLog(context.Background(), &recordUsageCoreInput{}, result, &APIKey{ID: 1}, &User{ID: 2}, &Account{ID: 3, Platform: PlatformGemini}, nil, result.Model, 1, 1, 1, BillingTypeBalance, false, nil, customerBillingForwardResult(result), nil)
 			data, err := json.Marshal(log)
 			require.NoError(t, err)
 			var fields map[string]any
@@ -60,7 +60,7 @@ func TestGeminiUsageProvenanceDoesNotCreateResponseEvidenceForSync(t *testing.T)
 	attempt.ObserveUsage([]byte(`{"usageMetadata":{"promptTokenCount":12,"candidatesTokenCount":3}}`))
 	result := &ForwardResult{RequestID: "sync-provenance", Model: "gemini-test", Usage: ClaudeUsage{InputTokens: 12, OutputTokens: 3}}
 	finishGeminiUpstreamAttempt(attempt, result, nil)
-	log := (&GatewayService{}).buildRecordUsageLog(context.Background(), &recordUsageCoreInput{}, result, &APIKey{ID: 1}, &User{ID: 2}, &Account{ID: 3, Platform: PlatformGemini}, nil, result.Model, 1, 1, 1, BillingTypeBalance, false, nil, &recordUsageOpts{})
+	log := (&GatewayService{}).buildRecordUsageLog(context.Background(), &recordUsageCoreInput{}, result, &APIKey{ID: 1}, &User{ID: 2}, &Account{ID: 3, Platform: PlatformGemini}, nil, result.Model, 1, 1, 1, BillingTypeBalance, false, nil, customerBillingForwardResult(result), nil)
 	data, err := json.Marshal(log)
 	require.NoError(t, err)
 	var fields map[string]any

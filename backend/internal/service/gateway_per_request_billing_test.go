@@ -90,7 +90,7 @@ func TestGatewayCalculateRecordUsageCost_PerRequestReplacesTokenCost(t *testing.
 		BillingTypeBalance,
 		false,
 		cost,
-		&recordUsageOpts{},
+		customerBillingForwardResult(result), nil,
 	)
 
 	require.Equal(t, 5000, usageLog.InputTokens)

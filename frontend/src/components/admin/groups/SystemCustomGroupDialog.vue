@@ -85,6 +85,11 @@
           data-testid="system-custom-advanced-settings"
           class="mt-4 grid gap-4 border-t border-slate-100 pt-4 dark:border-dark-700 sm:grid-cols-3"
         >
+          <GroupInputTokenProtectionField
+            v-model="form.gemini_input_counting_enabled"
+            id="system-custom-input-token-protection"
+            class="sm:col-span-3"
+          />
           <label class="block sm:col-span-3">
             <span class="input-label">{{ t('admin.groups.form.description') }}</span>
             <textarea
@@ -245,6 +250,7 @@ import type {
   SystemCustomGroupSource
 } from '@/types'
 import type { ReusableGroupTagOption } from '@/utils/groupTagOptions'
+import GroupInputTokenProtectionField from './GroupInputTokenProtectionField.vue'
 import GroupTagField from '@/components/admin/group/GroupTagField.vue'
 import { KEY_GROUP_PROVIDERS } from '@/utils/keyGroupProviders'
 
@@ -288,6 +294,7 @@ const form = reactive({
   daily_limit_usd: '' as number | string | null,
   weekly_limit_usd: '' as number | string | null,
   monthly_limit_usd: '' as number | string | null,
+  gemini_input_counting_enabled: true as boolean | undefined,
   default_validity_days: 30
 })
 
@@ -305,6 +312,7 @@ const reset = () => {
   form.daily_limit_usd = ''
   form.weekly_limit_usd = ''
   form.monthly_limit_usd = ''
+  form.gemini_input_counting_enabled = true
   form.default_validity_days = 30
   candidates.value = []
   selectedSourceIDs.value = []
@@ -392,6 +400,7 @@ const load = async () => {
       form.daily_limit_usd = detail.group.daily_limit_usd ?? ''
       form.weekly_limit_usd = detail.group.weekly_limit_usd ?? ''
       form.monthly_limit_usd = detail.group.monthly_limit_usd ?? ''
+      form.gemini_input_counting_enabled = detail.group.gemini_input_counting_enabled
       form.default_validity_days = detail.group.default_validity_days
       advancedSettingsOpen.value = Boolean(
         detail.group.description || detail.group.daily_limit_usd !== null || detail.group.weekly_limit_usd !== null || detail.group.monthly_limit_usd !== null
@@ -454,6 +463,7 @@ const saveDisabled = computed(() =>
 )
 
 const snapshot = (): CreateSystemCustomGroupRequest => ({
+  gemini_input_counting_enabled: form.gemini_input_counting_enabled,
   name: form.name.trim(),
   description: form.description.trim() || null,
   tag: form.tag,

@@ -910,25 +910,7 @@ type recordUsageOpts struct {
 
 // RecordUsage 记录使用量并扣费（或更新订阅用量）
 func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInput) error {
-	return s.recordUsageCore(ctx, &recordUsageCoreInput{
-		Result:             input.Result,
-		ParsedRequest:      input.ParsedRequest,
-		APIKey:             input.APIKey,
-		User:               input.User,
-		Account:            input.Account,
-		Subscription:       input.Subscription,
-		PricingAt:          input.PricingAt,
-		InboundEndpoint:    input.InboundEndpoint,
-		UpstreamEndpoint:   input.UpstreamEndpoint,
-		UserAgent:          input.UserAgent,
-		IPAddress:          input.IPAddress,
-		SessionID:          input.SessionID,
-		RequestPayloadHash: input.RequestPayloadHash,
-		ForceCacheBilling:  input.ForceCacheBilling,
-		APIKeyService:      input.APIKeyService,
-		QuotaPlatform:      input.QuotaPlatform,
-		ChannelUsageFields: input.ChannelUsageFields,
-	}, &recordUsageOpts{})
+	return s.recordUsageCore(ctx, input, &recordUsageOpts{})
 }
 
 // RecordUsageLongContextInput 记录使用量的输入参数（支持长上下文双倍计费）。
@@ -980,25 +962,7 @@ func (s *GatewayService) RecordUsageWithLongContext(ctx context.Context, input *
 }
 
 // recordUsageCoreInput 是 recordUsageCore 的公共输入字段，从两种输入结构体中提取。
-type recordUsageCoreInput struct {
-	Result             *ForwardResult
-	ParsedRequest      *ParsedRequest
-	APIKey             *APIKey
-	User               *User
-	Account            *Account
-	Subscription       *UserSubscription
-	PricingAt          time.Time
-	InboundEndpoint    string
-	UpstreamEndpoint   string
-	UserAgent          string
-	IPAddress          string
-	SessionID          string
-	RequestPayloadHash string
-	ForceCacheBilling  bool
-	APIKeyService      APIKeyQuotaUpdater
-	QuotaPlatform      string
-	ChannelUsageFields
-}
+type recordUsageCoreInput = RecordUsageInput
 
 // responseModelBillingCostEpsilon 吸收两次成本计算之间的浮点末位误差，
 // 避免同价模型因浮点误差被判成"更贵"而白白放弃采纳。
@@ -1077,10 +1041,15 @@ func logResponseModelBillingApplied(component string, account *Account, requestI
 // recordUsageCore is shared by normal and legacy-long-context usage recording.
 func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsageCoreInput, opts *recordUsageOpts) error {
 	result := input.Result
+	// A detached worker carries the original request snapshot. Prefer an
+	// already stamped result (e.g. a separately priced WebSocket turn).
+	if result != nil && result.InputTokenProtection == nil {
+		result.InputTokenProtection = InputTokenProtectionFromContext(ctx)
+	}
 	if err := validateForwardContinuationResults(result); err != nil {
 		return err
 	}
-	if NeedsUsageMeasurementReview(result) {
+	if result != nil && result.InputTokenProtection == nil && NeedsUsageMeasurementReview(result) {
 		return ErrUsageMeasurementIncomplete
 	}
 	apiKey := input.APIKey
@@ -1094,16 +1063,37 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	if shouldSkipPureGeminiUsageFailure(result) {
 		return nil
 	}
-	cacheTTLOverridden := false
-	rounds := result.ContinuationResults
-	if len(rounds) == 0 {
-		rounds = []*ForwardResult{result}
+	billingModel := s.recordUsageBillingModel(ctx, apiKey, result, input.ChannelUsageFields)
+	protection := result.InputTokenProtection
+	// Without response-model adoption the configured tariff is final. Persist
+	// missing local evidence even when the upstream counters cannot be priced.
+	if protection != nil && (protection.Pending || protection.Limit < 0) &&
+		input.BillingModelSource != BillingModelSourceResponse && s.forwardConfiguredTokenTariff(ctx, result, apiKey, billingModel) {
+		return s.recordPendingUsage(ctx, input, opts)
 	}
-	for _, round := range rounds {
-		result := round
+	if protection != nil && NeedsUsageMeasurementReview(result) {
+		if s.forwardConfiguredTokenTariff(ctx, result, apiKey, billingModel) {
+			return s.recordPendingUsage(ctx, input, opts)
+		}
+		return ErrUsageMeasurementIncomplete
+	}
+
+	for _, round := range forwardBillingRounds(result) {
+		ApplyForwardImageBillingResolution(round)
+		logServiceTierBillingDowngrade("service.gateway", account, round.RequestID, ApplyForwardServiceTierBillingResolution(round))
+	}
+	if len(result.ContinuationResults) > 0 {
+		refreshForwardContinuationUsage(result)
+	}
+	// On protected requests the provider's original cache classification also
+	// owns the account quota and cost, even when the customer's key forces reads.
+	providerResult := result
+	if protection != nil {
+		result = cloneForwardBillingResult(result)
+	}
+	cacheTTLOverridden := false
+	for _, result := range forwardBillingRounds(result) {
 		applyMissingInputTokenEstimate(ctx, result, account)
-		ApplyForwardImageBillingResolution(result)
-		logServiceTierBillingDowngrade("service.gateway", account, result.RequestID, ApplyForwardServiceTierBillingResolution(result))
 
 		// 强制缓存计费：将 input_tokens 转为 cache_read_input_tokens
 		// 用于粘性会话切换时的特殊计费处理
@@ -1135,46 +1125,7 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		refreshForwardContinuationUsage(result)
 	}
 
-	// 获取费率倍数（优先级：用户专属 > 分组默认 > 系统默认）
-	multiplier := 1.0
-	if s.cfg != nil {
-		multiplier = s.cfg.Default.RateMultiplier
-	}
-	if apiKey.GroupID != nil && apiKey.Group != nil {
-		groupDefault := apiKey.Group.RateMultiplier
-		multiplier = s.ResolveUserGroupRateMultiplier(ctx, user.ID, *apiKey.GroupID, groupDefault)
-	}
-	// token 倍率叠加高峰因子（token 计费含图片 token，图片按次倍率不受影响）。高峰因子按请求时刻现算，
-	// 不并入上面的 getUserGroupRateMultiplier，以免污染 user:group 倍率缓存。
-	pricingAt := input.PricingAt
-	if pricingAt.IsZero() {
-		pricingAt = timezone.Now()
-	}
-	multiplier, imageMultiplier := computePeakAwareMultipliers(apiKey, multiplier, pricingAt)
-
-	// 确定计费模型
-	concreteBillingModel := forwardResultBillingModel(result.Model, result.UpstreamModel)
-	billingModel := concreteBillingModel
-	if input.BillingModelSource == BillingModelSourceChannelMapped && input.ChannelMappedModel != "" {
-		billingModel = billingModelFromMappedUsageField(ctx, input.ChannelMappedModel)
-	}
-	requestedBillingModel := billingModelFromOriginalUsageField(ctx, input.OriginalModel)
-	if input.BillingModelSource == BillingModelSourceRequested && requestedBillingModel != "" {
-		billingModel = requestedBillingModel
-	}
-	// composite 分组的公开别名（如 all/claude）会经 OriginalModel/ChannelMappedModel
-	// 进入上面的来源覆盖：任意别名查无价会静默落 $0，含家族词的别名则被价格表的
-	// 家族模糊匹配错计（如 Opus 流量按 Sonnet 兜底价）。除非管理员为别名显式配置了
-	// 渠道定价（OpenRouter 式自定价），composite 请求一律按实际转发的具体模型计费。
-	if apiKey.Group != nil && apiKey.Group.Platform == PlatformComposite {
-		billingModel = s.compositeBillableModel(ctx, apiKey, billingModel, concreteBillingModel)
-	}
-	billingModel = groupAliasBillingModel(apiKey.Group, billingModel, func(alias string) bool {
-		return s.resolver.hasConfiguredModelPricing(ctx, PricingInput{Model: alias, GroupID: apiKey.GroupID, Group: apiKey.Group})
-	})
-	// 通用兜底（与 OpenAI 路径的 usageBillingModelCandidates 语义对齐）：
-	// 选定模型查不到任何价格时回退到实际转发的具体模型。已定价流量不受影响。
-	billingModel = s.billableModelWithFallback(ctx, apiKey, billingModel, result.UpstreamModel, result.Model)
+	multiplier, imageMultiplier, pricingAt := s.recordUsageMultipliers(ctx, apiKey, user, input.PricingAt)
 	cacheStorageCost := s.cacheStorageCost(result, billingModel)
 
 	// 确定 RequestedModel（渠道映射前的原始模型）
@@ -1194,11 +1145,12 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	if err := ValidateUsageBillingActualCost(cost.ActualCost); err != nil {
 		return err
 	}
+	originalCost := cost
 	// Customer counting and delivery projections must not discount account
 	// costs or account quota. Re-run with the original upstream usage.
 	accountTotalCost := cost.TotalCost
 	var accountQuotaTotalCost *float64
-	if billingResult.Usage != result.Usage {
+	if !sameForwardBillingUsage(billingResult, result) {
 		rawCost, rawErr := s.calculateRecordUsageCostWithResponseModel(ctx, input, result, billingModel, multiplier, imageMultiplier, pricingAt, opts, false)
 		if rawErr != nil {
 			return rawErr
@@ -1219,6 +1171,39 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		}
 	}
 
+	if protection != nil {
+		price := func(round *ForwardResult) (*CostBreakdown, error) {
+			return s.calculateRecordUsageCostWithResponseModel(ctx, input, round, billingModel, multiplier, imageMultiplier, pricingAt, opts, false)
+		}
+		projected, protectedCost, pending, err := protectForwardBilling(billingResult, providerResult, protection, originalCost, price)
+		if err != nil {
+			return err
+		}
+		if pending {
+			return s.recordPendingUsage(ctx, input, opts)
+		}
+		if projected == billingResult {
+			// The adopted tariff excluded the entire request.
+			protection = nil
+			providerResult = result
+		} else {
+			cost = lessExpensiveForwardCost(cost, protectedCost)
+			accountQuotaTotalCost = &accountTotalCost
+			billingResult = projected
+		}
+		if !sameForwardBillingUsage(providerResult, result) {
+			providerCost, err := price(providerResult)
+			if err != nil {
+				return err
+			}
+			if err := ValidateUsageBillingActualCost(providerCost.TotalCost); err != nil {
+				return err
+			}
+			accountTotalCost = providerCost.TotalCost
+			accountQuotaTotalCost = &accountTotalCost
+		}
+	}
+
 	// 判断计费方式：订阅模式 vs 余额模式。系统自定义月卡的 API key
 	// 已克隆成来源分组，因此必须使用上面的双重身份判定，不能再看来源分组类型。
 	billingType := BillingTypeBalance
@@ -1228,8 +1213,8 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 
 	// 创建使用日志
 	accountRateMultiplier := account.BillingRateMultiplier()
-	usageLog := s.buildRecordUsageLog(ctx, input, result, apiKey, user, account, subscription,
-		requestedModel, multiplier, imageMultiplier, accountRateMultiplier, billingType, cacheTTLOverridden, cost, opts)
+	usageLog := s.buildRecordUsageLog(ctx, input, providerResult, apiKey, user, account, subscription,
+		requestedModel, multiplier, imageMultiplier, accountRateMultiplier, billingType, cacheTTLOverridden, cost, billingResult, protection)
 	if systemCustomResolution != nil {
 		usageLog.GroupID = optionalInt64Ptr(systemCustomResolution.BillingGroupID)
 		usageLog.SourceGroupID = optionalInt64Ptr(systemCustomResolution.SourceGroupID)
@@ -1238,7 +1223,7 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	// 计算账号统计定价费用（使用最终上游模型匹配自定义规则）。纯存储费不是一次模型请求，
 	// 账号统计成本回落 total_cost（官方存储价）。
 	if apiKey.GroupID != nil && len(result.ContinuationResults) > 0 {
-		if err := s.applyForwardContinuationAccountStatsCost(ctx, usageLog, input, result, billingModel, multiplier, imageMultiplier, pricingAt, opts); err != nil {
+		if err := s.applyForwardContinuationAccountStatsCost(ctx, usageLog, input, providerResult, billingModel, multiplier, imageMultiplier, pricingAt, opts); err != nil {
 			return err
 		}
 	} else if apiKey.GroupID != nil && !isCacheStorageOnlyResult(result) {
@@ -1246,7 +1231,7 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 			account.ID, *apiKey.GroupID, result.UpstreamModel, result.Model,
 			// Anthropic's input_tokens excludes cache_read and cache_creation (billed separately);
 			// OpenAI gateway uses actualInputTokens which also excludes cache_read for the same reason.
-			result.Usage.billingUsageTokens(),
+			providerResult.Usage.billingUsageTokens(),
 			accountTotalCost-cacheStorageCost, pricingAt,
 			accountStatsLongContextPricingEnabled(nil), result.upstreamPriceFactor(),
 		)
@@ -1339,10 +1324,11 @@ func (s *GatewayService) recordUsageBillingModel(ctx context.Context, apiKey *AP
 	concreteBillingModel := forwardResultBillingModel(result.Model, result.UpstreamModel)
 	billingModel := concreteBillingModel
 	if fields.BillingModelSource == BillingModelSourceChannelMapped && fields.ChannelMappedModel != "" {
-		billingModel = fields.ChannelMappedModel
+		billingModel = billingModelFromMappedUsageField(ctx, fields.ChannelMappedModel)
 	}
-	if fields.BillingModelSource == BillingModelSourceRequested && fields.OriginalModel != "" {
-		billingModel = fields.OriginalModel
+	requestedBillingModel := billingModelFromOriginalUsageField(ctx, fields.OriginalModel)
+	if fields.BillingModelSource == BillingModelSourceRequested && requestedBillingModel != "" {
+		billingModel = requestedBillingModel
 	}
 	// composite 分组的公开别名（如 all/claude）会经 OriginalModel/ChannelMappedModel
 	// 进入上面的来源覆盖：任意别名查无价会静默落 $0，含家族词的别名则被价格表的
@@ -1351,6 +1337,9 @@ func (s *GatewayService) recordUsageBillingModel(ctx context.Context, apiKey *AP
 	if apiKey.Group != nil && apiKey.Group.Platform == PlatformComposite {
 		billingModel = s.compositeBillableModel(ctx, apiKey, billingModel, concreteBillingModel)
 	}
+	billingModel = groupAliasBillingModel(apiKey.Group, billingModel, func(alias string) bool {
+		return s.resolver.hasConfiguredModelPricing(ctx, PricingInput{Model: alias, GroupID: apiKey.GroupID, Group: apiKey.Group})
+	})
 	// 通用兜底（与 OpenAI 路径的 usageBillingModelCandidates 语义对齐）：
 	// 选定模型查不到任何价格时回退到实际转发的具体模型。已定价流量不受影响。
 	return s.billableModelWithFallback(ctx, apiKey, billingModel, result.UpstreamModel, result.Model)
@@ -1402,9 +1391,32 @@ func (s *GatewayService) QuoteUsageCost(ctx context.Context, input *RecordUsageI
 	}
 	multiplier, imageMultiplier, pricingAt := s.recordUsageMultipliers(ctx, input.APIKey, user, input.PricingAt)
 	billingModel := s.recordUsageBillingModel(ctx, input.APIKey, input.Result, input.ChannelUsageFields)
-	cost := s.calculateRecordUsageCost(ctx, input.Result, input.APIKey, billingModel, multiplier, imageMultiplier, pricingAt)
+	result := input.Result
+	protection := result.InputTokenProtection
+	if protection == nil {
+		protection = InputTokenProtectionFromContext(ctx)
+	}
+	price := func(round *ForwardResult) (*CostBreakdown, error) {
+		return s.calculateRecordUsageCost(ctx, round, input.APIKey, billingModel, multiplier, imageMultiplier, pricingAt), nil
+	}
+	cost, _ := price(result)
 	if cost == nil {
 		return 0
+	}
+	if protection != nil {
+		if validateForwardContinuationResults(result) != nil {
+			return 0
+		}
+		_, projected, pending, err := protectForwardBilling(result, result, protection, cost, price)
+		if err != nil {
+			return 0
+		}
+		if pending {
+			// A created cachedContent has a measured size and TTL even when
+			// customer input is unknown. Reserve its priced storage component.
+			return s.cacheStorageCost(result, billingModel) * multiplier
+		}
+		return projected.ActualCost
 	}
 	return cost.ActualCost
 }
@@ -1846,7 +1858,8 @@ func (s *GatewayService) buildRecordUsageLog(
 	billingType int8,
 	cacheTTLOverridden bool,
 	cost *CostBreakdown,
-	_ *recordUsageOpts,
+	customerResult *ForwardResult,
+	protection *InputTokenProtection,
 ) *UsageLog {
 	durationMs := int(result.Duration.Milliseconds())
 	requestID := resolveUsageBillingRequestID(ctx, result.RequestID)
@@ -1860,21 +1873,30 @@ func (s *GatewayService) buildRecordUsageLog(
 			"selected_response_model", strings.TrimSpace(result.UpstreamResponseModel),
 		)
 	}
-	usageOutcome := withContinuationAudit(ensureResponseOutcomeForUsageLog(result.Outcome, result.AntiTruncationRounds), forwardContinuationAudit(result, account))
-	customerResult := customerBillingForwardResultForAccount(result, account)
-	if customerResult.Usage.InputTokens != result.Usage.InputTokens && result.GeminiInputCounting != nil {
-		// Keep the captured provider outcome immutable. A missing collector stays
-		// at version zero so scalar audit does not invent a completion status.
+	usageOutcome := withContinuationAudit(ensureResponseOutcomeForUsageLog(result.Outcome, result.AntiTruncationRounds), forwardContinuationAudit(result, customerResult, protection != nil))
+	var policy string
+	var candidate int
+	if protection != nil {
+		policy, candidate = "group_input_token_protection", protection.Limit
+	} else if evidence := result.GeminiInputCounting; evidence != nil && customerResult.InputTokenProtection == nil && customerResult.Usage.InputTokens != result.Usage.InputTokens {
+		policy, candidate = evidence.Policy, evidence.CandidateInputTokens
+	}
+	if policy != "" {
+		// Preserve collector version zero for scalar-only policy evidence.
 		var audit ResponseOutcome
 		if usageOutcome != nil {
 			audit = *usageOutcome
 		}
 		rawInput := result.Usage.InputTokens
-		candidate := result.GeminiInputCounting.CandidateInputTokens
 		audit.UpstreamInputTokens = &rawInput
-		audit.InputTokenPolicy = result.GeminiInputCounting.Policy
+		audit.InputTokenPolicy = policy
 		audit.InputTokenPolicyCount = &candidate
 		usageOutcome = &audit
+	}
+
+	cacheUsage := result.Usage
+	if protection != nil {
+		cacheUsage = customerResult.Usage
 	}
 	usageLog := &UsageLog{
 		UserID:                   user.ID,
@@ -1894,14 +1916,14 @@ func (s *GatewayService) buildRecordUsageLog(
 		InboundEndpoint:          optionalTrimmedStringPtr(input.InboundEndpoint),
 		UpstreamEndpoint:         optionalTrimmedStringPtr(input.UpstreamEndpoint),
 		InputTokens:              customerResult.Usage.InputTokens,
-		OutputTokens:             recordedOutputTokens(result),
+		OutputTokens:             customerResult.Usage.OutputTokens,
 		InputTokensSource:        customerResult.InputTokensSource.Normalize(),
 		OutputTokensSource:       recordedOutputTokensSource(result),
 		UpstreamOutputTokens:     result.Usage.OutputTokens,
-		CacheCreationTokens:      result.Usage.CacheCreationInputTokens,
-		CacheReadTokens:          result.Usage.CacheReadInputTokens,
-		CacheCreation5mTokens:    result.Usage.CacheCreation5mTokens,
-		CacheCreation1hTokens:    result.Usage.CacheCreation1hTokens,
+		CacheCreationTokens:      cacheUsage.CacheCreationInputTokens,
+		CacheReadTokens:          cacheUsage.CacheReadInputTokens,
+		CacheCreation5mTokens:    cacheUsage.CacheCreation5mTokens,
+		CacheCreation1hTokens:    cacheUsage.CacheCreation1hTokens,
 		ImageOutputTokens:        result.Usage.ImageOutputTokens,
 		RateMultiplier:           multiplier,
 		AccountRateMultiplier:    &accountRateMultiplier,

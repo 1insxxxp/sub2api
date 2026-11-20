@@ -155,6 +155,7 @@ func TestCreateSystemCustomGroupNormalizesContainer(t *testing.T) {
 	require.Equal(t, 1.0, repo.createdGroup.RateMultiplier)
 	require.True(t, repo.createdGroup.SystemCustomRoutingEnabled)
 	require.True(t, repo.createdGroup.IsSystemCustomRouteGroup())
+	require.True(t, repo.createdGroup.GeminiInputCountingEnabled)
 	require.Equal(t, "tavern-sonnet", repo.createdModels[0].PublicModel)
 	require.Equal(t, "claude-sonnet-4", repo.createdModels[0].SourceModel)
 	require.Equal(t, []int64{10}, repo.createdSourceGroupIDs)
@@ -197,7 +198,7 @@ func TestCreateSystemCustomGroupExplicitSourcesAreAuthoritativeAndOrdered(t *tes
 	)
 
 	_, err := svc.Create(context.Background(), CreateSystemCustomGroupRequest{
-		Name: "dynamic", DefaultValidityDays: 30,
+		Name: "dynamic", DefaultValidityDays: 30, GeminiInputCountingEnabled: testPtrBool(false),
 		SourceGroupIDs: []int64{20, 10},
 		Models: []SystemCustomGroupModelInput{
 			{PublicModel: "ignored", SourceGroupID: 999, SourceModel: "missing", Enabled: true},
@@ -206,6 +207,7 @@ func TestCreateSystemCustomGroupExplicitSourcesAreAuthoritativeAndOrdered(t *tes
 
 	require.NoError(t, err)
 	require.Equal(t, []int64{20, 10}, repo.createdSourceGroupIDs)
+	require.False(t, repo.createdGroup.GeminiInputCountingEnabled)
 	require.Empty(t, repo.createdModels, "explicit sources must not persist an unvalidated legacy snapshot")
 }
 
@@ -217,7 +219,7 @@ func TestUpdateSystemCustomGroupExplicitSourcesReplaceSelectionAndPreserveLegacy
 		Group: Group{
 			ID: 99, Name: "existing", Platform: PlatformComposite,
 			SubscriptionType: SubscriptionTypeSubscription, SystemCustomRoutingEnabled: true,
-			IsExclusive: true, RateMultiplier: 1, Status: StatusActive,
+			GeminiInputCountingEnabled: true, IsExclusive: true, RateMultiplier: 1, Status: StatusActive,
 		},
 		Models: []SystemCustomGroupModel{legacyModel},
 	}}
@@ -238,6 +240,7 @@ func TestUpdateSystemCustomGroupExplicitSourcesReplaceSelectionAndPreserveLegacy
 	})
 
 	require.NoError(t, err)
+	require.True(t, updated.Group.GeminiInputCountingEnabled)
 	require.Equal(t, []int64{20, 10}, repo.updatedSourceGroupIDs)
 	require.Empty(t, repo.updatedModels)
 	require.Equal(t, []SystemCustomGroupModel{legacyModel}, updated.Models)
@@ -347,7 +350,7 @@ func TestUpdateSystemCustomGroupNormalizesContainer(t *testing.T) {
 	description := " changed "
 
 	updated, err := svc.Update(context.Background(), 99, UpdateSystemCustomGroupRequest{
-		Name: " changed ", Description: &description, DefaultValidityDays: 60,
+		Name: " changed ", Description: &description, DefaultValidityDays: 60, GeminiInputCountingEnabled: testPtrBool(true),
 		Models: []SystemCustomGroupModelInput{{PublicModel: " alias ", SourceGroupID: 10, SourceModel: " model-a ", Enabled: true}},
 	})
 
@@ -358,6 +361,7 @@ func TestUpdateSystemCustomGroupNormalizesContainer(t *testing.T) {
 	require.True(t, repo.updatedGroup.IsExclusive)
 	require.Equal(t, 1.0, repo.updatedGroup.RateMultiplier)
 	require.True(t, repo.updatedGroup.SystemCustomRoutingEnabled)
+	require.True(t, repo.updatedGroup.GeminiInputCountingEnabled)
 	require.Equal(t, "alias", repo.updatedModels[0].PublicModel)
 }
 

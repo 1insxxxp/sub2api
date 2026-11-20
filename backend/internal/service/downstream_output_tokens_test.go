@@ -405,7 +405,7 @@ func TestUsageLogSeparatesDeliveredAndProviderOutputTokens(t *testing.T) {
 		BillingTypeBalance,
 		false,
 		&CostBreakdown{},
-		&recordUsageOpts{},
+		customerBillingForwardResult(result), nil,
 	)
 
 	require.Equal(t, 7, usageLog.OutputTokens)
@@ -437,7 +437,7 @@ func TestCompletedUsageLogUsesProviderOutputTokens(t *testing.T) {
 		BillingTypeBalance,
 		false,
 		&CostBreakdown{},
-		&recordUsageOpts{},
+		customerBillingForwardResult(result), nil,
 	)
 
 	require.Equal(t, 321, usageLog.OutputTokens)

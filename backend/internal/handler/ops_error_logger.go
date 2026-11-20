@@ -470,6 +470,8 @@ func setOpsSelectedAccount(c *gin.Context, accountID int64, platform ...string) 
 		return
 	}
 	service.ClearOpsUpstreamModel(c)
+	// A failover can switch between passthrough and account-mapped billing.
+	c.Set("openai_passthrough", false)
 	c.Set(opsAccountIDKey, accountID)
 	if c.Request != nil {
 		ctx := context.WithValue(c.Request.Context(), ctxkey.AccountID, accountID)

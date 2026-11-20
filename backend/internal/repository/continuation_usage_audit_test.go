@@ -50,11 +50,55 @@ func TestContinuationUsageAuditRejectsOlderVersionsAndUnboundedEvidence(t *testi
 			require.Error(t, err)
 		}
 	}
-	for _, extra := range []string{`,"prompt":"private text"`, `,"api_key":"secret"`, `,"input_tokens":-1`} {
+	for _, extra := range []string{`,"prompt":"private text"`, `,"api_key":"secret"`, `,"input_tokens":-1`, `,"cache_creation_30m_tokens":-1`, `,"cache_creation_12h_tokens":2147483648`, `,"image_input_tokens":-1`, `,"image_cache_read_tokens":-1`} {
 		raw := []byte(`{"version":5,"usage":{"request_id":"continued","api_key_id":2,"user_id":1,"account_id":3,"created_at":"2026-11-03T00:00:00Z","outcome":{"continuation_usage":[{"request_id":"first","model":"gpt-5","input_tokens_source":"upstream","output_tokens_source":"upstream"` + extra + `}]}}}`)
 		_, err := decodeUsagePersistencePayload(raw, "continued", 2)
 		require.Error(t, err)
 	}
 	rounds := make([]service.ContinuationUsageAudit, 5)
 	require.Error(t, service.ValidateContinuationUsageAudit(rounds))
+}
+
+func TestSettledProtectedSingleCallAuditSurvivesPersistence(t *testing.T) {
+	rawInput, limit := 200, 18
+	log := &service.UsageLog{
+		RequestID: "protected-call", UserID: 1, APIKeyID: 2, AccountID: 3,
+		CacheReadTokens: 18, OutputTokens: 8, ActualCost: 0.25,
+		Outcome: &service.ResponseOutcome{
+			UpstreamInputTokens: &rawInput, InputTokenPolicy: "group_input_token_protection", InputTokenPolicyCount: &limit,
+			ContinuationUsage: []service.ContinuationUsageAudit{{
+				InputTokens: rawInput, InputIncludesCache: true, CacheReadTokens: 41, CacheCreationTokens: 24,
+				CacheCreation30mTokens: 9, CacheCreation12hTokens: 15, ImageInputTokens: 38, ImageCacheReadTokens: 25,
+				OutputTokens: 8, CustomerOutputTokens: 8, InputTokenPolicy: "group_input_token_protection", InputTokenPolicyCount: limit,
+				InputTokensSource: service.UsageTokenSourceUpstream, OutputTokensSource: service.UsageTokenSourceUpstream,
+			}},
+		},
+	}
+	payload, err := encodeUsagePersistencePayload(&service.UsageBillingCommand{
+		RequestID: log.RequestID, APIKeyID: log.APIKeyID, UserID: log.UserID, AccountID: log.AccountID, UsageLog: log,
+	}, 0)
+	require.NoError(t, err)
+	replayed, err := decodeUsagePersistencePayload(payload, log.RequestID, log.APIKeyID)
+	require.NoError(t, err)
+	require.Equal(t, log.Outcome, replayed.Outcome)
+	require.Zero(t, replayed.InputTokens)
+	require.Zero(t, replayed.CacheCreationTokens)
+	require.Equal(t, 18, replayed.CacheReadTokens)
+	require.Equal(t, 0.25, replayed.ActualCost)
+	require.Zero(t, replayed.AntiTruncationRounds)
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+	mock.ExpectExec(`INSERT INTO usage_response_outcomes`).WithArgs(
+		"protected-call", int64(2), int64(1), int64(3), nil,
+		0, 0, false, false, false, false, int64(0), 0, false, "", "none", "none",
+		int16(0), 0, "unknown", "unknown", rawInput, "group_input_token_protection", limit,
+	).WillReturnResult(sqlmock.NewResult(1, 1))
+	rawAudit, err := json.Marshal(log.Outcome.ContinuationUsage)
+	require.NoError(t, err)
+	mock.ExpectExec(`UPDATE usage_response_outcomes SET continuation_usage=\$3::jsonb`).
+		WithArgs("protected-call", int64(2), string(rawAudit)).WillReturnResult(sqlmock.NewResult(0, 1))
+	require.NoError(t, newUsageLogRepositoryWithSQL(nil, db).UpsertResponseOutcome(context.Background(), replayed))
+	require.NoError(t, mock.ExpectationsWereMet())
 }

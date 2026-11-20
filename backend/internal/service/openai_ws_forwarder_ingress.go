@@ -195,6 +195,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 	isCodexCLI := openai.IsCodexOfficialClientByHeaders(c.GetHeader("User-Agent"), c.GetHeader("originator")) || (s.cfg != nil && s.cfg.Gateway.ForceCodexCLI)
 
 	type openAIWSClientPayload struct {
+		customerRaw              []byte
 		payloadRaw               []byte
 		accountIdentitySourceRaw []byte
 		rawForHash               []byte
@@ -491,6 +492,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			payloadRaw:               normalized,
 			accountIdentitySourceRaw: accountIdentitySourceRaw,
 			rawForHash:               trimmed,
+			customerRaw:              raw,
 			promptCacheKey:           promptCacheKey,
 			previousResponseID:       previousResponseID,
 			originalModel:            originalModel,
@@ -502,11 +504,12 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		}, nil
 	}
 
+	var turnProtection *openAIWSTurnInputProtection
 	writeClientMessage := func(message []byte) error {
 		writeCtx, cancel := newOpenAIWSDownstreamWriteContext(ctx, hooks, s.openAIWSWriteTimeout())
 		defer cancel()
 		message = restoreCodexToolNamesFromContext(c, message)
-		return clientConn.Write(writeCtx, coderws.MessageText, message)
+		return clientConn.Write(writeCtx, coderws.MessageText, turnProtection.project(message))
 	}
 
 	readClientMessage := func() ([]byte, error) {
@@ -613,6 +616,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 					return err
 				}
 			}
+			turnProtection = hooks.inputProtection(turn, currentBridgePayload.customerRaw, currentBridgePayload.originalModel)
 			if turnState != "" && c != nil && c.Request != nil {
 				c.Request.Header.Set(openAIWSTurnStateHeader, turnState)
 			}
@@ -693,7 +697,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 					return fmt.Errorf("resolve Grok websocket cache identity: %w", err)
 				}
 			}
-			result, bridgeErr := s.runAccountContinuationWSTurn(ctx, c, account, bridgePayloadRaw, currentBridgePayload.originalModel, &writeClientMessage, func(roundPayload []byte) (*OpenAIForwardResult, error) {
+			result, bridgeErr := s.runAccountContinuationWSTurn(ctx, c, account, bridgePayloadRaw, currentBridgePayload.originalModel, &writeClientMessage, turnProtection, func(roundPayload []byte) (*OpenAIForwardResult, error) {
 				return s.proxyOpenAIWSHTTPBridgeTurn(
 					ctx,
 					c,
@@ -707,9 +711,10 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 					currentBridgePayload.imageInputSize,
 					grokCacheIdentity,
 					turn,
-					writeClientMessage,
+					writeClientMessage, turnProtection,
 				)
 			})
+			turnProtection.stamp(result)
 			if bridgeErr != nil && isOpenAIWSSessionPreempted(ctx) {
 				return errOpenAIWSSessionPreempted
 			}
@@ -1198,6 +1203,17 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 				firstTokenMs = &ms
 			}
 			imageCounter.AddSSEData(upstreamMessage)
+			turnProtection.observe(upstreamMessage, func() OpenAIForwardResult {
+				r := OpenAIForwardResult{Model: originalModel, UpstreamModel: mappedModel, OpenAIWSMode: true, ServiceTier: extractOpenAIServiceTierFromBody(payload), ReasoningEffort: ApplyThinkingEnabledFallback(extractOpenAIReasoningEffortFromBody(payload, mappedModel, originalModel), payload, mappedModel)}
+				if count := imageCounter.Count(); count > 0 {
+					r.ImageCount = count
+					r.BillingModel = imageBillingModel
+					r.ImageSize = imageSizeTier
+					r.ImageInputSize = imageInputSize
+					r.ImageOutputSizes = imageCounter.Sizes()
+				}
+				return r
+			})
 
 			if !clientDisconnected {
 				if needModelReplace && len(mappedModelBytes) > 0 && openAIWSEventMayContainModel(eventType) && bytes.Contains(upstreamMessage, mappedModelBytes) {
@@ -1322,6 +1338,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 	currentPayload := firstPayload.payloadRaw
 	// Admission hooks must see client model candidates before upstream mapping.
 	currentClientPayload := firstPayload.rawForHash
+	currentCustomerPayload := firstPayload.customerRaw
 	currentOriginalModel := firstPayload.originalModel
 	currentImageBillingModel := firstPayload.imageBillingModel
 	currentImageSizeTier := firstPayload.imageSizeTier
@@ -1527,6 +1544,9 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			if err := hooks.BeforeTurn(turn); err != nil {
 				return err
 			}
+		}
+		if !skipBeforeTurn {
+			turnProtection = hooks.inputProtection(turn, currentCustomerPayload, currentOriginalModel)
 		}
 		skipBeforeTurn = false
 		// 剥离本会话已知失效的加密项，阻断同一失效密文随历史反复触发上游拒绝。
@@ -1882,9 +1902,10 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			)
 		}
 
-		result, relayErr := s.runAccountContinuationWSTurn(ctx, c, account, currentPayload, currentOriginalModel, &writeClientMessage, func(roundPayload []byte) (*OpenAIForwardResult, error) {
+		result, relayErr := s.runAccountContinuationWSTurn(ctx, c, account, currentPayload, currentOriginalModel, &writeClientMessage, turnProtection, func(roundPayload []byte) (*OpenAIForwardResult, error) {
 			return sendAndRelay(turn, sessionLease, roundPayload, len(roundPayload), currentOriginalModel, currentImageBillingModel, currentImageSizeTier, currentImageInputSize, currentRequestedReasoningEffort)
 		})
+		turnProtection.stamp(result)
 		if relayErr != nil {
 			lastTurnClean = false
 			if isOpenAIWSSessionPreempted(ctx) {
@@ -2049,6 +2070,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		}
 		currentPayload = nextPayload.payloadRaw
 		currentClientPayload = nextPayload.rawForHash
+		currentCustomerPayload = nextPayload.customerRaw
 		currentOriginalModel = nextPayload.originalModel
 		currentImageBillingModel = nextPayload.imageBillingModel
 		currentImageSizeTier = nextPayload.imageSizeTier

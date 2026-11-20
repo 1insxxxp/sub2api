@@ -36,6 +36,7 @@ const messages: Record<string, string> = {
   'usage.outputTps': 'Output TPS',
   'usage.tokensUnreported': 'Not reported',
   'usage.billingPendingReview': 'Pending review',
+  'usage.customerInputPendingHint': 'Verifying the original request input count.',
   'usage.billingPendingReviewHint': 'Usage and charges are being checked. This record will be updated when confirmed.',
   'usage.tokensEstimated': 'Estimated',
   'usage.billedTokens': 'Billed Tokens',
@@ -1155,6 +1156,14 @@ describe('usage token measurement sources', () => {
     await wrapper.find('.group.relative').trigger('mouseenter')
     expect(wrapper.get('[data-testid="token-total"]').text()).toBe('—')
     expect(wrapper.text()).not.toContain('$0.000000')
+    wrapper.unmount()
+  })
+
+  it.each([true, false])('explains a pending original input count (admin=%s)', (admin) => {
+    const row = { ...baseImageRow, image_count: 0, billing_mode: 'token', billing_status: 'pending_review', billing_pending_reason: 'customer_input_unavailable', input_tokens: 0, input_tokens_source: 'unreported' }
+    const wrapper = mountSources([row], admin)
+    expect(wrapper.get('[data-testid="usage-billing-pending"]').attributes('title')).toContain('original request input')
+    expect(wrapper.get('[data-testid="input-token-count"]').attributes('title')).toContain('original request input')
     wrapper.unmount()
   })
 

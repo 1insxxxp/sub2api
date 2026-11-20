@@ -38,7 +38,7 @@ func TestAccountContinuationWebSocketJoinsOneLogicalTurn(t *testing.T) {
 	var frames [][]byte
 	write := func(frame []byte) error { frames = append(frames, append([]byte(nil), frame...)); return nil }
 	calls := 0
-	result, err := svc.runAccountContinuationWSTurn(context.Background(), c, account, []byte(`{"type":"response.create","model":"gpt-text","input":"write"}`), "gpt-text", &write, func(body []byte) (*OpenAIForwardResult, error) {
+	result, err := svc.runAccountContinuationWSTurn(context.Background(), c, account, []byte(`{"type":"response.create","model":"gpt-text","input":"write"}`), "gpt-text", &write, nil, func(body []byte) (*OpenAIForwardResult, error) {
 		calls++
 		if calls == 2 {
 			require.Contains(t, string(body), "alpha")

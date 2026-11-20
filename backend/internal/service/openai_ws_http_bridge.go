@@ -430,7 +430,12 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 	grokCacheIdentity string,
 	turn int,
 	writeClientMessage func([]byte) error,
+	protections ...*openAIWSTurnInputProtection,
 ) (*OpenAIForwardResult, error) {
+	var protection *openAIWSTurnInputProtection
+	if len(protections) > 0 {
+		protection = protections[0]
+	}
 	if s == nil {
 		return nil, errors.New("service is nil")
 	}
@@ -817,6 +822,7 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 			markOpenAICyberPolicyEvent(c, upstreamMessage, http.StatusOK, &usage)
 		}
 		imageCounter.AddSSEData(upstreamMessage)
+		protection.observe(upstreamMessage, func() OpenAIForwardResult { return *resultWithUsage() })
 
 		if needModelReplace && len(mappedModelBytes) > 0 && openAIWSEventMayContainModel(eventType) && strings.Contains(trimmedData, mappedModel) {
 			upstreamMessage = replaceOpenAIWSMessageModel(upstreamMessage, mappedModel, originalModel)

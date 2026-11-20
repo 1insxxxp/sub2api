@@ -157,6 +157,7 @@ describe('SystemCustomGroupDialog', () => {
       weekly_limit_usd: null,
       monthly_limit_usd: null,
       default_validity_days: 30,
+      gemini_input_counting_enabled: true,
       source_group_ids: [22, 11]
     })
     expect(wrapper.find('[data-testid="system-custom-model-row"]').exists()).toBe(false)
@@ -214,6 +215,19 @@ describe('SystemCustomGroupDialog', () => {
     const wrapper = mountDialog({ groupId: 90 })
     await flushPromises()
     expect(wrapper.getComponent(Select).props('modelValue')).toBe('')
+    wrapper.unmount()
+  })
+
+  it('loads the saved container policy and submits an explicit disable', async () => {
+    getSystemCustomGroup.mockResolvedValue({ ...existingGroup, group: { ...existingGroup.group, gemini_input_counting_enabled: true } })
+    const wrapper = mountDialog({ groupId: 90 })
+    await flushPromises()
+    const checkbox = wrapper.get<HTMLInputElement>('[data-testid="system-custom-input-token-protection"]')
+    expect(checkbox.element.checked).toBe(true)
+    await checkbox.setValue(false)
+    await wrapper.get('[data-testid="system-custom-save"]').trigger('click')
+    await flushPromises()
+    expect(updateSystemCustomGroup).toHaveBeenCalledWith(90, expect.objectContaining({ gemini_input_counting_enabled: false }))
     wrapper.unmount()
   })
 

@@ -1087,9 +1087,9 @@ export default {
       failedToCreate: '创建分组失败',
       failedToUpdate: '更新分组失败',
       nameRequired: '请输入分组名称',
-      geminiInputCounting: {
-        enable: '对此分组启用 Gemini 输入 Token 优惠',
-        hint: '仅对本分组中符合条件的 Gemini API Key 纯文本请求生效，按接近 Vertex 的口径下调用户输入 Token 及费用。输出用量和上游成本保持不变；工具、多媒体、缓存等请求沿用原计费。'
+      inputTokenProtection: {
+        enable: '输入 Token 计费保护',
+        hint: '按量计费时，普通输入和缓存读写的 Token 合计以本地估算的客户原始输入量为上限。优先保留缓存读取优惠，客户费用最高为原价。无法估算输入时暂缓结算。按次计费沿用原价。'
       },
       emptyResponseCompensation: {
         enable: '允许用户自助申请空响应退款',

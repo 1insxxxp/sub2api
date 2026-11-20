@@ -186,7 +186,7 @@ func TestBuildRecordUsageLogCarriesAntiTruncationRounds(t *testing.T) {
 		BillingTypeBalance,
 		false,
 		nil,
-		&recordUsageOpts{},
+		customerBillingForwardResult(result), nil,
 	)
 	require.Equal(t, 2, log.AntiTruncationRounds)
 	require.NotNil(t, log.Outcome)

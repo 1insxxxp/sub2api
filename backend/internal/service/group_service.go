@@ -85,31 +85,33 @@ type GroupSortOrderUpdate struct {
 
 // CreateGroupRequest 创建分组请求
 type CreateGroupRequest struct {
-	KeyDisplayCategory   string              `json:"key_display_category"`
-	Name                 string              `json:"name"`
-	Description          string              `json:"description"`
-	RateMultiplier       float64             `json:"rate_multiplier"`
-	IsExclusive          bool                `json:"is_exclusive"`
-	AllowImageGeneration bool                `json:"allow_image_generation"`
-	ImageRateIndependent bool                `json:"image_rate_independent"`
-	ImageRateMultiplier  *float64            `json:"image_rate_multiplier"`
-	ModelAliases         []domain.ModelAlias `json:"model_aliases"`
-	ImageCountBilling    bool                `json:"image_count_billing"`
+	GeminiInputCountingEnabled *bool               `json:"gemini_input_counting_enabled"`
+	KeyDisplayCategory         string              `json:"key_display_category"`
+	Name                       string              `json:"name"`
+	Description                string              `json:"description"`
+	RateMultiplier             float64             `json:"rate_multiplier"`
+	IsExclusive                bool                `json:"is_exclusive"`
+	AllowImageGeneration       bool                `json:"allow_image_generation"`
+	ImageRateIndependent       bool                `json:"image_rate_independent"`
+	ImageRateMultiplier        *float64            `json:"image_rate_multiplier"`
+	ModelAliases               []domain.ModelAlias `json:"model_aliases"`
+	ImageCountBilling          bool                `json:"image_count_billing"`
 }
 
 // UpdateGroupRequest 更新分组请求
 type UpdateGroupRequest struct {
-	KeyDisplayCategory   *string              `json:"key_display_category"`
-	Name                 *string              `json:"name"`
-	Description          *string              `json:"description"`
-	RateMultiplier       *float64             `json:"rate_multiplier"`
-	IsExclusive          *bool                `json:"is_exclusive"`
-	Status               *string              `json:"status"`
-	AllowImageGeneration *bool                `json:"allow_image_generation"`
-	ImageRateIndependent *bool                `json:"image_rate_independent"`
-	ImageRateMultiplier  *float64             `json:"image_rate_multiplier"`
-	ModelAliases         *[]domain.ModelAlias `json:"model_aliases"`
-	ImageCountBilling    *bool                `json:"image_count_billing"`
+	GeminiInputCountingEnabled *bool                `json:"gemini_input_counting_enabled"`
+	KeyDisplayCategory         *string              `json:"key_display_category"`
+	Name                       *string              `json:"name"`
+	Description                *string              `json:"description"`
+	RateMultiplier             *float64             `json:"rate_multiplier"`
+	IsExclusive                *bool                `json:"is_exclusive"`
+	Status                     *string              `json:"status"`
+	AllowImageGeneration       *bool                `json:"allow_image_generation"`
+	ImageRateIndependent       *bool                `json:"image_rate_independent"`
+	ImageRateMultiplier        *float64             `json:"image_rate_multiplier"`
+	ModelAliases               *[]domain.ModelAlias `json:"model_aliases"`
+	ImageCountBilling          *bool                `json:"image_count_billing"`
 }
 
 // GroupService 分组管理服务
@@ -159,19 +161,20 @@ func (s *GroupService) Create(ctx context.Context, req CreateGroupRequest) (*Gro
 
 	// 创建分组
 	group := &Group{
-		Name:                 req.Name,
-		ModelAliases:         aliases,
-		Description:          req.Description,
-		Platform:             PlatformAnthropic,
-		KeyDisplayCategory:   req.KeyDisplayCategory,
-		RateMultiplier:       req.RateMultiplier,
-		IsExclusive:          req.IsExclusive,
-		Status:               StatusActive,
-		SubscriptionType:     SubscriptionTypeStandard,
-		AllowImageGeneration: req.AllowImageGeneration,
-		ImageCountBilling:    req.ImageCountBilling,
-		ImageRateIndependent: req.ImageRateIndependent,
-		ImageRateMultiplier:  imageRateMultiplier,
+		GeminiInputCountingEnabled: newGroupInputProtectionEnabled(req.GeminiInputCountingEnabled),
+		Name:                       req.Name,
+		ModelAliases:               aliases,
+		Description:                req.Description,
+		Platform:                   PlatformAnthropic,
+		KeyDisplayCategory:         req.KeyDisplayCategory,
+		RateMultiplier:             req.RateMultiplier,
+		IsExclusive:                req.IsExclusive,
+		Status:                     StatusActive,
+		SubscriptionType:           SubscriptionTypeStandard,
+		AllowImageGeneration:       req.AllowImageGeneration,
+		ImageCountBilling:          req.ImageCountBilling,
+		ImageRateIndependent:       req.ImageRateIndependent,
+		ImageRateMultiplier:        imageRateMultiplier,
 	}
 
 	if err := s.groupRepo.Create(ctx, group); err != nil {
@@ -226,6 +229,10 @@ func (s *GroupService) Update(ctx context.Context, id int64, req UpdateGroupRequ
 			return nil, infraerrors.BadRequest("INVALID_MODEL_ALIASES", err.Error())
 		}
 		group.ModelAliases = aliases
+	}
+
+	if req.GeminiInputCountingEnabled != nil {
+		group.GeminiInputCountingEnabled = *req.GeminiInputCountingEnabled
 	}
 
 	// 更新字段

@@ -861,6 +861,7 @@ func UsageLogFromServiceAdmin(l *service.UsageLog) *AdminUsageLog {
 	usageLog.UpstreamEndpoint = l.UpstreamEndpoint
 	return &AdminUsageLog{
 		UsageLog:                usageLog,
+		PendingEvidence:         l.PendingEvidence,
 		OutcomeStatus:           usageOutcomeStatus(l),
 		SourceGroupID:           l.SourceGroupID,
 		CategoryDefaultGroupID:  l.CategoryDefaultGroupID,

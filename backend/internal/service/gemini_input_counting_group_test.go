@@ -35,19 +35,14 @@ func TestGeminiInputCountingGroupAllAdapters(t *testing.T) {
 		for _, stream := range []bool{false, true} {
 			for _, enabled := range []bool{false, true} {
 				t.Run(fmt.Sprintf("%s/stream=%t/group=%t", path, stream, enabled), func(t *testing.T) {
-					result, rec := callGeminiInputCountingForward(t, path, stream, false,
+					result, rec := callGeminiInputCountingForward(t, path, stream, true,
 						`{"promptTokenCount":1000,"cachedContentTokenCount":0,"candidatesTokenCount":9,"thoughtsTokenCount":2,"totalTokenCount":1011}`,
 						geminiInputCountingTestGroup(71, enabled))
 					require.Equal(t, 1000, result.Usage.InputTokens)
 					require.Equal(t, 11, result.Usage.OutputTokens)
 					input := geminiInputCountingCustomerInput(t, path, stream, rec.Body.String())
-					if enabled {
-						require.NotNil(t, result.GeminiInputCounting)
-						require.Equal(t, result.GeminiInputCounting.CandidateInputTokens, input)
-					} else {
-						require.Nil(t, result.GeminiInputCounting)
-						require.Equal(t, 1000, input)
-					}
+					require.Nil(t, result.GeminiInputCounting)
+					require.Equal(t, 1000, input, "bound groups report the original provider count on every protocol")
 				})
 			}
 		}
@@ -61,11 +56,9 @@ func TestGeminiInputCountingGroupSharedAccountAndExplicitOff(t *testing.T) {
 	for _, enabled := range []bool{true, false, true, false} {
 		attempt, _ := geminiInputCountingGroupAttempt(t, geminiInputCountingTestGroup(71, enabled), account)
 		attempt.ObserveRequest(inputCountingTestRequest(t, inputCountingTestBody))
-		require.Equal(t, enabled, attempt.inputCounting != nil)
-		if enabled {
-			require.Nil(t, attempt.inputFallback.CountRequest)
-			require.Empty(t, attempt.inputFallback.CalibrationKey)
-		}
+		require.Nil(t, attempt.inputCounting)
+		require.Nil(t, attempt.inputFallback.CountRequest)
+		require.Empty(t, attempt.inputFallback.CalibrationKey)
 	}
 	after, err := json.Marshal(account.Extra)
 	require.NoError(t, err)
@@ -84,7 +77,7 @@ func TestGeminiInputCountingGroupUsesFrozenBillingParent(t *testing.T) {
 			c.Set("api_key", &APIKey{GroupID: &source.ID, Group: source})
 			attempt := BeginGeminiUpstreamAttempt(c, inputCountingTestAccount(), inputCountingTestModel, true)
 			attempt.ObserveRequest(inputCountingTestRequest(t, inputCountingTestBody))
-			require.Equal(t, enabled, attempt.inputCounting != nil, "fallback/source settings cannot alter the billed parent group's switch")
+			require.Nil(t, attempt.inputCounting, "neither the billing parent nor the fallback source enables the legacy discount")
 		})
 	}
 }
@@ -106,7 +99,7 @@ func TestGeminiInputCountingGroupRejectsMissingOrUntrustedGroup(t *testing.T) {
 	}
 }
 
-func TestGeminiInputCountingGroupKeepsAccountAndFinalRequestGuards(t *testing.T) {
+func TestGeminiInputCountingUnboundAccountKeepsAccountAndFinalRequestGuards(t *testing.T) {
 	for _, mutate := range []func(*Account){
 		func(a *Account) { a.ID = 0 },
 		func(a *Account) { a.Platform = PlatformAntigravity },
@@ -115,7 +108,7 @@ func TestGeminiInputCountingGroupKeepsAccountAndFinalRequestGuards(t *testing.T)
 	} {
 		account := inputCountingTestAccount()
 		mutate(account)
-		attempt, _ := geminiInputCountingGroupAttempt(t, geminiInputCountingTestGroup(71, true), account)
+		attempt, _ := geminiInputCountingGroupAttempt(t, nil, account)
 		attempt.ObserveRequest(inputCountingTestRequest(t, inputCountingTestBody))
 		require.Nil(t, attempt.inputCounting)
 	}
@@ -124,11 +117,11 @@ func TestGeminiInputCountingGroupKeepsAccountAndFinalRequestGuards(t *testing.T)
 		strings.Replace(inputCountingTestBody, `"text":"请仅回复OK，不要解释。"`, `"inlineData":{"mimeType":"image/png","data":"x"}`, 1),
 		strings.TrimSuffix(inputCountingTestBody, "}") + `,"cachedContent":"cachedContents/x"}`,
 	} {
-		attempt, _ := geminiInputCountingGroupAttempt(t, geminiInputCountingTestGroup(71, true), inputCountingTestAccount())
+		attempt, _ := geminiInputCountingGroupAttempt(t, nil, inputCountingTestAccount())
 		attempt.ObserveRequest(inputCountingTestRequest(t, body))
 		require.Nil(t, attempt.inputCounting)
 	}
-	attempt, _ := geminiInputCountingGroupAttempt(t, geminiInputCountingTestGroup(71, true), inputCountingTestAccount())
+	attempt, _ := geminiInputCountingGroupAttempt(t, nil, inputCountingTestAccount())
 	wrong, err := http.NewRequest(http.MethodPost, "https://fixture.example/v1beta/models/different:generateContent", strings.NewReader(inputCountingTestBody))
 	require.NoError(t, err)
 	attempt.ObserveRequest(wrong)
@@ -167,10 +160,18 @@ func TestGeminiInputCountingGroupSystemCustomDoesNotInheritSource(t *testing.T) 
 	}
 }
 
-func TestGeminiInputCountingGroupFreezesSwitchAtAttemptStart(t *testing.T) {
-	group := geminiInputCountingTestGroup(71, true)
-	attempt, _ := geminiInputCountingGroupAttempt(t, group, inputCountingTestAccount())
-	group.GeminiInputCountingEnabled = false
+func TestGeminiInputCountingCustomBindingWithoutResolvedGroupSkipsLegacyDiscount(t *testing.T) {
+	id := int64(31)
+	c := newGeminiAttemptTestContext(t)
+	c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), ctxkey.APIKey, &APIKey{CustomGroupID: &id}))
+	require.False(t, requestGeminiInputCountingEnabled(c, inputCountingTestAccount(), inputCountingTestModel))
+}
+
+func TestGeminiInputCountingProtectedUnboundAccountSkipsLegacyProjection(t *testing.T) {
+	c := newGeminiAttemptTestContext(t)
+	c.Request = c.Request.WithContext(WithInputTokenProtection(c.Request.Context(), &InputTokenProtection{Pending: true}))
+	account := inputCountingTestAccount()
+	attempt := BeginGeminiUpstreamAttempt(c, account, inputCountingTestModel, true)
 	attempt.ObserveRequest(inputCountingTestRequest(t, inputCountingTestBody))
-	require.NotNil(t, attempt.inputCounting, "only later requests may see a saved switch change")
+	require.Nil(t, attempt.inputCounting)
 }

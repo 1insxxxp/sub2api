@@ -800,6 +800,7 @@ export interface SystemCustomGroupModelInput {
 }
 
 export interface CreateSystemCustomGroupRequest {
+  gemini_input_counting_enabled?: boolean
   tag?: GroupTag
   tag_color?: string
   key_display_category?: KeyDisplayCategory
@@ -818,6 +819,7 @@ export interface CreateSystemCustomGroupRequest {
 export type UpdateSystemCustomGroupRequest = CreateSystemCustomGroupRequest
 
 export interface SystemCustomGroupContainer {
+  gemini_input_counting_enabled?: boolean
   tag?: GroupTag
   tag_color?: string
   key_display_category?: KeyDisplayCategory
@@ -2137,7 +2139,7 @@ export interface UsageLog {
   /** Pending review entries use negative IDs; settled usage entries use positive IDs. */
   id: number
   billing_status?: UsageBillingStatus
-  billing_pending_reason?: 'upstream_usage_missing'
+  billing_pending_reason?: 'upstream_usage_missing' | 'customer_input_unavailable'
   user_id: number
   api_key_id: number
   account_id: number | null
@@ -2257,7 +2259,31 @@ export interface UsageLogAccountSummary {
   name: string
 }
 
+interface PendingProviderUsage {
+  input_tokens?: number
+  output_tokens?: number
+  cache_read_tokens?: number
+  cache_creation_tokens?: number
+  cache_creation_5m_tokens?: number
+  cache_creation_1h_tokens?: number
+  cache_creation_30m_tokens?: number
+  cache_creation_12h_tokens?: number
+  image_input_tokens?: number
+  image_cache_read_tokens?: number
+  image_output_tokens?: number
+  delivered_output_tokens?: number
+}
+
 export interface AdminUsageLog extends UsageLog {
+  pending_provider_evidence?: PendingProviderUsage & {
+    input_includes_cache?: boolean
+    input_limit?: number
+    projected_output_tokens?: number
+    provider_total_cost?: number
+    cache_storage_token_hours?: number
+    cache_storage_cost?: number
+    rounds?: Record<string, PendingProviderUsage>
+  }
   upstream_model?: string | null
   upstream_reasoning_effort?: string | null
   upstream_response_model?: string | null

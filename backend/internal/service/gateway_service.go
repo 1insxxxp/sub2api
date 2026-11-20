@@ -677,6 +677,8 @@ type AudioUsage struct {
 }
 
 type ForwardResult struct {
+	// Original client request budget. One snapshot covers all continuation leaves.
+	InputTokenProtection *InputTokenProtection `json:"input_token_protection,omitempty"`
 	// ContinuationResults contains independent provider calls for one logical
 	// response. Billing must price/recover these leaves before aggregation.
 	ContinuationResults []*ForwardResult `json:"-"`

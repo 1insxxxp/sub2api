@@ -263,6 +263,10 @@ type OpenAIWSIngressHooks struct {
 	TurnStarted             func(turn int, startedAt time.Time)
 	BeforeTurn              func(turn int) error
 	BeforeRequest           func(turn int, payload []byte, originalModel string) error
+	// InputProtectionForTurn snapshots the original customer input independently
+	// of the currently configured tariff. ProjectUsageForTurn checks each observed usage.
+	InputProtectionForTurn func(turn int, original []byte, model string) *InputTokenProtection
+	ProjectUsageForTurn    func(turn int, result OpenAIForwardResult) bool
 	// MapRequestModel resolves the current turn's client model to the model
 	// that must be written into the upstream response.create frame.
 	MapRequestModel func(turn int, originalModel string) (string, error)

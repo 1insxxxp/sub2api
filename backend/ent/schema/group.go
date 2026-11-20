@@ -56,8 +56,8 @@ func (Group) Fields() []ent.Field {
 			Default(false).
 			Comment("是否允许用户对该分组的空回请求申请补偿"),
 		field.Bool("gemini_input_counting_enabled").
-			Default(false).
-			Comment("分组级 Gemini 纯文本输入 token 仅下调计费策略，默认关闭"),
+			Default(true).
+			Comment("按原始客户输入封顶分组的按量输入计费，新建分组默认开启"),
 		// 高峰时段倍率（added by migration 158）
 		field.Bool("peak_rate_enabled").
 			Default(false).

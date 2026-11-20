@@ -437,6 +437,7 @@ func updateSystemCustomGroupRecord(ctx context.Context, client *dbent.Client, gr
 		SetIsExclusive(true).
 		SetSubscriptionType(service.SubscriptionTypeSubscription).
 		SetSystemCustomRoutingEnabled(true).
+		SetGeminiInputCountingEnabled(groupIn.GeminiInputCountingEnabled).
 		SetDefaultValidityDays(groupIn.DefaultValidityDays)
 	if groupIn.DailyLimitUSD != nil {
 		builder = builder.SetDailyLimitUsd(*groupIn.DailyLimitUSD)

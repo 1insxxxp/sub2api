@@ -86,7 +86,7 @@ func claudeContinuationCounts(usage ClaudeUsage) []int {
 func openAIContinuationCounts(usage OpenAIUsage) []int {
 	return []int{usage.InputTokens, usage.OutputTokens, usage.CacheReadInputTokens,
 		usage.CacheCreationInputTokens, usage.ImageInputTokens, usage.ImageCacheReadTokens, usage.ImageOutputTokens,
-		usage.CacheCreation30mInputTokens, usage.CacheCreation12hInputTokens}
+		usage.CacheCreation30mInputTokens, usage.CacheCreation12hInputTokens, usage.CacheCreation5mTokens, usage.CacheCreation1hTokens}
 }
 
 // AggregateForwardContinuationResults snapshots leaf results so a subsequent
@@ -148,7 +148,7 @@ func (s *GatewayService) applyForwardContinuationAccountStatsCost(ctx context.Co
 		}
 		leaf := &UsageLog{ServiceTier: round.ServiceTier, ReasoningEffort: round.ReasoningEffort}
 		applyAccountStatsCost(ctx, leaf, s.channelService, s.billingService, input.Account.ID, *input.APIKey.GroupID, round.UpstreamModel, round.Model,
-			UsageTokens{InputTokens: round.Usage.InputTokens, OutputTokens: round.Usage.OutputTokens, CacheReadTokens: round.Usage.CacheReadInputTokens, CacheCreationTokens: round.Usage.CacheCreationInputTokens}, cost.TotalCost, at, accountStatsLongContextPricingEnabled(nil), round.upstreamPriceFactor())
+			round.Usage.billingUsageTokens(), cost.TotalCost, at, accountStatsLongContextPricingEnabled(nil), round.upstreamPriceFactor())
 		if leaf.AccountStatsCost != nil {
 			total += *leaf.AccountStatsCost
 		} else {
@@ -320,19 +320,14 @@ func openAIContinuationUsageTokens(result *OpenAIForwardResult, delivered bool) 
 	if delivered && continuationRoundFailedWithoutOutput(result.Outcome, result.DeliveredOutputTokens) {
 		return UsageTokens{}
 	}
-	uncached := max(0, result.Usage.InputTokens-result.Usage.CacheReadInputTokens-result.Usage.CacheCreationInputTokens)
+	tokens := result.Usage.billingUsageTokens()
 	if roundInput, ok := openAIChatUncachedInputTokens(result); ok {
-		uncached = roundInput
+		tokens.InputTokens = roundInput
 	}
-	output := result.Usage.OutputTokens
 	if delivered {
-		output = recordedOpenAIOutputTokens(result)
+		tokens.OutputTokens = recordedOpenAIOutputTokens(result)
 	}
-	return UsageTokens{InputTokens: uncached, OutputTokens: output,
-		CacheReadTokens: result.Usage.CacheReadInputTokens, CacheCreationTokens: result.Usage.CacheCreationInputTokens,
-		CacheCreation30mTokens: result.Usage.CacheCreation30mInputTokens, CacheCreation12hTokens: result.Usage.CacheCreation12hInputTokens,
-		ImageInputTokens:     max(0, result.Usage.ImageInputTokens-result.Usage.ImageCacheReadTokens),
-		ImageCacheReadTokens: result.Usage.ImageCacheReadTokens, ImageOutputTokens: result.Usage.ImageOutputTokens}
+	return tokens
 }
 
 func continuationRoundFailedWithoutOutput(outcome *ResponseOutcome, delivered *int) bool {
@@ -391,7 +386,7 @@ func aggregateContinuationOutcome(last *ResponseOutcome, visit func(func(*Respon
 	return &summary
 }
 
-func (s *OpenAIGatewayService) calculateOpenAIContinuationRecordUsageCost(ctx context.Context, input *OpenAIRecordUsageInput, account *Account, models []string, multiplier, imageMultiplier, videoMultiplier, baseMultiplier float64, gate *bool, exempt bool, at time.Time) (*CostBreakdown, error) {
+func (s *OpenAIGatewayService) calculateOpenAIContinuationRecordUsageCost(ctx context.Context, input *OpenAIRecordUsageInput, account *Account, models []string, multiplier, imageMultiplier, videoMultiplier, baseMultiplier float64, gate *bool, exempt bool, at time.Time, tokenPriced map[*OpenAIForwardResult]bool) (*CostBreakdown, error) {
 	total := &CostBreakdown{}
 	for _, round := range input.Result.ContinuationResults {
 		if continuationRoundFailedWithoutOutput(round.Outcome, round.DeliveredOutputTokens) {
@@ -400,6 +395,9 @@ func (s *OpenAIGatewayService) calculateOpenAIContinuationRecordUsageCost(ctx co
 		cost, err := s.openAIContinuationLeafCost(ctx, input, round, models, multiplier, imageMultiplier, videoMultiplier, baseMultiplier, gate, exempt, at, true)
 		if err != nil {
 			return nil, err
+		}
+		if tokenPriced != nil && openAITokenPricedForProtection(round, cost) {
+			tokenPriced[round] = true
 		}
 		if groupBillsOpenAIFastAtStandard(input.APIKey, account, optionalStringValue(round.ServiceTier)) {
 			standard := *round
@@ -418,22 +416,10 @@ func (s *OpenAIGatewayService) calculateOpenAIContinuationRecordUsageCost(ctx co
 func (s *OpenAIGatewayService) openAIContinuationLeafCost(ctx context.Context, input *OpenAIRecordUsageInput, round *OpenAIForwardResult, models []string, multiplier, imageMultiplier, videoMultiplier, baseMultiplier float64, gate *bool, exempt bool, at time.Time, delivered bool) (*CostBreakdown, error) {
 	tokens := openAIContinuationUsageTokens(round, delivered)
 	tier := optionalStringValue(round.ServiceTier)
-	cost, err := s.calculateOpenAIRecordUsageCost(ctx, round, input.APIKey, models, multiplier, imageMultiplier, videoMultiplier, baseMultiplier, tokens, tier, gate, exempt, at)
-	if err != nil {
-		return nil, err
-	}
-	baselineModel := firstUsageBillingModel(models)
-	if model := responseModelBillingDeclaration(input.BillingModelSource, round.UpstreamResponseModel, round.UpstreamResponseModelConflict, false); model != "" && model != baselineModel {
-		if identified, responsePriced := s.hasIdentifiedOpenAIResponsePricing(ctx, model, input.APIKey); identified {
-			candidates := s.filterCNProviderBillingModelCandidates(ctx, input.Account, input.APIKey, usageBillingModelCandidates(model))
-			alternative, err := s.calculateOpenAIRecordUsageCost(ctx, round, input.APIKey, candidates, multiplier, imageMultiplier, videoMultiplier, baseMultiplier, tokens, tier, gate, exempt, at)
-			baselinePriced := s.resolveOpenAIChannelPricing(ctx, baselineModel, input.APIKey) != nil
-			if err == nil && responseModelBillingAdoptable(cost, alternative, baselinePriced, responsePriced) {
-				cost = alternative
-			}
-		}
-	}
-	return cost, nil
+	cost, _, err := s.quoteOpenAIResponseModel(ctx, input, round, models, func(candidates []string) (*CostBreakdown, error) {
+		return s.calculateOpenAIRecordUsageCost(ctx, round, input.APIKey, candidates, multiplier, imageMultiplier, videoMultiplier, baseMultiplier, tokens, tier, gate, exempt, at)
+	}, false)
+	return cost, err
 }
 
 func (s *OpenAIGatewayService) applyOpenAIContinuationAccountStatsCost(ctx context.Context, log *UsageLog, input *OpenAIRecordUsageInput, models []string, multiplier, imageMultiplier, videoMultiplier, baseMultiplier float64, gate *bool, exempt bool, at time.Time) error {

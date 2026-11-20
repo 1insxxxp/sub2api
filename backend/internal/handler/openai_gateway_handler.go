@@ -263,6 +263,9 @@ func usageRecordContext(parent context.Context, base context.Context) context.Co
 	if parent == nil {
 		return base
 	}
+	if protection := service.InputTokenProtectionFromContext(parent); protection != nil {
+		base = service.WithInputTokenProtection(base, protection)
+	}
 	// Usage recording runs on a detached worker context. Preserve the complete
 	// system custom route identity as one value and let the service helper
 	// restore its public/upstream model projections together, avoiding drift
@@ -2887,6 +2890,18 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 	var lastFailoverErr *service.UpstreamFailoverError
 	var oauth429FailoverState service.OpenAIOAuth429FailoverState
 	wsAttemptMessage := append([]byte(nil), firstMessage...)
+	wsPath := c.Request.URL.Path
+	estimateTurnInput := func(key *service.APIKey, body []byte) *service.InputTokenProtection {
+		if key == nil || key.Group == nil || !key.Group.GeminiInputCountingEnabled {
+			return nil
+		}
+		return service.EstimateCustomerInputTokenProtection(wsPath, body)
+	}
+	// Account failover can replay a larger payload containing gateway history.
+	// The retried logical turn keeps its original estimate, even if it was nil.
+	firstTurnProtection := estimateTurnInput(apiKey, firstMessage)
+	var activeTurnProtection atomic.Pointer[service.InputTokenProtection]
+	activeTurnProtection.Store(firstTurnProtection)
 	waitForWSSameAccountRetry := func(account *service.Account, failoverErr *service.UpstreamFailoverError) bool {
 		if account == nil || failoverErr == nil || failoverErr.StatusCode != http.StatusTooManyRequests || failoverErr.SameAccountRetryDeadline.IsZero() {
 			return false
@@ -3149,6 +3164,32 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 			MaxReasoningEffortOverLimit: maxReasoningEffortOverLimit,
 			ReasoningEffortMappings:     reasoningEffortMappings,
 			TurnStarted:                 recordTurnStart,
+			InputProtectionForTurn: func(turn int, original []byte, model string) *service.InputTokenProtection {
+				p := firstTurnProtection
+				if turn > 1 {
+					p = estimateTurnInput(turnBillingAPIKeys.forTurn(turn, apiKey), original)
+				}
+				activeTurnProtection.Store(p)
+				return p
+			},
+			ProjectUsageForTurn: func(turn int, r service.OpenAIForwardResult) bool {
+				key := turnBillingAPIKeys.forTurn(turn, apiKey)
+				var mapping service.ChannelMappingResult
+				if snapshot := turnChannelMapping.Load(); snapshot != nil && snapshot.turn == turn {
+					mapping = snapshot.mapping
+				} else {
+					mapping, _ = h.gatewayService.ResolveChannelMappingAndRestrict(ctx, key.GroupID, r.Model)
+				}
+				upstream := r.UpstreamModel
+				if upstream == "" {
+					upstream = r.Model
+				}
+				r.BillingModel = openAIWSTurnBillingModel(&r, mapping, r.Model, upstream)
+				return h.gatewayService.InputTokenProtectionBillsForResult(withOpenAIWSTurnBillingGroup(ctx, key), &service.OpenAIRecordUsageInput{
+					APIKey: key, Account: account, Result: &r, ChannelUsageFields: mapping.ToUsageFields(r.Model, upstream),
+					PricingAt: turnPricing.currentOr(firstTurnStartedAt),
+				})
+			},
 			BeforeRequest: func(turn int, payload []byte, originalModel string) error {
 				c.Set(securityAuditWSTurnContextKey, turn)
 				service.BeginOpsStreamTurn(c, turn)
@@ -3309,7 +3350,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				}
 				turnUsageFields := turnMapping.ToUsageFields(turnRequestedModel, turnUpstreamModel)
 				cyberMarked := service.GetOpsCyberPolicy(c) != nil
-				h.recordCyberPolicyIfMarked(c, apiKey, account, subscription, turnRequestedModel, turnErr != nil, cyberBlockBody, turnUsageFields, requestPayloadHash)
+				h.recordCyberPolicyIfMarked(c, turnBillingAPIKeys.forTurn(turn, apiKey), account, subscription, turnRequestedModel, turnErr != nil, cyberBlockBody, turnUsageFields, requestPayloadHash, activeTurnProtection.Load())
 				cyberBlockedThisConn, cyberBlockPendingAfterFailover = advanceOpenAIWSCyberBlockState(
 					cyberBlockedThisConn,
 					cyberBlockPendingAfterFailover,
@@ -3357,7 +3398,8 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				turnRecordPricingAt := turnPricing.currentOr(turnStart)
 				turnBillingAPIKey := turnBillingAPIKeys.forTurn(turn, apiKey)
 				cyberBlocked := service.GetOpsCyberPolicy(c) != nil
-				h.submitOpenAIUsageRecordTask(ctx, result, func(taskCtx context.Context) {
+				turnRecordCtx := service.WithInputTokenProtection(ctx, result.InputTokenProtection)
+				h.submitOpenAIUsageRecordTask(turnRecordCtx, result, func(taskCtx context.Context) {
 					if err := h.gatewayService.RecordUsage(taskCtx, &service.OpenAIRecordUsageInput{
 						Result:             result,
 						APIKey:             turnBillingAPIKey,
@@ -3427,6 +3469,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				}
 				wsAttemptMessage = nextAttemptMessage
 				if retryCurrentTurn {
+					firstTurnProtection = activeTurnProtection.Load()
 					previousResponseID = ""
 					reqLog.Warn("openai.websocket_current_turn_failover_retry",
 						zap.Int64("account_id", account.ID),
@@ -4571,7 +4614,7 @@ func (h *OpenAIGatewayHandler) enqueueCyberSessionBlockedOpsEntry(c *gin.Context
 // 并在 forward 返回错误时写一条 tokens=0 用量行。标记由 gateway 服务层在透传 cyber 后设置；
 // 当前请求已发给用户，本方法只做事后记录，不影响响应。forwardErrored 为 true 时才写用量行，
 // 避免与正常 RecordUsage(forward 成功路径)重复。每请求至多记录一次。
-func (h *OpenAIGatewayHandler) recordCyberPolicyIfMarked(c *gin.Context, apiKey *service.APIKey, account *service.Account, subscription *service.UserSubscription, model string, forwardErrored bool, cyberBlockBody []byte, channelFields service.ChannelUsageFields, requestPayloadHash string) {
+func (h *OpenAIGatewayHandler) recordCyberPolicyIfMarked(c *gin.Context, apiKey *service.APIKey, account *service.Account, subscription *service.UserSubscription, model string, forwardErrored bool, cyberBlockBody []byte, channelFields service.ChannelUsageFields, requestPayloadHash string, turnProtection ...*service.InputTokenProtection) {
 	mark := service.GetOpsCyberPolicy(c)
 	if mark == nil {
 		return
@@ -4669,10 +4712,13 @@ func (h *OpenAIGatewayHandler) recordCyberPolicyIfMarked(c *gin.Context, apiKey 
 			cancel()
 		}
 	}
+	billingCtx := usageRecordContext(requestCtx, context.Background())
+	if len(turnProtection) > 0 {
+		billingCtx = service.WithInputTokenProtection(billingCtx, turnProtection[0])
+	}
 	go func() {
-		base, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel := context.WithTimeout(billingCtx, 30*time.Second)
 		defer cancel()
-		ctx := usageRecordContext(requestCtx, base)
 		if cmSvc != nil {
 			cmSvc.RecordCyberPolicyEvent(ctx, service.CyberPolicyRecordInput{
 				LogOnly:         cyberLogOnly,

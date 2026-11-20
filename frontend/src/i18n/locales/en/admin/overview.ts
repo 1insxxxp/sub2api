@@ -1047,9 +1047,9 @@ export default {
       groupUpdatedSuccess: 'Group updated successfully',
       groupDeletedSuccess: 'Group deleted successfully',
       rateMultiplierHint: 'Cost multiplier for this group (e.g., 1.5 = 150% of base cost)',
-      geminiInputCounting: {
-        enable: 'Enable Gemini input token discounts for this group',
-        hint: 'Applies only to eligible plain-text Gemini API key requests billed to this group. Uses a Vertex-like estimate to lower user input tokens and charges. Output usage and upstream costs stay unchanged; tools, media, and cached requests retain their existing billing.'
+      inputTokenProtection: {
+        enable: 'Input token billing protection',
+        hint: 'For token-based billing, ordinary and cached input together are capped at the local estimate of the original customer input. Cached reads receive their discount first, and the customer pays at most the original charge. If the input cannot be estimated, settlement is deferred. Per-request pricing is unchanged.'
       },
       emptyResponseCompensation: {
         enable: 'Allow self-service empty-response refunds',

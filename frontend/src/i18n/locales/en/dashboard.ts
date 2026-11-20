@@ -376,6 +376,7 @@ export default {
     requestEmpty: 'Empty reply',
     tokensUnreported: 'Not reported',
     billingPendingReview: 'Pending review',
+    customerInputPendingHint: 'Settlement is on hold while the original request input count is verified.',
     billingPendingReviewHint: 'Usage and charges are being checked. This record will be updated when confirmed.',
     billingSettled: 'Settled',
     billingStatus: 'Billing status',

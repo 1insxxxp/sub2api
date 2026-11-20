@@ -253,7 +253,7 @@ type CreateGroupInput struct {
 	Platform                         string
 	RateMultiplier                   float64
 	EmptyResponseCompensationEnabled bool
-	GeminiInputCountingEnabled       bool
+	GeminiInputCountingEnabled       *bool
 	IsExclusive                      bool
 	SubscriptionType                 string   // standard/subscription
 	DailyLimitUSD                    *float64 // 日限额 (USD)

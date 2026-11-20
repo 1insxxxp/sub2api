@@ -112,6 +112,7 @@ type UsageLog struct {
 	// never occupy usage_logs or its billing deduplication identity.
 	BillingStatus        UsageBillingStatus
 	BillingPendingReason string
+	PendingEvidence      *PendingUsageEvidence `json:"-"`
 	// RequestedModel is the client-requested model name recorded for stable user/admin display.
 	// Empty should be treated as Model for backward compatibility with historical rows.
 	RequestedModel string

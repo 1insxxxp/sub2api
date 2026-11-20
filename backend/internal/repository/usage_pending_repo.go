@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -16,7 +17,7 @@ import (
 )
 
 // UpsertPendingUsage accepts only explicit scalar observations. In particular it
-// never serializes UsageLog associations, request bodies, credentials, or costs.
+// never serializes UsageLog associations, request bodies, or credentials.
 func (r *usageLogRepository) UpsertPendingUsage(ctx context.Context, log *service.UsageLog) error {
 	if log == nil || log.UserID <= 0 || log.APIKeyID <= 0 || log.AccountID <= 0 || strings.TrimSpace(log.RequestID) == "" || strings.TrimSpace(log.Model) == "" {
 		return errors.New("invalid pending usage identity")
@@ -59,13 +60,13 @@ func (r *usageLogRepository) upsertPendingUsage(ctx context.Context, sqlq sqlExe
 	}
 	inputSource, outputSource := service.UsageTokenSourceUnreported, service.UsageTokenSourceUnreported
 	input, output, cacheRead, cacheCreate, cache5m, cache1h, imageOutput := 0, 0, 0, 0, 0, 0, 0
-	if log.InputTokensSource == service.UsageTokenSourceUpstream {
+	if log.PendingEvidence == nil && log.InputTokensSource == service.UsageTokenSourceUpstream {
 		inputSource = service.UsageTokenSourceUpstream
 		input, cacheRead, cacheCreate = max(0, log.InputTokens), max(0, log.CacheReadTokens), max(0, log.CacheCreationTokens)
 		cache5m, cache1h = max(0, log.CacheCreation5mTokens), max(0, log.CacheCreation1hTokens)
 	}
-	if log.OutputTokensSource == service.UsageTokenSourceUpstream {
-		outputSource = service.UsageTokenSourceUpstream
+	if log.OutputTokensSource == service.UsageTokenSourceUpstream || log.PendingEvidence != nil && log.PendingEvidence.ProjectedOutputTokens != nil {
+		outputSource = log.OutputTokensSource
 		output, imageOutput = max(0, log.OutputTokens), max(0, log.ImageOutputTokens)
 	}
 	createdAt := log.CreatedAt
@@ -78,6 +79,20 @@ func (r *usageLogRepository) upsertPendingUsage(ctx context.Context, sqlq sqlExe
 	}
 	columns := []string{"request_id", "user_id", "api_key_id", "account_id", "model", "requested_model", "upstream_model", "group_id", "source_group_id", "custom_group_id", "subscription_id", "input_tokens", "output_tokens", "input_tokens_source", "output_tokens_source", "cache_creation_tokens", "cache_read_tokens", "cache_creation_5m_tokens", "cache_creation_1h_tokens", "image_output_tokens", "billing_type", "stream", "duration_ms", "first_token_ms", "user_agent", "ip_address", "inbound_endpoint", "upstream_endpoint", "upstream_request_id", "session_id", "channel_id", "model_mapping_chain", "service_tier", "reasoning_effort", "requested_reasoning_effort", "created_at", "category_default_group_id"}
 	args := []any{log.RequestID, log.UserID, log.APIKeyID, log.AccountID, log.Model, requestedModel, log.UpstreamModel, log.GroupID, log.SourceGroupID, log.CustomGroupID, log.SubscriptionID, input, output, inputSource, outputSource, cacheCreate, cacheRead, cache5m, cache1h, imageOutput, log.BillingType, log.Stream, log.DurationMs, log.FirstTokenMs, log.UserAgent, log.IPAddress, log.InboundEndpoint, log.UpstreamEndpoint, log.UpstreamRequestID, log.SessionID, log.ChannelID, log.ModelMappingChain, log.ServiceTier, log.ReasoningEffort, log.RequestedReasoningEffort, createdAt, log.CategoryDefaultGroupID}
+	var evidence any
+	reason := service.UsagePendingReasonUpstreamMissing
+	if e := log.PendingEvidence; e != nil {
+		raw, err := json.Marshal(e)
+		if err != nil {
+			return err
+		}
+		evidence = string(raw)
+		if e.InputLimit == nil {
+			reason = service.UsagePendingReasonCustomerInputUnavailable
+		}
+	}
+	columns = append(columns, "pending_reason", "provider_evidence")
+	args = append(args, reason, evidence)
 	placeholders := make([]string, len(args))
 	updates := make([]string, 0, len(columns))
 	for i, column := range columns {
@@ -96,6 +111,8 @@ func (r *usageLogRepository) upsertPendingUsage(ctx context.Context, sqlq sqlExe
 			columnType = "boolean"
 		case "user_agent", "model_mapping_chain":
 			columnType = "text"
+		case "provider_evidence":
+			columnType = "jsonb"
 		case "created_at":
 			columnType = "timestamptz"
 		}
@@ -103,10 +120,21 @@ func (r *usageLogRepository) upsertPendingUsage(ctx context.Context, sqlq sqlExe
 		switch column {
 		case "request_id", "user_id", "api_key_id", "created_at":
 			// Preserve request identity and original history ordering on retries.
+		case "pending_reason":
+			updates = append(updates, `pending_reason = CASE
+				WHEN usage_pending_records.provider_evidence ? 'input_limit' OR EXCLUDED.provider_evidence ? 'input_limit' THEN 'upstream_usage_missing'
+				WHEN usage_pending_records.provider_evidence IS NOT NULL OR EXCLUDED.provider_evidence IS NOT NULL THEN 'customer_input_unavailable'
+				ELSE EXCLUDED.pending_reason END`)
+		case "provider_evidence":
+			updates = append(updates, "provider_evidence = "+pendingEvidenceUpdate())
 		case "input_tokens", "input_tokens_source", "cache_creation_tokens", "cache_read_tokens", "cache_creation_5m_tokens", "cache_creation_1h_tokens":
-			updates = append(updates, fmt.Sprintf("%[1]s = CASE WHEN EXCLUDED.input_tokens_source = 'upstream' THEN EXCLUDED.%[1]s ELSE usage_pending_records.%[1]s END", column))
+			empty := "0"
+			if column == "input_tokens_source" {
+				empty = "'unreported'"
+			}
+			updates = append(updates, fmt.Sprintf("%[1]s = CASE WHEN EXCLUDED.provider_evidence IS NOT NULL OR usage_pending_records.provider_evidence IS NOT NULL THEN %[2]s WHEN EXCLUDED.input_tokens_source = 'upstream' THEN EXCLUDED.%[1]s ELSE usage_pending_records.%[1]s END", column, empty))
 		case "output_tokens", "output_tokens_source", "image_output_tokens":
-			updates = append(updates, fmt.Sprintf("%[1]s = CASE WHEN EXCLUDED.output_tokens_source = 'upstream' THEN EXCLUDED.%[1]s ELSE usage_pending_records.%[1]s END", column))
+			updates = append(updates, fmt.Sprintf("%[1]s = CASE WHEN EXCLUDED.provider_evidence ? 'projected_output_tokens' THEN EXCLUDED.%[1]s WHEN usage_pending_records.provider_evidence ? 'projected_output_tokens' OR (EXCLUDED.provider_evidence IS NULL AND usage_pending_records.provider_evidence IS NOT NULL AND usage_pending_records.output_tokens_source = 'upstream') THEN usage_pending_records.%[1]s WHEN EXCLUDED.output_tokens_source = 'upstream' THEN EXCLUDED.%[1]s ELSE usage_pending_records.%[1]s END", column))
 		default:
 			updates = append(updates, column+" = EXCLUDED."+column)
 		}
@@ -114,9 +142,9 @@ func (r *usageLogRepository) upsertPendingUsage(ctx context.Context, sqlq sqlExe
 	// A late observation must not recreate a pending request after real usage
 	// retention. Committed billing dedup and its archive are settlement evidence.
 	settled := "EXISTS (SELECT 1 FROM usage_logs WHERE request_id = $1::varchar AND api_key_id = $3::bigint) OR EXISTS (SELECT 1 FROM usage_billing_dedup WHERE request_id = $1::varchar AND api_key_id = $3::bigint) OR EXISTS (SELECT 1 FROM usage_billing_dedup_archive WHERE request_id = $1::varchar AND api_key_id = $3::bigint)"
-	query := "INSERT INTO usage_pending_records (" + strings.Join(columns, ", ") + ") SELECT " + strings.Join(placeholders, ", ") + " WHERE NOT (" + settled + ") ON CONFLICT (request_id, api_key_id) DO UPDATE SET " + strings.Join(updates, ", ") + " WHERE usage_pending_records.user_id = EXCLUDED.user_id AND usage_pending_records.account_id = EXCLUDED.account_id RETURNING id"
-	var id int64
-	if err := scanSingleRow(ctx, sqlq, query, args, &id); err != nil {
+	query := "INSERT INTO usage_pending_records (" + strings.Join(columns, ", ") + ") SELECT " + strings.Join(placeholders, ", ") + " WHERE NOT (" + settled + ") ON CONFLICT (request_id, api_key_id) DO UPDATE SET " + strings.Join(updates, ", ") + " WHERE usage_pending_records.user_id = EXCLUDED.user_id AND usage_pending_records.account_id = EXCLUDED.account_id RETURNING " + pendingMetadataColumns
+	var saved pendingMetadata
+	if err := scanSingleRow(ctx, sqlq, query, args, saved.dest()...); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			// Distinguish an already settled request from an identity conflict.
 			var alreadySettled bool
@@ -129,14 +157,81 @@ func (r *usageLogRepository) upsertPendingUsage(ctx context.Context, sqlq sqlExe
 		}
 		return fmt.Errorf("upsert pending usage: %w", err)
 	}
-	log.ID = -id
-	log.BillingStatus = service.UsageBillingStatusPendingReview
-	log.BillingPendingReason = service.UsagePendingReasonUpstreamMissing
+	if len(saved.evidence) == 0 {
+		log.ID = -saved.id
+		log.BillingStatus, log.BillingPendingReason = service.UsageBillingStatusPendingReview, saved.reason
+		return nil
+	}
+	return saved.apply(log)
+}
+
+// A retry can arrive from either recording path. Import a legacy observation
+// into private evidence before clearing its public input columns. Independently
+// reported fields, including explicit zero totals, survive sparse retries.
+func pendingEvidenceUpdate() string {
+	legacy := func(row string) string {
+		return fmt.Sprintf(`jsonb_strip_nulls(jsonb_build_object(
+			'input_tokens', CASE WHEN %[1]s.input_tokens_source = 'upstream' THEN %[1]s.input_tokens END,
+			'output_tokens', CASE WHEN %[1]s.output_tokens_source = 'upstream' THEN %[1]s.output_tokens END,
+			'cache_read_tokens', NULLIF(%[1]s.cache_read_tokens, 0),
+			'cache_creation_tokens', NULLIF(%[1]s.cache_creation_tokens, 0),
+			'cache_creation_5m_tokens', NULLIF(%[1]s.cache_creation_5m_tokens, 0),
+			'cache_creation_1h_tokens', NULLIF(%[1]s.cache_creation_1h_tokens, 0),
+			'image_output_tokens', NULLIF(%[1]s.image_output_tokens, 0)))`, row)
+	}
+	return `CASE
+		WHEN usage_pending_records.provider_evidence IS NULL AND EXCLUDED.provider_evidence IS NULL THEN NULL
+		WHEN usage_pending_records.provider_evidence IS NULL THEN ` + legacy("usage_pending_records") + ` || EXCLUDED.provider_evidence
+		WHEN EXCLUDED.provider_evidence IS NULL THEN ` + legacy("EXCLUDED") + ` || usage_pending_records.provider_evidence
+		ELSE usage_pending_records.provider_evidence || EXCLUDED.provider_evidence ||
+			COALESCE((SELECT jsonb_build_object('rounds', jsonb_object_agg(k,
+				COALESCE(usage_pending_records.provider_evidence->'rounds'->k, '{}'::jsonb) ||
+				COALESCE(EXCLUDED.provider_evidence->'rounds'->k, '{}'::jsonb)))
+				FROM jsonb_object_keys(COALESCE(usage_pending_records.provider_evidence->'rounds', '{}'::jsonb) ||
+					COALESCE(EXCLUDED.provider_evidence->'rounds', '{}'::jsonb)) AS keys(k)
+				HAVING count(*) > 0), '{}'::jsonb)
+		END`
+}
+
+const pendingMetadataColumns = "id, input_tokens_source, output_tokens_source, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, cache_creation_5m_tokens, cache_creation_1h_tokens, image_output_tokens, pending_reason, provider_evidence"
+
+type pendingMetadata struct {
+	id                                                      int64
+	inputSource, outputSource                               service.UsageTokenSource
+	input, output, read, creation, short, long, imageOutput int
+	reason                                                  string
+	evidence                                                []byte
+}
+
+func (m *pendingMetadata) dest() []any {
+	return []any{&m.id, &m.inputSource, &m.outputSource, &m.input, &m.output, &m.read, &m.creation, &m.short, &m.long, &m.imageOutput, &m.reason, &m.evidence}
+}
+
+func (m *pendingMetadata) apply(log *service.UsageLog) error {
+	log.ID = -m.id
+	log.BillingStatus, log.BillingPendingReason = service.UsageBillingStatusPendingReview, m.reason
+	log.InputTokensSource, log.OutputTokensSource = m.inputSource.Normalize(), m.outputSource.Normalize()
+	log.InputTokens, log.OutputTokens, log.UpstreamOutputTokens = m.input, m.output, m.output
+	log.CacheReadTokens, log.CacheCreationTokens = m.read, m.creation
+	log.CacheCreation5mTokens, log.CacheCreation1hTokens, log.ImageOutputTokens = m.short, m.long, m.imageOutput
+	log.PendingEvidence = nil
+	if len(m.evidence) > 0 {
+		var evidence service.PendingUsageEvidence
+		if err := json.Unmarshal(m.evidence, &evidence); err != nil {
+			return err
+		}
+		log.PendingEvidence = &evidence
+		log.UpstreamOutputTokens = 0
+		log.ImageOutputTokens = evidence.ImageOutputTokens
+		if evidence.OutputTokens != nil {
+			log.UpstreamOutputTokens = *evidence.OutputTokens
+		}
+	}
 	return nil
 }
 
 // These expressions produce the existing typed read projection, not billing
-// rows. Financial columns are intentionally absent from the pending store.
+// rows. Customer charges always project as zero while pending.
 func pendingUsageSelectColumns() string {
 	values := make(map[string]string)
 	for _, column := range strings.Fields("user_id api_key_id account_id request_id model requested_model upstream_model group_id source_group_id custom_group_id subscription_id input_tokens output_tokens cache_creation_tokens cache_read_tokens cache_creation_5m_tokens cache_creation_1h_tokens image_output_tokens billing_type stream duration_ms first_token_ms user_agent ip_address inbound_endpoint upstream_endpoint upstream_request_id session_id channel_id model_mapping_chain service_tier reasoning_effort requested_reasoning_effort created_at category_default_group_id") {
@@ -258,7 +353,6 @@ func (r *usageLogRepository) hydratePendingUsageMetadata(ctx context.Context, lo
 			ids = append(ids, id)
 			byID[id] = &logs[i]
 			logs[i].BillingStatus = service.UsageBillingStatusPendingReview
-			logs[i].BillingPendingReason = service.UsagePendingReasonUpstreamMissing
 			logs[i].InputTokensSource = service.UsageTokenSourceUnreported
 			logs[i].OutputTokensSource = service.UsageTokenSourceUnreported
 		}
@@ -266,27 +360,20 @@ func (r *usageLogRepository) hydratePendingUsageMetadata(ctx context.Context, lo
 	if len(ids) == 0 {
 		return nil
 	}
-	rows, err := r.sql.QueryContext(ctx, "SELECT id, input_tokens_source, output_tokens_source, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, cache_creation_5m_tokens, cache_creation_1h_tokens, image_output_tokens FROM usage_pending_records WHERE id = ANY($1)", pq.Array(ids))
+	rows, err := r.sql.QueryContext(ctx, "SELECT "+pendingMetadataColumns+" FROM usage_pending_records WHERE id = ANY($1)", pq.Array(ids))
 	if err != nil {
 		return err
 	}
 	defer func() { err = errors.Join(err, rows.Close()) }()
 	for rows.Next() {
-		var id int64
-		var input, output string
-		var inputTokens, outputTokens, cacheRead, cacheCreate, cache5m, cache1h, imageOutput int
-		if err := rows.Scan(&id, &input, &output, &inputTokens, &outputTokens, &cacheRead, &cacheCreate, &cache5m, &cache1h, &imageOutput); err != nil {
+		var m pendingMetadata
+		if err := rows.Scan(m.dest()...); err != nil {
 			return err
 		}
-		if log := byID[id]; log != nil {
-			log.InputTokensSource = service.UsageTokenSource(input).Normalize()
-			log.OutputTokensSource = service.UsageTokenSource(output).Normalize()
-			// Read counts and their evidence in the same snapshot if a repeated
-			// observation was persisted between the list and metadata queries.
-			log.InputTokens, log.OutputTokens, log.UpstreamOutputTokens = inputTokens, outputTokens, outputTokens
-			log.CacheReadTokens, log.CacheCreationTokens = cacheRead, cacheCreate
-			log.CacheCreation5mTokens, log.CacheCreation1hTokens = cache5m, cache1h
-			log.ImageOutputTokens = imageOutput
+		if log := byID[m.id]; log != nil {
+			if err := m.apply(log); err != nil {
+				return err
+			}
 		}
 	}
 	return rows.Err()

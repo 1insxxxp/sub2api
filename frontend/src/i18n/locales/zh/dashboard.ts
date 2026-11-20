@@ -381,6 +381,7 @@ export default {
     requestEmpty: '空回复',
     tokensUnreported: '未上报',
     billingPendingReview: '待核对',
+    customerInputPendingHint: '暂缓结算，正在核对本次请求的原始输入量。',
     billingPendingReviewHint: '正在核对本次请求的用量与费用，确认后会更新此记录。',
     billingSettled: '已结算',
     billingStatus: '计费状态',

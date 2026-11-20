@@ -293,3 +293,66 @@ func TestPendingUsageHistoryPaginationFiltersAndLateSettlement(t *testing.T) {
 	_, err = repo.GetByID(ctx, batchPending.ID)
 	require.ErrorIs(t, err, service.ErrUsageLogNotFound)
 }
+
+func TestPendingInputEvidenceRoundTripAndRetries(t *testing.T) {
+	ctx := context.Background()
+	tx := testEntTx(t)
+	client := tx.Client()
+	repo := newUsageLogRepositoryWithSQL(client, tx)
+	user := mustCreateUser(t, client, &service.User{Email: "pending-protection@example.invalid"})
+	key := mustCreateApiKey(t, client, &service.APIKey{UserID: user.ID, Key: "sk-pending-protection", Name: "protection"})
+	account := mustCreateAccount(t, client, &service.Account{Name: "pending-protection"})
+	identity := service.UsageLog{RequestID: "pending-protection", UserID: user.ID, APIKeyID: key.ID, AccountID: account.ID, Model: "test"}
+	legacy := identity
+	legacy.InputTokens, legacy.InputTokensSource = 150, service.UsageTokenSourceUpstream
+	require.NoError(t, repo.UpsertPendingUsage(ctx, &legacy))
+	id := legacy.ID
+	held := identity
+	rawOutput, delivered, price := 35, 6, 0.125
+	held.PendingEvidence = &service.PendingUsageEvidence{
+		PendingProviderUsage:  service.PendingProviderUsage{OutputTokens: &rawOutput, CacheReadTokens: 25, DeliveredOutputTokens: &delivered},
+		ProjectedOutputTokens: &delivered, ProviderTotalCost: &price, CacheStorageTokenHours: 24000, CacheStorageCost: 0.1,
+		Rounds: map[int]service.PendingProviderUsage{0: {OutputTokens: &rawOutput}},
+	}
+	held.OutputTokens, held.OutputTokensSource = delivered, service.UsageTokenSourceEstimated
+	require.NoError(t, repo.UpsertPendingUsage(ctx, &held))
+	require.Equal(t, id, held.ID)
+	require.Equal(t, service.UsagePendingReasonCustomerInputUnavailable, held.BillingPendingReason)
+	require.Equal(t, 150, *held.PendingEvidence.InputTokens)
+	// Retried legacy callbacks can neither restore public input nor erase the
+	// protected disposition, output selection or known provider price.
+	stale := identity
+	stale.InputTokens, stale.InputTokensSource = 999, service.UsageTokenSourceUpstream
+	require.NoError(t, repo.UpsertPendingUsage(ctx, &stale))
+	require.Zero(t, stale.InputTokens)
+	require.Equal(t, held.PendingEvidence, stale.PendingEvidence)
+	more := identity
+	zero := 0
+	more.PendingEvidence = &service.PendingUsageEvidence{Rounds: map[int]service.PendingProviderUsage{0: {InputTokens: &zero}}}
+	require.NoError(t, repo.UpsertPendingUsage(ctx, &more))
+	got, err := repo.GetByID(ctx, id)
+	require.NoError(t, err)
+	require.Equal(t, service.UsagePendingReasonCustomerInputUnavailable, got.BillingPendingReason)
+	require.Zero(t, got.InputTokens)
+	require.Zero(t, got.CacheReadTokens)
+	require.Equal(t, service.UsageTokenSourceUnreported, got.InputTokensSource)
+	require.Equal(t, delivered, got.OutputTokens)
+	require.Equal(t, rawOutput, got.UpstreamOutputTokens)
+	require.Equal(t, zero, *got.PendingEvidence.Rounds[0].InputTokens)
+	require.Equal(t, rawOutput, *got.PendingEvidence.Rounds[0].OutputTokens)
+	require.Equal(t, price, *got.PendingEvidence.ProviderTotalCost)
+	require.Equal(t, 24000.0, got.PendingEvidence.CacheStorageTokenHours)
+	require.Equal(t, 0.1, got.PendingEvidence.CacheStorageCost)
+	require.Zero(t, got.ActualCost)
+	require.Zero(t, got.TotalCost)
+	limit := 8
+	more.PendingEvidence = &service.PendingUsageEvidence{InputLimit: &limit}
+	require.NoError(t, repo.UpsertPendingUsage(ctx, &more))
+	require.NoError(t, repo.UpsertPendingUsage(ctx, &held))
+	rows, _, err := repo.ListWithFilters(ctx, pagination.PaginationParams{Page: 1, PageSize: 10}, usagestats.UsageLogFilters{UserID: user.ID, IncludePending: true})
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	require.Equal(t, service.UsagePendingReasonUpstreamMissing, rows[0].BillingPendingReason)
+	require.Equal(t, 8, *rows[0].PendingEvidence.InputLimit)
+	require.Equal(t, 24000.0, rows[0].PendingEvidence.CacheStorageTokenHours)
+}

@@ -133,12 +133,14 @@ func TestSystemCustomGroupRepositoryUpdateReplacesSourcesAndPreservesLegacyRoute
 
 	before := loadSystemCustomRouteRows(t, container.ID)
 	container.Name += "-changed"
+	container.GeminiInputCountingEnabled = true
 	require.NoError(t, repo.Update(ctx, container, []int64{sourceTwo.ID, sourceOne.ID}, []service.SystemCustomGroupModelInput{
 		{PublicModel: "must-not-replace", SourceGroupID: sourceTwo.ID, SourceModel: "ignored", Enabled: true},
 	}))
 
 	stored, err := repo.Get(ctx, container.ID)
 	require.NoError(t, err)
+	require.True(t, stored.Group.GeminiInputCountingEnabled)
 	require.Equal(t, []int64{sourceTwo.ID, sourceOne.ID}, systemCustomSourceIDs(stored.Sources))
 	require.Equal(t, []int{0, 1}, systemCustomSourcePriorities(stored.Sources))
 	require.Equal(t, before, loadSystemCustomRouteRows(t, container.ID), "legacy route rows must remain byte-for-byte unchanged")

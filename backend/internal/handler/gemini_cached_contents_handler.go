@@ -275,6 +275,7 @@ func (h *GatewayHandler) GeminiCachedContentsCreate(c *gin.Context) {
 			Result: &service.ForwardResult{
 				Model: modelName, UpstreamModel: mappedModel,
 				Usage: service.ClaudeUsage{InputTokens: int(tokens)}, CacheStorageTokenHours: storageTokenHours,
+				InputTokensSource:       service.UsageTokenSourceUpstream,
 				UpstreamPriceMultiplier: service.VertexUpstreamPriceMultiplier(account, mappedModel, ""),
 			},
 			APIKey: apiKey, User: apiKey.User, Subscription: subscription, PricingAt: pricingAt, ChannelUsageFields: usageFields,
@@ -694,6 +695,11 @@ func (h *GatewayHandler) submitGeminiCachedContentUsage(
 		Usage:                   service.ClaudeUsage{InputTokens: inputTokens},
 		CacheStorageTokenHours:  storageTokenHours,
 		UpstreamPriceMultiplier: priceMultiplier,
+	}
+	if inputTokens > 0 {
+		// CreateUpstream requires a measured totalTokenCount, including when
+		// the creation is rolled back and only the input charge is recorded.
+		result.InputTokensSource = service.UsageTokenSourceUpstream
 	}
 	inboundEndpoint := GetInboundEndpoint(c)
 	upstreamEndpoint := GetUpstreamEndpoint(c, account.Platform)

@@ -6,87 +6,72 @@ import (
 	"context"
 	"testing"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"github.com/stretchr/testify/require"
 )
 
-func TestCreateGroupPreservesGeminiInputCountingPolicy(t *testing.T) {
-	repo := &groupRepoStubForAdmin{createID: 73}
-	svc := &adminServiceImpl{groupRepo: repo}
-	group, err := svc.CreateGroup(context.Background(), &CreateGroupInput{
-		Name: "input-discount", Platform: PlatformGemini, RateMultiplier: 1, GeminiInputCountingEnabled: true,
-	})
-	require.NoError(t, err)
-	require.True(t, group.GeminiInputCountingEnabled)
-	require.True(t, repo.created.GeminiInputCountingEnabled)
-}
-
-func TestCreateGroupRejectsUnsupportedGeminiInputCountingPlatform(t *testing.T) {
-	for _, platform := range []string{PlatformAnthropic, PlatformOpenAI, PlatformAntigravity, PlatformGrok} {
+func TestGroupInputProtectionDefaultsOnForEveryPlatform(t *testing.T) {
+	for _, platform := range append(domain.ConcretePlatformIDs(), PlatformComposite) {
 		t.Run(platform, func(t *testing.T) {
-			repo := &groupRepoStubForAdmin{createID: 74}
-			svc := &adminServiceImpl{groupRepo: repo}
-			_, err := svc.CreateGroup(context.Background(), &CreateGroupInput{
-				Name: "invalid-input-discount", Platform: platform, RateMultiplier: 1, GeminiInputCountingEnabled: true,
-			})
-			require.Error(t, err)
-			require.Nil(t, repo.created)
+			for _, setting := range []*bool{nil, testPtrBool(false), testPtrBool(true)} {
+				repo := &groupRepoStubForAdmin{createID: 73}
+				svc := &adminServiceImpl{groupRepo: repo}
+				group, err := svc.CreateGroup(context.Background(), &CreateGroupInput{
+					Name: "protected", Platform: platform, RateMultiplier: 1, GeminiInputCountingEnabled: setting,
+				})
+				require.NoError(t, err)
+				require.Equal(t, setting == nil || *setting, group.GeminiInputCountingEnabled)
+				require.Equal(t, group.GeminiInputCountingEnabled, repo.created.GeminiInputCountingEnabled)
+			}
 		})
 	}
 }
 
-func TestCreateGroupGeminiInputCountingDefaultAndComposite(t *testing.T) {
-	for _, enabled := range []bool{false, true} {
-		repo := &groupRepoStubForAdmin{createID: 75}
+func TestGroupInputProtectionSurvivesPlatformChanges(t *testing.T) {
+	for _, saved := range []bool{false, true} {
+		repo := &groupRepoStubForAdmin{getByID: &Group{
+			ID: 76, Platform: PlatformGemini, RateMultiplier: 1, Status: StatusActive,
+			SubscriptionType: SubscriptionTypeStandard, GeminiInputCountingEnabled: saved,
+		}}
 		svc := &adminServiceImpl{groupRepo: repo}
-		group, err := svc.CreateGroup(context.Background(), &CreateGroupInput{
-			Name: "composite-input-discount", Platform: PlatformComposite, RateMultiplier: 1, GeminiInputCountingEnabled: enabled,
-		})
+		_, err := svc.UpdateGroup(context.Background(), 76, &UpdateGroupInput{Platform: PlatformOpenAI})
 		require.NoError(t, err)
-		require.Equal(t, enabled, group.GeminiInputCountingEnabled)
+		require.Equal(t, saved, repo.updated.GeminiInputCountingEnabled)
+		_, err = svc.UpdateGroup(context.Background(), 76, &UpdateGroupInput{GeminiInputCountingEnabled: testPtrBool(!saved)})
+		require.NoError(t, err)
+		require.Equal(t, !saved, repo.updated.GeminiInputCountingEnabled)
 	}
 }
 
-func TestUpdateGroupGeminiInputCountingOmissionAndExplicitDisable(t *testing.T) {
-	repo := &groupRepoStubForAdmin{getByID: &Group{
-		ID: 76, Name: "input-discount", Platform: PlatformGemini, RateMultiplier: 1,
-		Status: StatusActive, SubscriptionType: SubscriptionTypeStandard, GeminiInputCountingEnabled: true,
-	}}
-	svc := &adminServiceImpl{groupRepo: repo}
-	group, err := svc.UpdateGroup(context.Background(), 76, &UpdateGroupInput{Name: "input-discount-renamed"})
+func TestSimpleModeGroupInputProtectionDefaultsAndPreservation(t *testing.T) {
+	repo := &groupRepoStubForAdmin{createID: 75}
+	svc := &adminServiceImpl{groupRepo: repo, cfg: &config.Config{RunMode: config.RunModeSimple}}
+	_, err := svc.CreateGroup(context.Background(), &CreateGroupInput{Name: "new"})
 	require.NoError(t, err)
-	require.True(t, group.GeminiInputCountingEnabled, "an unrelated edit must not disable the policy")
-	disabled := false
-	group, err = svc.UpdateGroup(context.Background(), 76, &UpdateGroupInput{GeminiInputCountingEnabled: &disabled})
+	require.True(t, repo.created.GeminiInputCountingEnabled)
+	repo.getByID = repo.created
+	repo.getByID.GeminiInputCountingEnabled = false
+	_, err = svc.UpdateGroup(context.Background(), 75, &UpdateGroupInput{Name: "renamed"})
 	require.NoError(t, err)
-	require.False(t, group.GeminiInputCountingEnabled)
 	require.False(t, repo.updated.GeminiInputCountingEnabled)
 }
 
-func TestUpdateGroupRejectsUnsupportedGeminiInputCountingPlatform(t *testing.T) {
-	enabled := true
-	repo := &groupRepoStubForAdmin{getByID: &Group{
-		ID: 77, Name: "no-input-discount", Platform: PlatformAnthropic, RateMultiplier: 1,
-		Status: StatusActive, SubscriptionType: SubscriptionTypeStandard,
-	}}
-	svc := &adminServiceImpl{groupRepo: repo}
-	_, err := svc.UpdateGroup(context.Background(), 77, &UpdateGroupInput{GeminiInputCountingEnabled: &enabled})
-	require.Error(t, err)
-	require.Nil(t, repo.updated)
-}
-
-func TestUpdateGroupPlatformChangeRequiresDisablingGeminiInputCounting(t *testing.T) {
-	repo := &groupRepoStubForAdmin{getByID: &Group{
-		ID: 78, Name: "input-discount", Platform: PlatformGemini, RateMultiplier: 1,
-		Status: StatusActive, SubscriptionType: SubscriptionTypeStandard, GeminiInputCountingEnabled: true,
-	}}
-	svc := &adminServiceImpl{groupRepo: repo}
-	_, err := svc.UpdateGroup(context.Background(), 78, &UpdateGroupInput{Platform: PlatformOpenAI})
-	require.Error(t, err)
-	require.Nil(t, repo.updated)
-	disabled := false
-	group, err := svc.UpdateGroup(context.Background(), 78, &UpdateGroupInput{Platform: PlatformOpenAI, GeminiInputCountingEnabled: &disabled})
-	require.NoError(t, err)
-	require.False(t, group.GeminiInputCountingEnabled)
+func TestGroupServiceInputProtectionDefaultsAndOverride(t *testing.T) {
+	repo := &keyDisplayCategoryGroupRepoStub{groupRepoStubForAdmin: &groupRepoStubForAdmin{createID: 84}}
+	svc := NewGroupService(repo, nil)
+	for _, setting := range []*bool{nil, testPtrBool(false)} {
+		created, err := svc.Create(context.Background(), CreateGroupRequest{Name: "direct", RateMultiplier: 1, GeminiInputCountingEnabled: setting})
+		require.NoError(t, err)
+		require.Equal(t, setting == nil, created.GeminiInputCountingEnabled)
+		repo.getByID = created
+		updated, err := svc.Update(context.Background(), created.ID, UpdateGroupRequest{})
+		require.NoError(t, err)
+		require.Equal(t, setting == nil, updated.GeminiInputCountingEnabled)
+		updated, err = svc.Update(context.Background(), created.ID, UpdateGroupRequest{GeminiInputCountingEnabled: testPtrBool(false)})
+		require.NoError(t, err)
+		require.False(t, updated.GeminiInputCountingEnabled)
+	}
 }
 
 func TestDuplicateGroupPreservesGeminiInputCountingPolicy(t *testing.T) {

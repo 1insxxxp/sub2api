@@ -437,9 +437,6 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 	}
 
 	platform := NormalizeGroupPlatform(input.Platform)
-	if err := validateGroupGeminiInputCounting(platform, input.GeminiInputCountingEnabled); err != nil {
-		return nil, err
-	}
 	modelAliases, err := domain.NormalizeModelAliases(input.ModelAliases)
 	if err != nil {
 		return nil, infraerrors.BadRequest("INVALID_MODEL_ALIASES", err.Error())
@@ -626,7 +623,7 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		Platform:                         platform,
 		RateMultiplier:                   input.RateMultiplier,
 		EmptyResponseCompensationEnabled: input.EmptyResponseCompensationEnabled,
-		GeminiInputCountingEnabled:       input.GeminiInputCountingEnabled,
+		GeminiInputCountingEnabled:       newGroupInputProtectionEnabled(input.GeminiInputCountingEnabled),
 		IsExclusive:                      input.IsExclusive,
 		Status:                           StatusActive,
 		SubscriptionType:                 subscriptionType,
@@ -891,9 +888,6 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	}
 	if input.GeminiInputCountingEnabled != nil {
 		group.GeminiInputCountingEnabled = *input.GeminiInputCountingEnabled
-	}
-	if err := validateGroupGeminiInputCounting(group.Platform, group.GeminiInputCountingEnabled); err != nil {
-		return nil, err
 	}
 	if input.IsExclusive != nil {
 		group.IsExclusive = *input.IsExclusive

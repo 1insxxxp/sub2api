@@ -199,6 +199,8 @@ func TestGeminiHandlers_InterruptedUsageBilling(t *testing.T) {
 			clientGone                 bool
 			wantBilling                bool
 			wantEstimate               bool
+			wantPending                bool
+			protected                  bool
 			ledgerRecovery             bool
 			countRecovery              bool
 			customUsage                string
@@ -236,6 +238,8 @@ func TestGeminiHandlers_InterruptedUsageBilling(t *testing.T) {
 			{name: "metadata timeout then next account completes", parts: `{"text":"partial answer"}`, finish: `,"finishReason":"STOP"`, wantBilling: true, completed: true, metadataTimeout: true},
 			{name: "cancellation with prompt only", parts: `{"text":"partial answer"}`, readErr: context.Canceled, clientGone: true, customUsage: `{"promptTokenCount":12}`, wantEstimate: true},
 			{name: "cancellation with output only", parts: `{"text":"partial answer"}`, readErr: context.Canceled, clientGone: true, customUsage: `{"candidatesTokenCount":10000}`, wantEstimate: true},
+			{name: "protected failover after metadata timeout", parts: `{"text":"partial answer"}`, finish: `,"finishReason":"STOP"`, wantBilling: true, completed: true, metadataTimeout: true, protected: true},
+			{name: "protected stream missing provider output", protected: true, parts: `{"text":"partial answer"}`, finish: `,"finishReason":"STOP"`, customUsage: `{"promptTokenCount":12}`, wantPending: true},
 			{name: "completed without usage", parts: `{"text":"partial answer"}`, finish: `,"finishReason":"STOP"`, omitUsage: true, wantEstimate: true},
 			{name: "normal completed", parts: `{"text":"partial answer"}`, finish: `,"finishReason":"STOP"`, wantBilling: true, completed: true},
 			{name: "safety failure empty answer", finish: `,"finishReason":"SAFETY"`, zeroOutputUsage: true, wantBilling: true},
@@ -334,6 +338,10 @@ func TestGeminiHandlers_InterruptedUsageBilling(t *testing.T) {
 					terminal := map[string]string{"chat": "[DONE]", "messages": "message_stop", "native": "\"finishReason\":\"STOP\""}[protocol]
 					c.Writer = &geminiPartialCancelAfterTerminalWriter{ResponseWriter: c.Writer, cancel: cancel, terminal: terminal}
 				}
+				if tc.protected {
+					group.GeminiInputCountingEnabled = true
+					ctx = service.WithInputTokenProtection(ctx, &service.InputTokenProtection{Limit: 8})
+				}
 				ctx = context.WithValue(ctx, ctxkey.Group, group)
 				path := "/v1/chat/completions"
 				body := `{"model":"gemini-2.5-flash","messages":[{"role":"user","content":"hello"}],"stream":true}`
@@ -404,6 +412,18 @@ func TestGeminiHandlers_InterruptedUsageBilling(t *testing.T) {
 					require.Zero(t, upstream.countCalls, "countTokens cannot prove consumption for an unaccepted request")
 					return
 				}
+				if tc.wantPending {
+					require.Empty(t, wallet.commands)
+					require.Empty(t, usageRepo.logs)
+					require.Len(t, usageRepo.pending, 1)
+					require.Zero(t, usageRepo.pending[0].InputTokens)
+					require.Equal(t, service.UsageTokenSourceUnreported, usageRepo.pending[0].InputTokensSource)
+					require.Equal(t, 12, *usageRepo.pending[0].PendingEvidence.InputTokens)
+					require.Equal(t, service.UsagePendingReasonUpstreamMissing, usageRepo.pending[0].BillingPendingReason)
+					require.Equal(t, service.UsageTokenSourceUnreported, usageRepo.pending[0].OutputTokensSource)
+					require.Equal(t, service.UsageBillingStatusPendingReview, usageRepo.pending[0].BillingStatus)
+					return
+				}
 				if tc.wantEstimate {
 					require.Empty(t, usageRepo.pending, "final estimation must settle into normal history")
 					require.Len(t, wallet.commands, 1)
@@ -439,7 +459,13 @@ func TestGeminiHandlers_InterruptedUsageBilling(t *testing.T) {
 				require.Len(t, wallet.commands, 1, "provider usage settles exactly once")
 				require.Len(t, usageRepo.logs, 1)
 				log := usageRepo.logs[0]
-				require.Equal(t, providerInput, log.InputTokens)
+				if tc.protected {
+					require.NotNil(t, log.Outcome)
+					require.Equal(t, providerInput, *log.Outcome.UpstreamInputTokens)
+					require.Equal(t, 8, log.InputTokens)
+				} else {
+					require.Equal(t, providerInput, log.InputTokens)
+				}
 				if tc.ledgerRecovery {
 					require.Positive(t, upstream.ledgerCalls)
 					require.NotNil(t, log.UpstreamRequestID)

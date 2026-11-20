@@ -17,6 +17,11 @@ type GroupModelStatusVisibility = domain.GroupModelStatusVisibility
 type ReasoningEffortMapping = domain.ReasoningEffortMapping
 type GroupModelsListConfig = GroupModelAllowlist
 
+// An omitted create option enables protection. Updates preserve the stored value on omission.
+func newGroupInputProtectionEnabled(setting *bool) bool {
+	return setting == nil || *setting
+}
+
 type Group struct {
 	ID          int64
 	Name        string
@@ -35,8 +40,8 @@ type Group struct {
 	// EmptyResponseCompensationEnabled controls whether users in this group may
 	// submit self-service empty-response claims. It defaults to false.
 	EmptyResponseCompensationEnabled bool
-	// GeminiInputCountingEnabled opts this billing group into the text-only,
-	// only-decrease Gemini input discount. Shared accounts keep group isolation.
+	// GeminiInputCountingEnabled caps billed input at the original customer input estimate.
+	// The historical field name is retained for stored groups and admin clients.
 	GeminiInputCountingEnabled bool
 	// 高峰时段倍率：peak_rate_enabled 为 true 且当前时刻处于 [PeakStart, PeakEnd) 时，
 	// token 计费倍率额外乘以 PeakRateMultiplier。详见 PeakMultiplierAt。

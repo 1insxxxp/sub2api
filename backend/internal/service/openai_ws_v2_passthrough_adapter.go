@@ -30,6 +30,7 @@ type openAIWSClientFrameConn struct {
 	// model identifier they supplied for the current turn.
 	restoreResponseModel func([]byte) []byte
 	restoreToolNames     func([]byte) []byte
+	projectUsage         func([]byte) []byte
 }
 
 // openAIWSPolicyEnforcingFrameConn wraps a client-side FrameConn and runs
@@ -652,6 +653,9 @@ func (c *openAIWSClientFrameConn) WriteFrame(ctx context.Context, msgType coderw
 			payload = c.restoreToolNames(payload)
 		}
 	}
+	if c.projectUsage != nil {
+		payload = c.projectUsage(payload)
+	}
 	return c.conn.Write(ctx, msgType, payload)
 }
 
@@ -954,7 +958,12 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 	completedTurns := atomic.Int32{}
 	turnLifecycle := newOpenAIWSPassthroughTurnLifecycle(true)
 	var acceptedTurnStartedAt atomic.Pointer[time.Time]
+	var turnProtection atomic.Pointer[openAIWSTurnInputProtection]
+	// Read and written only by the upstream-to-client relay. Hold this frame's turn through the final write even if the client starts another turn.
+	var frameProtection *openAIWSTurnInputProtection
+	turnProtection.Store(hooks.inputProtection(1, originalFirstClientMessage, initialRequestModel))
 	clientFrameConn := &openAIWSClientFrameConn{
+		projectUsage:         func(frame []byte) []byte { return frameProtection.project(frame) },
 		conn:                 clientConn,
 		controlCtx:           ctx,
 		interTurnIdleTimeout: s.openAIWSIngressInterTurnIdleTimeout(),
@@ -978,6 +987,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 		// capturedSessionModel 的读写都发生在该 goroutine 内，因此无需
 		// 加锁/原子化。
 		filter: func(msgType coderws.MessageType, payload []byte) (out []byte, blocked *OpenAIFastBlockedError, filterErr error) {
+			originalFrame := payload
 			if msgType != coderws.MessageText && msgType != coderws.MessageBinary {
 				return payload, nil, nil
 			}
@@ -1118,6 +1128,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 			//     覆盖（Store(nil)），因为 OpenAI 上游对该帧实际不传
 			//     service_tier 时按 default 处理，billing 应如实反映。
 			if policyErr == nil && blocked == nil && isResponseCreate {
+				turnProtection.Store(hooks.inputProtection(turnNo, originalFrame, requestModelForThisFrame))
 				usageMeta.updateFromResponseCreate(out, model, requestModelForThisFrame)
 				_, actualModel := usageMeta.turnModels(requestModelForThisFrame)
 				SetOpsUpstreamModel(c, actualModel)
@@ -1214,12 +1225,14 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 				turnResult := &OpenAIForwardResult{
 					RequestID: turn.RequestID,
 					Usage: OpenAIUsage{
-						InputTokens:              turn.Usage.InputTokens,
-						ImageInputTokens:         turn.Usage.ImageInputTokens,
-						OutputTokens:             turn.Usage.OutputTokens,
-						CacheCreationInputTokens: turn.Usage.CacheCreationInputTokens,
-						CacheReadInputTokens:     turn.Usage.CacheReadInputTokens,
-						ImageOutputTokens:        turn.Usage.ImageOutputTokens,
+						InputTokens:                 turn.Usage.InputTokens,
+						ImageInputTokens:            turn.Usage.ImageInputTokens,
+						OutputTokens:                turn.Usage.OutputTokens,
+						CacheCreationInputTokens:    turn.Usage.CacheCreationInputTokens,
+						CacheCreation30mInputTokens: turn.Usage.CacheCreation30mInputTokens,
+						CacheCreation12hInputTokens: turn.Usage.CacheCreation12hInputTokens,
+						CacheReadInputTokens:        turn.Usage.CacheReadInputTokens,
+						ImageOutputTokens:           turn.Usage.ImageOutputTokens,
 					},
 					Model:                         turnRequestModel,
 					UpstreamModel:                 openAIWSDifferentModel(turnRequestModel, turnUpstreamModel),
@@ -1236,6 +1249,8 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 					Duration:                      turn.Duration,
 					FirstTokenMs:                  turn.FirstTokenMs,
 				}
+				frameProtection.apply(turnResult)
+				frameProtection.stamp(turnResult)
 				logOpenAIWSV2Passthrough(
 					"relay_turn_completed account_id=%d turn=%d request_id=%s terminal_event=%s turn_requested_model=%s turn_upstream_model=%s duration_ms=%d first_token_ms=%d input_tokens=%d output_tokens=%d cache_read_tokens=%d",
 					account.ID,
@@ -1284,6 +1299,11 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 				_ = clientConn.CloseNow()
 			},
 			BeforeWriteClient: func(msgType coderws.MessageType, payload []byte, wroteDownstream bool) error {
+				frameProtection = turnProtection.Load()
+				frameProtection.observe(payload, func() OpenAIForwardResult {
+					model, upstream := usageMeta.turnModels("")
+					return OpenAIForwardResult{Model: model, UpstreamModel: openAIWSDifferentModel(model, upstream), ServiceTier: usageMeta.serviceTier.Load(), ReasoningEffort: usageMeta.reasoningEffort.Load(), OpenAIWSMode: true}
+				})
 				if msgType != coderws.MessageText {
 					return nil
 				}
@@ -1356,12 +1376,14 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 	result := &OpenAIForwardResult{
 		RequestID: relayResult.RequestID,
 		Usage: OpenAIUsage{
-			InputTokens:              relayResult.Usage.InputTokens,
-			ImageInputTokens:         relayResult.Usage.ImageInputTokens,
-			OutputTokens:             relayResult.Usage.OutputTokens,
-			CacheCreationInputTokens: relayResult.Usage.CacheCreationInputTokens,
-			CacheReadInputTokens:     relayResult.Usage.CacheReadInputTokens,
-			ImageOutputTokens:        relayResult.Usage.ImageOutputTokens,
+			InputTokens:                 relayResult.Usage.InputTokens,
+			ImageInputTokens:            relayResult.Usage.ImageInputTokens,
+			OutputTokens:                relayResult.Usage.OutputTokens,
+			CacheCreationInputTokens:    relayResult.Usage.CacheCreationInputTokens,
+			CacheCreation30mInputTokens: relayResult.Usage.CacheCreation30mInputTokens,
+			CacheCreation12hInputTokens: relayResult.Usage.CacheCreation12hInputTokens,
+			CacheReadInputTokens:        relayResult.Usage.CacheReadInputTokens,
+			ImageOutputTokens:           relayResult.Usage.ImageOutputTokens,
 		},
 		Model:                         resultRequestModel,
 		UpstreamModel:                 openAIWSDifferentModel(resultRequestModel, resultUpstreamModel),
@@ -1378,6 +1400,10 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 		Duration:                      relayResult.Duration,
 		FirstTokenMs:                  relayResult.FirstTokenMs,
 	}
+	if completedTurns.Load() == 0 {
+		turnProtection.Load().apply(result)
+	}
+	turnProtection.Load().stamp(result)
 
 	turnCount := int(completedTurns.Load())
 	if relayExit == nil {

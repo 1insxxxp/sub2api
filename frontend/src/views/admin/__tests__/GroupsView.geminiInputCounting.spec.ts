@@ -58,6 +58,7 @@ const sourceGroup = (platform: GroupPlatform, enabled?: boolean): AdminGroup => 
   monthly_limit_usd: null,
   long_context_pricing_enabled: true,
   force_openai_fast: false,
+  force_openai_ultrafast: false,
   free_openai_fast: false,
   model_pricing: [],
   profit_control_enabled: false,
@@ -170,7 +171,7 @@ const submit = async (wrapper: VueWrapper, form: 'create' | 'edit') => {
   await flushPromises()
 }
 
-describe('GroupsView Gemini input counting policy', () => {
+describe('GroupsView input token protection', () => {
   beforeEach(() => {
     localStorage.clear()
     vi.clearAllMocks()
@@ -184,36 +185,36 @@ describe('GroupsView Gemini input counting policy', () => {
     for (const wrapper of wrappers.splice(0)) wrapper.unmount()
   })
 
-  it.each(['gemini', 'composite'] as const)('creates %s groups with the policy off by default and explicitly enables it', async (platform) => {
+  it.each(['anthropic', 'openai', 'gemini', 'composite'] as const)('creates %s groups with the policy on by default and explicitly disables it', async (platform) => {
     const wrapper = mountView()
     await openCreate(wrapper, platform)
-    expect(wrapper.get<HTMLInputElement>('[data-testid="create-gemini-input-counting"]').element.checked).toBe(false)
-    await submit(wrapper, 'create')
-    expect(createGroup).toHaveBeenLastCalledWith(expect.objectContaining({ platform, gemini_input_counting_enabled: false }))
-
-    await openCreate(wrapper, platform)
-    expect(wrapper.get<HTMLInputElement>('[data-testid="create-gemini-input-counting"]').element.checked).toBe(false)
-    await wrapper.get('[data-testid="create-gemini-input-counting"]').setValue(true)
+    expect(wrapper.get<HTMLInputElement>('[data-testid="create-input-token-protection"]').element.checked).toBe(true)
     await submit(wrapper, 'create')
     expect(createGroup).toHaveBeenLastCalledWith(expect.objectContaining({ platform, gemini_input_counting_enabled: true }))
+
     await openCreate(wrapper, platform)
-    expect(wrapper.get<HTMLInputElement>('[data-testid="create-gemini-input-counting"]').element.checked).toBe(false)
+    expect(wrapper.get<HTMLInputElement>('[data-testid="create-input-token-protection"]').element.checked).toBe(true)
+    await wrapper.get('[data-testid="create-input-token-protection"]').setValue(false)
+    await submit(wrapper, 'create')
+    expect(createGroup).toHaveBeenLastCalledWith(expect.objectContaining({ platform, gemini_input_counting_enabled: false }))
+    await openCreate(wrapper, platform)
+    expect(wrapper.get<HTMLInputElement>('[data-testid="create-input-token-protection"]').element.checked).toBe(true)
   })
 
-  it.each(['gemini', 'composite'] as const)('restores the saved %s policy, preserves it on unrelated edits, and saves an explicit disable', async (platform) => {
+  it.each(['openai', 'gemini', 'composite'] as const)('restores the saved %s policy, preserves it on unrelated edits, and saves an explicit disable', async (platform) => {
     const group = sourceGroup(platform, true)
     listGroups.mockResolvedValue({ items: [group], total: 1, page: 1, page_size: 20, pages: 1 })
     updateGroup.mockResolvedValue(group)
     const wrapper = mountView()
     await openEdit(wrapper)
-    expect(wrapper.get<HTMLInputElement>('[data-testid="edit-gemini-input-counting"]').element.checked).toBe(true)
+    expect(wrapper.get<HTMLInputElement>('[data-testid="edit-input-token-protection"]').element.checked).toBe(true)
     await wrapper.get('[data-tour="edit-group-form-name"]').setValue('Renamed group')
     await submit(wrapper, 'edit')
     expect(updateGroup).toHaveBeenLastCalledWith(42, expect.objectContaining({ gemini_input_counting_enabled: true }))
     expect(group.gemini_input_counting_enabled).toBe(true)
 
     await openEdit(wrapper)
-    await wrapper.get('[data-testid="edit-gemini-input-counting"]').setValue(false)
+    await wrapper.get('[data-testid="edit-input-token-protection"]').setValue(false)
     await submit(wrapper, 'edit')
     expect(updateGroup).toHaveBeenLastCalledWith(42, expect.objectContaining({ gemini_input_counting_enabled: false }))
   })
@@ -221,37 +222,26 @@ describe('GroupsView Gemini input counting policy', () => {
   it('loads older group responses without opting in', async () => {
     const wrapper = mountView()
     await openEdit(wrapper)
-    expect(wrapper.get<HTMLInputElement>('[data-testid="edit-gemini-input-counting"]').element.checked).toBe(false)
+    expect(wrapper.get<HTMLInputElement>('[data-testid="edit-input-token-protection"]').element.checked).toBe(false)
     await submit(wrapper, 'edit')
-    expect(updateGroup).toHaveBeenCalledWith(42, expect.objectContaining({ gemini_input_counting_enabled: false }))
+    expect(updateGroup.mock.calls[0][1].gemini_input_counting_enabled).toBeUndefined()
   })
 
-  it('clears the create opt-in when switching to an unsupported platform', async () => {
+  it('keeps an explicit disable when switching platforms during creation', async () => {
     const wrapper = mountView()
     await openCreate(wrapper, 'gemini')
-    await wrapper.get('[data-testid="create-gemini-input-counting"]').setValue(true)
+    await wrapper.get('[data-testid="create-input-token-protection"]').setValue(false)
     await wrapper.get('[data-tour="group-form-platform"]').setValue('openai')
-    expect(wrapper.find('[data-testid="create-gemini-input-counting"]').exists()).toBe(false)
+    expect(wrapper.get<HTMLInputElement>('[data-testid="create-input-token-protection"]').element.checked).toBe(false)
     await submit(wrapper, 'create')
     expect(createGroup).toHaveBeenCalledWith(expect.objectContaining({ platform: 'openai', gemini_input_counting_enabled: false }))
-    await openCreate(wrapper, 'gemini')
-    expect(wrapper.get<HTMLInputElement>('[data-testid="create-gemini-input-counting"]').element.checked).toBe(false)
-  })
-
-  it('normalizes unsupported saved groups to disabled', async () => {
-    listGroups.mockResolvedValue({ items: [sourceGroup('openai', true)], total: 1, page: 1, page_size: 20, pages: 1 })
-    const wrapper = mountView()
-    await openEdit(wrapper)
-    expect(wrapper.find('[data-testid="edit-gemini-input-counting"]').exists()).toBe(false)
-    await submit(wrapper, 'edit')
-    expect(updateGroup).toHaveBeenCalledWith(42, expect.objectContaining({ gemini_input_counting_enabled: false }))
   })
 
   it('keeps the billing policy out of simple-mode edits', async () => {
     authState.isSimpleMode = true
     const wrapper = mountView()
     await openEdit(wrapper)
-    expect(wrapper.find('[data-testid="edit-gemini-input-counting"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="edit-input-token-protection"]').exists()).toBe(false)
     await submit(wrapper, 'edit')
     expect(updateGroup).toHaveBeenCalledWith(42, expect.not.objectContaining({ gemini_input_counting_enabled: expect.anything() }))
   })

@@ -977,6 +977,7 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 		resetKeepaliveTimer()
 	}
 
+	protectedInput := InputTokenProtectionFromContext(ctx) != nil
 	processSSEEvent := func(lines []string) ([]string, string, *sseUsagePatch, error) {
 		if len(lines) == 0 {
 			return nil, "", nil, nil
@@ -1103,6 +1104,12 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 			}
 		}
 
+		// The provider snapshot is taken after alias normalization and before the
+		// account's client-facing TTL rewrite. Settlement applies its own policy.
+		var usagePatch *sseUsagePatch
+		if protectedInput {
+			usagePatch = s.extractSSEUsagePatch(event)
+		}
 		// Cache TTL Override: 重写 SSE 事件中的 cache_creation 分类。
 		// 账号级设置优先；全局 1h 请求注入开启时，默认把 usage 计费归回 5m。
 		if overrideTarget, ok := s.resolveCacheTTLUsageOverrideTarget(ctx, account); ok {
@@ -1137,7 +1144,9 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 			}
 		}
 
-		usagePatch := s.extractSSEUsagePatch(event)
+		if !protectedInput {
+			usagePatch = s.extractSSEUsagePatch(event)
+		}
 		if anthropicStreamEventIsTerminal(eventName, dataLine) {
 			sawTerminalEvent = true
 		}
@@ -1635,6 +1644,15 @@ func (s *GatewayService) handleNonStreamingResponse(ctx context.Context, resp *h
 	mergeRawAnthropicCacheCreationUsage(gjson.GetBytes(body, "usage"), &response.Usage)
 	normalizeAnthropicCompatiblePromptUsage(gjson.GetBytes(body, "usage"), &response.Usage)
 
+	var observedUsage *ClaudeUsage
+	if InputTokenProtectionFromContext(ctx) != nil {
+		raw := response.Usage
+		if raw.CacheReadInputTokens == 0 {
+			raw.CacheReadInputTokens = max(0, int(gjson.GetBytes(body, "usage.cached_tokens").Int()))
+		}
+		observedUsage = &raw
+	}
+
 	// Claude Max simulation must update both billing usage and the JSON returned
 	// to the client. Existing cache creation usage is preserved and bypasses the
 	// account-level TTL override below.
@@ -1690,6 +1708,9 @@ func (s *GatewayService) handleNonStreamingResponse(ctx context.Context, resp *h
 	// 写入响应
 	c.Data(resp.StatusCode, contentType, body)
 
+	if observedUsage != nil {
+		return observedUsage, nil
+	}
 	return &response.Usage, nil
 }
 

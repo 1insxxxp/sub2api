@@ -164,13 +164,13 @@ func TestSystemCustomGroupHandlerCreateAndUpdateDecodeOrderedSourceGroupIDs(t *t
 			name:   "create",
 			method: http.MethodPost,
 			path:   "/",
-			body:   `{"name":"Monthly","default_validity_days":30,"source_group_ids":[9,7,12]}`,
+			body:   `{"name":"Monthly","default_validity_days":30,"source_group_ids":[9,7,12],"gemini_input_counting_enabled":false}`,
 		},
 		{
 			name:   "update",
 			method: http.MethodPut,
 			path:   "/42",
-			body:   `{"name":"Monthly","default_validity_days":30,"source_group_ids":[9,7,12]}`,
+			body:   `{"name":"Monthly","default_validity_days":30,"source_group_ids":[9,7,12],"gemini_input_counting_enabled":false}`,
 		},
 	}
 
@@ -180,16 +180,21 @@ func TestSystemCustomGroupHandlerCreateAndUpdateDecodeOrderedSourceGroupIDs(t *t
 			var got []int64
 			svc.createFn = func(_ context.Context, req service.CreateSystemCustomGroupRequest) (*service.SystemCustomGroup, error) {
 				got = append([]int64(nil), req.SourceGroupIDs...)
-				return &service.SystemCustomGroup{}, nil
+				require.NotNil(t, req.GeminiInputCountingEnabled)
+				require.False(t, *req.GeminiInputCountingEnabled)
+				return &service.SystemCustomGroup{Group: service.Group{GeminiInputCountingEnabled: false}}, nil
 			}
 			svc.updateFn = func(_ context.Context, _ int64, req service.UpdateSystemCustomGroupRequest) (*service.SystemCustomGroup, error) {
 				got = append([]int64(nil), req.SourceGroupIDs...)
-				return &service.SystemCustomGroup{}, nil
+				require.NotNil(t, req.GeminiInputCountingEnabled)
+				require.False(t, *req.GeminiInputCountingEnabled)
+				return &service.SystemCustomGroup{Group: service.Group{GeminiInputCountingEnabled: false}}, nil
 			}
 
 			recorder := performSystemCustomGroupRequest(t, newSystemCustomGroupHandlerTestRouter(svc), tt.method, tt.path, tt.body)
 
 			require.Contains(t, []int{http.StatusOK, http.StatusCreated}, recorder.Code)
+			require.Contains(t, recorder.Body.String(), `"gemini_input_counting_enabled":false`)
 			require.Equal(t, []int64{9, 7, 12}, got)
 		})
 	}

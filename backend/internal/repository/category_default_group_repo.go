@@ -292,7 +292,7 @@ func (r *categoryDefaultGroupRepository) Publish(ctx context.Context, category s
 		return nil, err
 	}
 	if current.GroupID == 0 {
-		g := &service.Group{Name: categoryDefaultName(category), Description: "按已发布模型关联来源分组，沿来源分组计费", Platform: service.PlatformComposite, KeyDisplayCategory: category, IsCategoryDefault: true, RateMultiplier: 1, Status: service.StatusActive, SubscriptionType: service.SubscriptionTypeStandard, SortOrder: -1000}
+		g := &service.Group{Name: categoryDefaultName(category), Description: "按已发布模型关联来源分组，沿来源分组计费", Platform: service.PlatformComposite, KeyDisplayCategory: category, IsCategoryDefault: true, GeminiInputCountingEnabled: true, RateMultiplier: 1, Status: service.StatusActive, SubscriptionType: service.SubscriptionTypeStandard, SortOrder: -1000}
 		if err := createGroupRecord(ctx, client, g); err != nil {
 			return nil, categoryDefaultTransactionError(err)
 		}

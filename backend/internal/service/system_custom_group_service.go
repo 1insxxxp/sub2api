@@ -147,6 +147,7 @@ func (s *SystemCustomGroupService) Create(ctx context.Context, req CreateSystemC
 		WeeklyLimitUSD:             weekly,
 		MonthlyLimitUSD:            monthly,
 		DefaultValidityDays:        days,
+		GeminiInputCountingEnabled: newGroupInputProtectionEnabled(req.GeminiInputCountingEnabled),
 	}
 	if err := s.repo.Create(ctx, group, sourceGroupIDs, models); err != nil {
 		return nil, fmt.Errorf("create system custom group: %w", err)
@@ -222,6 +223,9 @@ func (s *SystemCustomGroupService) Update(ctx context.Context, groupID int64, re
 	group.WeeklyLimitUSD = weekly
 	group.MonthlyLimitUSD = monthly
 	group.DefaultValidityDays = days
+	if req.GeminiInputCountingEnabled != nil {
+		group.GeminiInputCountingEnabled = *req.GeminiInputCountingEnabled
+	}
 	normalizeSystemCustomContainer(&group)
 	if err := s.repo.Update(ctx, &group, sourceGroupIDs, models); err != nil {
 		return nil, fmt.Errorf("update system custom group: %w", err)

@@ -1108,6 +1108,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 						ctx := context.WithValue(c.Request.Context(), ctxkey.ForcePlatform, "")
 						c.Request = c.Request.WithContext(ctx)
 						currentAPIKey = fallbackAPIKey
+						c.Set(middleware2.InputProtectionPricingKey, currentAPIKey)
 						currentSubscription = nil
 						publicModel, routeModel = resolveGroupModelRoute(fallbackGroup, reqModel)
 						channelMapping, _ = h.gatewayService.ResolveChannelMappingAndRestrict(c.Request.Context(), currentAPIKey.GroupID, routeModel)
