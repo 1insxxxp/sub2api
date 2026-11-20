@@ -117,7 +117,7 @@ func TestCategoryDefaultAPIKeyClonePreservesIdentityAndSourcePolicies(t *testing
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	c.Request = httptest.NewRequest("POST", "/v1beta/models/gemini-test:generateContent", nil).WithContext(ctx)
 	account := &Account{ID: 3, Platform: PlatformGemini, Type: AccountTypeAPIKey}
-	require.True(t, requestGeminiInputCountingEnabled(c, account, "gemini-test"), "source discount must be frozen after default source resolution")
+	require.False(t, requestGeminiInputCountingEnabled(c, account, "gemini-test"), "resolved source groups use original input protection instead of the legacy account discount")
 	key.User.GroupAccountExclusions[sourceID][0] = 100
 	require.Equal(t, int64(27), exclusions[sourceID][0], "request clone must not mutate shared exclusions")
 }
