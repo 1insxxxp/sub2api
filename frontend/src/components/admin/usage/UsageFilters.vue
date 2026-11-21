@@ -3,7 +3,7 @@
     <!-- Toolbar: left filters (multi-line) + right actions -->
     <div class="admin-toolbar items-end" :class="{ 'usage-filter-toolbar': flat }">
       <!-- Left: filters (allowed to wrap to multiple rows) -->
-      <div class="admin-toolbar-group flex-1 items-end gap-4" :class="{ 'usage-filter-fields': flat }">
+      <div class="admin-toolbar-group flex-1 items-end gap-4" :class="{ 'usage-filter-fields': flat, 'with-date': $slots['after-filter'] }">
         <!-- User Search -->
         <div ref="userSearchRef" class="usage-filter-user usage-filter-dropdown relative w-full sm:w-auto sm:min-w-[240px]">
           <label class="input-label">{{ t('admin.usage.userFilter') }}</label>
@@ -57,6 +57,7 @@
           <span class="usage-filter-toggle-label">{{ t('common.filter') }}</span>
           <span v-if="activeExtraFilters" class="usage-filter-count">{{ activeExtraFilters }}</span>
         </button>
+        <slot name="after-filter" />
         <button
           v-if="flat && mobile && showActions"
           type="button"
@@ -284,7 +285,7 @@ const emit = defineEmits([
 const { t } = useI18n()
 const filters = toRef(props, 'modelValue')
 const mobile = useMediaQuery('(max-width: 767px)')
-const filtersExpanded = ref(false)
+const filtersExpanded = ref(true)
 const filterToggle = ref<HTMLButtonElement | null>(null)
 const hasExtraFilters = computed(() => props.mode === 'usage' || props.mode === 'errors')
 const showExtraFilters = computed(() => !props.flat || !hasExtraFilters.value || filtersExpanded.value)
@@ -653,6 +654,8 @@ defineExpose({ getUserSearchRevision, setUserKeyword })
     grid-template-columns: minmax(0, 1fr) auto auto;
     align-items: end;
   }
+  .usage-filter-fields.with-date .usage-filter-user { grid-column: 1 / -1; }
+  .usage-list-filters .usage-filter-fields.with-date { grid-template-columns: auto minmax(0, 1fr) auto; }
   .usage-extra-filters {
     grid-column: 1 / -1;
     grid-template-columns: repeat(2, minmax(0, 1fr));

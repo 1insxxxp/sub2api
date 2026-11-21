@@ -138,7 +138,7 @@ const UsageFiltersStub = defineComponent({
     })
     return { userKeyword }
   },
-  template: '<div><span data-test="user-filter-label">{{ userKeyword }}</span><slot name="after-reset" /></div>',
+  template: '<div><span data-test="user-filter-label">{{ userKeyword }}</span><slot name="after-filter" /><slot name="after-reset" /></div>',
 })
 const UsageTableStub = {
   props: ['columns'],

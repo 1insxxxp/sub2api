@@ -19,18 +19,6 @@
         </button>
       </nav>
       <div class="admin-surface usage-workspace-surface" data-test="usage-tabs-surface">
-        <div
-          v-if="activeTab === 'overview' || activeTab === 'usage' || activeTab === 'errors'"
-          class="usage-workspace-date"
-          role="group"
-          :aria-label="t('admin.dashboard.timeRange')"
-        >
-          <DateRangePicker
-            :start-date="startDate"
-            :end-date="endDate"
-            @change="onDateRangeChange"
-          />
-        </div>
         <RankingTimeToolbar
           v-if="activeTab === 'ranking' || activeTab === 'recharge' || activeTab === 'claims'"
           :start-date="startDate"
@@ -56,6 +44,13 @@
           @cleanup="openCleanupDialog"
           @export="exportToExcel"
         >
+          <template v-if="activeTab === 'usage' || activeTab === 'errors' || activeTab === 'overview'" #after-filter>
+            <DateRangePicker
+              :start-date="startDate"
+              :end-date="endDate"
+              @change="onDateRangeChange"
+            />
+          </template>
           <template #after-reset>
             <div v-if="activeTab === 'usage' || activeTab === 'errors'" class="relative" ref="columnDropdownRef">
               <button
@@ -996,8 +991,6 @@ defineExpose({ requestedModelStats, refreshData })
 .dark .usage-workspace-tab[aria-pressed='true'] { color: #93c5fd; }
 .usage-workspace-tab:focus-visible { outline: 2px solid var(--workspace-focus); outline-offset: -2px; }
 .usage-workspace-surface { margin-top: 0.75rem; }
-.usage-workspace-date { padding: 0.75rem 1rem 0; }
-.usage-workspace-date :deep(.date-picker-trigger) { max-width: 100%; }
 .usage-workspace-filters { border-bottom: 1px solid var(--workspace-divider); }
 .usage-workspace-results { overflow: hidden; border-radius: 0 0 8px 8px; }
 .usage-workspace-overview { display: grid; gap: 1rem; padding: 1rem; }
@@ -1007,7 +1000,6 @@ defineExpose({ requestedModelStats, refreshData })
 @media (max-width: 767px) {
   .usage-workspace-nav { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .usage-workspace-tab { font-size: 0.75rem; }
-  .usage-workspace-date { padding: 0.625rem 0.75rem 0; }
   .usage-workspace-overview { padding: 0.75rem; }
 }
 
