@@ -86,7 +86,10 @@ func (s *GatewayService) FinalizeGeminiUsageFallback(ctx context.Context, input 
 	if result.OutputTokensSource != UsageTokenSourceUpstream {
 		output := 0
 		outputMethod = "no_upstream_acceptance"
-		if accepted {
+		if accepted && evidence.InterruptedOutputZero {
+			output = deliveredOutputTokens(result.DeliveredOutputTokens)
+			outputMethod = "delivered_text_before_cancel"
+		} else if accepted {
 			output = max(0, evidence.CandidateTokens)
 			if evidence.UsageFields&4 != 0 {
 				output += max(0, evidence.MeasuredThoughts)

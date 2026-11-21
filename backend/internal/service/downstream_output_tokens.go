@@ -490,6 +490,17 @@ func ApplyDeliveredOutputTokens(result *ForwardResult, collector *DownstreamOutp
 	}
 	delivered := collector.TokenCount()
 	result.DeliveredOutputTokens = &delivered
+	// An interim zero contradicts text already written. Give the exact
+	// request ledger first chance to supply the provider's final count.
+	evidence := result.GeminiUsageFallback
+	if result.RequireMeasuredUsage && result.Stream && result.ClientDisconnect && !result.GeminiUsageFinalized &&
+		result.OutputTokensSource == UsageTokenSourceUpstream && result.Usage.OutputTokens == 0 &&
+		evidence != nil && evidence.UpstreamAccepted && !evidence.UpstreamFinished &&
+		!upstreamUsageComplete(result.Outcome) && !collector.HasDeliveredTerminal() && delivered > 0 && collector.HasDeliveredText() {
+		evidence.InterruptedOutputZero = true
+		result.OutputTokensSource = UsageTokenSourceUnreported
+		result.MeasuredUsageComplete = false
+	}
 }
 
 func ApplyDeliveredOpenAIOutputTokens(result *OpenAIForwardResult, collector *DownstreamOutputTokenCollector) {

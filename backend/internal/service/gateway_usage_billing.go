@@ -1931,6 +1931,10 @@ func (s *GatewayService) buildRecordUsageLog(
 		SubscriptionID:           optionalSubscriptionID(subscription),
 		CreatedAt:                time.Now(),
 	}
+	if result.GeminiUsageFallback != nil && result.GeminiUsageFallback.InterruptedOutputZero && result.OutputTokensSource == UsageTokenSourceEstimated {
+		usageLog.UpstreamOutputTokens = 0 // The upstream stream only reported a provisional zero.
+	}
+
 	if result.ImageCount > 0 && (cost == nil || cost.BillingMode != string(BillingModeToken)) {
 		usageLog.RateMultiplier = imageMultiplier
 	}

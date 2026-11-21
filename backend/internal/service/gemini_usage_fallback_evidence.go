@@ -20,14 +20,16 @@ const (
 // GeminiUsageFallback contains only scalar output evidence and the short-lived
 // input count request. Provider field presence remains distinct from estimates.
 type GeminiUsageFallback struct {
-	Input              *GeminiInputUsageFallback
-	CandidateTokens    int
-	ThoughtTokens      int
-	UsageFields        uint8
-	MeasuredCandidates int
-	MeasuredThoughts   int
-	UpstreamAccepted   bool
-	OutputTruncated    bool
+	UpstreamFinished      bool
+	InterruptedOutputZero bool
+	Input                 *GeminiInputUsageFallback
+	CandidateTokens       int
+	ThoughtTokens         int
+	UsageFields           uint8
+	MeasuredCandidates    int
+	MeasuredThoughts      int
+	UpstreamAccepted      bool
+	OutputTruncated       bool
 }
 
 // Output text stays on the live attempt only. Async billing receives token
@@ -213,7 +215,7 @@ func (a *GeminiUpstreamAttempt) snapshotUsageFallback() *GeminiUsageFallback {
 		return nil
 	}
 	fallback := &GeminiUsageFallback{
-		UsageFields: a.event.UsageFields, MeasuredCandidates: int(a.candidates),
+		UpstreamFinished: a.upstreamFinished, UsageFields: a.event.UsageFields, MeasuredCandidates: int(a.candidates),
 		MeasuredThoughts: int(a.event.ThoughtTokens), UpstreamAccepted: a.upstreamAccepted,
 		OutputTruncated: a.fallbackOutputTruncated,
 	}

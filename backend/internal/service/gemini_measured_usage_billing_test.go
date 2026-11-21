@@ -131,3 +131,30 @@ func TestGeminiLedgerRecoveredUsagePreservesMeasuredInputAfterAccountSwitch(t *t
 	require.InDelta(t, logs.lastLog.ActualCost, commands.lastCmd.BalanceCost, 1e-8)
 	require.InDelta(t, logs.lastLog.ActualCost, commands.lastCmd.APIKeyQuotaCost, 1e-8)
 }
+
+func TestGeminiChatInterruptedProvisionalZeroUsesDeliveredOutput(t *testing.T) {
+	const model = "gemini-3-flash-preview"
+	const frames = "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"hello world\"}]}}],\"usageMetadata\":{\"promptTokenCount\":31643,\"candidatesTokenCount\":0,\"totalTokenCount\":31643}}\n\n"
+	svc, c, _ := newGeminiAbortingStreamService(t, "/v1/chat/completions", nil, frames, true)
+	collector, restore := AttachDownstreamOutputTokenCollector(c, model)
+	defer restore()
+	result, _ := callGeminiTraversalPath(t, "chat", svc, c, geminiVertexAPIKeyTestAccount(""), model, true)
+	require.NotNil(t, result)
+	ApplyDeliveredOutputTokens(result, collector)
+	require.True(t, NeedsUsageMeasurementReview(result))
+	billing, logs, commands := newGeminiInputUsageRegressionBilling()
+	billing.billingService.pricingService.pricingData[model] = &LiteLLMModelPricing{InputCostPerToken: 1e-6, OutputCostPerToken: 5e-6}
+	input := &RecordUsageInput{Result: result, Account: geminiVertexAPIKeyTestAccount(""), APIKey: &APIKey{ID: 501}, User: &User{ID: 601}, APIKeyService: &openAIRecordUsageAPIKeyQuotaStub{}}
+	billing.FinalizeGeminiUsageFallback(context.Background(), input)
+	require.Equal(t, *result.DeliveredOutputTokens, result.Usage.OutputTokens)
+	require.Equal(t, 31643, result.Usage.InputTokens)
+	require.Positive(t, recordedOutputTokens(result))
+	require.Equal(t, *result.DeliveredOutputTokens, recordedOutputTokens(result))
+	require.Equal(t, UsageTokenSourceEstimated, recordedOutputTokensSource(result))
+	require.NoError(t, billing.RecordUsage(context.Background(), input))
+	require.Equal(t, 1, commands.calls)
+	require.Equal(t, *result.DeliveredOutputTokens, logs.lastLog.OutputTokens)
+	require.Zero(t, logs.lastLog.UpstreamOutputTokens)
+	require.Equal(t, UsageTokenSourceEstimated, logs.lastLog.OutputTokensSource)
+	require.Positive(t, logs.lastLog.OutputCost)
+}

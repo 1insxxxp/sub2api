@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -42,6 +43,7 @@ type GeminiUpstreamAttempt struct {
 	nativeInputCountEmitted bool
 	inputFallback           *GeminiInputUsageFallback
 	fallbackCandidates      map[int64]*geminiFallbackCandidate
+	upstreamFinished        bool
 	upstreamAccepted        bool
 	fallbackOutputBytes     int
 	fallbackStreamCount     int
@@ -177,6 +179,14 @@ func ObserveGeminiUpstreamAttemptUsage(c *gin.Context, raw []byte) {
 func (a *GeminiUpstreamAttempt) ObserveUsage(raw []byte) {
 	if a == nil || a.ended || !gjson.ValidBytes(raw) {
 		return
+	}
+	if !a.upstreamFinished && bytes.Contains(raw, []byte(`"finishReason"`)) {
+		root := gjson.ParseBytes(raw)
+		if wrapped := root.Get("response"); wrapped.IsObject() {
+			root = wrapped
+		}
+		reason := root.Get("candidates.0.finishReason").String()
+		a.upstreamFinished = reason != "" && reason != "FINISH_REASON_UNSPECIFIED"
 	}
 	if a.inputCounting != nil && geminiInputCountingResponseHasMedia(raw) {
 		a.inputCounting = nil
