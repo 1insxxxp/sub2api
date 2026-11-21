@@ -571,7 +571,7 @@ func TestGeminiCachedContentsCreate_ProtectionAtQuoteAndDetachedSettlement(t *te
 	}
 }
 
-func TestGeminiCachedContentsCreate_PendingProtectionPreservesUpstreamInput(t *testing.T) {
+func TestGeminiCachedContentsCreate_MissingEstimatePreservesUpstreamInput(t *testing.T) {
 	const path = "/v1beta/cachedContents"
 	const body = `{"model":"models/gemini-2.5-pro","ttl":"86400s","contents":[{"parts":[{"fileData":{"fileUri":"gs://test/cache"}}]}]}`
 	protection := service.EstimateCustomerInputTokenProtection(path, []byte(body))
@@ -583,19 +583,14 @@ func TestGeminiCachedContentsCreate_PendingProtectionPreservesUpstreamInput(t *t
 		env.h.GeminiCachedContentsCreate(c)
 	})
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-	require.Zero(t, env.billing.commandCount())
-	require.Len(t, env.usage.totals(), 1)
+	totals := env.waitForUsage(t, 1)
+	require.InDelta(t, cachedBillingTokens*cachedBillingInputPrice+24*cachedBillingTokens*cachedBillingStoragePrice, totals[0], 1e-9)
 	row := env.usage.first()
-	require.Equal(t, service.UsageBillingStatusPendingReview, row.BillingStatus)
-	require.Zero(t, row.InputTokens)
-	require.Equal(t, service.UsageTokenSourceUnreported, row.InputTokensSource)
-	require.Equal(t, service.UsagePendingReasonCustomerInputUnavailable, row.BillingPendingReason)
-	require.Equal(t, cachedBillingTokens, *row.PendingEvidence.InputTokens)
-	require.Positive(t, row.PendingEvidence.CacheStorageTokenHours)
-	require.Positive(t, row.PendingEvidence.CacheStorageCost)
+	require.Equal(t, cachedBillingTokens, row.InputTokens)
+	require.Nil(t, row.PendingEvidence)
 }
 
-func TestGeminiCachedContentsCreate_PendingInputReservesStorage(t *testing.T) {
+func TestGeminiCachedContentsCreate_MissingEstimateReservesOriginalCharge(t *testing.T) {
 	const path = "/v1beta/cachedContents"
 	const body = `{"model":"models/gemini-2.5-pro","ttl":"86400s","contents":[{"parts":[{"fileData":{"fileUri":"gs://test/cache"}}]}]}`
 	protection := service.EstimateCustomerInputTokenProtection(path, []byte(body))
@@ -603,7 +598,7 @@ func TestGeminiCachedContentsCreate_PendingInputReservesStorage(t *testing.T) {
 	const hours = 24 * cachedBillingTokens
 	const rawStorageCost = hours * cachedBillingStoragePrice
 	const multiplier = 2
-	const reserve = rawStorageCost * multiplier
+	const reserve = (rawStorageCost + cachedBillingTokens*cachedBillingInputPrice) * multiplier
 
 	for _, tc := range []struct {
 		name            string
@@ -625,16 +620,12 @@ func TestGeminiCachedContentsCreate_PendingInputReservesStorage(t *testing.T) {
 			require.Equal(t, tc.status, rec.Code, rec.Body.String())
 			require.Equal(t, tc.deletes, env.upstream.methodCalls(http.MethodDelete))
 			require.Len(t, env.repo.records, 1-tc.deletes)
-			require.Zero(t, env.billing.commandCount())
-			require.Len(t, env.usage.totals(), 1)
+			totals := env.waitForUsage(t, 1)
+			want := float64(tc.storageHours)*cachedBillingStoragePrice + cachedBillingTokens*cachedBillingInputPrice
+			require.InDelta(t, want, totals[0], 1e-9)
 			row := env.usage.first()
-			require.Equal(t, service.UsageBillingStatusPendingReview, row.BillingStatus)
-			require.Zero(t, row.ActualCost)
-			require.NotNil(t, row.PendingEvidence)
-			require.NotNil(t, row.PendingEvidence.InputTokens)
-			require.Equal(t, cachedBillingTokens, *row.PendingEvidence.InputTokens)
-			require.Equal(t, tc.storageHours, row.PendingEvidence.CacheStorageTokenHours)
-			require.InDelta(t, tc.storageHours*cachedBillingStoragePrice, row.PendingEvidence.CacheStorageCost, 1e-9)
+			require.Equal(t, cachedBillingTokens, row.InputTokens)
+			require.Nil(t, row.PendingEvidence)
 		})
 	}
 }

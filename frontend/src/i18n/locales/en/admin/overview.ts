@@ -1049,7 +1049,7 @@ export default {
       rateMultiplierHint: 'Cost multiplier for this group (e.g., 1.5 = 150% of base cost)',
       inputTokenProtection: {
         enable: 'Input token billing protection',
-        hint: 'For token-based billing, ordinary and cached input together are capped at the local estimate of the original customer input. Cached reads receive their discount first, and the customer pays at most the original charge. If the input cannot be estimated, settlement is deferred. Per-request pricing is unchanged.'
+        hint: 'For token billing, cap at the lower count if the original input estimate is below 20,000 tokens or the difference exceeds 5,000 tokens. Otherwise keep the reported count. When capping, keep cache writes first, then ordinary input, then cache reads. If evidence is insufficient, use the original settlement. Per-request pricing stays the same.'
       },
       emptyResponseCompensation: {
         enable: 'Allow self-service empty-response refunds',

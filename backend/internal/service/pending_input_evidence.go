@@ -58,12 +58,6 @@ func forwardPendingProviderUsage(r *ForwardResult) PendingProviderUsage {
 	return pendingProviderUsage(r.Usage.InputTokens, r.Usage.OutputTokens, source, r.OutputTokensSource, r.Usage.billingUsageTokens(), r.DeliveredOutputTokens)
 }
 
-func openAIPendingProviderUsage(r *OpenAIForwardResult) PendingProviderUsage {
-	e := pendingProviderUsage(r.Usage.InputTokens, r.Usage.OutputTokens, r.InputTokensSource, r.OutputTokensSource, r.Usage.billingUsageTokens(), r.DeliveredOutputTokens)
-	e.ImageInputTokens, e.ImageCacheReadTokens = r.Usage.ImageInputTokens, r.Usage.ImageCacheReadTokens
-	return e
-}
-
 func (e *PendingUsageEvidence) measuredTotals() bool {
 	if e.InputTokens == nil || e.OutputTokens == nil && e.CacheStorageTokenHours == 0 {
 		return false
@@ -112,27 +106,6 @@ func (s *GatewayService) forwardPendingEvidence(ctx context.Context, input *Reco
 			ApplyForwardImageBillingResolution(priced)
 			ApplyForwardServiceTierBillingResolution(priced)
 			e.setPrice(s.calculateRecordUsageCostWithResponseModel(ctx, input, priced, model, m, im, at, opts, false))
-		}
-	}
-	return e
-}
-
-func openAIPendingEvidence(r *OpenAIForwardResult) *PendingUsageEvidence {
-	e := &PendingUsageEvidence{PendingProviderUsage: openAIPendingProviderUsage(r), InputIncludesCache: true}
-	if projected := recordedOpenAIOutputTokens(r); projected != r.Usage.OutputTokens && (r.DeliveredOutputTokens != nil || len(r.ContinuationResults) > 0) {
-		e.ProjectedOutputTokens = &projected
-	}
-	if len(r.ContinuationResults) > 0 {
-		e.Rounds = make(map[int]PendingProviderUsage, len(r.ContinuationResults))
-		for i, round := range r.ContinuationResults {
-			e.Rounds[i] = openAIPendingProviderUsage(round)
-		}
-	} else if r.ChatUsage != nil {
-		e.Rounds = make(map[int]PendingProviderUsage, len(r.ChatUsage.Rounds))
-		for i, round := range r.ChatUsage.Rounds {
-			if round != nil {
-				e.Rounds[i] = openAIPendingProviderUsage(&OpenAIForwardResult{Usage: round.Usage, InputTokensSource: round.InputTokensSource, OutputTokensSource: round.OutputTokensSource})
-			}
 		}
 	}
 	return e

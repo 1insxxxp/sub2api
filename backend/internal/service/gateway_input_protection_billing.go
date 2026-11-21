@@ -1,6 +1,6 @@
 package service
 
-import "context"
+import "math"
 
 func forwardBillingRounds(result *ForwardResult) []*ForwardResult {
 	if len(result.ContinuationResults) != 0 {
@@ -52,9 +52,9 @@ func forwardTokenPriced(result *ForwardResult, cost *CostBreakdown) bool {
 }
 
 // Preserve per-call tiers and delivery projections. Allocate a single request
-// budget across the four buckets first so a later cached read takes precedence
-// over an earlier ordinary input. Within a bucket, retain provider call order.
-func capForwardBillingRounds(rounds []*ForwardResult, protection *InputTokenProtection) {
+// budget across the four buckets so later cache writes take precedence
+// over earlier ordinary input or cache reads. Within a bucket, retain provider call order.
+func capForwardBillingRounds(rounds []*ForwardResult, protection *InputTokenProtection) bool {
 	type buckets struct{ read, input, short, long int }
 	var total buckets
 	counts := make([]buckets, len(rounds))
@@ -62,11 +62,14 @@ func capForwardBillingRounds(rounds []*ForwardResult, protection *InputTokenProt
 		u := round.Usage
 		short, long := allocateCacheCreationBillingTokens(u.billingUsageTokens())
 		counts[i] = buckets{max(0, u.CacheReadInputTokens), max(0, u.InputTokens), short, long}
-		// Each bucket can consume at most Limit, including malformed oversized counts.
-		total.read += min(counts[i].read, protection.Limit-total.read)
-		total.input += min(counts[i].input, protection.Limit-total.input)
-		total.short += min(short, protection.Limit-total.short)
-		total.long += min(long, protection.Limit-total.long)
+		// Saturate each aggregate before applying the request-wide threshold.
+		total.read += min(counts[i].read, math.MaxInt-total.read)
+		total.input += min(counts[i].input, math.MaxInt-total.input)
+		total.short += min(short, math.MaxInt-total.short)
+		total.long += min(long, math.MaxInt-total.long)
+	}
+	if !protection.exceedsTolerance(total.read, total.input, total.short, total.long) {
+		return false
 	}
 	read, input, short, long := protection.Cap(total.read, total.input, total.short, total.long)
 	take := func(remaining *int, n int) int {
@@ -87,6 +90,7 @@ func capForwardBillingRounds(rounds []*ForwardResult, protection *InputTokenProt
 			round.InputTokensEstimated = true
 		}
 	}
+	return true
 }
 
 func lessExpensiveForwardCost(baseline, candidate *CostBreakdown) *CostBreakdown {
@@ -100,7 +104,10 @@ type forwardUsagePrice func(*ForwardResult) (*CostBreakdown, error)
 
 // Price each original leaf before allocation: an adopted response model can
 // have a per-request tariff even when the requested model is token-priced.
-func protectForwardBilling(result, provider *ForwardResult, protection *InputTokenProtection, original *CostBreakdown, price forwardUsagePrice) (customer *ForwardResult, cost *CostBreakdown, pending bool, err error) {
+func protectForwardBilling(result, provider *ForwardResult, protection *InputTokenProtection, original *CostBreakdown, price forwardUsagePrice) (customer *ForwardResult, cost *CostBreakdown, err error) {
+	if !protection.hasEstimate() {
+		return result, original, nil
+	}
 	projected := cloneForwardBillingResult(result)
 	leaves := forwardBillingRounds(projected)
 	eligible := make([]*ForwardResult, 0, len(leaves))
@@ -111,23 +118,22 @@ func protectForwardBilling(result, provider *ForwardResult, protection *InputTok
 		if len(leaves) > 1 {
 			baseline, err = price(leaf)
 			if err != nil {
-				return nil, nil, false, err
+				return nil, nil, err
 			}
 		}
 		prices[i] = baseline
 		if forwardTokenPriced(leaf, baseline) {
-			if protection.Pending || protection.Limit < 0 || forwardBillableInputMissing(observations[i], leaf) {
-				return result, original, true, nil
+			if forwardBillableInputMissing(observations[i], leaf) {
+				return result, original, nil
 			}
 			eligible = append(eligible, leaf)
 		} else {
 			leaf.InputTokenProtection = nil
 		}
 	}
-	if len(eligible) == 0 {
-		return result, original, false, nil
+	if len(eligible) == 0 || !capForwardBillingRounds(eligible, protection) {
+		return result, original, nil
 	}
-	capForwardBillingRounds(eligible, protection)
 	if len(projected.ContinuationResults) > 0 {
 		refreshForwardContinuationUsage(projected)
 	}
@@ -138,35 +144,24 @@ func protectForwardBilling(result, provider *ForwardResult, protection *InputTok
 		if leaf.Usage != raw[i].Usage {
 			capped, err := price(leaf)
 			if err != nil {
-				return nil, nil, false, err
+				return nil, nil, err
 			}
 			if err := ValidateUsageBillingActualCost(capped.ActualCost); err != nil {
-				return nil, nil, false, err
+				return nil, nil, err
 			}
 			baseline = lessExpensiveForwardCost(baseline, capped)
 		}
 		addContinuationCost(total, baseline)
 	}
-	return projected, total, false, nil
+	return projected, total, nil
 }
 
-// An explicit measured zero is valid. A generated answer without either
-// upstream input usage stays in review even if a legacy estimate of the
-// transformed provider request was available.
+// An explicit measured zero is valid. An estimate of the transformed
+// provider request cannot establish a discrepancy with the original input.
 func forwardBillableInputMissing(provider, customer *ForwardResult) bool {
+	if provider.InputTokensEstimated || provider.InputTokensSource == UsageTokenSourceEstimated || provider.InputTokensSource == UsageTokenSourceUnreported {
+		return true
+	}
 	return provider.InputTokensSource != UsageTokenSourceUpstream && anthropicInputUsageMissing(provider.Usage) &&
 		(customer.Usage.OutputTokens > 0 || customer.Usage.ImageOutputTokens > 0 || customer.ImageCount > 0)
-}
-
-// A protected request may arrive directly with incomplete Gemini measurements.
-// Keep the historical measurement error for an explicitly non-token tariff.
-func (s *GatewayService) forwardConfiguredTokenTariff(ctx context.Context, result *ForwardResult, key *APIKey, model string) bool {
-	if forwardNonTokenUsage(result) {
-		return false
-	}
-	resolved := s.resolveChannelPricing(ctx, model, key)
-	if result.ImageCount > 0 {
-		return !imageCountBillingApplies(key, result.ImageEndpoint) && resolved != nil && resolved.Mode == BillingModeToken
-	}
-	return resolved == nil || resolved.Mode == "" || resolved.Mode == BillingModeToken
 }

@@ -70,3 +70,32 @@ func TestAcceptanceHandlerRejectsUnknownBodyAndHidesErrors(t *testing.T) {
 	require.NotContains(t, r.Body.String(), "private-token")
 	require.Equal(t, "private, no-store", r.Header().Get("Cache-Control"))
 }
+
+func (s *acceptanceHandlerStub) RetestPreview(_ context.Context, actor int64, id string) (*service.AcceptancePreview, error) {
+	if actor != 7 || id != "160fbf33-30fb-4f1a-9545-e4124d80810c" {
+		return nil, service.ErrAcceptanceInvalid
+	}
+	s.calls++
+	return &service.AcceptancePreview{}, nil
+}
+func TestAcceptanceHandlerRetestRequiresAdminAndValidRun(t *testing.T) {
+	for _, tc := range []struct {
+		role, id string
+		want     int
+	}{
+		{"sub_admin", "160fbf33-30fb-4f1a-9545-e4124d80810c", 403},
+		{"admin", "other", 400}, {"admin", "160fbf33-30fb-4f1a-9545-e4124d80810c", 200},
+	} {
+		r := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(r)
+		c.Request = httptest.NewRequest("POST", "/", nil)
+		c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: 7})
+		c.Set(string(middleware.ContextKeyUserRole), tc.role)
+		c.Params = gin.Params{{Key: "id", Value: tc.id}}
+		svc := &acceptanceHandlerStub{}
+		h := ChannelAcceptanceHandler{service: svc}
+		h.RetestPreview(c)
+		require.Equal(t, tc.want, r.Code)
+		require.Equal(t, tc.want == 200, svc.calls == 1)
+	}
+}

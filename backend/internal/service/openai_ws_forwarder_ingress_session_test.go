@@ -234,7 +234,8 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_KeepLeaseAcrossT
 	require.Equal(t, "response.completed", gjson.GetBytes(secondTurnEvent, "type").String())
 	require.Equal(t, "resp_ingress_turn_2", gjson.GetBytes(secondTurnEvent, "response.id").String())
 	require.EqualValues(t, 1, gjson.GetBytes(firstTurnEvent, "response.usage.input_tokens").Int())
-	require.Zero(t, gjson.GetBytes(secondTurnEvent, "response.usage.input_tokens").Int())
+	require.EqualValues(t, 1, gjson.GetBytes(secondTurnEvent, "response.usage.input_tokens").Int(),
+		"an unknown previous response must preserve upstream usage")
 	require.Equal(t, 1, (<-rawUsage).InputTokens)
 	require.Equal(t, 1, (<-rawUsage).InputTokens)
 	require.Equal(t, "response.completed", <-turnTerminalCh, "首轮 turn 应保留成功终态")
@@ -1531,7 +1532,7 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_HTTPBridgeModeRe
 	require.Equal(t, "response.done", gjson.GetBytes(event2, "type").String())
 	require.Equal(t, "resp_http_bridge_1", gjson.GetBytes(event2, "response.id").String())
 	require.EqualValues(t, 1, gjson.GetBytes(event2, "response.usage.input_tokens").Int())
-	require.EqualValues(t, 1, gjson.GetBytes(event2, "response.usage.input_tokens_details.cached_tokens").Int())
+	require.Zero(t, gjson.GetBytes(event2, "response.usage.input_tokens_details.cached_tokens").Int())
 	require.Equal(t, "completed", gjson.GetBytes(event2, "response.output.0.status").String())
 
 	_ = clientConn.Close(coderws.StatusNormalClosure, "done")

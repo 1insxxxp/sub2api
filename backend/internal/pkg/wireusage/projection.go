@@ -25,15 +25,13 @@ type Projector struct {
 	gross, input, read, write, short, long int
 	hasInput, hasGross, hasRead, hasWrite  bool
 	emitted, modalities                    map[string]int
-	zeroBudget                             bool
 	stream                                 jsonStream
 	sse                                    sseStream
 	cacheDetails, promptDetails            modalitySnapshot
 }
 
 func New(cap CapFunc, messages bool) *Projector {
-	read, _, _, _ := cap(1, 0, 0, 0)
-	return &Projector{cap: cap, messages: messages, emitted: make(map[string]int), modalities: make(map[string]int), zeroBudget: read == 0}
+	return &Projector{cap: cap, messages: messages, emitted: make(map[string]int), modalities: make(map[string]int)}
 }
 
 // JSON projects a complete JSON frame. The caller owns the original storage.
@@ -125,7 +123,7 @@ func (u *usageObject) set(n int, fields ...string) {
 // Provider-reported prices cannot be prorated from token counts. A native
 // monetary total would describe a different input when the cap binds.
 func (u *usageObject) finish(discounted bool) []byte {
-	if discounted || u.p.zeroBudget {
+	if discounted {
 		for _, key := range []string{"cost", "cost_details", "cost_in_usd_ticks", "input_cost", "total_cost"} {
 			if u.src.Get(key).Exists() {
 				u.raw, _ = sjson.DeleteBytes(u.raw, key)
@@ -164,6 +162,9 @@ func (p *Projector) object(raw []byte, messages, gemini bool) []byte {
 			p.hasGross = true
 		}
 		u.observe(&p.read, "cachedContentTokenCount")
+		if !p.hasGross {
+			return raw
+		}
 		read := p.read
 		if p.hasGross {
 			read = min(read, p.gross)
@@ -220,6 +221,10 @@ func (p *Projector) object(raw []byte, messages, gemini bool) []byte {
 	if miss, ok := u.first("prompt_cache_miss_tokens"); ok && messages {
 		input = miss
 		p.input = miss
+		p.hasInput = true
+	}
+	if !p.hasGross && !p.hasInput {
+		return raw
 	}
 	// Attribute untyped writes to the short bucket for cap allocation; expose
 	// only measured TTL detail. Reconcile contradictory detail with the aggregate.

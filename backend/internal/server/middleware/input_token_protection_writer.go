@@ -21,7 +21,7 @@ func InstallInputTokenProtectionWriter(c *gin.Context, projectUsage func() bool)
 		return
 	}
 	policy := service.InputTokenProtectionFromContext(c.Request.Context())
-	if policy == nil {
+	if policy == nil || policy.Pending || policy.Limit < 0 {
 		return
 	}
 	if _, ok := c.Writer.(*inputProtectionWriter); ok {

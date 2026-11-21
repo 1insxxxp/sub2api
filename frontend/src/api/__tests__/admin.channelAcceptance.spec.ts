@@ -11,6 +11,11 @@ describe('channel acceptance API', () => {
     await channelAcceptanceApi.list([7])
     expect(get).toHaveBeenLastCalledWith('/admin/channel-acceptance/runs', { params: { account_ids: '7' } })
   })
+  it('requests a scoped retest preview by run ID without a body', async () => {
+    post.mockResolvedValue({ data: { id: 'scope-preview' } })
+    await expect(channelAcceptanceApi.retestPreview('run/1')).resolves.toEqual({ id: 'scope-preview' })
+    expect(post).toHaveBeenCalledWith('/admin/channel-acceptance/runs/run%2F1/retest-preview')
+  })
   it('starts only the approved preview and returns downloadable JSON', async () => {
     post.mockResolvedValue({ data: { id: 'run-1' } })
     await channelAcceptanceApi.start('preview-1')

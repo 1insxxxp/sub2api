@@ -1,6 +1,7 @@
 <template>
   <section class="usage-stats-section">
     <button
+      v-if="!alwaysExpanded"
       type="button"
       class="usage-stats-toggle sm:hidden" data-testid="usage-stats-toggle"
       :aria-expanded="statsExpanded"
@@ -12,7 +13,7 @@
         <Icon name="chevronDown" size="sm" :class="{ 'rotate-180': statsExpanded }" />
       </span>
     </button>
-  <div v-show="statsExpanded" data-test="usage-stats-grid" class="usage-stats-grid grid grid-cols-1 gap-4 min-[360px]:grid-cols-2 lg:grid-cols-4">
+  <div v-show="alwaysExpanded || statsExpanded" data-test="usage-stats-grid" class="usage-stats-grid grid grid-cols-1 gap-4 min-[360px]:grid-cols-2 lg:grid-cols-4">
     <div class="stat-card !gap-3 !p-4 sm:!gap-4 sm:!p-5">
       <div class="stat-icon shrink-0 bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300">
         <Icon name="document" size="md" />
@@ -118,6 +119,7 @@ import { formatTokenCount } from '@/utils/format'
 
 const props = withDefaults(defineProps<{
   stats: (AdminUsageStatsResponse | UsageStatsResponse) | null
+  alwaysExpanded?: boolean
   showAccountCost?: boolean
   strikeStandardCost?: boolean
 }>(), {

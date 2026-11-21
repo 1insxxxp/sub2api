@@ -14,16 +14,22 @@ func TestAcceptanceManifestFixedSizeAndCachePrefix(t *testing.T) {
 	}
 	counts := map[string]int{}
 	var cache string
+	tails := map[string]bool{}
 	for _, s := range samples {
 		counts[s.Category]++
 		if s.Snapshot.AccountID != 7 || s.TimeoutSeconds != 180 || s.MaxOutputTokens != 2048 {
 			t.Fatalf("lost fixed target/limits: %+v", s)
 		}
 		if s.Category == "cache" {
-			if cache == "" {
-				cache = s.Prompt
+			prefix, ok := strings.CutSuffix(s.Prompt, s.Expected)
+			if !ok || s.Expected == "" || tails[s.Expected] {
+				t.Fatal("missing or repeated cache challenge")
 			}
-			if cache != s.Prompt {
+			tails[s.Expected] = true
+			if cache == "" {
+				cache = prefix
+			}
+			if cache != prefix {
 				t.Fatal("cache prefix changed")
 			}
 		}

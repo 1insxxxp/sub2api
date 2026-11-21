@@ -27,12 +27,12 @@ func TestOpenAIInputProtectionSettlement(t *testing.T) {
 			if tc.platform == PlatformGrok {
 				model = "grok-4"
 			}
-			raw := OpenAIUsage{InputTokens: 200, CacheReadInputTokens: 50, CacheCreationInputTokens: 10, OutputTokens: 8}
+			raw := OpenAIUsage{InputTokens: 5200, CacheReadInputTokens: 50, CacheCreationInputTokens: 10, OutputTokens: 8}
 			result := &OpenAIForwardResult{RequestID: "one", Model: model, Usage: raw}
 			if tc.continuation {
 				var err error
 				result, err = AggregateOpenAIContinuationResults([]*OpenAIForwardResult{
-					{RequestID: "one", Model: model, Usage: OpenAIUsage{InputTokens: 140, OutputTokens: 5}},
+					{RequestID: "one", Model: model, Usage: OpenAIUsage{InputTokens: 5140, OutputTokens: 5}},
 					{RequestID: "two", Model: model, Usage: OpenAIUsage{InputTokens: 60, CacheReadInputTokens: 50, CacheCreationInputTokens: 10, OutputTokens: 3}},
 				})
 				require.NoError(t, err)
@@ -44,22 +44,22 @@ func TestOpenAIInputProtectionSettlement(t *testing.T) {
 			require.NoError(t, svc.RecordUsage(context.Background(), input))
 			log := repo.lastLog
 			require.NotNil(t, log)
-			require.Equal(t, 10, log.InputTokens)
-			require.Equal(t, 50, log.CacheReadTokens)
-			require.Zero(t, log.CacheCreationTokens)
+			require.Equal(t, 50, log.InputTokens)
+			require.Zero(t, log.CacheReadTokens)
+			require.Equal(t, 10, log.CacheCreationTokens)
 			require.Equal(t, 8, log.OutputTokens)
 			require.Equal(t, raw, result.Usage)
-			want := expectedOpenAICost(t, svc, model, OpenAIUsage{InputTokens: 60, CacheReadInputTokens: 50, OutputTokens: 8}, 1)
+			want := expectedOpenAICost(t, svc, model, OpenAIUsage{InputTokens: 60, CacheCreationInputTokens: 10, OutputTokens: 8}, 1)
 			provider := expectedOpenAICost(t, svc, model, raw, 1)
 			require.InDelta(t, want.ActualCost, ledger.lastCmd.BalanceCost, 1e-8)
 			require.InDelta(t, want.ActualCost, ledger.lastCmd.APIKeyQuotaCost, 1e-8)
 			require.InDelta(t, provider.TotalCost, ledger.lastCmd.AccountQuotaCost, 1e-8)
 			require.InDelta(t, provider.TotalCost, *log.AccountStatsCost, 1e-8)
-			require.Equal(t, 200, *log.Outcome.UpstreamInputTokens)
+			require.Equal(t, 5200, *log.Outcome.UpstreamInputTokens)
 			if tc.continuation {
-				require.Equal(t, 140, log.Outcome.ContinuationUsage[0].InputTokens)
-				require.Equal(t, 10, log.Outcome.ContinuationUsage[0].CustomerInputTokens)
-				require.Zero(t, log.Outcome.ContinuationUsage[1].CustomerInputTokens)
+				require.Equal(t, 5140, log.Outcome.ContinuationUsage[0].InputTokens)
+				require.Equal(t, 50, log.Outcome.ContinuationUsage[0].CustomerInputTokens)
+				require.Equal(t, 0, log.Outcome.ContinuationUsage[1].CustomerInputTokens)
 			}
 		})
 	}
@@ -68,15 +68,12 @@ func TestOpenAIInputProtectionSettlement(t *testing.T) {
 func TestOpenAIInputProtectionPendingAndPerRequest(t *testing.T) {
 	for _, perRequest := range []bool{false, true} {
 		repo := &openAIRecordUsageLogRepoStub{inserted: true}
-		pending := &pendingUsageWriterStub{}
 		ledger := &openAIRecordUsageBillingRepoStub{}
 		svc := newOpenAIRecordUsageServiceWithBillingRepoForTest(repo, ledger, &openAIRecordUsageUserRepoStub{}, &openAIRecordUsageSubRepoStub{}, nil)
 		group := &Group{ID: 4, RateMultiplier: 1}
 		model := "gpt-5.1"
 		if perRequest {
 			svc.resolver = newOpenAITextChannelPricingResolverForTest(t, group.ID, model, 0.25)
-		} else {
-			svc.usageLogRepo = pending
 		}
 		err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
 			Result: &OpenAIForwardResult{RequestID: "pending", Model: model, InputTokenProtection: &InputTokenProtection{Pending: true}, Usage: OpenAIUsage{InputTokens: 1000, OutputTokens: 3}, InputTokensSource: UsageTokenSourceUpstream},
@@ -87,10 +84,10 @@ func TestOpenAIInputProtectionPendingAndPerRequest(t *testing.T) {
 			require.Equal(t, 1000, repo.lastLog.InputTokens)
 			require.Equal(t, 0.25, ledger.lastCmd.BalanceCost)
 		} else {
-			require.Zero(t, ledger.calls)
-			require.Equal(t, UsageBillingStatusPendingReview, pending.log.BillingStatus)
-			require.Zero(t, pending.log.ActualCost)
-			require.Zero(t, pending.log.InputTokens)
+			require.Equal(t, 1, ledger.calls)
+			require.Equal(t, 1000, repo.lastLog.InputTokens)
+			require.Positive(t, repo.lastLog.ActualCost)
+			require.Nil(t, repo.lastLog.PendingEvidence)
 		}
 	}
 }
@@ -133,7 +130,8 @@ func TestOpenAIInputProtectionPassthroughUsesEachOriginalTurn(t *testing.T) {
 		expected := EstimateCustomerInputTokenProtection("response.create", []byte(frame))
 		require.False(t, expected.Pending)
 		require.EqualValues(t, expected.Limit, gjson.GetBytes(event, "response.usage.input_tokens").Int())
-		require.EqualValues(t, expected.Limit, gjson.GetBytes(event, cachedPath).Int())
+		require.Zero(t, gjson.GetBytes(event, cachedPath).Int())
+		require.EqualValues(t, expected.Limit, gjson.GetBytes(event, "response.usage.input_tokens_details.cache_write_tokens").Int())
 		require.EqualValues(t, 7+expected.Limit, gjson.GetBytes(event, "response.usage.total_tokens").Int())
 		select {
 		case r := <-results:
@@ -153,7 +151,7 @@ func TestOpenAIInputProtectionMixedContinuationPreservesPerCall(t *testing.T) {
 	svc := newOpenAIRecordUsageServiceForTest(repo, &openAIRecordUsageUserRepoStub{}, &openAIRecordUsageSubRepoStub{}, nil)
 	result, err := AggregateOpenAIContinuationResults([]*OpenAIForwardResult{
 		{Model: "gpt-5.1", RequestID: "per-call", WebSearchCalls: 1, Usage: OpenAIUsage{InputTokens: 400}},
-		{Model: "gpt-5.1", RequestID: "tokens", Usage: OpenAIUsage{InputTokens: 300, OutputTokens: 3}},
+		{Model: "gpt-5.1", RequestID: "tokens", Usage: OpenAIUsage{InputTokens: 5300, OutputTokens: 3}},
 	})
 	require.NoError(t, err)
 	result.InputTokenProtection = &InputTokenProtection{Limit: 10}
@@ -176,7 +174,7 @@ func TestOpenAIInputProtectionCacheDetailsCannotIncreaseGrossInput(t *testing.T)
 		customer := projectOpenAIInputForBilling(result, &InputTokenProtection{Limit: 100}, nil)
 		require.Equal(t, u, result.Usage)
 		require.Equal(t, 3, customer.Usage.InputTokens)
-		require.Equal(t, 3, customer.Usage.CacheReadInputTokens+customer.Usage.CacheCreationInputTokens)
+		require.Same(t, result, customer, "without a large discrepancy, keep preexisting settlement behavior")
 	}
 }
 
@@ -199,7 +197,7 @@ func TestOpenAIInputProtectionSearchTariffs(t *testing.T) {
 			result := &OpenAIForwardResult{Model: "grok-4", RequestID: "search", SearchCount: tc.searchCount, WebSearchCalls: tc.alphaCalls, InputTokenProtection: tc.protection}
 			customer, provider := perCall, perCall
 			if tc.searchCount > 0 {
-				result.Usage = OpenAIUsage{InputTokens: 800, OutputTokens: 10}
+				result.Usage = OpenAIUsage{InputTokens: 5800, OutputTokens: 10}
 				fee := float64(tc.searchCount) * perThousand / 1000
 				customer = expectedOpenAICost(t, svc, result.Model, OpenAIUsage{InputTokens: tc.wantInput, OutputTokens: 10}, 1).TotalCost + fee
 				provider = expectedOpenAICost(t, svc, result.Model, result.Usage, 1).TotalCost + fee
@@ -229,9 +227,9 @@ func TestOpenAIInputProtectionComparesResponseTariffAtEachUsage(t *testing.T) {
 		providerOutput           int
 		wantProvider             float64
 	}{
-		{"response becomes cheaper", a, b, 10, 1.1},
-		{"baseline becomes cheaper", b, a, 10, 1.1},
-		{"interrupted delivery changes provider tariff", a, b, 2000, 6.0},
+		{"response becomes cheaper", a, b, 10, 6.1},
+		{"baseline becomes cheaper", b, a, 10, 6.1},
+		{"interrupted delivery changes provider tariff", a, b, 2000, 26.0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := &openAIRecordUsageLogRepoStub{inserted: true}
@@ -240,7 +238,7 @@ func TestOpenAIInputProtectionComparesResponseTariffAtEachUsage(t *testing.T) {
 			svc.resolver = NewModelPricingResolver(nil, svc.billingService)
 			delivered := 10
 			result := &OpenAIForwardResult{RequestID: "crossing", Model: tc.baseline, UpstreamModel: tc.baseline, UpstreamResponseModel: tc.response,
-				Usage: OpenAIUsage{InputTokens: 1000, OutputTokens: tc.providerOutput}, InputTokenProtection: &InputTokenProtection{Limit: 2},
+				Usage: OpenAIUsage{InputTokens: 6000, OutputTokens: tc.providerOutput}, InputTokenProtection: &InputTokenProtection{Limit: 2},
 				ClientDisconnect: tc.providerOutput != delivered, DeliveredOutputTokens: &delivered}
 			err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{Result: result,
 				User: &User{ID: 1}, APIKey: &APIKey{ID: 2, UserID: 1, Group: group, GroupID: &group.ID, Quota: 100}, APIKeyService: &openAIRecordUsageAPIKeyQuotaStub{},
@@ -273,15 +271,15 @@ func TestOpenAIInputProtectionFreeFastRetainsVolumeDiscount(t *testing.T) {
 	cs.cache.Store(cache)
 	svc.resolver = NewModelPricingResolver(cs, svc.billingService)
 	priority := "priority"
-	result := &OpenAIForwardResult{RequestID: "volume", Model: model, ServiceTier: &priority, Usage: OpenAIUsage{InputTokens: 2000}, InputTokenProtection: &InputTokenProtection{Limit: 10}}
+	result := &OpenAIForwardResult{RequestID: "volume", Model: model, ServiceTier: &priority, Usage: OpenAIUsage{InputTokens: 6000}, InputTokenProtection: &InputTokenProtection{Limit: 10}}
 	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{Result: result, APIKey: &APIKey{ID: 2, UserID: 1, Group: group, GroupID: &group.ID, Quota: 100}, APIKeyService: &openAIRecordUsageAPIKeyQuotaStub{},
 		User: &User{ID: 1}, Account: &Account{ID: 3, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Extra: map[string]any{"quota_limit": 100.0, "openai_long_context_billing_enabled": true}}})
 	require.NoError(t, err)
 	require.Equal(t, 10, repo.lastLog.InputTokens)
-	// The short-context quote would cost 1 at Standard; the original quote cost 0.2.
-	require.InDelta(t, 0.2, ledger.lastCmd.BalanceCost, 1e-8)
-	require.InDelta(t, 0.2, ledger.lastCmd.APIKeyQuotaCost, 1e-8)
-	require.InDelta(t, 0.6, ledger.lastCmd.AccountQuotaCost, 1e-8)
+	// The short-context quote would cost 1 at Standard; the original quote cost 0.6.
+	require.InDelta(t, 0.6, ledger.lastCmd.BalanceCost, 1e-8)
+	require.InDelta(t, 0.6, ledger.lastCmd.APIKeyQuotaCost, 1e-8)
+	require.InDelta(t, 1.8, ledger.lastCmd.AccountQuotaCost, 1e-8)
 }
 
 func TestOpenAIInputProtectionPassthroughMissingAndZero(t *testing.T) {
@@ -325,27 +323,19 @@ func TestOpenAIInputProtectionPassthroughMissingAndZero(t *testing.T) {
 			repo := &openAIRecordUsageLogRepoStub{inserted: true}
 			ledger := &openAIRecordUsageBillingRepoStub{}
 			svc := newOpenAIRecordUsageServiceWithBillingRepoForTest(repo, ledger, &openAIRecordUsageUserRepoStub{}, &openAIRecordUsageSubRepoStub{}, nil)
-			pending := &pendingUsageWriterStub{}
-			if !tc.measured {
-				svc.usageLogRepo = pending
-			}
 			group := &Group{ID: 4, RateMultiplier: 1}
 			require.NoError(t, svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
 				Result: r, User: &User{ID: 1}, APIKey: &APIKey{ID: 2, GroupID: &group.ID, Group: group}, Account: &Account{ID: 3, Platform: PlatformOpenAI},
 			}))
+			source := UsageTokenSourceUnreported
 			if tc.measured {
-				require.Equal(t, UsageTokenSourceUpstream, r.InputTokensSource)
-				require.Equal(t, 1, ledger.calls)
-				require.Equal(t, 7, repo.lastLog.OutputTokens)
-			} else {
-				require.Equal(t, UsageTokenSourceUnreported, r.InputTokensSource)
-				require.Zero(t, ledger.calls)
-				require.Equal(t, UsageBillingStatusPendingReview, pending.log.BillingStatus)
-				require.NotNil(t, pending.log.PendingEvidence)
-				require.Nil(t, pending.log.PendingEvidence.InputTokens)
-				require.Equal(t, 7, *pending.log.PendingEvidence.OutputTokens)
-				require.Equal(t, int(gjson.Get("{"+tc.usage+"}", "cache_read_input_tokens").Int()), pending.log.PendingEvidence.CacheReadTokens)
+				source = UsageTokenSourceUpstream
 			}
+			require.Equal(t, source, r.InputTokensSource)
+			require.Equal(t, 1, ledger.calls)
+			require.Equal(t, 7, repo.lastLog.OutputTokens)
+			require.Nil(t, repo.lastLog.PendingEvidence)
+			require.EqualValues(t, gjson.Get("{"+tc.usage+"}", "cache_read_input_tokens").Int(), gjson.GetBytes(event, "response.usage.cache_read_input_tokens").Int())
 		})
 	}
 }
@@ -358,9 +348,9 @@ func TestOpenAIInputProtectionPassthroughAdoptedTariff(t *testing.T) {
 		wantInput                 int
 		wantCost                  float64
 	}{
-		{"per-call adopts token", fixed, metered, 0.20, 2, 0.009},
-		{"token adopts per-call", metered, fixed, 0.01, 50, 0.01},
-		{"per-call stays per-call", fixed, metered, 0.01, 50, 0.01},
+		{"per-call adopts token", fixed, metered, 0.20, 2, 0.00702},
+		{"token adopts per-call", metered, fixed, 0.01, 6000, 0.01},
+		{"per-call stays per-call", fixed, metered, 0.01, 6000, 0.01},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := &openAIRecordUsageLogRepoStub{inserted: true}
@@ -369,7 +359,7 @@ func TestOpenAIInputProtectionPassthroughAdoptedTariff(t *testing.T) {
 			pricing.resolver = NewModelPricingResolver(nil, pricing.billingService)
 			group := &Group{ID: 4, RateMultiplier: 1, Platform: PlatformOpenAI, ModelPricing: []ChannelModelPricing{
 				{Models: []string{fixed}, BillingMode: BillingModePerRequest, PerRequestPrice: f64p(tc.fixedPrice)},
-				{Models: []string{metered}, BillingMode: BillingModeToken, InputPrice: f64p(.001), OutputPrice: f64p(.001)},
+				{Models: []string{metered}, BillingMode: BillingModeToken, InputPrice: f64p(.00001), OutputPrice: f64p(.001)},
 			}}
 			cache := newEmptyChannelCache()
 			cache.loadedAt = time.Now()
@@ -397,15 +387,15 @@ func TestOpenAIInputProtectionPassthroughAdoptedTariff(t *testing.T) {
 			client := dialPassthroughLifecycleClientWithPayload(t, server, fmt.Sprintf(`{"type":"response.create","model":%q,"input":"hi"}`, tc.requested))
 			defer client.CloseNow()
 			requirePassthroughUpstreamWrite(t, upstream, time.Second)
-			upstream.Send(`{"type":"response.in_progress","response":{"id":"resp_tariff","usage":{"input_tokens":50,"output_tokens":1}}}`)
+			upstream.Send(`{"type":"response.in_progress","response":{"id":"resp_tariff","usage":{"input_tokens":6000,"output_tokens":1}}}`)
 			early, err := readPassthroughLifecycleFrame(t, client, 3*time.Second)
 			require.NoError(t, err)
 			require.EqualValues(t, 2, gjson.GetBytes(early, "response.usage.input_tokens").Int(), "provisional metered tariff")
 			gross := ""
 			if tc.wantInput == 2 {
-				gross = `"input_tokens":50,`
+				gross = `"input_tokens":6000,`
 			}
-			upstream.Send(fmt.Sprintf(`{"type":"response.completed","response":{"id":"resp_tariff","model":%q,"usage":{%s"output_tokens":7,"total_tokens":57}}}`, tc.reported, gross))
+			upstream.Send(fmt.Sprintf(`{"type":"response.completed","response":{"id":"resp_tariff","model":%q,"usage":{%s"output_tokens":7,"total_tokens":6007}}}`, tc.reported, gross))
 			wire, err := readPassthroughLifecycleFrame(t, client, 3*time.Second)
 			require.NoError(t, err)
 			require.EqualValues(t, tc.wantInput, gjson.GetBytes(wire, "response.usage.input_tokens").Int())
@@ -413,7 +403,7 @@ func TestOpenAIInputProtectionPassthroughAdoptedTariff(t *testing.T) {
 			select {
 			case r := <-results:
 				require.Equal(t, &InputTokenProtection{Limit: 2}, r.InputTokenProtection)
-				require.Equal(t, 50, r.Usage.InputTokens)
+				require.Equal(t, 6000, r.Usage.InputTokens)
 				input.Result = r
 			case <-time.After(time.Second):
 				t.Fatal("missing turn result")
@@ -427,34 +417,29 @@ func TestOpenAIInputProtectionPassthroughAdoptedTariff(t *testing.T) {
 
 func TestOpenAIInputProtectionAcceptedChatCacheWithoutGross(t *testing.T) {
 	round := &OpenAIChatUsageRound{UpstreamAccepted: true, CacheReadReported: true, CacheWriteReported: true, OutputReported: true, Usage: OpenAIUsage{CacheReadInputTokens: 10, CacheCreationInputTokens: 5, OutputTokens: 7}, InputFallback: &GeminiInputUsageFallback{Tokens: 100, Known: true}}
-	pending := &pendingUsageWriterStub{}
+	repo := &openAIRecordUsageLogRepoStub{inserted: true}
 	ledger := &openAIRecordUsageBillingRepoStub{}
-	svc := newOpenAIRecordUsageServiceWithBillingRepoForTest(&openAIRecordUsageLogRepoStub{}, ledger, &openAIRecordUsageUserRepoStub{}, &openAIRecordUsageSubRepoStub{}, nil)
-	svc.usageLogRepo = pending
+	svc := newOpenAIRecordUsageServiceWithBillingRepoForTest(repo, ledger, &openAIRecordUsageUserRepoStub{}, &openAIRecordUsageSubRepoStub{}, nil)
 	group := &Group{ID: 4, RateMultiplier: 1}
 	input := &OpenAIRecordUsageInput{Result: &OpenAIForwardResult{Model: "gpt-5.1", InputTokenProtection: &InputTokenProtection{Limit: 2}, ChatUsage: &OpenAIChatUsageEvidence{Rounds: []*OpenAIChatUsageRound{round}}},
 		User: &User{ID: 1}, Account: &Account{ID: 3}, APIKey: &APIKey{ID: 2, Group: group, GroupID: &group.ID}}
 	require.NoError(t, svc.RecordUsage(context.Background(), input))
-	require.Zero(t, ledger.calls)
-	require.NotNil(t, pending.log)
-	e := pending.log.PendingEvidence
-	require.NotNil(t, e)
-	require.Nil(t, e.InputTokens)
-	require.Equal(t, 10, e.CacheReadTokens)
-	require.Equal(t, 5, e.CacheCreationTokens)
-	require.Equal(t, 7, *e.OutputTokens)
+	require.Equal(t, 1, ledger.calls)
+	require.NotNil(t, repo.lastLog)
+	require.Nil(t, repo.lastLog.PendingEvidence)
+	require.Equal(t, 7, repo.lastLog.OutputTokens)
 }
 
 func TestOpenAIInputProtectionWSMergedTariffs(t *testing.T) {
 	fixed := &OpenAIForwardResult{Model: "fixed", Usage: OpenAIUsage{InputTokens: 100, CacheReadInputTokens: 10}}
-	metered := &OpenAIForwardResult{Model: "metered", Usage: OpenAIUsage{InputTokens: 40, CacheReadInputTokens: 5}}
+	metered := &OpenAIForwardResult{Model: "metered", Usage: OpenAIUsage{InputTokens: 3040, CacheReadInputTokens: 5}}
 	other := *metered
 	for _, leaves := range [][]*OpenAIForwardResult{{fixed, metered, &other}, {metered, &other, fixed}} {
 		turn := &openAIWSTurnInputProtection{evidence: &InputTokenProtection{Limit: 12}, merged: leaves, price: func(_ int, r OpenAIForwardResult) bool { return r.Model == "metered" }}
-		raw := []byte(`{"type":"response.completed","response":{"usage":{"input_tokens":180,"output_tokens":3,"total_tokens":183,"input_tokens_details":{"cached_tokens":20}}}}`)
+		raw := []byte(`{"type":"response.completed","response":{"usage":{"input_tokens":6180,"output_tokens":3,"total_tokens":6183,"input_tokens_details":{"cached_tokens":20}}}}`)
 		wire := turn.project(raw)
 		require.EqualValues(t, 112, gjson.GetBytes(wire, "response.usage.input_tokens").Int())
 		require.EqualValues(t, 115, gjson.GetBytes(wire, "response.usage.total_tokens").Int())
-		require.EqualValues(t, 20, gjson.GetBytes(wire, "response.usage.input_tokens_details.cached_tokens").Int())
+		require.EqualValues(t, 10, gjson.GetBytes(wire, "response.usage.input_tokens_details.cached_tokens").Int())
 	}
 }

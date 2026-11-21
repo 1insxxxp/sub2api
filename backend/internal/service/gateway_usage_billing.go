@@ -1049,7 +1049,7 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	if err := validateForwardContinuationResults(result); err != nil {
 		return err
 	}
-	if result != nil && result.InputTokenProtection == nil && NeedsUsageMeasurementReview(result) {
+	if NeedsUsageMeasurementReview(result) {
 		return ErrUsageMeasurementIncomplete
 	}
 	apiKey := input.APIKey
@@ -1065,18 +1065,6 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	}
 	billingModel := s.recordUsageBillingModel(ctx, apiKey, result, input.ChannelUsageFields)
 	protection := result.InputTokenProtection
-	// Without response-model adoption the configured tariff is final. Persist
-	// missing local evidence even when the upstream counters cannot be priced.
-	if protection != nil && (protection.Pending || protection.Limit < 0) &&
-		input.BillingModelSource != BillingModelSourceResponse && s.forwardConfiguredTokenTariff(ctx, result, apiKey, billingModel) {
-		return s.recordPendingUsage(ctx, input, opts)
-	}
-	if protection != nil && NeedsUsageMeasurementReview(result) {
-		if s.forwardConfiguredTokenTariff(ctx, result, apiKey, billingModel) {
-			return s.recordPendingUsage(ctx, input, opts)
-		}
-		return ErrUsageMeasurementIncomplete
-	}
 
 	for _, round := range forwardBillingRounds(result) {
 		ApplyForwardImageBillingResolution(round)
@@ -1175,15 +1163,12 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		price := func(round *ForwardResult) (*CostBreakdown, error) {
 			return s.calculateRecordUsageCostWithResponseModel(ctx, input, round, billingModel, multiplier, imageMultiplier, pricingAt, opts, false)
 		}
-		projected, protectedCost, pending, err := protectForwardBilling(billingResult, providerResult, protection, originalCost, price)
+		projected, protectedCost, err := protectForwardBilling(billingResult, providerResult, protection, originalCost, price)
 		if err != nil {
 			return err
 		}
-		if pending {
-			return s.recordPendingUsage(ctx, input, opts)
-		}
 		if projected == billingResult {
-			// The adopted tariff excluded the entire request.
+			// No customer input adjustment was applied.
 			protection = nil
 			providerResult = result
 		} else {
@@ -1407,14 +1392,9 @@ func (s *GatewayService) QuoteUsageCost(ctx context.Context, input *RecordUsageI
 		if validateForwardContinuationResults(result) != nil {
 			return 0
 		}
-		_, projected, pending, err := protectForwardBilling(result, result, protection, cost, price)
+		_, projected, err := protectForwardBilling(result, result, protection, cost, price)
 		if err != nil {
 			return 0
-		}
-		if pending {
-			// A created cachedContent has a measured size and TTL even when
-			// customer input is unknown. Reserve its priced storage component.
-			return s.cacheStorageCost(result, billingModel) * multiplier
 		}
 		return projected.ActualCost
 	}

@@ -274,3 +274,68 @@ func TestAcceptanceGeminiCostCatalogStripsENPMarker(t *testing.T) {
 		t.Fatalf("unexpected catalog estimate: %+v", got)
 	}
 }
+
+func TestAcceptanceDeclaredSourceBoundToPreview(t *testing.T) {
+	a := &Account{ID: 4, Platform: PlatformOpenAI, Type: AccountTypeAPIKey}
+	repo := &acceptanceRepoStub{}
+	s := NewChannelAcceptanceService(repo, &acceptanceAccountsStub{account: a}, nil, nil, nil)
+	target := AcceptanceTargetRequest{AccountID: 4, Model: "test-model", DeclaredSource: "kiro", Price: &AcceptancePrice{Source: "manual", InputPerMillion: 1, OutputPerMillion: 2}}
+	req := AcceptancePreviewRequest{Targets: []AcceptanceTargetRequest{target}}
+	p, err := s.Preview(context.Background(), 1, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, sample := range p.Samples {
+		if sample.Snapshot.DeclaredSource != "kiro" {
+			t.Fatal(sample.Snapshot)
+		}
+	}
+	p.Request.Targets[0].DeclaredSource = "vertex"
+	if _, err := s.Start(context.Background(), 1, p.ID); !errors.Is(err, ErrAcceptanceStale) {
+		t.Fatal(err)
+	}
+	req.Targets[0].DeclaredSource = "untrusted free text"
+	if _, err := s.Preview(context.Background(), 1, req); !errors.Is(err, ErrAcceptanceInvalid) {
+		t.Fatal(err)
+	}
+}
+
+func (r *acceptanceRepoStub) GetRun(_ context.Context, id string) (*AcceptanceRun, error) {
+	if r.run == nil || r.run.ID != id {
+		return nil, ErrAcceptanceNotFound
+	}
+	return r.run, nil
+}
+
+func TestAcceptanceRetestOnlyAnomalousProjectWithFreshPreview(t *testing.T) {
+	a := &Account{ID: 4, Platform: PlatformGemini, Type: AccountTypeAPIKey}
+	repo := &acceptanceRepoStub{}
+	svc := NewChannelAcceptanceService(repo, &acceptanceAccountsStub{account: a}, nil, nil, nil)
+	target := AcceptanceTargetRequest{AccountID: 4, Model: "gemini-2.5-pro", DeclaredSource: "vertex", Price: &AcceptancePrice{Source: "manual", InputPerMillion: 1, OutputPerMillion: 2}}
+	p, err := svc.Preview(context.Background(), 1, AcceptancePreviewRequest{Targets: []AcceptanceTargetRequest{target}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo.run = &AcceptanceRun{ID: "first", RuleVersion: ChannelAcceptanceRuleVersion, Status: "completed", Samples: p.Samples}
+	if _, err = svc.RetestPreview(context.Background(), 1, "first"); !errors.Is(err, ErrAcceptanceInvalid) {
+		t.Fatal(err)
+	}
+	for i, s := range p.Samples {
+		if s.Category == "input" {
+			p.Samples[i].Result = &AcceptanceResult{Status: "anomaly"}
+			break
+		}
+	}
+	next, err := svc.RetestPreview(context.Background(), 1, "first")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if next.GenerationCalls != 6 || next.CountCalls != 3 || next.EstimatedCostUSD >= p.EstimatedCostUSD || repo.created != 0 {
+		t.Fatal(next, repo.created)
+	}
+	for _, s := range next.Samples {
+		if (s.Category != "input" && s.Category != "count") || s.Snapshot.DeclaredSource != "vertex" || s.Snapshot.AccountID != 4 || strings.Contains(s.Prompt, p.ID) {
+			t.Fatal(s)
+		}
+	}
+}

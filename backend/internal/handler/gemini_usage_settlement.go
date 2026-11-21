@@ -47,10 +47,6 @@ func recordGatewayUsage(ctx context.Context, gateway *service.GatewayService, in
 				zap.Int64("account_id", input.Account.ID), zap.Error(err))
 		}
 	}
-	// Estimates finalize missing provider measurements on the legacy path. A
-	// protected request with incomplete measurements must reach pending review.
-	if input.Result != nil && input.Result.InputTokenProtection == nil && service.InputTokenProtectionFromContext(ctx) == nil {
-		gateway.FinalizeGeminiUsageFallback(ctx, input)
-	}
+	gateway.FinalizeGeminiUsageFallback(ctx, input)
 	return gateway.RecordUsage(ctx, input)
 }

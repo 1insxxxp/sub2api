@@ -81,9 +81,10 @@ func acceptanceManifest(target AcceptanceSnapshot, extras []string, nonce string
 		expected := fmt.Sprintf("%s-check-%d", nonce, i)
 		appendCase("repeat", primary, "Return exactly this NEW verification code, do not reuse an earlier answer: "+expected, expected, true, false)
 	}
-	cachePrompt := "Unique prefix " + nonce + "\n" + acceptanceText(8192) + "\nReturn exactly: " + nonce
+	cachePrefix := "Unique prefix " + nonce + "\n" + acceptanceText(8192) + "\nReturn exactly: "
 	for i := 0; i < 4; i++ {
-		appendCase("cache", primary, cachePrompt, nonce, true, false)
+		expected := fmt.Sprintf("%s-cache-%d", nonce, i)
+		appendCase("cache", primary, cachePrefix+expected, expected, true, false)
 	}
 	if acceptanceHasCountEndpoint(target) {
 		for _, p := range inputPrompts {

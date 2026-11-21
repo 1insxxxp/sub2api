@@ -431,7 +431,21 @@ describe('admin UsageView distribution metric toggles', () => {
 
     expect(wrapper.find('[data-test="admin-page-hero"]').exists()).toBe(false)
     expect(wrapper.find('.admin-page-hero').exists()).toBe(false)
+    expect(wrapper.get('#usage-panel-usage').isVisible()).toBe(true)
+    expect(wrapper.get('#usage-panel-errors').isVisible()).toBe(false)
+    expect(wrapper.find('[data-test="usage-chart-toolbar"]').exists()).toBe(false)
+
+    listErrorLogs.mockResolvedValueOnce({ items: [], total: 0 })
+    await wrapper.get('#usage-tab-errors').trigger('click')
+    await flushPromises()
+    expect(wrapper.get<HTMLElement>('#usage-panel-usage').element.style.display).toBe('none')
+    expect(wrapper.get<HTMLElement>('#usage-panel-errors').element.style.display).not.toBe('none')
+    expect(listErrorLogs).toHaveBeenCalledWith(expect.objectContaining({ page: 1 }))
+    expect(wrapper.get('#usage-tab-errors').attributes('aria-pressed')).toBe('true')
+
+    await wrapper.get('#usage-tab-overview').trigger('click')
     expect(wrapper.get('[data-test="usage-chart-toolbar"]').classes()).toContain('admin-toolbar-surface')
+    expect(wrapper.get<HTMLElement>('#usage-panel-errors').element.style.display).toBe('none')
     expect(wrapper.get('[data-test="usage-tabs-surface"]').classes()).toContain('admin-surface')
   })
 
@@ -499,6 +513,8 @@ describe('admin UsageView distribution metric toggles', () => {
       end_date: formatLocalDate(now),
       granularity: 'hour'
     }))
+
+    await wrapper.get('#usage-tab-overview').trigger('click')
 
     const modelChart = wrapper.find('[data-test="model-chart"]')
     const groupChart = wrapper.find('[data-test="group-chart"]')
@@ -783,7 +799,7 @@ describe('admin UsageView ranking tab', () => {
     expect(wrapper.find('[data-test="ranking"]').exists()).toBe(false)
 
     const tabs = wrapper.findAll('[data-testid="usage-detail-tab"]')
-    expect(tabs).toHaveLength(5)
+    expect(tabs).toHaveLength(6)
     await tabs[2].trigger('click')
     await flushPromises()
     expect(wrapper.find('[data-test="ranking"]').exists()).toBe(true)

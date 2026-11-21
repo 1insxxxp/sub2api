@@ -31,7 +31,7 @@ func (h *OpenAIWSIngressHooks) inputProtection(turn int, original []byte, model 
 		return nil
 	}
 	evidence := h.InputProtectionForTurn(turn, original, model)
-	if evidence == nil {
+	if !evidence.hasEstimate() {
 		return nil
 	}
 	return &openAIWSTurnInputProtection{turn: turn, evidence: evidence, projector: wireusage.New(evidence.Cap, false), price: h.ProjectUsageForTurn, projectUsage: h.ProjectUsageForTurn == nil}
@@ -128,10 +128,14 @@ func (p *openAIWSTurnInputProtection) project(frame []byte) []byte {
 		if len(tokenPriced) == 0 {
 			return frame
 		}
-		customer := projectOpenAIInputForBilling(&OpenAIForwardResult{ContinuationResults: p.merged}, p.evidence, tokenPriced)
-		gross := InputTokenProtection{Limit: customer.Usage.InputTokens}
+		original := &OpenAIForwardResult{ContinuationResults: p.merged}
+		customer := projectOpenAIInputForBilling(original, p.evidence, tokenPriced)
+		if customer == original {
+			return frame
+		}
+		b := openAIInputBuckets(customer)
 		return wireusage.New(func(read, input, short, long int) (int, int, int, int) {
-			return gross.Cap(min(read, customer.Usage.CacheReadInputTokens), input, short, long)
+			return min(read, b.read), min(input, b.input), min(short, b.short), min(long, b.long)
 		}, false).JSON(frame)
 	}
 	if p == nil {

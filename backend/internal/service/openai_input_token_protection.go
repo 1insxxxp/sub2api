@@ -1,6 +1,9 @@
 package service
 
-import "context"
+import (
+	"context"
+	"math"
+)
 
 // InputTokenProtectionBillsForResult quotes one unprojected provider response. In-progress WS counters
 // use the possible tariffs until the terminal frame supplies a final quote.
@@ -64,6 +67,9 @@ func openAIUnmeasuredBillableInput(result *OpenAIForwardResult) bool {
 				return true
 			}
 		}
+	}
+	if result.InputTokensSource == UsageTokenSourceEstimated {
+		return true
 	}
 	if result.InputTokensSource != UsageTokenSourceUnreported {
 		return false
@@ -132,9 +138,15 @@ func projectOpenAIInputLeaf(r *OpenAIForwardResult, b openAIProtectedInputBucket
 // Apply the cap once to the logical request, then allocate each retained bucket
 // across billable rounds in order. Provider results remain available for audit.
 func projectOpenAIInputForBilling(r *OpenAIForwardResult, p *InputTokenProtection, tokenPriced map[*OpenAIForwardResult]bool) *OpenAIForwardResult {
+	if !p.hasEstimate() {
+		return r
+	}
 	rounds := r.ContinuationResults
 	if len(rounds) == 0 {
 		b := openAIInputBuckets(r)
+		if openAIUnmeasuredBillableInput(r) || !p.exceedsTolerance(b.read, b.input, b.short, b.long) {
+			return r
+		}
 		b.read, b.input, b.short, b.long = p.Cap(b.read, b.input, b.short, b.long)
 		return projectOpenAIInputLeaf(r, b)
 	}
@@ -144,12 +156,18 @@ func projectOpenAIInputForBilling(r *OpenAIForwardResult, p *InputTokenProtectio
 		if !tokenPriced[round] {
 			continue
 		}
+		if openAIUnmeasuredBillableInput(round) {
+			return r
+		}
 		b := openAIInputBuckets(round)
 		buckets[i] = b
-		budget.read += b.read
-		budget.input += b.input
-		budget.short += b.short
-		budget.long += b.long
+		budget.read += min(b.read, math.MaxInt-budget.read)
+		budget.input += min(b.input, math.MaxInt-budget.input)
+		budget.short += min(b.short, math.MaxInt-budget.short)
+		budget.long += min(b.long, math.MaxInt-budget.long)
+	}
+	if !p.exceedsTolerance(budget.read, budget.input, budget.short, budget.long) {
+		return r
 	}
 	budget.read, budget.input, budget.short, budget.long = p.Cap(budget.read, budget.input, budget.short, budget.long)
 	projected := *r

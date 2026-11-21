@@ -58,7 +58,7 @@ func TestInputProtectionBillingGroupAndOriginalPayload(t *testing.T) {
 				want = limit
 			}
 			require.EqualValues(t, want, gjson.GetBytes(w.Body.Bytes(), "usage.prompt_tokens").Int())
-			require.EqualValues(t, min(want, 3295), gjson.GetBytes(w.Body.Bytes(), "usage.prompt_tokens_details.cached_tokens").Int())
+			require.EqualValues(t, max(0, want-2061), gjson.GetBytes(w.Body.Bytes(), "usage.prompt_tokens_details.cached_tokens").Int())
 		})
 	}
 }
@@ -97,7 +97,7 @@ func TestInputProtectionPricesUsageAtWrite(t *testing.T) {
 			require.Zero(t, prices)
 			c.Set(middleware.InputProtectionPricingKey, &service.APIKey{Group: &service.Group{ID: 72}})
 			service.SetOpsUpstreamModel(c, "selected-account-model")
-			_, err = c.Writer.WriteString(`"usage":{"input_tokens":5000,"output_tokens":1}}}` + "\n\n")
+			_, err = c.Writer.WriteString(`"usage":{"input_tokens":6000,"output_tokens":1}}}` + "\n\n")
 			require.NoError(t, err)
 		})
 		w := httptest.NewRecorder()
@@ -105,7 +105,7 @@ func TestInputProtectionPricesUsageAtWrite(t *testing.T) {
 		require.Equal(t, 1, prices)
 		_, data, ok := strings.Cut(w.Body.String(), "data: ")
 		require.True(t, ok)
-		want := 5000
+		want := 6000
 		if token {
 			want = limit
 		}
@@ -161,11 +161,11 @@ func TestInputProtectionCustomGroupOwnsOptIn(t *testing.T) {
 				return true
 			}), func(c *gin.Context) {
 				require.Equal(t, tc.want, service.InputTokenProtectionFromContext(c.Request.Context()) != nil)
-				c.Data(200, "application/json", []byte(`{"usage":{"input_tokens":999}}`))
+				c.Data(200, "application/json", []byte(`{"usage":{"input_tokens":5999}}`))
 			})
 			w := httptest.NewRecorder()
 			r.ServeHTTP(w, httptest.NewRequest("POST", path, strings.NewReader(body)))
-			want := 999
+			want := 5999
 			if tc.want {
 				want = service.EstimateCustomerInputTokenProtection(path, []byte(body)).Limit
 			}

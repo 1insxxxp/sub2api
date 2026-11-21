@@ -18,6 +18,8 @@ const acceptanceExcerptLimit = 2048
 // Parsers retain only known numeric usage and a bounded synthetic answer. They
 // never retain response headers, URLs with queries, or arbitrary usage fields.
 type acceptanceEvidenceParser struct {
+	fingerprint                                     *acceptanceFingerprint
+	fingerprintStream                               *acceptanceFingerprintStream
 	mu                                              sync.Mutex
 	pending, event                                  []byte
 	mode                                            int // 0 undecided; 1 JSON; 2 SSE
@@ -33,7 +35,7 @@ type acceptanceEvidenceParser struct {
 	chatOutput                                      *int64
 	messages                                        acceptanceMessagesState
 	responses                                       acceptanceResponsesState
-	protocolEnded                                   bool
+	protocolEnded, finished                         bool
 	tools                                           map[string]*acceptanceToolEvidence
 }
 
@@ -41,6 +43,12 @@ func newAcceptanceEvidenceParser() *acceptanceEvidenceParser { return &acceptanc
 func (p *acceptanceEvidenceParser) Feed(b []byte) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if p.finished {
+		return
+	}
+	if p.fingerprintStream != nil {
+		p.fingerprintStream.observe(b, p.fingerprint)
+	}
 	for len(b) > 0 {
 		n := bytes.IndexByte(b, '\n')
 		if n < 0 {
@@ -137,6 +145,11 @@ func (p *acceptanceEvidenceParser) detectMode(line []byte) {
 func (p *acceptanceEvidenceParser) Finish() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if p.finished {
+		return
+	}
+	p.finished = true
+	p.fingerprintStream = nil
 	if len(p.pending) > 0 {
 		p.line()
 	}
@@ -234,6 +247,11 @@ func (p *acceptanceEvidenceParser) consume(v any) {
 	m := acceptanceObject(v)
 	if m == nil {
 		return
+	}
+	// A relay may send provider metering events after the client protocol's
+	// terminal event. They still belong to the observed upstream response.
+	if p.fingerprint != nil {
+		p.fingerprint.observeFrame(m)
 	}
 	if p.protocolEnded || p.consumeMessages(m) || p.consumeResponses(m) {
 		return
@@ -415,8 +433,6 @@ func acceptanceSourceFromRequest(r *http.Request, adapter, requested, mapped str
 	if r == nil || r.URL == nil {
 		return s
 	}
-	host := strings.TrimSuffix(strings.ToLower(r.URL.Hostname()), ".")
-	endpoint := r.URL.Scheme + "://" + r.URL.Host
 	s.Host = r.URL.Host
 	switch {
 	case getHeaderRaw(r.Header, "x-api-key") != "" || getHeaderRaw(r.Header, "x-goog-api-key") != "" || r.URL.Query().Get("key") != "":
@@ -477,13 +493,16 @@ func acceptanceSourceFromRequest(r *http.Request, adapter, requested, mapped str
 		}
 	}
 
-	if r.URL.Scheme != "https" {
+	host := acceptanceDirectHost(r)
+	if host == "" {
 		return s
 	}
+	endpoint := r.URL.Scheme + "://" + r.URL.Host
+	region, regionalVertex := strings.CutSuffix(host, "-aiplatform.googleapis.com")
 	switch {
-	case strings.HasPrefix(host, "bedrock-runtime.") && strings.HasSuffix(host, ".amazonaws.com") && strings.Count(host, ".") == 3:
+	case strings.HasPrefix(s.Path, "/model/{model}/invoke") && strings.HasPrefix(host, "bedrock-runtime.") && strings.HasSuffix(host, ".amazonaws.com") && strings.Count(host, ".") == 3:
 		s.Kind, s.Channel = "direct", "bedrock"
-	case host == "api.anthropic.com":
+	case host == "api.anthropic.com" && (s.Path == "/v1/messages" || s.Path == "/v1/messages/count_tokens"):
 		s.Kind, s.Channel = "direct", "anthropic"
 	case isOfficialOpenAIModelsBaseURL(endpoint):
 		s.Kind, s.Channel = "direct", "openai"
@@ -507,17 +526,26 @@ func acceptanceSourceFromRequest(r *http.Request, adapter, requested, mapped str
 		s.Kind, s.Channel = "direct", PlatformMiniMax
 	case host == "api.typesafe.ai":
 		s.Kind, s.Channel = "direct", PlatformTypeSafe
-	case host == "generativelanguage.googleapis.com":
+	case host == "generativelanguage.googleapis.com" && strings.HasPrefix(s.Path, "/models/"):
 		s.Kind = "direct"
 		s.Channel = "google_developer_api"
-	case host == "aiplatform.googleapis.com" || host == "aiplatform.us.rep.googleapis.com" || host == "aiplatform.eu.rep.googleapis.com" || strings.HasSuffix(host, "-aiplatform.googleapis.com"):
+	case strings.HasPrefix(s.Path, "/models/") && (host == "aiplatform.googleapis.com" || host == "aiplatform.us.rep.googleapis.com" || host == "aiplatform.eu.rep.googleapis.com" || regionalVertex && region != "" && !strings.Contains(region, ".")):
 		s.Kind = "direct"
 		s.Channel = "vertex"
-	case host == "cloudcode-pa.googleapis.com" || host == "daily-cloudcode-pa.googleapis.com" || host == "daily-cloudcode-pa.sandbox.googleapis.com":
+	case strings.HasPrefix(s.Path, "/v1internal:") && (host == "cloudcode-pa.googleapis.com" || host == "daily-cloudcode-pa.googleapis.com" || host == "daily-cloudcode-pa.sandbox.googleapis.com"):
 		s.Kind = "direct"
 		s.Channel = "google_code_assist"
 	}
 	return s
+}
+
+// A request with an overridden HTTP authority cannot attest the URL host.
+func acceptanceDirectHost(r *http.Request) string {
+	if r == nil || r.URL == nil || r.URL.Scheme != "https" ||
+		(r.Host != "" && !strings.EqualFold(r.Host, r.URL.Host)) {
+		return ""
+	}
+	return strings.TrimSuffix(strings.ToLower(r.URL.Hostname()), ".")
 }
 
 type acceptanceToolEvidence struct {
@@ -562,7 +590,7 @@ func (p *acceptanceEvidenceParser) toolMatches(expected string) bool {
 func (p *acceptanceEvidenceParser) snapshot() *acceptanceEvidenceParser {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	out := &acceptanceEvidenceParser{usage: p.usage, usageFinal: p.usageFinal, frames: append([]json.RawMessage(nil), p.frames...), excerpt: p.excerpt, finishReason: p.finishReason, responseModel: p.responseModel, hasText: p.hasText, hasReasoning: p.hasReasoning, hasTool: p.hasTool, completed: p.completed, truncated: p.truncated, tools: map[string]*acceptanceToolEvidence{}}
+	out := &acceptanceEvidenceParser{fingerprint: p.fingerprint.snapshot(), usage: p.usage, usageFinal: p.usageFinal, frames: append([]json.RawMessage(nil), p.frames...), excerpt: p.excerpt, finishReason: p.finishReason, responseModel: p.responseModel, hasText: p.hasText, hasReasoning: p.hasReasoning, hasTool: p.hasTool, completed: p.completed, truncated: p.truncated, tools: map[string]*acceptanceToolEvidence{}}
 	for k, v := range p.tools {
 		copy := *v
 		out.tools[k] = &copy

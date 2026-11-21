@@ -51,6 +51,7 @@ func RegisterAdminRoutes(
 			acceptance.POST("/runs", adminHandlers.ChannelAcceptance.Start)
 			acceptance.GET("/runs", adminHandlers.ChannelAcceptance.History)
 			acceptance.GET("/runs/:id", adminHandlers.ChannelAcceptance.Get)
+			acceptance.POST("/runs/:id/retest-preview", adminHandlers.ChannelAcceptance.RetestPreview)
 			acceptance.POST("/runs/:id/cancel", adminHandlers.ChannelAcceptance.Cancel)
 			acceptance.GET("/runs/:id/export", adminHandlers.ChannelAcceptance.Export)
 		}

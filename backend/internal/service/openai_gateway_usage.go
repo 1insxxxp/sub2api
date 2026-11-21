@@ -304,28 +304,17 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		).Warn("openai_usage.pricing_missing_record_zero_cost", zap.Error(err))
 		cost = &CostBreakdown{BillingMode: string(BillingModeToken)}
 	}
-	customer := result
 	protection := result.InputTokenProtection
 	// The final adopted tariff decides whether a per-request or media charge
 	// is exempt. Legacy token pricing can leave BillingMode empty.
-	protectInput := protection != nil && !chatNeverAccepted && ((len(result.ContinuationResults) == 0 && openAITokenPricedForProtection(result, cost)) || len(tokenPricedRounds) > 0)
-	pendingInput := protectInput && (protection.Pending || protection.Limit < 0)
-	if protectInput && !pendingInput {
-		if len(result.ContinuationResults) == 0 {
-			pendingInput = openAIUnmeasuredBillableInput(result)
-		} else {
-			for round := range tokenPricedRounds {
-				if openAIUnmeasuredBillableInput(round) {
-					pendingInput = true
-					break
-				}
-			}
-		}
+	customer := result
+	if !chatNeverAccepted && (len(result.ContinuationResults) == 0 && openAITokenPricedForProtection(result, cost) || len(tokenPricedRounds) > 0) {
+		customer = projectOpenAIInputForBilling(result, protection, tokenPricedRounds)
 	}
+	protectInput := customer != result
 	baselineCost := cost
 	var accountQuotaTotalCost *float64
-	if protectInput && !pendingInput {
-		customer = projectOpenAIInputForBilling(result, protection, tokenPricedRounds)
+	if protectInput {
 		tokens = customer.Usage.billingUsageTokens()
 		actualInputTokens = tokens.InputTokens
 		tokens.OutputTokens = recordedOpenAIOutputTokens(result)
@@ -445,18 +434,16 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		rawInput := result.Usage.InputTokens
 		audit.UpstreamInputTokens = &rawInput
 		audit.InputTokenPolicy = "group_input_token_protection"
-		if !pendingInput {
-			limit := protection.Limit
-			audit.InputTokenPolicyCount = &limit
-			if len(result.ContinuationResults) == 0 {
-				audit.ContinuationUsage = []ContinuationUsageAudit{openAIProtectedSingleCallAudit(result, tokens, limit)}
-			}
-			for i, leaf := range customer.ContinuationResults {
-				audit.ContinuationUsage[i].CustomerInputTokens = openAIContinuationUsageTokens(leaf, true).InputTokens
-				if tokenPricedRounds[result.ContinuationResults[i]] {
-					audit.ContinuationUsage[i].InputTokenPolicy = audit.InputTokenPolicy
-					audit.ContinuationUsage[i].InputTokenPolicyCount = limit
-				}
+		limit := protection.Limit
+		audit.InputTokenPolicyCount = &limit
+		if len(result.ContinuationResults) == 0 {
+			audit.ContinuationUsage = []ContinuationUsageAudit{openAIProtectedSingleCallAudit(result, tokens, limit)}
+		}
+		for i, leaf := range customer.ContinuationResults {
+			audit.ContinuationUsage[i].CustomerInputTokens = openAIContinuationUsageTokens(leaf, true).InputTokens
+			if tokenPricedRounds[result.ContinuationResults[i]] {
+				audit.ContinuationUsage[i].InputTokenPolicy = audit.InputTokenPolicy
+				audit.ContinuationUsage[i].InputTokenPolicyCount = limit
 			}
 		}
 		usageOutcome = &audit
@@ -574,29 +561,6 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	}
 	if subscription != nil {
 		usageLog.SubscriptionID = &subscription.ID
-	}
-
-	if pendingInput {
-		writer, ok := s.usageLogRepo.(pendingUsageWriter)
-		if !ok {
-			return errors.New("pending OpenAI usage persistence unavailable")
-		}
-		usageLog.CustomGroupID = apiKey.CustomGroupID
-		evidence := openAIPendingEvidence(result)
-		if evidence.measuredTotals() {
-			if len(result.ContinuationResults) > 0 {
-				evidence.ProviderTotalCost = accountQuotaTotalCost
-			} else {
-				evidence.setPrice(quoteSingle(result, providerTokens, false, false))
-			}
-		}
-		delete(usageLog.ImageSizeBreakdown, "image_cache_read_tokens")
-		usageLog.protectPendingInput(protection, evidence)
-		usageLog.InputCost, usageLog.ImageInputCost, usageLog.OutputCost, usageLog.ImageOutputCost = 0, 0, 0, 0
-		usageLog.CacheReadCost, usageLog.CacheCreationCost, usageLog.TotalCost, usageLog.ActualCost = 0, 0, 0, 0
-		persistCtx, cancel := detachedBillingContext(ctx)
-		defer cancel()
-		return writer.UpsertPendingUsage(persistCtx, usageLog)
 	}
 
 	// 计算账号统计定价费用（使用最终上游模型匹配自定义规则）

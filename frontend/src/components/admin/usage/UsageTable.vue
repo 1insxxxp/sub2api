@@ -19,7 +19,7 @@
     <div class="overflow-auto">
       <DataTable
         :columns="columns"
-        :mobile-layout="compactMobile ? { title: 'user', subtitle: 'model', status: 'stream', summary: ['group', 'billing_mode', 'tokens', 'cost', 'latency', 'created_at'] } : undefined"
+        :mobile-layout="compactMobile ? { title: 'user', subtitle: 'model', status: 'stream', summary: ['group', 'tokens', 'cost', 'created_at'] } : undefined"
         :data="data"
         :loading="loading"
         :server-side-sort="serverSideSort"
@@ -884,7 +884,7 @@ const hideTokenTooltip = () => {
 
 <style scoped>
 @media (max-width: 767px) {
-  .usage-mobile-cards :deep(.admin-record-identity) { min-width: 0; }
+  .usage-mobile-cards :deep(.admin-record-identity) { min-width: 0; gap: 0.25rem; }
   .usage-mobile-cards :deep(.admin-record-title),
   .usage-mobile-cards :deep(.admin-record-subtitle),
   .usage-mobile-cards :deep(.admin-record-value) {
@@ -893,11 +893,9 @@ const hideTokenTooltip = () => {
     white-space: normal;
   }
   .usage-mobile-cards :deep(.admin-record-title button) { text-align: left; overflow-wrap: anywhere; }
-  .usage-mobile-cards :deep(.admin-record-subtitle) { margin-top: 8px; }
-  .usage-mobile-cards :deep(.admin-record-summary [data-field='tokens']),
-  .usage-mobile-cards :deep(.admin-record-summary [data-field='group']),
-  .usage-mobile-cards :deep(.admin-record-summary [data-field='billing_mode']),
-  .usage-mobile-cards :deep(.admin-record-summary [data-field='created_at']) { grid-column: 1 / -1; }
+  .usage-mobile-cards :deep(.admin-record-header) { padding-block: 0.75rem 0.625rem; }
+  .usage-mobile-cards :deep(.admin-record-summary) { gap: 0.625rem 0.75rem; padding-block: 0.625rem; }
+  .usage-mobile-cards :deep(.admin-record-metric) { gap: 0.125rem; }
   .usage-mobile-cards :deep(.admin-record-value .flex) { flex-wrap: wrap; }
   .usage-mobile-cards :deep(.admin-record-value .inline-flex) { max-width: 100%; flex-wrap: wrap; }
   .usage-mobile-cards :deep(.admin-record-value svg) { flex-shrink: 0; }

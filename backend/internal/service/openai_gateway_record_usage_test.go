@@ -222,7 +222,7 @@ func TestRecordCyberPolicyUsageLog_UsesDetachedInputProtection(t *testing.T) {
 	ctx := WithInputTokenProtection(context.Background(), &InputTokenProtection{Limit: 72})
 	svc.RecordCyberPolicyUsageLog(ctx, CyberPolicyUsageInput{
 		APIKey: &APIKey{ID: 2, User: &User{ID: 1}}, Account: &Account{ID: 3},
-		RequestID: "interrupted-protected", Model: "gpt-5.1", Stream: true, InputTokens: 1200, OutputTokens: 300,
+		RequestID: "interrupted-protected", Model: "gpt-5.1", Stream: true, InputTokens: 5200, OutputTokens: 300,
 	})
 	require.Equal(t, 1, logs.calls)
 	log := logs.lastLog
@@ -230,7 +230,7 @@ func TestRecordCyberPolicyUsageLog_UsesDetachedInputProtection(t *testing.T) {
 	require.Equal(t, 72, log.InputTokens)
 	require.Equal(t, 300, log.OutputTokens)
 	require.NotNil(t, log.Outcome)
-	require.Equal(t, 1200, *log.Outcome.UpstreamInputTokens)
+	require.Equal(t, 5200, *log.Outcome.UpstreamInputTokens)
 }
 
 func TestRecordCyberPolicyUsageLog_NonStreamZeroTokensZeroCost(t *testing.T) {

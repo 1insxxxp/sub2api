@@ -279,7 +279,7 @@ func (s *ChannelAcceptanceService) targetSnapshot(ctx context.Context, t Accepta
 		v := *t.Price
 		price = &v
 	}
-	snapshot := AcceptanceSnapshot{AccountID: a.ID, AccountName: a.Name, Platform: a.Platform, AccountType: a.Type, Protocols: plan.Protocols, Model: t.Model, UpstreamModel: mapped, GroupID: t.GroupID, Fingerprint: AcceptanceAccountFingerprint(a, g)}
+	snapshot := AcceptanceSnapshot{DeclaredSource: t.DeclaredSource, AccountID: a.ID, AccountName: a.Name, Platform: a.Platform, AccountType: a.Type, Protocols: plan.Protocols, Model: t.Model, UpstreamModel: mapped, GroupID: t.GroupID, Fingerprint: AcceptanceAccountFingerprint(a, g)}
 	if injected, ok := a.ResolveModelSystemPrompt(mapped); ok {
 		snapshot.AdditionalInputEstimate = len([]byte(injected)) + 64
 	}
@@ -293,6 +293,10 @@ func (s *ChannelAcceptanceService) targetSnapshot(ctx context.Context, t Accepta
 }
 
 func (s *ChannelAcceptanceService) Preview(ctx context.Context, actor int64, req AcceptancePreviewRequest) (*AcceptancePreview, error) {
+	return s.preview(ctx, actor, req, nil)
+}
+
+func (s *ChannelAcceptanceService) preview(ctx context.Context, actor int64, req AcceptancePreviewRequest, retest map[acceptanceRetestKey]bool) (*AcceptancePreview, error) {
 	if actor <= 0 || len(req.Targets) == 0 || len(req.Targets) > 25 || len(req.Extras) > 4 {
 		return nil, ErrAcceptanceInvalid
 	}
@@ -315,6 +319,11 @@ func (s *ChannelAcceptanceService) Preview(ctx context.Context, actor int64, req
 	p := &AcceptancePreview{ID: uuid.NewString(), ActorID: actor, RuleVersion: ChannelAcceptanceRuleVersion, CreatedAt: now, ExpiresAt: now.Add(10 * time.Minute), Request: req, CanStart: true, Issues: []string{}, Samples: []AcceptanceSample{}}
 	seen := map[string]bool{}
 	for _, target := range req.Targets {
+		switch target.DeclaredSource {
+		case "", "unknown", "vertex", "google_developer_api", "google_code_assist", "antigravity", "anthropic", "claude_max", "kiro", "bedrock":
+		default:
+			return nil, ErrAcceptanceInvalid
+		}
 		key := fmt.Sprintf("%d:%s", target.AccountID, target.Model)
 		if seen[key] {
 			return nil, ErrAcceptanceInvalid
@@ -337,6 +346,9 @@ func (s *ChannelAcceptanceService) Preview(ctx context.Context, actor int64, req
 		}
 		previousGenerationCalls := p.GenerationCalls
 		for _, sample := range acceptanceManifest(snapshot, req.Extras, p.ID) {
+			if retest != nil && !retest[acceptanceSampleRetestKey(sample)] {
+				continue
+			}
 			sample.Ordinal = len(p.Samples)
 			p.Samples = append(p.Samples, sample)
 			p.EstimatedCostUSD += sample.EstimatedCostUSD
@@ -390,7 +402,7 @@ func (s *ChannelAcceptanceService) Start(ctx context.Context, actor int64, previ
 			return nil, ErrAcceptanceStale
 		}
 		old := seen[fmt.Sprintf("%d:%s", target.AccountID, target.Model)]
-		if current.Fingerprint != old.Fingerprint || current.Price != old.Price || current.UpstreamModel != old.UpstreamModel || !slices.Equal(current.Protocols, old.Protocols) {
+		if current.DeclaredSource != old.DeclaredSource || current.Fingerprint != old.Fingerprint || current.Price != old.Price || current.UpstreamModel != old.UpstreamModel || !slices.Equal(current.Protocols, old.Protocols) {
 			return nil, ErrAcceptanceStale
 		}
 	}

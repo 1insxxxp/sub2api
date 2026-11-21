@@ -1,17 +1,18 @@
 <template>
-  <div :class="flat ? 'admin-surface px-4 py-4 sm:px-5 sm:py-5' : 'card p-6'">
+  <div :class="flat ? 'usage-list-filters px-3 py-2.5 md:px-4 md:py-3' : 'card p-6'">
     <!-- Toolbar: left filters (multi-line) + right actions -->
-    <div class="admin-toolbar items-end">
+    <div class="admin-toolbar items-end" :class="{ 'usage-filter-toolbar': flat }">
       <!-- Left: filters (allowed to wrap to multiple rows) -->
-      <div class="admin-toolbar-group flex-1 items-end gap-4">
+      <div class="admin-toolbar-group flex-1 items-end gap-4" :class="{ 'usage-filter-fields': flat }">
         <!-- User Search -->
-        <div ref="userSearchRef" class="usage-filter-dropdown relative w-full sm:w-auto sm:min-w-[240px]">
+        <div ref="userSearchRef" class="usage-filter-user usage-filter-dropdown relative w-full sm:w-auto sm:min-w-[240px]">
           <label class="input-label">{{ t('admin.usage.userFilter') }}</label>
           <input
             v-model="userKeyword"
             type="text"
             class="input pr-8"
             :placeholder="t('admin.usage.searchUserPlaceholder')"
+            :aria-label="t('admin.usage.userFilter')"
             @input="debounceUserSearch"
             @focus="showUserDropdown = true"
           />
@@ -19,7 +20,7 @@
             v-if="filters.user_id"
             type="button"
             @click="clearUser"
-            class="absolute right-2 top-8 flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-primary-50 hover:text-primary-600 dark:hover:bg-primary-500/10 dark:hover:text-primary-200"
+            class="usage-clear-user absolute right-2 top-8 flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-primary-50 hover:text-primary-600 dark:hover:bg-primary-500/10 dark:hover:text-primary-200"
             aria-label="Clear user filter"
           >
             ✕
@@ -41,151 +42,189 @@
           </div>
         </div>
 
-        <!-- API Key Search -->
-        <div v-if="mode === 'usage' || mode === 'errors'" ref="apiKeySearchRef" class="usage-filter-dropdown relative w-full sm:w-auto sm:min-w-[240px]">
-          <label class="input-label">{{ t('usage.apiKeyFilter') }}</label>
-          <input
-            v-model="apiKeyKeyword"
-            type="text"
-            class="input pr-8"
-            :placeholder="t('admin.usage.searchApiKeyPlaceholder')"
-            @input="debounceApiKeySearch"
-            @focus="onApiKeyFocus"
-          />
-          <button
-            v-if="filters.api_key_id"
-            type="button"
-            @click="onClearApiKey"
-            class="absolute right-2 top-8 flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-primary-50 hover:text-primary-600 dark:hover:bg-primary-500/10 dark:hover:text-primary-200"
-            aria-label="Clear API key filter"
-          >
-            ✕
-          </button>
-          <div
-            v-if="showApiKeyDropdown && apiKeyResults.length > 0"
-            class="admin-action-menu absolute z-50 mt-1 max-h-60 w-full overflow-y-auto"
-          >
+        <button
+          v-if="flat && hasExtraFilters"
+          ref="filterToggle"
+          type="button"
+          class="btn btn-secondary usage-filter-toggle"
+          data-test="usage-filter-toggle"
+          :aria-label="t('common.filter')"
+          :aria-expanded="filtersExpanded"
+          :aria-controls="mobile && showActions ? 'usage-extra-filters usage-filter-actions' : 'usage-extra-filters'"
+          @click="filtersExpanded = !filtersExpanded"
+        >
+          <Icon name="filter" size="sm" />
+          <span class="usage-filter-toggle-label">{{ t('common.filter') }}</span>
+          <span v-if="activeExtraFilters" class="usage-filter-count">{{ activeExtraFilters }}</span>
+        </button>
+        <button
+          v-if="flat && mobile && showActions"
+          type="button"
+          class="btn btn-secondary usage-filter-refresh"
+          :aria-label="t('common.refresh')"
+          @click="$emit('refresh')"
+        >
+          <Icon name="refresh" size="sm" />
+        </button>
+
+        <div
+          v-show="showExtraFilters"
+          :id="flat ? 'usage-extra-filters' : undefined"
+          :class="flat && hasExtraFilters ? 'usage-extra-filters' : 'contents'"
+          @keydown.esc="closeExtraFilters"
+        >
+          <!-- API Key Search -->
+          <div v-if="mode === 'usage' || mode === 'errors'" ref="apiKeySearchRef" class="usage-filter-dropdown relative w-full sm:w-auto sm:min-w-[240px]">
+            <label class="input-label">{{ t('usage.apiKeyFilter') }}</label>
+            <input
+              v-model="apiKeyKeyword"
+              type="text"
+              class="input pr-8"
+              :placeholder="t('admin.usage.searchApiKeyPlaceholder')"
+              @input="debounceApiKeySearch"
+              @focus="onApiKeyFocus"
+            />
             <button
-              v-for="k in apiKeyResults"
-              :key="k.id"
+              v-if="filters.api_key_id"
               type="button"
-              @click="selectApiKey(k)"
-              class="admin-action-menu-item justify-between"
+              @click="onClearApiKey"
+              class="absolute right-2 top-8 flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-primary-50 hover:text-primary-600 dark:hover:bg-primary-500/10 dark:hover:text-primary-200"
+              aria-label="Clear API key filter"
             >
-              <span class="truncate">{{ k.name || `#${k.id}` }}</span>
-              <span class="ml-2 text-xs text-gray-400">#{{ k.id }}</span>
+              ✕
             </button>
+            <div
+              v-if="showApiKeyDropdown && apiKeyResults.length > 0"
+              class="admin-action-menu absolute z-50 mt-1 max-h-60 w-full overflow-y-auto"
+            >
+              <button
+                v-for="k in apiKeyResults"
+                :key="k.id"
+                type="button"
+                @click="selectApiKey(k)"
+                class="admin-action-menu-item justify-between"
+              >
+                <span class="truncate">{{ k.name || `#${k.id}` }}</span>
+                <span class="ml-2 text-xs text-gray-400">#{{ k.id }}</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Model Filter -->
+          <div v-if="mode === 'usage' || mode === 'errors'" class="w-full sm:w-auto sm:min-w-[220px]">
+            <label class="input-label">{{ t('usage.model') }}</label>
+            <Select v-model="filters.model" :options="modelOptions" searchable @change="emitChange" />
+          </div>
+
+          <!-- Account Filter -->
+          <div v-if="mode === 'usage' || mode === 'errors'" ref="accountSearchRef" class="usage-filter-dropdown relative w-full sm:w-auto sm:min-w-[220px]">
+            <label class="input-label">{{ t('admin.usage.account') }}</label>
+            <input
+              v-model="accountKeyword"
+              type="text"
+              class="input pr-8"
+              :placeholder="t('admin.usage.searchAccountPlaceholder')"
+              @input="debounceAccountSearch"
+              @focus="showAccountDropdown = true"
+            />
+            <button
+              v-if="filters.account_id"
+              type="button"
+              @click="clearAccount"
+              class="absolute right-2 top-8 flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-primary-50 hover:text-primary-600 dark:hover:bg-primary-500/10 dark:hover:text-primary-200"
+              aria-label="Clear account filter"
+            >
+              ✕
+            </button>
+            <div
+              v-if="showAccountDropdown && (accountResults.length > 0 || accountKeyword)"
+              class="admin-action-menu absolute z-50 mt-1 max-h-60 w-full overflow-y-auto"
+            >
+              <button
+                v-for="a in accountResults"
+                :key="a.id"
+                type="button"
+                @click="selectAccount(a)"
+                class="admin-action-menu-item justify-between"
+              >
+                <span class="truncate">{{ a.name }}</span>
+                <span class="ml-2 text-xs text-gray-400">#{{ a.id }}</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Request Type Filter (usage only) -->
+          <div v-if="mode === 'usage'" class="w-full sm:w-auto sm:min-w-[180px]">
+            <label class="input-label">{{ t('usage.type') }}</label>
+            <Select v-model="filters.request_type" :options="requestTypeOptions" @change="emitChange" />
+          </div>
+
+          <!-- Native compaction is independent of the transport request type. -->
+          <div v-if="mode === 'usage'" class="w-full sm:w-auto sm:min-w-[180px]">
+            <label class="input-label">{{ t('usage.compactionFilter') }}</label>
+            <Select v-model="filters.native_compaction_v2" :options="compactionOptions" @change="emitChange" />
+          </div>
+
+          <!-- Billing Type Filter (usage only) -->
+          <div v-if="mode === 'usage'" class="w-full sm:w-auto sm:min-w-[200px]">
+            <label class="input-label">{{ t('admin.usage.billingType') }}</label>
+            <Select v-model="filters.billing_type" :options="billingTypeOptions" @change="emitChange" />
+          </div>
+
+          <!-- Billing Mode Filter (usage only；用户排行的 user-breakdown 接口不支持该维度) -->
+          <div v-if="mode === 'usage'" class="w-full sm:w-auto sm:min-w-[200px]">
+            <label class="input-label">{{ t('admin.usage.billingMode') }}</label>
+            <Select v-model="filters.billing_mode" :options="billingModeOptions" @change="emitChange" />
+          </div>
+
+          <div v-if="mode === 'usage'" class="w-full sm:w-auto sm:min-w-[220px]">
+            <label class="input-label">{{ t('admin.usage.upstreamModelAudit') }}</label>
+            <Select v-model="filters.upstream_model_mismatch" :options="upstreamModelMismatchOptions" @change="emitChange" />
+          </div>
+
+          <!-- Error Phase Filter (errors only) -->
+          <div v-if="mode === 'errors'" class="w-full sm:w-auto sm:min-w-[180px]">
+            <label class="input-label">{{ t('admin.ops.errorLog.type') }}</label>
+            <Select v-model="filters.error_phase" :options="errorPhaseOptions" @change="emitChange" />
+          </div>
+
+          <!-- Error Category Filter (errors only) -->
+          <div v-if="mode === 'errors'" class="w-full sm:w-auto sm:min-w-[180px]">
+            <label class="input-label">{{ t('usage.errors.category') }}</label>
+            <Select v-model="filters.error_category" :options="errorCategoryOptions" @change="emitChange" />
+          </div>
+
+          <!-- Status Code Filter (errors only) -->
+          <div v-if="mode === 'errors'" class="w-full sm:w-auto sm:min-w-[180px]">
+            <label class="input-label">{{ t('admin.ops.errorLog.status') }}</label>
+            <Select v-model="filters.status_code" :options="statusCodeOptions" @change="emitChange" />
+          </div>
+
+          <!-- Group Filter -->
+          <div v-if="mode === 'usage' || mode === 'errors'" class="w-full sm:w-auto sm:min-w-[200px]">
+            <label class="input-label">{{ t('admin.usage.group') }}</label>
+            <Select v-model="filters.group_id" :options="groupOptions" searchable @change="emitChange" />
           </div>
         </div>
-
-        <!-- Model Filter -->
-        <div v-if="mode === 'usage' || mode === 'errors'" class="w-full sm:w-auto sm:min-w-[220px]">
-          <label class="input-label">{{ t('usage.model') }}</label>
-          <Select v-model="filters.model" :options="modelOptions" searchable @change="emitChange" />
-        </div>
-
-        <!-- Account Filter -->
-        <div v-if="mode === 'usage' || mode === 'errors'" ref="accountSearchRef" class="usage-filter-dropdown relative w-full sm:w-auto sm:min-w-[220px]">
-          <label class="input-label">{{ t('admin.usage.account') }}</label>
-          <input
-            v-model="accountKeyword"
-            type="text"
-            class="input pr-8"
-            :placeholder="t('admin.usage.searchAccountPlaceholder')"
-            @input="debounceAccountSearch"
-            @focus="showAccountDropdown = true"
-          />
-          <button
-            v-if="filters.account_id"
-            type="button"
-            @click="clearAccount"
-            class="absolute right-2 top-8 flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-primary-50 hover:text-primary-600 dark:hover:bg-primary-500/10 dark:hover:text-primary-200"
-            aria-label="Clear account filter"
-          >
-            ✕
-          </button>
-          <div
-            v-if="showAccountDropdown && (accountResults.length > 0 || accountKeyword)"
-            class="admin-action-menu absolute z-50 mt-1 max-h-60 w-full overflow-y-auto"
-          >
-            <button
-              v-for="a in accountResults"
-              :key="a.id"
-              type="button"
-              @click="selectAccount(a)"
-              class="admin-action-menu-item justify-between"
-            >
-              <span class="truncate">{{ a.name }}</span>
-              <span class="ml-2 text-xs text-gray-400">#{{ a.id }}</span>
-            </button>
-          </div>
-        </div>
-
-        <!-- Request Type Filter (usage only) -->
-        <div v-if="mode === 'usage'" class="w-full sm:w-auto sm:min-w-[180px]">
-          <label class="input-label">{{ t('usage.type') }}</label>
-          <Select v-model="filters.request_type" :options="requestTypeOptions" @change="emitChange" />
-        </div>
-
-        <!-- Native compaction is independent of the transport request type. -->
-        <div v-if="mode === 'usage'" class="w-full sm:w-auto sm:min-w-[180px]">
-          <label class="input-label">{{ t('usage.compactionFilter') }}</label>
-          <Select v-model="filters.native_compaction_v2" :options="compactionOptions" @change="emitChange" />
-        </div>
-
-        <!-- Billing Type Filter (usage only) -->
-        <div v-if="mode === 'usage'" class="w-full sm:w-auto sm:min-w-[200px]">
-          <label class="input-label">{{ t('admin.usage.billingType') }}</label>
-          <Select v-model="filters.billing_type" :options="billingTypeOptions" @change="emitChange" />
-        </div>
-
-        <!-- Billing Mode Filter (usage only；用户排行的 user-breakdown 接口不支持该维度) -->
-        <div v-if="mode === 'usage'" class="w-full sm:w-auto sm:min-w-[200px]">
-          <label class="input-label">{{ t('admin.usage.billingMode') }}</label>
-          <Select v-model="filters.billing_mode" :options="billingModeOptions" @change="emitChange" />
-        </div>
-
-        <div v-if="mode === 'usage'" class="w-full sm:w-auto sm:min-w-[220px]">
-          <label class="input-label">{{ t('admin.usage.upstreamModelAudit') }}</label>
-          <Select v-model="filters.upstream_model_mismatch" :options="upstreamModelMismatchOptions" @change="emitChange" />
-        </div>
-
-        <!-- Error Phase Filter (errors only) -->
-        <div v-if="mode === 'errors'" class="w-full sm:w-auto sm:min-w-[180px]">
-          <label class="input-label">{{ t('admin.ops.errorLog.type') }}</label>
-          <Select v-model="filters.error_phase" :options="errorPhaseOptions" @change="emitChange" />
-        </div>
-
-        <!-- Error Category Filter (errors only) -->
-        <div v-if="mode === 'errors'" class="w-full sm:w-auto sm:min-w-[180px]">
-          <label class="input-label">{{ t('usage.errors.category') }}</label>
-          <Select v-model="filters.error_category" :options="errorCategoryOptions" @change="emitChange" />
-        </div>
-
-        <!-- Status Code Filter (errors only) -->
-        <div v-if="mode === 'errors'" class="w-full sm:w-auto sm:min-w-[180px]">
-          <label class="input-label">{{ t('admin.ops.errorLog.status') }}</label>
-          <Select v-model="filters.status_code" :options="statusCodeOptions" @change="emitChange" />
-        </div>
-
-        <!-- Group Filter -->
-        <div v-if="mode === 'usage' || mode === 'errors'" class="w-full sm:w-auto sm:min-w-[200px]">
-          <label class="input-label">{{ t('admin.usage.group') }}</label>
-          <Select v-model="filters.group_id" :options="groupOptions" searchable @change="emitChange" />
-        </div>
-
       </div>
 
       <!-- Right: actions -->
-      <div v-if="showActions" class="admin-toolbar-group w-full justify-end sm:w-auto">
-        <button type="button" @click="$emit('refresh')" class="btn btn-secondary">
+      <div
+        v-if="showActions"
+        v-show="!mobile || showExtraFilters"
+        :id="flat ? 'usage-filter-actions' : undefined"
+        class="admin-toolbar-group w-full justify-end sm:w-auto"
+        :class="{ 'usage-filter-actions': flat }"
+        @keydown.esc="closeExtraFilters"
+      >
+        <button v-if="!flat || !mobile" type="button" @click="$emit('refresh')" class="btn btn-secondary">
           {{ t('common.refresh') }}
         </button>
         <button type="button" @click="$emit('reset')" class="btn btn-secondary">
           {{ t('common.reset') }}
         </button>
         <slot name="after-reset" />
-        <template v-if="mode === 'usage'">
+        <template v-if="mode === 'usage' && showRecordActions">
           <button type="button" @click="$emit('cleanup')" class="btn btn-danger">
             {{ t('admin.usage.cleanup.button') }}
           </button>
@@ -200,6 +239,8 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, toRef, watch, computed } from 'vue'
+import { useMediaQuery } from '@vueuse/core'
+import Icon from '@/components/icons/Icon.vue'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
 import Select, { type SelectOption } from '@/components/common/Select.vue'
@@ -214,6 +255,7 @@ interface Props {
   startDate: string
   endDate: string
   showActions?: boolean
+  showRecordActions?: boolean
   modelOptions?: string[]
   /**
    * errors 模式:隐藏用量专属字段/按钮,显示错误类型+状态码(错误请求 tab 用)
@@ -226,6 +268,7 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   showActions: true,
+  showRecordActions: true,
   mode: 'usage',
   flat: false
 })
@@ -240,6 +283,26 @@ const emit = defineEmits([
 
 const { t } = useI18n()
 const filters = toRef(props, 'modelValue')
+const mobile = useMediaQuery('(max-width: 767px)')
+const filtersExpanded = ref(false)
+const filterToggle = ref<HTMLButtonElement | null>(null)
+const hasExtraFilters = computed(() => props.mode === 'usage' || props.mode === 'errors')
+const showExtraFilters = computed(() => !props.flat || !hasExtraFilters.value || filtersExpanded.value)
+const activeExtraFilters = computed(() => {
+  if (!hasExtraFilters.value) return 0
+  const shared = ['api_key_id', 'model', 'account_id', 'group_id']
+  const fields = props.mode === 'usage'
+    ? [...shared, 'request_type', 'native_compaction_v2', 'billing_type', 'billing_mode', 'upstream_model_mismatch']
+    : [...shared, 'error_phase', 'error_category', 'status_code']
+  return fields.filter((field) => filters.value[field] != null && filters.value[field] !== '').length
+})
+
+function closeExtraFilters(event: KeyboardEvent) {
+  if (event.defaultPrevented || !props.flat || !filtersExpanded.value) return
+  event.preventDefault()
+  filtersExpanded.value = false
+  filterToggle.value?.focus()
+}
 
 const userSearchRef = ref<HTMLElement | null>(null)
 const apiKeySearchRef = ref<HTMLElement | null>(null)
@@ -549,3 +612,60 @@ const getUserSearchRevision = () => userSearchSequence
 
 defineExpose({ getUserSearchRevision, setUserKeyword })
 </script>
+
+<style scoped>
+.usage-filter-count {
+  padding: 0.125rem 0.375rem;
+  border-radius: 4px;
+  background: rgb(var(--brand-rgb) / 12%);
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.usage-list-filters .usage-filter-toolbar { align-items: start; }
+.usage-list-filters .usage-filter-fields { width: 100%; }
+.usage-list-filters .usage-filter-user { flex: 0 1 20rem; min-width: 0; }
+.usage-list-filters .usage-filter-user .input-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.usage-list-filters .usage-clear-user { top: 0.25rem; right: 0.25rem; }
+.usage-filter-toggle { flex-shrink: 0; gap: 0.375rem; padding-inline: 0.625rem; white-space: nowrap; }
+.usage-filter-refresh { width: 2.5rem; padding-inline: 0; }
+.usage-extra-filters {
+  display: grid;
+  flex-basis: 100%;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+  gap: 0.5rem;
+  align-items: end;
+  padding-top: 0.25rem;
+}
+.usage-extra-filters > div { width: 100%; min-width: 0; }
+
+@media (max-width: 767px) {
+  .usage-list-filters .usage-filter-toolbar { gap: 0.625rem; }
+  .usage-list-filters .usage-filter-fields {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: end;
+  }
+  .usage-extra-filters {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .usage-list-filters .usage-filter-actions {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+  .usage-filter-actions .btn { padding-inline: 0.625rem; font-size: 0.75rem; }
+}
+
+@media (max-width: 359px) {
+  .usage-filter-toggle-label { display: none; }
+}
+</style>

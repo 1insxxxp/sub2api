@@ -16,11 +16,11 @@ func TestInputProtectionHTTPBoundary(t *testing.T) {
 		status                                 int
 		p                                      *service.InputTokenProtection
 	}{
-		{"pending", "/v1/messages", "application/json", "", `{"usage":{"input_tokens":12,"cache_read_input_tokens":8,"output_tokens":4}}`, `{"usage":{"input_tokens":0,"cache_read_input_tokens":0,"output_tokens":4}}`, 200, &service.InputTokenProtection{Pending: true}},
+		{"pending", "/v1/messages", "application/json", "", `{"usage":{"input_tokens":12,"cache_read_input_tokens":8,"output_tokens":4}}`, `{"usage":{"input_tokens":12,"cache_read_input_tokens":8,"output_tokens":4}}`, 200, &service.InputTokenProtection{Pending: true}},
 		{"per request", "/v1/messages", "application/json", "", `{"usage":{"input_tokens":12}}`, `{"usage":{"input_tokens":12}}`, 200, nil},
 		{"error", "/v1/responses", "application/json", "", `{"usage":{"input_tokens":12}}`, `{"usage":{"input_tokens":12}}`, 429, &service.InputTokenProtection{Limit: 1}},
 		{"encoded", "/v1/responses", "application/json", "gzip", "opaque", "opaque", 200, &service.InputTokenProtection{Limit: 1}},
-		{"messages", "/v1/messages", "application/json", "", `{"usage":{"input_tokens":12,"cache_read_input_tokens":8,"output_tokens":4}}`, `{"usage":{"input_tokens":2,"cache_read_input_tokens":8,"output_tokens":4}}`, 200, &service.InputTokenProtection{Limit: 10}},
+		{"messages", "/v1/messages", "application/json", "", `{"usage":{"input_tokens":5012,"cache_read_input_tokens":8,"output_tokens":4}}`, `{"usage":{"input_tokens":10,"cache_read_input_tokens":0,"output_tokens":4}}`, 200, &service.InputTokenProtection{Limit: 10}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := httptest.NewRecorder()
@@ -32,7 +32,7 @@ func TestInputProtectionHTTPBoundary(t *testing.T) {
 			wrapped := c.Writer
 			InstallInputTokenProtectionWriter(c, nil)
 			require.Same(t, wrapped, c.Writer)
-			if tc.p == nil {
+			if tc.p == nil || tc.p.Pending {
 				require.Same(t, original, c.Writer)
 			}
 			c.Header("Content-Type", tc.media)
@@ -48,7 +48,7 @@ func TestInputProtectionHTTPBoundary(t *testing.T) {
 			require.Equal(t, len(raw), n)
 			require.Equal(t, tc.raw, string(raw))
 			require.Equal(t, tc.want, rec.Body.String())
-			if tc.p != nil && tc.encoding == "" && tc.status == 200 {
+			if tc.p != nil && !tc.p.Pending && tc.encoding == "" && tc.status == 200 {
 				require.Empty(t, rec.Result().Header.Get("Content-Length"))
 			}
 		})

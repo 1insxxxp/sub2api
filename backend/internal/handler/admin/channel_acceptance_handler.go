@@ -20,6 +20,7 @@ import (
 type channelAcceptanceService interface {
 	Targets(context.Context, []int64) ([]service.AcceptanceTarget, error)
 	Preview(context.Context, int64, service.AcceptancePreviewRequest) (*service.AcceptancePreview, error)
+	RetestPreview(context.Context, int64, string) (*service.AcceptancePreview, error)
 	Start(context.Context, int64, string) (*service.AcceptanceRun, error)
 	Get(context.Context, string) (*service.AcceptanceRun, error)
 	History(context.Context, []int64) ([]service.AcceptanceRun, error)
@@ -143,6 +144,22 @@ func (h *ChannelAcceptanceHandler) Preview(c *gin.Context) {
 		return
 	}
 	p, err := h.service.Preview(c.Request.Context(), actor, req)
+	if err != nil {
+		acceptanceError(c, err)
+		return
+	}
+	response.Success(c, p)
+}
+func (h *ChannelAcceptanceHandler) RetestPreview(c *gin.Context) {
+	actor, ok := h.actor(c)
+	if !ok {
+		return
+	}
+	id, ok := acceptanceRunID(c)
+	if !ok {
+		return
+	}
+	p, err := h.service.RetestPreview(c.Request.Context(), actor, id)
 	if err != nil {
 		acceptanceError(c, err)
 		return

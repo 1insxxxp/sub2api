@@ -16,6 +16,11 @@ type InputTokenProtection struct {
 
 type inputTokenProtectionKey struct{}
 
+const (
+	inputTokenProtectionTolerance         = 5000
+	inputTokenProtectionStrictBelowTokens = 20000
+)
+
 // WithInputTokenProtection freezes a value copy so retries and detached usage
 // workers cannot observe changes to the caller's evidence.
 func WithInputTokenProtection(ctx context.Context, p *InputTokenProtection) context.Context {
@@ -34,26 +39,43 @@ func InputTokenProtectionFromContext(ctx context.Context) *InputTokenProtection 
 	return p
 }
 
-// Cap takes disjoint buckets. Prefer the customer's discounted reads, then
-// ordinary input, then the shorter and longer cache writes. Subtracting from
-// remaining avoids overflow even for inconsistent upstream counters.
+// Cap keeps reported usage within the tolerance. When the provider exceeds
+// the estimate by more, retain writes first, then ordinary input, then reads.
 func (p *InputTokenProtection) Cap(read, input, write5m, write1h int) (int, int, int, int) {
-	if p == nil {
+	if !p.hasEstimate() || !p.exceedsTolerance(read, input, write5m, write1h) {
 		return read, input, write5m, write1h
 	}
-	if p.Pending {
-		return 0, 0, 0, 0
-	}
-	remaining := max(0, p.Limit)
+	remaining := p.Limit
 	take := func(n int) int {
 		n = min(remaining, max(n, 0))
 		remaining -= n
 		return n
 	}
-	r := take(read)
+	short, long := take(write5m), take(write1h)
 	i := take(input)
-	w := take(write5m)
-	return r, i, w, take(write1h)
+	return take(read), i, short, long
+}
+
+func (p *InputTokenProtection) hasEstimate() bool {
+	return p != nil && !p.Pending && p.Limit >= 0
+}
+
+func (p *InputTokenProtection) exceedsTolerance(counts ...int) bool {
+	remaining, tolerance := p.Limit, inputTokenProtectionTolerance
+	if remaining < inputTokenProtectionStrictBelowTokens {
+		tolerance = 0
+	}
+	for _, count := range counts {
+		count = max(count, 0)
+		within := min(remaining, count)
+		remaining -= within
+		excess := count - within
+		if excess > tolerance {
+			return true
+		}
+		tolerance -= excess
+	}
+	return false
 }
 
 // InputTokenProtectionBillsByTokens checks the wire tariff before an account

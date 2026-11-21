@@ -31,12 +31,12 @@ func TestAcceptanceExecutorDiscountKeepsThreeUsageLayers(t *testing.T) {
 	for _, enabled := range []bool{false, true} {
 		for _, protocol := range []string{"gemini", "chat"} {
 			a := &Account{ID: 7, Platform: PlatformGemini, Type: AccountTypeAPIKey, Credentials: map[string]any{"api_key": "test"}}
-			g := &Group{ID: 8, Platform: PlatformGemini, Status: StatusActive, Hydrated: true, GeminiInputCountingEnabled: enabled, RateMultiplier: 2}
+			if enabled {
+				a.Extra = map[string]any{GeminiInputCountingExtraKey: map[string]any{"mode": GeminiInputCountingVertexLikeDiscountV1, "models": []string{"gemini-3.8-flash"}}}
+			}
 			u := &acceptanceExecutorHTTP{status: 200, contentType: "application/json", body: `{"candidates":[{"content":{"parts":[{"text":"acceptance-ok"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":1000,"candidatesTokenCount":9,"thoughtsTokenCount":2,"cachedContentTokenCount":0,"totalTokenCount":1011}}`}
-			e := NewAccountAcceptanceExecutor(&acceptanceExecutorAccounts{a: a}, &acceptanceExecutorGroups{group: g}, &GeminiMessagesCompatService{cfg: &config.Config{}, httpUpstream: u}, nil, nil, nil)
+			e := NewAccountAcceptanceExecutor(&acceptanceExecutorAccounts{a: a}, nil, &GeminiMessagesCompatService{cfg: &config.Config{}, httpUpstream: u}, nil, nil, nil)
 			sample := acceptanceExecutorSample(a, protocol, false)
-			sample.Snapshot.GroupID = &g.ID
-			sample.Snapshot.Fingerprint = AcceptanceAccountFingerprint(a, g)
 			r, err := e.Execute(context.Background(), sample)
 			if err != nil || r.RawUsage.Input == nil || *r.RawUsage.Input != 1000 || r.ClientUsage.Input == nil || r.BillingUsage.Input == nil {
 				t.Fatalf("lost usage: %v %+v", err, r)

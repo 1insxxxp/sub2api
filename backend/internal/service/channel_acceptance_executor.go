@@ -90,6 +90,11 @@ func (e *AccountAcceptanceExecutor) Execute(ctx context.Context, sample Acceptan
 	a = &copyAccount
 	sample.Snapshot.Platform = a.Platform
 	result := &AcceptanceResult{Status: "inconclusive", Source: AcceptanceSource{Kind: "unverified", Channel: "unknown", RequestedModel: sample.Snapshot.Model, UpstreamModel: sample.Snapshot.UpstreamModel}, EffectiveParameters: map[string]any{"requested_max_output_tokens": sample.MaxOutputTokens, "fixed_account": true, "automatic_continuation": false}}
+	rawParser := newAcceptanceEvidenceParser()
+	if sample.Snapshot.DeclaredSource != "" {
+		rawParser.fingerprint = newAcceptanceFingerprint()
+		defer rawParser.reportFingerprint(sample.Snapshot.DeclaredSource, result)
+	}
 	if sample.Protocol != "count_tokens" && acceptanceThinkingConfig(sample.Snapshot.UpstreamModel) != nil {
 		result.EffectiveParameters["requested_reasoning_effort"] = "low"
 	}
@@ -191,7 +196,7 @@ func (e *AccountAcceptanceExecutor) Execute(ctx context.Context, sample Acceptan
 		c.Request.Header.Set("anthropic-version", "2023-06-01")
 	}
 	c.Request.RequestURI = c.Request.URL.RequestURI()
-	upstream := &acceptanceHTTPUpstream{accountID: a.ID, parser: newAcceptanceEvidenceParser(), result: result, sample: sample}
+	upstream := &acceptanceHTTPUpstream{accountID: a.ID, parser: rawParser, result: result, sample: sample}
 	repo := &acceptanceReadOnlyAccounts{AccountRepository: e.accounts}
 	var fr *ForwardResult
 	var ofr *OpenAIForwardResult
@@ -396,21 +401,15 @@ func (e *AccountAcceptanceExecutor) Execute(ctx context.Context, sample Acceptan
 		result.Status = "inconclusive"
 		result.Findings = append(result.Findings, AcceptanceFinding{Code: "usage_missing", Level: "warning", Message: "上游缺少输入或输出用量，无法认定计量正常"})
 	}
-	if result.RawUsage.Output != nil && *result.RawUsage.Output > 0 && (result.ClientUsage.Output == nil || *result.ClientUsage.Output == 0) {
-		result.Status = "anomaly"
-		result.Findings = append(result.Findings, AcceptanceFinding{Code: "client_output_usage_lost", Level: "error", Message: "上游存在输出用量，但客户端返回缺失或为零"})
-	}
-	if result.RawUsage.Output != nil && *result.RawUsage.Output == 0 && (raw.hasText || raw.hasTool) {
-		result.Status = "anomaly"
-		result.Findings = append(result.Findings, AcceptanceFinding{Code: "upstream_zero_output_with_content", Level: "warning", Message: "上游返回了正文或工具调用，但同时明确报告输出为零；需要复核计量"})
-	}
+	acceptanceCheckOutputUsage(result, raw, client)
 	if result.RawUsage.Source == "upstream_chat_reported" && result.RawUsage.Thoughts == nil {
 		result.Findings = append(result.Findings, AcceptanceFinding{Code: "reasoning_breakdown_missing", Level: "info", Message: "Chat 输出总量包含未拆分的思考消耗；不能据此认定思考为零"})
 	}
-	if acceptanceUsageContradictory(result.RawUsage) {
+	if acceptanceObservedUsageContradictory(raw) {
 		result.Status = "anomaly"
 		result.Findings = append(result.Findings, AcceptanceFinding{Code: "usage_inconsistent", Level: "warning", Message: "上游用量字段之间存在矛盾，需要复核字段口径，不能据此断言造假"})
 	}
+	acceptanceCheckEcho(sample, result, raw, client)
 	matched := strings.Contains(result.OutputExcerpt, sample.Expected)
 	if sample.Category == "image" {
 		matched = strings.Contains(strings.ToLower(result.OutputExcerpt), strings.ToLower(sample.Expected))
@@ -500,10 +499,14 @@ func (u *acceptanceHTTPUpstream) do(r *http.Request, proxy string, id int64, n i
 	}
 	if resp != nil {
 		u.status = resp.StatusCode
+		observed := r
 		if resp.Request != nil {
-			u.result.Source = acceptanceSourceFromRequest(resp.Request, u.sample.Protocol, u.sample.Snapshot.Model, u.result.Source.UpstreamModel)
+			observed = resp.Request
+			u.result.Source = acceptanceSourceFromRequest(observed, u.sample.Protocol, u.sample.Snapshot.Model, u.result.Source.UpstreamModel)
 		}
-		if resp.Body != nil && u.sample.Stream && strings.HasSuffix(r.URL.Path, "/invoke-with-response-stream") && resp.StatusCode/100 == 2 {
+		decodedBedrock := u.sample.Stream && strings.HasSuffix(r.URL.Path, "/invoke-with-response-stream") && resp.StatusCode/100 == 2
+		u.parser.observeFingerprintResponse(observed, u.result.Source, resp, decodedBedrock)
+		if resp.Body != nil && decodedBedrock {
 			resp.Body = &acceptanceBedrockBody{ReadCloser: resp.Body, parser: u.parser}
 		} else if resp.Body != nil {
 			resp.Body = &acceptanceObservedBody{ReadCloser: resp.Body, parser: u.parser}

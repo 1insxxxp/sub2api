@@ -516,7 +516,7 @@
     <AccountTestModal v-if="showTest" :show="showTest" :account="testingAcc" @close="closeTestModal" />
     <AccountStatsModal v-if="showStats" :show="showStats" :account="statsAcc" @close="closeStatsModal" />
     <ScheduledTestsPanel v-if="showSchedulePanel" :show="showSchedulePanel" :account-id="scheduleAcc?.id ?? null" :model-options="scheduleModelOptions" @close="closeSchedulePanel" />
-    <AccountAcceptanceDialog v-if="showAcceptance && authStore.isAdmin" :show="showAcceptance" :account-ids="acceptanceAccountIds" @close="showAcceptance = false" />
+    <AccountAcceptanceDialog v-if="acceptanceAccountIds.length && authStore.isAdmin" :show="showAcceptance" :account-ids="acceptanceAccountIds" @close="showAcceptance = false" />
     <AccountActionMenu :can-accept="authStore.isAdmin" @acceptance="openAccountAcceptance" :show="menu.show" :account="menu.acc" :anchor-rect="menu.anchorRect" @close="menu.show = false" @test="handleTest" @stats="handleViewStats" @schedule="handleSchedule" @duplicate="handleDuplicateAccount" @reauth="handleReAuth" @refresh-token="handleRefresh" @recover-state="handleRecoverState" @reset-quota="handleResetQuota" @set-privacy="handleSetPrivacy" @create-spark-shadow="handleCreateSparkShadow" />
     <SyncFromCrsModal v-if="showSync" :show="showSync" @close="showSync = false" @synced="reload" />
     <ImportDataModal v-if="showImportData" :show="showImportData" @close="showImportData = false" @imported="handleDataImported" />

@@ -13,9 +13,23 @@ func TestInputProtectionOriginalBudget(t *testing.T) {
 	ctx := WithInputTokenProtection(context.Background(), p)
 	p.Limit = 5000
 	r, i, s, l := InputTokenProtectionFromContext(ctx).Cap(3295, 2061, math.MaxInt, math.MaxInt)
-	require.Equal(t, [4]int{19, 0, 0, 0}, [4]int{r, i, s, l})
+	require.Equal(t, [4]int{0, 0, 19, 0}, [4]int{r, i, s, l})
 	r, i, s, l = InputTokenProtectionFromContext(ctx).Cap(2, 3, 4, 20)
-	require.Equal(t, [4]int{2, 3, 4, 10}, [4]int{r, i, s, l})
+	require.Equal(t, [4]int{0, 0, 4, 15}, [4]int{r, i, s, l})
+}
+
+func TestInputProtectionDivergenceBoundary(t *testing.T) {
+	p := &InputTokenProtection{Limit: 20000}
+	r, i, s, l := p.Cap(24950, 25, 15, 10)
+	require.Equal(t, [4]int{24950, 25, 15, 10}, [4]int{r, i, s, l})
+	r, i, s, l = p.Cap(24951, 25, 15, 10)
+	require.Equal(t, [4]int{19950, 25, 15, 10}, [4]int{r, i, s, l})
+	r, i, s, l = (&InputTokenProtection{Limit: 19999}).Cap(19950, 25, 15, 10)
+	require.Equal(t, [4]int{19949, 25, 15, 10}, [4]int{r, i, s, l})
+	r, i, s, l = (&InputTokenProtection{Limit: 10000}).Cap(3, 2, 1, 0)
+	require.Equal(t, [4]int{3, 2, 1, 0}, [4]int{r, i, s, l})
+	r, i, s, l = (&InputTokenProtection{Pending: true}).Cap(5051, 25, 15, 10)
+	require.Equal(t, [4]int{5051, 25, 15, 10}, [4]int{r, i, s, l})
 }
 
 func TestInputProtectionBillingMode(t *testing.T) {

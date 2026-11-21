@@ -20,9 +20,9 @@ func TestSettledProtectedSingleCallRetainsRawUsage(t *testing.T) {
 	check := func(t *testing.T, log *UsageLog, rawInput int) ContinuationUsageAudit {
 		t.Helper()
 		require.NotNil(t, log)
-		require.Equal(t, 18, log.CacheReadTokens)
+		require.Zero(t, log.CacheReadTokens)
 		require.Zero(t, log.InputTokens)
-		require.Zero(t, log.CacheCreationTokens)
+		require.Equal(t, 18, log.CacheCreationTokens)
 		require.NotNil(t, log.Outcome)
 		require.Len(t, log.Outcome.ContinuationUsage, 1)
 		audit := log.Outcome.ContinuationUsage[0]
@@ -53,12 +53,12 @@ func TestSettledProtectedSingleCallRetainsRawUsage(t *testing.T) {
 		result := &ForwardResult{
 			RequestID: "one-message", Model: "claude-sonnet-4", InputTokenProtection: protection,
 			InputTokensSource: UsageTokenSourceUpstream, OutputTokensSource: UsageTokenSourceUpstream,
-			Usage: ClaudeUsage{InputTokens: 135, CacheReadInputTokens: 41, CacheCreationInputTokens: 24, CacheCreation5mTokens: 7, CacheCreation1hTokens: 17, OutputTokens: 8},
+			Usage: ClaudeUsage{InputTokens: 5135, CacheReadInputTokens: 41, CacheCreationInputTokens: 24, CacheCreation5mTokens: 7, CacheCreation1hTokens: 17, OutputTokens: 8},
 		}
 		require.NoError(t, svc.RecordUsage(context.Background(), &RecordUsageInput{
 			Result: result, APIKey: key, Account: account, User: user, ForceCacheBilling: true,
 		}))
-		audit := check(t, logs.lastLog, 135)
+		audit := check(t, logs.lastLog, 5135)
 		require.False(t, audit.InputIncludesCache)
 		require.Equal(t, 7, audit.CacheCreation5mTokens)
 		require.Equal(t, 17, audit.CacheCreation1hTokens)
@@ -70,10 +70,10 @@ func TestSettledProtectedSingleCallRetainsRawUsage(t *testing.T) {
 		result := &OpenAIForwardResult{
 			RequestID: "one-response", Model: "gpt-5.1", InputTokenProtection: protection,
 			InputTokensSource: UsageTokenSourceUpstream, OutputTokensSource: UsageTokenSourceUpstream,
-			Usage: OpenAIUsage{InputTokens: 200, CacheReadInputTokens: 41, CacheCreationInputTokens: 24, CacheCreation30mInputTokens: 9, CacheCreation12hInputTokens: 15, ImageInputTokens: 38, ImageCacheReadTokens: 25, OutputTokens: 8},
+			Usage: OpenAIUsage{InputTokens: 5200, CacheReadInputTokens: 41, CacheCreationInputTokens: 24, CacheCreation30mInputTokens: 9, CacheCreation12hInputTokens: 15, ImageInputTokens: 38, ImageCacheReadTokens: 25, OutputTokens: 8},
 		}
 		require.NoError(t, svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{Result: result, APIKey: key, Account: account, User: user}))
-		audit := check(t, logs.lastLog, 200)
+		audit := check(t, logs.lastLog, 5200)
 		require.True(t, audit.InputIncludesCache)
 		require.Equal(t, 9, audit.CacheCreation30mTokens)
 		require.Equal(t, 15, audit.CacheCreation12hTokens)

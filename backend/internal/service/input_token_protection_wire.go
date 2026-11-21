@@ -6,7 +6,7 @@ import "github.com/Wei-Shaw/sub2api/internal/pkg/wireusage"
 // complete client-bound frame (including a Responses WebSocket terminal event).
 // The provider frame remains available verbatim to usage recording.
 func ProjectInputTokenProtectionJSON(payload []byte, p *InputTokenProtection) []byte {
-	if p == nil {
+	if !p.hasEstimate() {
 		return payload
 	}
 	return wireusage.New(p.Cap, false).JSON(payload)

@@ -78,7 +78,7 @@ func TestCategoryDefaultFakeHTTPMatchesDirectGeminiBillingAndQuota(t *testing.T)
 						if !strings.Contains(r.URL.Path, "gemini-4-argon:") || strings.Contains(r.URL.Path, "countTokens") {
 							invalidPath.Store(true)
 						}
-						payload := `{"candidates":[{"content":{"parts":[{"text":"A complete answer."}],"role":"model"},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":1000,"cachedContentTokenCount":0,"candidatesTokenCount":9,"thoughtsTokenCount":2,"totalTokenCount":1011}}`
+						payload := `{"candidates":[{"content":{"parts":[{"text":"A complete answer."}],"role":"model"},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":5200,"cachedContentTokenCount":0,"candidatesTokenCount":9,"thoughtsTokenCount":2,"totalTokenCount":5211}}`
 						w.Header().Set("X-Request-Id", fmt.Sprintf("isolated-category-test-%d", calls.Load()))
 						w.Header().Set("Content-Type", "application/json")
 						if stream {
@@ -128,8 +128,8 @@ func TestCategoryDefaultFakeHTTPMatchesDirectGeminiBillingAndQuota(t *testing.T)
 						require.NoError(t, forwardErr)
 						require.Nil(t, result.GeminiInputCounting)
 						wireInput := geminiInputCountingCustomerInput(t, adapter, stream, recorder.Body.String())
-						require.Equal(t, 1000, wireInput, "the group billing cap does not rewrite protocol usage")
-						require.Equal(t, 1000, result.Usage.InputTokens, "raw upstream evidence remains intact")
+						require.Equal(t, 5200, wireInput, "the group billing cap does not rewrite protocol usage")
+						require.Equal(t, 5200, result.Usage.InputTokens, "raw upstream evidence remains intact")
 						require.Equal(t, 11, result.Usage.OutputTokens)
 						logRepo := &openAIRecordUsageLogRepoStub{inserted: true}
 						billing := &openAIRecordUsageBillingRepoStub{result: &UsageBillingApplyResult{Applied: true}}

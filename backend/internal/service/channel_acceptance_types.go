@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const ChannelAcceptanceRuleVersion = "channel-acceptance-v2"
+const ChannelAcceptanceRuleVersion = "channel-acceptance-v3"
 
 var (
 	ErrAcceptanceInvalid       = errors.New("验收参数无效")
@@ -50,10 +50,11 @@ func (p *AcceptancePrice) UnmarshalJSON(data []byte) error {
 }
 
 type AcceptanceTargetRequest struct {
-	AccountID int64            `json:"account_id"`
-	Model     string           `json:"model"`
-	GroupID   *int64           `json:"group_id,omitempty"`
-	Price     *AcceptancePrice `json:"price,omitempty"`
+	DeclaredSource string           `json:"declared_source,omitempty"`
+	AccountID      int64            `json:"account_id"`
+	Model          string           `json:"model"`
+	GroupID        *int64           `json:"group_id,omitempty"`
+	Price          *AcceptancePrice `json:"price,omitempty"`
 }
 type AcceptancePreviewRequest struct {
 	Targets   []AcceptanceTargetRequest `json:"targets"`
@@ -83,6 +84,7 @@ type AcceptanceGroup struct {
 
 // Snapshot contains no credentials. Fingerprint binds all effective account settings.
 type AcceptanceSnapshot struct {
+	DeclaredSource          string          `json:"declared_source,omitempty"`
 	AccountType             string          `json:"account_type,omitempty"`
 	Protocols               []string        `json:"protocols,omitempty"`
 	AccountID               int64           `json:"account_id"`

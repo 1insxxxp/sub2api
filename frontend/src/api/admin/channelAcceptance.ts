@@ -1,6 +1,8 @@
 import { apiClient } from '../client'
 
 export type AcceptanceExtra = 'long_context' | 'image' | 'audio' | 'tools'
+export type AcceptanceDeclaredSource = 'unknown' | 'vertex' | 'google_developer_api' | 'google_code_assist' | 'antigravity' | 'anthropic' | 'claude_max' | 'kiro' | 'bedrock'
+
 export interface AcceptancePrice {
   input_per_million: number
   output_per_million: number
@@ -23,6 +25,7 @@ export interface AcceptanceTarget {
   groups?: { id: number; name: string }[]
 }
 export interface AcceptanceTargetRequest {
+  declared_source?: AcceptanceDeclaredSource
   account_id: number
   model: string
   group_id?: number
@@ -34,6 +37,7 @@ export interface AcceptancePreviewRequest {
   budget_usd?: number
 }
 export interface AcceptanceSnapshot {
+  declared_source?: AcceptanceDeclaredSource
   account_id: number
   account_name: string
   platform: string
@@ -140,6 +144,10 @@ export const channelAcceptanceApi = {
   },
   async preview(request: AcceptancePreviewRequest): Promise<AcceptancePreview> {
     const { data } = await apiClient.post<AcceptancePreview>(`${base}/previews`, request)
+    return data
+  },
+  async retestPreview(runId: string): Promise<AcceptancePreview> {
+    const { data } = await apiClient.post<AcceptancePreview>(`${base}/runs/${encodeURIComponent(runId)}/retest-preview`)
     return data
   },
   async start(previewId: string): Promise<AcceptanceRun> {

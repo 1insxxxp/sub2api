@@ -1,86 +1,35 @@
 <template>
   <AppLayout>
-    <div class="space-y-6">
-      <UsageStatsCards :stats="usageStats" />
-      <!-- Charts Section -->
-      <div class="space-y-4">
-        <div class="admin-toolbar-surface" data-test="usage-chart-toolbar">
-          <div class="admin-toolbar usage-filter-bar">
-            <div class="admin-toolbar-group usage-filter-item">
-              <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('admin.dashboard.timeRange') }}:</span>
-              <DateRangePicker
-                v-model:start-date="startDate"
-                v-model:end-date="endDate"
-                @change="onDateRangeChange"
-              />
-            </div>
-            <div class="admin-toolbar-group usage-filter-item usage-filter-item-granularity sm:justify-end">
-              <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('admin.dashboard.granularity') }}:</span>
-              <div class="w-28">
-                <Select v-model="granularity" :options="granularityOptions" @change="loadChartData" />
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <ModelDistributionChart
-            v-model:source="modelDistributionSource"
-            v-model:metric="modelDistributionMetric"
-            :model-stats="requestedModelStats"
-            :upstream-model-stats="upstreamModelStats"
-            :mapping-model-stats="mappingModelStats"
-            :loading="modelStatsLoading"
-            :show-source-toggle="true"
-            :show-metric-toggle="true"
+    <div class="usage-workspace">
+      <div ref="workspaceStart" class="usage-workspace-start" aria-hidden="true"></div>
+      <nav ref="workspaceNav" class="usage-workspace-nav" :aria-label="t('nav.adminUsage')">
+        <button
+          v-for="tab in detailTabs"
+          :id="`usage-tab-${tab.key}`"
+          :key="tab.key"
+          type="button"
+          data-testid="usage-detail-tab"
+          class="usage-workspace-tab"
+          :aria-pressed="activeTab === tab.key"
+          :aria-controls="`usage-panel-${tab.key}`"
+          @click="switchTab(tab.key)"
+        >
+          <Icon :name="tab.icon" size="sm" />
+          <span>{{ tab.label }}</span>
+        </button>
+      </nav>
+      <div class="admin-surface usage-workspace-surface" data-test="usage-tabs-surface">
+        <div
+          v-if="activeTab === 'overview' || activeTab === 'usage' || activeTab === 'errors'"
+          class="usage-workspace-date"
+          role="group"
+          :aria-label="t('admin.dashboard.timeRange')"
+        >
+          <DateRangePicker
             :start-date="startDate"
             :end-date="endDate"
-            :filters="breakdownFilters"
+            @change="onDateRangeChange"
           />
-          <GroupDistributionChart
-            v-model:metric="groupDistributionMetric"
-            :group-stats="groupStats"
-            :loading="chartsLoading"
-            :show-metric-toggle="true"
-            :start-date="startDate"
-            :end-date="endDate"
-            :filters="breakdownFilters"
-          />
-        </div>
-        <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <EndpointDistributionChart
-            v-model:source="endpointDistributionSource"
-            v-model:metric="endpointDistributionMetric"
-            :endpoint-stats="inboundEndpointStats"
-            :upstream-endpoint-stats="upstreamEndpointStats"
-            :endpoint-path-stats="endpointPathStats"
-            :loading="endpointStatsLoading"
-            :show-source-toggle="true"
-            :show-metric-toggle="true"
-            :title="t('usage.endpointDistribution')"
-            :start-date="startDate"
-            :end-date="endDate"
-            :filters="breakdownFilters"
-          />
-          <TokenUsageTrend :trend-data="trendData" :loading="chartsLoading" />
-        </div>
-      </div>
-      <!-- 明细区：tab 栏 + 筛选 + 内容收进同一张卡片，消除割裂感 -->
-      <div class="admin-surface overflow-hidden" data-test="usage-tabs-surface">
-        <div class="admin-panel-header flex flex-wrap items-center border-b border-gray-200 px-2 dark:border-dark-700 sm:px-4">
-          <button
-            v-for="tab in detailTabs"
-            :key="tab.key"
-            type="button"
-            data-testid="usage-detail-tab"
-            class="-mb-px inline-flex items-center gap-1.5 border-b-2 px-3 py-3 text-sm font-medium transition-colors sm:px-4"
-            :class="activeTab === tab.key
-              ? 'border-primary-500 text-primary-600 dark:text-primary-400'
-              : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:border-dark-500 dark:hover:text-gray-200'"
-            @click="switchTab(tab.key)"
-          >
-            <Icon :name="tab.icon" size="sm" />
-            {{ tab.label }}
-          </button>
         </div>
         <RankingTimeToolbar
           v-if="activeTab === 'ranking' || activeTab === 'recharge' || activeTab === 'claims'"
@@ -89,11 +38,30 @@
           @change="onDateRangeChange"
         />
 
-        <UsageFilters v-if="activeTab !== 'claims'" v-model="filters" ref="usageFiltersRef" flat :mode="activeTab" class="border-b border-gray-100 dark:border-dark-700/50" :start-date="startDate" :end-date="endDate" :exporting="exporting" :model-options="modelNameOptions" @change="applyFilters" @refresh="refreshData" @reset="resetFilters" @cleanup="openCleanupDialog" @export="exportToExcel">
+        <UsageFilters
+          v-show="activeTab !== 'claims'"
+          v-model="filters"
+          ref="usageFiltersRef"
+          flat
+          :mode="filterMode"
+          :show-record-actions="activeTab === 'usage'"
+          class="usage-workspace-filters"
+          :start-date="startDate"
+          :end-date="endDate"
+          :exporting="exporting"
+          :model-options="modelNameOptions"
+          @change="applyFilters"
+          @refresh="refreshData"
+          @reset="resetFilters"
+          @cleanup="openCleanupDialog"
+          @export="exportToExcel"
+        >
           <template #after-reset>
-            <div v-if="activeTab !== 'ranking' && activeTab !== 'recharge'" class="relative" ref="columnDropdownRef">
+            <div v-if="activeTab === 'usage' || activeTab === 'errors'" class="relative" ref="columnDropdownRef">
               <button
+                type="button"
                 data-testid="usage-column-settings"
+                :aria-expanded="showColumnDropdown"
                 @click="showColumnDropdown = !showColumnDropdown"
                 class="btn btn-secondary px-2 md:px-3"
                 :title="t('admin.users.columnSettings')"
@@ -128,7 +96,7 @@
           </template>
         </UsageFilters>
 
-        <div v-show="activeTab === 'usage'" class="overflow-hidden rounded-b-2xl">
+        <div id="usage-panel-usage" v-show="activeTab === 'usage'" class="usage-workspace-results">
           <UsageTable
             compact-mobile
             flat
@@ -144,7 +112,7 @@
           />
           <Pagination v-if="pagination.total > 0" :page="pagination.page" :total="pagination.total" :page-size="pagination.page_size" @update:page="handlePageChange" @update:pageSize="handlePageSizeChange" />
         </div>
-        <div v-show="activeTab === 'errors'" class="overflow-hidden rounded-b-2xl">
+        <div id="usage-panel-errors" v-show="activeTab === 'errors'" class="usage-workspace-results">
           <OpsErrorLogTable
             flat
             :rows="errRows" :total="errTotal" :loading="errLoading"
@@ -159,8 +127,9 @@
             @ipGeoBatchFailed="handleIpGeoBatchFailed" />
         </div>
         <!-- 懒挂载：首次切到该 tab 才请求排行数据，之后随筛选自动刷新 -->
-        <div v-if="rankingMounted" v-show="activeTab === 'ranking'" class="overflow-hidden rounded-b-2xl">
+        <div id="usage-panel-ranking" v-show="activeTab === 'ranking'" class="usage-workspace-results">
           <UserTokenRanking
+            v-if="rankingMounted"
             ref="rankingRef"
             :start-date="startDate"
             :end-date="endDate"
@@ -169,15 +138,68 @@
             @select-user="handleRankingSelectUser"
           />
         </div>
-        <div v-if="rechargeMounted" v-show="activeTab === 'recharge'" class="overflow-hidden rounded-b-2xl">
-          <RechargeRanking ref="rechargeRef" :start-date="startDate" :end-date="endDate" :filters="{ user_id: filters.user_id }" @select-user="handleRankingSelectUser" />
+        <div id="usage-panel-recharge" v-show="activeTab === 'recharge'" class="usage-workspace-results">
+          <RechargeRanking v-if="rechargeMounted" ref="rechargeRef" :start-date="startDate" :end-date="endDate" :filters="{ user_id: filters.user_id }" @select-user="handleRankingSelectUser" />
         </div>
-        <div v-if="claimsMounted" v-show="activeTab === 'claims'" class="overflow-hidden rounded-b-2xl">
+        <div id="usage-panel-claims" v-show="activeTab === 'claims'" class="usage-workspace-results">
           <EmptyResponseClaimsPanel
+            v-if="claimsMounted"
             ref="claimsRef"
             :start-date="startDate"
             :end-date="endDate"
           />
+        </div>
+        <div id="usage-panel-overview" :hidden="activeTab !== 'overview'">
+          <div v-if="activeTab === 'overview'" class="usage-workspace-overview">
+            <div class="admin-toolbar-surface" data-test="usage-chart-toolbar">
+              <div class="usage-chart-granularity">
+                <span>{{ t('admin.dashboard.granularity') }}</span>
+                <Select v-model="granularity" :options="granularityOptions" @change="loadChartData" />
+              </div>
+            </div>
+            <UsageStatsCards :stats="usageStats" always-expanded />
+            <div class="grid grid-cols-1 gap-4 xl:grid-cols-2">
+              <ModelDistributionChart
+                v-model:source="modelDistributionSource"
+                v-model:metric="modelDistributionMetric"
+                :model-stats="requestedModelStats"
+                :upstream-model-stats="upstreamModelStats"
+                :mapping-model-stats="mappingModelStats"
+                :loading="modelStatsLoading"
+                :show-source-toggle="true"
+                :show-metric-toggle="true"
+                :start-date="startDate"
+                :end-date="endDate"
+                :filters="breakdownFilters"
+              />
+              <GroupDistributionChart
+                v-model:metric="groupDistributionMetric"
+                :group-stats="groupStats"
+                :loading="chartsLoading"
+                :show-metric-toggle="true"
+                :start-date="startDate"
+                :end-date="endDate"
+                :filters="breakdownFilters"
+              />
+            </div>
+            <div class="grid grid-cols-1 gap-4 xl:grid-cols-2">
+              <EndpointDistributionChart
+                v-model:source="endpointDistributionSource"
+                v-model:metric="endpointDistributionMetric"
+                :endpoint-stats="inboundEndpointStats"
+                :upstream-endpoint-stats="upstreamEndpointStats"
+                :endpoint-path-stats="endpointPathStats"
+                :loading="endpointStatsLoading"
+                :show-source-toggle="true"
+                :show-metric-toggle="true"
+                :title="t('usage.endpointDistribution')"
+                :start-date="startDate"
+                :end-date="endDate"
+                :filters="breakdownFilters"
+              />
+              <TokenUsageTrend :trend-data="trendData" :loading="chartsLoading" />
+            </div>
+          </div>
         </div>
       </div>
       <OpsErrorDetailModal v-model:show="showErrorModal" :error-id="selectedErrorId" :error-type="'request'" />
@@ -293,7 +315,7 @@ const handleUserClick = async (userId: number) => {
 const handleRankingSelectUser = (userId: number, email: string) => {
   filters.value = { ...filters.value, user_id: userId }
   usageFiltersRef.value?.setUserKeyword?.(email || '')
-  activeTab.value = 'usage'
+  switchTab('usage')
   applyFilters()
 }
 
@@ -800,14 +822,20 @@ const loadSavedColumns = () => {
 }
 
 // Detail tabs
-type DetailTab = 'usage' | 'errors' | 'ranking' | 'recharge' | 'claims'
+type DetailTab = 'usage' | 'errors' | 'ranking' | 'recharge' | 'claims' | 'overview'
 const activeTab = ref<DetailTab>('usage')
+const filterMode = computed(() =>
+  activeTab.value === 'overview' || activeTab.value === 'claims' ? 'usage' : activeTab.value
+)
+const workspaceStart = ref<HTMLElement | null>(null)
+const workspaceNav = ref<HTMLElement | null>(null)
 const detailTabs = computed(() => [
   { key: 'usage' as const, label: t('usage.tabs.usage'), icon: 'document' as const },
   { key: 'errors' as const, label: t('usage.tabs.errors'), icon: 'exclamationTriangle' as const },
   { key: 'ranking' as const, label: t('usage.tabs.ranking'), icon: 'chart' as const },
   { key: 'recharge' as const, label: t('usage.tabs.rechargeRanking'), icon: 'dollar' as const },
-  { key: 'claims' as const, label: t('admin.usage.emptyResponseClaims.tab'), icon: 'dollar' as const },
+  { key: 'claims' as const, label: t('admin.usage.emptyResponseClaims.tab'), icon: 'clipboard' as const },
+  { key: 'overview' as const, label: t('usage.tabs.overview'), icon: 'chartBar' as const },
 ])
 const usageFiltersRef = ref<InstanceType<typeof UsageFilters> | null>(null)
 const rankingMounted = ref(false)
@@ -818,6 +846,13 @@ const claimsMounted = ref(false)
 const claimsRef = ref<InstanceType<typeof EmptyResponseClaimsPanel> | null>(null)
 
 const switchTab = (tab: DetailTab) => {
+  const start = workspaceStart.value
+  const nav = workspaceNav.value
+  if (tab !== activeTab.value && start && nav &&
+      start.getBoundingClientRect().top < nav.getBoundingClientRect().top) {
+    start.scrollIntoView({ block: 'start', behavior: 'instant' })
+  }
+  showColumnDropdown.value = false
   activeTab.value = tab
   if (tab === 'errors' && errRows.value.length === 0) loadAdminErrors()
   if (tab === 'ranking') rankingMounted.value = true
@@ -911,3 +946,72 @@ watch(modelDistributionSource, (source) => {
 
 defineExpose({ requestedModelStats, refreshData })
 </script>
+
+<style scoped>
+.usage-workspace {
+  --usage-header-offset: calc(4rem + 1px);
+  min-width: 0;
+}
+
+.usage-workspace-start { scroll-margin-top: var(--usage-header-offset); }
+
+.usage-workspace-nav {
+  position: sticky;
+  top: var(--usage-header-offset);
+  z-index: 20;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border: 1px solid var(--workspace-rule);
+  border-radius: 8px;
+  background: var(--workspace-solid);
+  box-shadow: var(--workspace-shadow);
+}
+
+.usage-workspace-tab {
+  display: flex;
+  min-width: 0;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.375rem;
+  border-radius: 6px;
+  color: var(--workspace-muted);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.usage-workspace-tab svg { flex-shrink: 0; }
+.usage-workspace-tab:hover { color: var(--workspace-ink); background: var(--workspace-hover); }
+.usage-workspace-tab[aria-pressed='true'] {
+  color: rgb(var(--brand-rgb));
+  background: rgb(var(--brand-rgb) / 10%);
+  box-shadow: inset 0 0 0 1px rgb(var(--brand-rgb) / 22%);
+  font-weight: 600;
+}
+.dark .usage-workspace-tab[aria-pressed='true'] { color: #93c5fd; }
+.usage-workspace-tab:focus-visible { outline: 2px solid var(--workspace-focus); outline-offset: -2px; }
+.usage-workspace-surface { margin-top: 0.75rem; }
+.usage-workspace-date { padding: 0.75rem 1rem 0; }
+.usage-workspace-date :deep(.date-picker-trigger) { max-width: 100%; }
+.usage-workspace-filters { border-bottom: 1px solid var(--workspace-divider); }
+.usage-workspace-results { overflow: hidden; border-radius: 0 0 8px 8px; }
+.usage-workspace-overview { display: grid; gap: 1rem; padding: 1rem; }
+.usage-chart-granularity { display: flex; align-items: center; gap: 0.625rem; color: var(--workspace-muted); font-size: 0.8125rem; }
+.usage-chart-granularity :deep(.select-container) { width: 7rem; }
+
+@media (max-width: 767px) {
+  .usage-workspace-nav { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .usage-workspace-tab { font-size: 0.75rem; }
+  .usage-workspace-date { padding: 0.625rem 0.75rem 0; }
+  .usage-workspace-overview { padding: 0.75rem; }
+}
+
+@media (max-width: 359px) {
+  .usage-workspace-tab svg { display: none; }
+}
+</style>
