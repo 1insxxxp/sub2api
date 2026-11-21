@@ -44,7 +44,8 @@ func TestInputProtectionWireTariff(t *testing.T) {
 	const flat, metered = "public-flat", "account-metered"
 	id := int64(23)
 	r := newOpenAITextChannelPricingResolverForTest(t, id, flat, .05)
-	cache := r.channelService.cache.Load().(*channelCache)
+	cache, ok := r.channelService.cache.Load().(*channelCache)
+	require.True(t, ok)
 	price := 0.000001
 	tokenPrice := ChannelModelPricing{Models: []string{metered}, BillingMode: BillingModeToken, InputPrice: &price, OutputPrice: &price}
 	cache.channelByGroupID[id].ModelPricing = []ChannelModelPricing{tokenPrice}
@@ -92,7 +93,9 @@ func TestInputProtectionSystemCustomPricingSource(t *testing.T) {
 	const source, alias = "source-flat", "display-alias"
 	id := int64(72)
 	r := newOpenAITextChannelPricingResolverForTest(t, id, source, .05)
-	channel := r.channelService.cache.Load().(*channelCache).channelByGroupID[id]
+	cache, ok := r.channelService.cache.Load().(*channelCache)
+	require.True(t, ok)
+	channel := cache.channelByGroupID[id]
 	channel.BillingModelSource = BillingModelSourceRequested
 	s := &OpenAIGatewayService{resolver: r, channelService: r.channelService, billingService: r.billingService}
 	tokenPrice := 0.00001

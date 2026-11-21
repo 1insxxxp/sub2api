@@ -351,3 +351,153 @@ func openRetentionTestDB(t *testing.T, ctx context.Context, schema string) *sql.
 	require.NoError(t, db.PingContext(ctx))
 	return db
 }
+
+func cleanupUsageLogsBatchWithRollupInvalidation(ctx context.Context, db *sql.DB, cutoff time.Time) (int64, error) {
+	candidates, err := selectUsageLogsCleanupCandidates(ctx, db, cutoff)
+	if err != nil || len(candidates) == 0 {
+		return 0, err
+	}
+	return cleanupUsageLogsCandidatesWithRollupInvalidation(ctx, db, cutoff, candidates)
+}
+
+type usageLogsCleanupCandidate struct {
+	tableOID  int64
+	ctid      string
+	xmin      string
+	id        int64
+	createdAt time.Time
+}
+
+func selectUsageLogsCleanupCandidates(ctx context.Context, db *sql.DB, cutoff time.Time) ([]usageLogsCleanupCandidate, error) {
+	// Selection can wait on old partitions or scan many expired rows. Complete
+	// this autocommit statement before taking the global watermark lock. Keeping
+	// even its relation locks in that transaction would invert the existing
+	// watermark -> DROP PARTITION lock order.
+	rows, err := db.QueryContext(ctx, `
+		SELECT tableoid, ctid::text, xmin::text, id, created_at
+		FROM usage_logs ul
+		WHERE ul.created_at < $1
+		  AND NOT EXISTS (
+			SELECT 1 FROM empty_response_claims erc
+			WHERE erc.usage_log_id = ul.id
+		  )
+		ORDER BY ul.created_at ASC, ul.id ASC
+		LIMIT $2
+	`, cutoff.UTC(), usageLogsCleanupBatchSize)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	candidates := make([]usageLogsCleanupCandidate, 0, usageLogsCleanupBatchSize)
+	for rows.Next() {
+		var candidate usageLogsCleanupCandidate
+		if err := rows.Scan(&candidate.tableOID, &candidate.ctid, &candidate.xmin, &candidate.id, &candidate.createdAt); err != nil {
+			return nil, err
+		}
+		candidates = append(candidates, candidate)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	return candidates, nil
+}
+
+// The semi-join keeps the DELETE as finite tuple lookups as well. A direct
+// DELETE USING join can hash/scan the complete usage table under the state lock.
+const usageLogsCleanupDeleteQuery = `
+		WITH locked_victims AS MATERIALIZED (
+			SELECT victim.tableoid, victim.ctid
+			FROM unnest($2::oid[], $3::tid[], $4::text[], $5::bigint[], $6::timestamptz[])
+				AS candidate(tableoid, ctid, xmin, id, created_at)
+			CROSS JOIN LATERAL (
+				SELECT ul.tableoid, ul.ctid
+				FROM usage_logs ul
+				WHERE ul.tableoid = candidate.tableoid AND ul.ctid = candidate.ctid
+					AND ul.xmin::text = candidate.xmin AND ul.id = candidate.id
+					AND ul.created_at = candidate.created_at AND ul.created_at < $1
+					AND NOT EXISTS (
+						SELECT 1 FROM empty_response_claims erc
+						WHERE erc.usage_log_id = ul.id
+					)
+				FOR UPDATE OF ul SKIP LOCKED
+			) victim
+		)
+		DELETE FROM usage_logs ul
+		WHERE (ul.tableoid, ul.ctid) IN (SELECT tableoid, ctid FROM locked_victims)
+		RETURNING ul.created_at
+	`
+
+func cleanupUsageLogsCandidatesWithRollupInvalidation(ctx context.Context, db *sql.DB, cutoff time.Time, candidates []usageLogsCleanupCandidate) (int64, error) {
+	tableOIDs := make([]int64, len(candidates))
+	ctids := make([]string, len(candidates))
+	xmins := make([]string, len(candidates))
+	ids := make([]int64, len(candidates))
+	createdAts := make([]time.Time, len(candidates))
+	for i, candidate := range candidates {
+		tableOIDs[i], ctids[i], xmins[i], ids[i], createdAts[i] = candidate.tableOID, candidate.ctid, candidate.xmin, candidate.id, candidate.createdAt
+	}
+
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	rollback := func(err error) (int64, error) {
+		_ = tx.Rollback()
+		return 0, err
+	}
+
+	if err := lockGroupUsageRollupState(ctx, tx); err != nil {
+		return rollback(err)
+	}
+	// Selection did not lock rows: recheck the complete tuple version and cutoff
+	// so a moved/updated/reused ctid cannot delete a different record. Skip rows
+	// held by writers, whose AFTER trigger may itself be waiting for this state
+	// lock. Only the finite, unlocked candidates enter the fenced DELETE phase.
+	rows, err := tx.QueryContext(ctx, usageLogsCleanupDeleteQuery, cutoff.UTC(), pq.Array(tableOIDs), pq.Array(ctids), pq.Array(xmins), pq.Array(ids), pq.Array(createdAts))
+	if err != nil {
+		return rollback(err)
+	}
+
+	var affected int64
+	var earliestDeletedAt time.Time
+	for rows.Next() {
+		var deletedAt time.Time
+		if err := rows.Scan(&deletedAt); err != nil {
+			_ = rows.Close()
+			return rollback(err)
+		}
+		affected++
+		if earliestDeletedAt.IsZero() || deletedAt.Before(earliestDeletedAt) {
+			earliestDeletedAt = deletedAt
+		}
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return rollback(err)
+	}
+	if err := rows.Close(); err != nil {
+		return rollback(err)
+	}
+	if affected > 0 {
+		if err := invalidateGroupUsageRollupsAt(ctx, tx, earliestDeletedAt); err != nil {
+			return rollback(err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return affected, nil
+}
+
+// lockGroupUsageRollupState fences the legacy bounded-candidate cleanup helper.
+// Regular cleanup relies on the nonblocking invalidation triggers instead.
+func lockGroupUsageRollupState(ctx context.Context, tx *sql.Tx) error {
+	var id int16
+	if err := tx.QueryRowContext(ctx, `SELECT id FROM usage_group_rollup_state WHERE id = 1 FOR UPDATE`).Scan(&id); err != nil {
+		return fmt.Errorf("锁定分组用量汇总水位: %w", err)
+	}
+	return nil
+}

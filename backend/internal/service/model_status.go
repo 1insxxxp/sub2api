@@ -182,7 +182,10 @@ func (s *ModelStatusService) Report(ctx context.Context) (*ModelStatusReport, er
 	case next := <-result:
 		err = next.Err
 		if err == nil {
-			return filterModelStatusReport(next.Val.(*ModelStatusReport), groups), nil
+			if report, ok := next.Val.(*ModelStatusReport); ok && report != nil {
+				return filterModelStatusReport(report, groups), nil
+			}
+			err = fmt.Errorf("invalid model status refresh result (%T)", next.Val)
 		}
 	}
 	if report := s.loadStale(); report != nil {

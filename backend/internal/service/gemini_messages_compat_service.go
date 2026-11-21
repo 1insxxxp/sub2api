@@ -3702,10 +3702,10 @@ func (a *geminiNativeOutputUsage) project(raw []byte) []byte {
 	}
 	var text strings.Builder
 	for _, candidate := range a.output.fallbackCandidates {
-		text.WriteString(candidate.text.String())
+		_, _ = text.WriteString(candidate.text.String())
 		for _, tool := range candidate.tools {
-			text.WriteString(tool.name)
-			text.WriteString(tool.args.String())
+			_, _ = text.WriteString(tool.name)
+			_, _ = text.WriteString(tool.args.String())
 		}
 	}
 	// thought=true text is kept separate by the evidence collector and is not

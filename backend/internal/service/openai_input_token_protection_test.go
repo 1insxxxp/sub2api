@@ -109,7 +109,7 @@ func TestOpenAIInputProtectionPassthroughUsesEachOriginalTurn(t *testing.T) {
 	defer server.Close()
 	frames := []string{`{"type":"response.create","model":"gpt-5.1","input":"short"}`, `{"type":"response.create","model":"gpt-5.1","input":"more distinct customer words for the next turn"}`}
 	client := dialPassthroughLifecycleClientWithPayload(t, server, frames[0])
-	defer client.CloseNow()
+	defer func() { _ = client.CloseNow() }()
 	for i, frame := range frames {
 		if i > 0 {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -305,7 +305,7 @@ func TestOpenAIInputProtectionPassthroughMissingAndZero(t *testing.T) {
 			})
 			defer server.Close()
 			client := dialPassthroughLifecycleClientWithPayload(t, server, `{"type":"response.create","model":"gpt-5.1","input":"hello"}`)
-			defer client.CloseNow()
+			defer func() { _ = client.CloseNow() }()
 			requirePassthroughUpstreamWrite(t, upstream, time.Second)
 			upstream.Send(`{"type":"response.completed","response":{"id":"resp_one","usage":{` + tc.usage + `}}}`)
 			event, err := readPassthroughLifecycleFrame(t, client, 3*time.Second)
@@ -385,7 +385,7 @@ func TestOpenAIInputProtectionPassthroughAdoptedTariff(t *testing.T) {
 			})
 			defer server.Close()
 			client := dialPassthroughLifecycleClientWithPayload(t, server, fmt.Sprintf(`{"type":"response.create","model":%q,"input":"hi"}`, tc.requested))
-			defer client.CloseNow()
+			defer func() { _ = client.CloseNow() }()
 			requirePassthroughUpstreamWrite(t, upstream, time.Second)
 			upstream.Send(`{"type":"response.in_progress","response":{"id":"resp_tariff","usage":{"input_tokens":6000,"output_tokens":1}}}`)
 			early, err := readPassthroughLifecycleFrame(t, client, 3*time.Second)

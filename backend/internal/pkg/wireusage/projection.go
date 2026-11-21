@@ -311,15 +311,15 @@ func (u *usageObject) modalitiesFor(path string, snapshot *modalitySnapshot, all
 		}
 		keep := strconv.Itoa(allocate(v.Get("modality").String(), n))
 		if keep != token.Raw {
-			out.WriteString(raw[last:token.Index])
-			out.WriteString(keep)
+			_, _ = out.WriteString(raw[last:token.Index])
+			_, _ = out.WriteString(keep)
 			last = token.Index + len(token.Raw)
 		}
 		return true
 	})
 	projected := raw
 	if last != 0 {
-		out.WriteString(raw[last:])
+		_, _ = out.WriteString(raw[last:])
 		projected = out.String()
 	}
 	if field.IsArray() && projected != raw || !field.IsArray() && projected != snapshot.projected {
