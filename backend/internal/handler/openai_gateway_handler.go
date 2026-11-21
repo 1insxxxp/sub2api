@@ -3187,7 +3187,8 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				r.BillingModel = openAIWSTurnBillingModel(&r, mapping, r.Model, upstream)
 				return h.gatewayService.InputTokenProtectionBillsForResult(withOpenAIWSTurnBillingGroup(ctx, key), &service.OpenAIRecordUsageInput{
 					APIKey: key, Account: account, Result: &r, ChannelUsageFields: mapping.ToUsageFields(r.Model, upstream),
-					PricingAt: turnPricing.currentOr(firstTurnStartedAt),
+					QuotaPlatform: service.QuotaPlatform(ctx, key),
+					PricingAt:     turnPricing.currentOr(firstTurnStartedAt),
 				})
 			},
 			BeforeRequest: func(turn int, payload []byte, originalModel string) error {
