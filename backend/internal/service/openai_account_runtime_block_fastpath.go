@@ -93,7 +93,9 @@ func isOpenAIAccount(account *Account) bool {
 // handleOpenAIAccountUpstreamError expects canonicalModel to be the model used
 // for scheduling after applying account mapping exactly once.
 func (s *OpenAIGatewayService) handleOpenAIAccountUpstreamError(ctx context.Context, account *Account, statusCode int, headers http.Header, responseBody []byte, canonicalModel ...string) bool {
-	if statusCode == http.StatusNotFound && !isUpstreamModelNotFoundError(statusCode, responseBody) {
+	// Generic 404s only affect future scheduling when an explicit rule matches.
+	if statusCode == http.StatusNotFound && !isUpstreamModelNotFoundError(statusCode, responseBody) &&
+		len(matchTempUnschedulableRules(account, statusCode, responseBody)) == 0 {
 		return false
 	}
 	if account != nil && account.Platform == PlatformGrok && isGrokContentPolicyRejection(statusCode, responseBody) {

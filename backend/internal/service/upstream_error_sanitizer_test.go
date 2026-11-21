@@ -244,6 +244,11 @@ func TestForwardEmbeddingsSanitizesRawUpstreamErrorBody(t *testing.T) {
 
 	require.Error(t, err)
 	require.Nil(t, result)
-	require.NotContains(t, rec.Body.String(), "openclawroot.com")
-	require.Contains(t, rec.Body.String(), "[upstream]")
+	var failover *UpstreamFailoverError
+	require.ErrorAs(t, err, &failover)
+	require.Equal(t, http.StatusNotFound, failover.StatusCode)
+	require.False(t, c.Writer.Written())
+	require.Empty(t, rec.Body.String())
+	require.NotContains(t, string(failover.ResponseBody), "openclawroot.com")
+	require.Contains(t, string(failover.ResponseBody), "[upstream]")
 }
