@@ -118,7 +118,7 @@ func TestAcceptanceFingerprintInfersKiroIndependentlyOfDeclaration(t *testing.T)
 			p.Finish()
 			r := &AcceptanceResult{Status: "passed", EffectiveParameters: map[string]any{}}
 			p.snapshot().fingerprint.report(tc.declared, r)
-			require.Equal(t, "kiro", r.EffectiveParameters["source_fingerprint"].(map[string]any)["inferred_candidate"])
+			require.Equal(t, "kiro", requireAcceptanceFingerprint(t, r)["inferred_candidate"])
 			require.Equal(t, tc.code, r.Findings[0].Code)
 			require.Equal(t, tc.level, r.Findings[0].Level)
 			require.Contains(t, r.Findings[0].Message, "Kiro/Amazon Q")
@@ -152,7 +152,7 @@ func TestAcceptanceFingerprintPlaceholdersAndUntrustedDeclaration(t *testing.T) 
 	require.Empty(t, r.Findings)
 	require.Empty(t, r.EffectiveParameters)
 	p.fingerprint.report("unknown", r)
-	fp := r.EffectiveParameters["source_fingerprint"].(map[string]any)
+	fp := requireAcceptanceFingerprint(t, r)
 	require.Equal(t, false, fp["signature_present"])
 	require.Contains(t, fp["signals"], "signature_placeholder")
 }
@@ -165,7 +165,7 @@ func TestAcceptanceFingerprintReportAfterFinishIgnoresDetachedChunks(t *testing.
 	report := func() map[string]any {
 		r := &AcceptanceResult{EffectiveParameters: map[string]any{}}
 		p.reportFingerprint("unknown", r)
-		return r.EffectiveParameters["source_fingerprint"].(map[string]any)
+		return requireAcceptanceFingerprint(t, r)
 	}
 	first := report()
 	require.Equal(t, true, first["signature_present"])
@@ -214,10 +214,17 @@ func TestAcceptanceFingerprintAndReportedSourceAgreeOnHost(t *testing.T) {
 			require.NoError(t, err)
 			require.NoError(t, resp.Body.Close())
 			p.reportFingerprint("anthropic", result)
-			fp := result.EffectiveParameters["source_fingerprint"].(map[string]any)
+			fp := requireAcceptanceFingerprint(t, result)
 			require.Equal(t, tc.direct, result.Source.Kind == "direct")
 			require.Equal(t, tc.direct, fp["endpoint"] == "anthropic")
 			require.Equal(t, tc.direct, fp["verdict"] == "source_endpoint_match")
 		})
 	}
+}
+
+func requireAcceptanceFingerprint(t *testing.T, result *AcceptanceResult) map[string]any {
+	t.Helper()
+	fp, ok := result.EffectiveParameters["source_fingerprint"].(map[string]any)
+	require.True(t, ok, "missing source fingerprint")
+	return fp
 }

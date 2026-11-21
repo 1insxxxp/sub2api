@@ -18,15 +18,6 @@ type acceptanceExecutorAccounts struct {
 	a *Account
 }
 
-type acceptanceExecutorGroups struct {
-	GroupRepository
-	group *Group
-}
-
-func (r *acceptanceExecutorGroups) GetByID(context.Context, int64) (*Group, error) {
-	return r.group, nil
-}
-
 func TestAcceptanceExecutorDiscountKeepsThreeUsageLayers(t *testing.T) {
 	for _, enabled := range []bool{false, true} {
 		for _, protocol := range []string{"gemini", "chat"} {

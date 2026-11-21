@@ -535,7 +535,7 @@ func (s *ChannelAcceptanceService) execute(ctx context.Context, sample Acceptanc
 	}
 	if result == nil {
 		status := "error"
-		if errors.Is(requestCtx.Err(), context.Canceled) {
+		if errors.Is(requestCtx.Err(), context.Canceled) || errors.Is(err, context.Canceled) {
 			status = "cancelled"
 		}
 		result = &AcceptanceResult{Status: status, Findings: []AcceptanceFinding{{Code: "execution_failed", Level: "warning", Message: "检测未完成，无法确认上游消耗；保留费用预留且不自动重放"}}}

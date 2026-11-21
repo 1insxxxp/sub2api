@@ -20,7 +20,7 @@ func acceptanceParseFixture(body string) *acceptanceEvidenceParser {
 func acceptanceStreamFixture(frames ...string) string {
 	var b strings.Builder
 	for _, frame := range frames {
-		b.WriteString("data: " + frame + "\r\n\r\n")
+		_, _ = b.WriteString("data: " + frame + "\r\n\r\n")
 	}
 	return b.String()
 }

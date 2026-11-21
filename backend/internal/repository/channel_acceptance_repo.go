@@ -223,7 +223,7 @@ func (r *channelAcceptanceRepository) GetRun(ctx context.Context, id string) (*s
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	run.Samples = make([]service.AcceptanceSample, 0, run.Total)
 	for rows.Next() {
 		sample, scanErr := scanAcceptanceSample(rows)
@@ -258,7 +258,7 @@ func (r *channelAcceptanceRepository) ListRuns(ctx context.Context, accounts []i
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	runs := make([]service.AcceptanceRun, 0)
 	for rows.Next() {
 		run, scanErr := scanAcceptanceRun(rows)

@@ -115,7 +115,9 @@ func (e *AccountAcceptanceExecutor) Execute(ctx context.Context, sample Acceptan
 		return unsupported("当前分组未启用 Messages 转发")
 	}
 	if sample.Protocol == "count_tokens" {
-		if !(a.Platform == PlatformGemini && (a.Type == AccountTypeServiceAccount || a.Type == AccountTypeAPIKey) || a.Platform == PlatformAnthropic && a.Type == AccountTypeAPIKey) {
+		geminiCount := a.Platform == PlatformGemini && (a.Type == AccountTypeServiceAccount || a.Type == AccountTypeAPIKey)
+		anthropicCount := a.Platform == PlatformAnthropic && a.Type == AccountTypeAPIKey
+		if !geminiCount && !anthropicCount {
 			return unsupported("没有相同来源的原生计数适配器")
 		}
 	} else if !slices.Contains(acceptanceProtocols(a.Platform, a.Type, sample.Snapshot.UpstreamModel), sample.Protocol) {
@@ -577,7 +579,7 @@ func acceptanceCaptureParameters(r *http.Request, result *AcceptanceResult) {
 	if err != nil {
 		return
 	}
-	defer body.Close()
+	defer func() { _ = body.Close() }()
 	d := json.NewDecoder(io.LimitReader(body, 2<<20))
 	d.UseNumber()
 	var m map[string]any

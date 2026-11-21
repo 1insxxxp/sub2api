@@ -119,7 +119,10 @@ func analyzeAcceptanceRunV3(run *AcceptanceRun) {
 				if model := r.Source.ResponseModel; model != "" && model != g.responseModel {
 					continue
 				}
-				hash := r.EffectiveParameters["input_fingerprint"].(string)
+				hash, _ := r.EffectiveParameters["input_fingerprint"].(string)
+				if hash == "" {
+					continue
+				}
 				n := *r.RawUsage.Input
 				if old, ok := counts[hash]; ok && old != n {
 					// Valid counts are nonnegative. A disputed baseline stays
@@ -191,7 +194,10 @@ func analyzeAcceptanceInputs(samples []*AcceptanceSample, counts map[string]int6
 	bySize := map[int][]*AcceptanceSample{}
 	for _, s := range samples {
 		r := s.Result
-		hash := r.EffectiveParameters["input_fingerprint"].(string)
+		hash, _ := r.EffectiveParameters["input_fingerprint"].(string)
+		if hash == "" {
+			continue
+		}
 		input := *r.RawUsage.Input
 		if count, ok := counts[hash]; ok && count >= 0 && count != input {
 			acceptanceAddFinding(r, "count_endpoint_mismatch", fmt.Sprintf("相同实际输入：生成接口报告 %d Token，计数接口报告 %d Token；上游口径不一致，需复核", input, count))
