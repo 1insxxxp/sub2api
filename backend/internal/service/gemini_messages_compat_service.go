@@ -1160,7 +1160,7 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 		// 精确匹配服务端配置类 400 错误，触发 failover + 临时封禁
 		if resp.StatusCode == http.StatusBadRequest {
 			msg400 := strings.ToLower(strings.TrimSpace(extractUpstreamErrorMessage(respBody)))
-			if isGoogleProjectConfigError(msg400) {
+			if isUpstreamToolSchemaError(resp.StatusCode, respBody) || isGoogleProjectConfigError(msg400) {
 				upstreamReqID := resp.Header.Get(requestIDHeader)
 				if upstreamReqID == "" {
 					upstreamReqID = resp.Header.Get("x-goog-request-id")
@@ -1792,7 +1792,7 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 		// 精确匹配服务端配置类 400 错误，触发 failover + 临时封禁
 		if resp.StatusCode == http.StatusBadRequest {
 			msg400 := strings.ToLower(strings.TrimSpace(extractUpstreamErrorMessage(respBody)))
-			if isGoogleProjectConfigError(msg400) {
+			if isUpstreamToolSchemaError(resp.StatusCode, respBody) || isGoogleProjectConfigError(msg400) {
 				evBody := unwrapIfNeeded(isOAuth, respBody)
 				upstreamMsg := sanitizeUpstreamErrorMessage(strings.TrimSpace(extractUpstreamErrorMessage(evBody)))
 				upstreamDetail := ""
@@ -2223,8 +2223,10 @@ func sleepGeminiBackoff(ctx context.Context, attempt int) error {
 }
 
 var (
-	sensitiveQueryParamRegex = regexp.MustCompile(`(?i)([?&](?:key|client_secret|access_token|refresh_token)=)[^&"\s]+`)
-	retryInRegex             = regexp.MustCompile(`Please retry in ([0-9.]+)s`)
+	sensitiveQueryParamRegex  = regexp.MustCompile(`(?i)([?&](?:key|client_secret|access_token|refresh_token)=)[^&"\s]+`)
+	upstreamRequestIDRegex    = regexp.MustCompile(`(?i)(\b(?:request|delivery|trace)[_-]?id\s*[:=]\s*)[A-Za-z0-9._:-]+`)
+	upstreamProviderNameRegex = regexp.MustCompile(`(?i)\b(?:kiro|devin|cursor)\b`)
+	retryInRegex              = regexp.MustCompile(`Please retry in ([0-9.]+)s`)
 )
 
 func sanitizeUpstreamErrorMessage(msg string) string {
@@ -2241,6 +2243,8 @@ func sanitizeUpstreamErrorMessage(msg string) string {
 	msg = upstreamAuthValueRegex.ReplaceAllString(msg, `$1[REDACTED]`)
 	msg = upstreamAPIKeyRegex.ReplaceAllString(msg, "[REDACTED]")
 	msg = upstreamJWTRegex.ReplaceAllString(msg, "[REDACTED]")
+	msg = upstreamRequestIDRegex.ReplaceAllString(msg, `$1[REDACTED]`)
+	msg = upstreamProviderNameRegex.ReplaceAllString(msg, "[upstream]")
 	return upstreamEmailRegex.ReplaceAllString(msg, "[email]")
 }
 

@@ -4,6 +4,7 @@ package service
 
 import (
 	"encoding/json"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -68,4 +69,16 @@ func TestGeminiDefaultTestModel(t *testing.T) {
 
 	apiKey := &Account{Platform: PlatformGemini, Type: AccountTypeAPIKey}
 	require.Equal(t, geminicli.DefaultTestModel, geminiDefaultTestModel(apiKey))
+}
+
+func TestFormatAccountTestUpstreamErrorRedactsSensitiveDetails(t *testing.T) {
+	raw := []byte(`{"error":{"code":"invalid_request_error","message":"request rejected at https://relay.example/v1/models/private-model?api_key=secret; request_id=req-secret","request_body":{"prompt":"private prompt"}}}`)
+
+	got := formatAccountTestUpstreamError(http.StatusBadRequest, raw)
+
+	require.Contains(t, got, "API returned 400")
+	require.NotContains(t, got, "relay.example")
+	require.NotContains(t, got, "private-model")
+	require.NotContains(t, got, "secret")
+	require.NotContains(t, got, "private prompt")
 }

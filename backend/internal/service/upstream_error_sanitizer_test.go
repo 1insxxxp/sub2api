@@ -48,6 +48,17 @@ func TestUpstreamErrorPrivacyMessage(t *testing.T) {
 	require.Equal(t, diagnostic, sanitizeUpstreamErrorMessage(diagnostic))
 }
 
+func TestUpstreamErrorPrivacyMessageMasksProviderNames(t *testing.T) {
+	message := "Kiro/Cursor/Devin upstream rejected model claude-sonnet-5"
+
+	got := sanitizeUpstreamErrorMessage(message)
+
+	require.NotContains(t, strings.ToLower(got), "kiro")
+	require.NotContains(t, strings.ToLower(got), "cursor")
+	require.NotContains(t, strings.ToLower(got), "devin")
+	require.Contains(t, got, "[upstream]")
+}
+
 func TestUpstreamErrorPrivacyTruncatedPayload(t *testing.T) {
 	diagnostic := "invalid_schema: max_tokens must exceed thinking.budget_tokens; "
 	for _, payload := range []string{

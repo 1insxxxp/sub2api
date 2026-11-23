@@ -9,6 +9,23 @@ import (
 
 var upstreamModelNotFoundKeywords = []string{"model not found", "unknown model", "not found", "not supported", "unsupported", "does not exist"}
 
+// isUpstreamToolSchemaError identifies deterministic 400 responses caused by
+// the selected channel rejecting or losing a function tool schema. These are
+// channel-specific failures, so Gemini compatibility callers may fail over to
+// another account. Client-side request validation errors must not match this.
+func isUpstreamToolSchemaError(statusCode int, body []byte) bool {
+	if statusCode != http.StatusBadRequest {
+		return false
+	}
+	normalized := strings.ToLower(strings.TrimSpace(extractUpstreamErrorMessage(body)))
+	if normalized == "" {
+		return false
+	}
+	toolSignal := strings.Contains(normalized, "tool") || strings.Contains(normalized, "function")
+	parameterSignal := strings.Contains(normalized, "parameter") || strings.Contains(normalized, "query") || strings.Contains(normalized, "schema")
+	return toolSignal && parameterSignal
+}
+
 func isUpstreamModelNotFoundError(statusCode int, body []byte) bool {
 	if statusCode == http.StatusBadRequest && isUnknownProviderForModelError(body) {
 		return true

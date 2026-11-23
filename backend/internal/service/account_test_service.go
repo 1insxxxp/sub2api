@@ -634,13 +634,13 @@ func (s *AccountTestService) testClaudeAccountConnection(c *gin.Context, account
 
 	resp, err := s.httpUpstream.DoWithTLS(req, proxyURL, account.ID, account.Concurrency, s.tlsFPProfileService.ResolveTLSProfile(account))
 	if err != nil {
-		return s.sendErrorAndEnd(c, fmt.Sprintf("Request failed: %s", err.Error()))
+		return s.sendErrorAndEnd(c, fmt.Sprintf("Request failed: %s", sanitizeStreamError(err)))
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		errMsg := fmt.Sprintf("API returned %d: %s", resp.StatusCode, string(body))
+		errMsg := formatAccountTestUpstreamError(resp.StatusCode, body)
 
 		// 403 表示账号被上游封禁，标记为 error 状态
 		if resp.StatusCode == http.StatusForbidden {
@@ -706,13 +706,13 @@ func (s *AccountTestService) testClaudeVertexServiceAccountConnection(c *gin.Con
 
 	resp, err := s.httpUpstream.DoWithTLS(req, proxyURL, account.ID, account.Concurrency, s.tlsFPProfileService.ResolveTLSProfile(account))
 	if err != nil {
-		return s.sendErrorAndEnd(c, fmt.Sprintf("Request failed: %s", err.Error()))
+		return s.sendErrorAndEnd(c, fmt.Sprintf("Request failed: %s", sanitizeStreamError(err)))
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		errMsg := fmt.Sprintf("API returned %d: %s", resp.StatusCode, string(body))
+		errMsg := formatAccountTestUpstreamError(resp.StatusCode, body)
 		if resp.StatusCode == http.StatusForbidden {
 			_ = s.accountRepo.SetError(ctx, account.ID, errMsg)
 		}
@@ -798,14 +798,14 @@ func (s *AccountTestService) testBedrockAccountConnection(c *gin.Context, ctx co
 
 	resp, err := s.httpUpstream.DoWithTLS(req, proxyURL, account.ID, account.Concurrency, nil)
 	if err != nil {
-		return s.sendErrorAndEnd(c, fmt.Sprintf("Request failed: %s", err.Error()))
+		return s.sendErrorAndEnd(c, fmt.Sprintf("Request failed: %s", sanitizeStreamError(err)))
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	body, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
-		return s.sendErrorAndEnd(c, fmt.Sprintf("API returned %d: %s", resp.StatusCode, string(body)))
+		return s.sendErrorAndEnd(c, formatAccountTestUpstreamError(resp.StatusCode, body))
 	}
 
 	// Bedrock non-streaming response is standard Claude JSON, extract the text
@@ -988,7 +988,7 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 
 	resp, err := s.doOpenAIAccountTestUpstream(req, proxyURL, account, true)
 	if err != nil {
-		return s.sendErrorAndEnd(c, fmt.Sprintf("Request failed: %s", err.Error()))
+		return s.sendErrorAndEnd(c, fmt.Sprintf("Request failed: %s", sanitizeStreamError(err)))
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -1018,7 +1018,7 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 			errMsg := fmt.Sprintf("Authentication failed (401): %s", string(body))
 			_ = s.accountRepo.SetError(ctx, account.ID, errMsg)
 		}
-		return s.sendErrorAndEnd(c, fmt.Sprintf("API returned %d: %s", resp.StatusCode, string(body)))
+		return s.sendErrorAndEnd(c, formatAccountTestUpstreamError(resp.StatusCode, body))
 	}
 
 	// Process SSE stream
@@ -1313,7 +1313,7 @@ func (s *AccountTestService) testGrokResponsesConnection(c *gin.Context, ctx con
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return s.sendErrorAndEnd(c, fmt.Sprintf("Grok Responses API returned %d: %s", resp.StatusCode, string(body)))
+		return s.sendErrorAndEnd(c, fmt.Sprintf("Grok Responses API returned %d: %s", resp.StatusCode, sanitizeAccountTestUpstreamErrorMessage(body)))
 	}
 
 	return s.processOpenAIStream(c, resp.Body)
@@ -1494,7 +1494,7 @@ func (s *AccountTestService) testGrokVideoGeneration(c *gin.Context, ctx context
 		return s.sendErrorAndEnd(c, fmt.Sprintf("Failed to read Grok video response: %s", err.Error()))
 	}
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusCreated {
-		return s.sendErrorAndEnd(c, fmt.Sprintf("Grok videos API returned %d: %s", resp.StatusCode, string(body)))
+		return s.sendErrorAndEnd(c, fmt.Sprintf("Grok videos API returned %d: %s", resp.StatusCode, sanitizeAccountTestUpstreamErrorMessage(body)))
 	}
 
 	requestID := strings.TrimSpace(gjson.GetBytes(body, "request_id").String())
@@ -2026,7 +2026,7 @@ func isTransientGrokTransportError(err error) bool {
 }
 
 func formatGrokImageTransportError(err error, hasSourceImage bool, payloadBytes int) string {
-	base := fmt.Sprintf("Grok image request failed: %s", err.Error())
+	base := fmt.Sprintf("Grok image request failed: %s", sanitizeStreamError(err))
 	if !hasSourceImage {
 		return base
 	}
@@ -2037,10 +2037,7 @@ func formatGrokImageTransportError(err error, hasSourceImage bool, payloadBytes 
 }
 
 func formatGrokImagesAPIError(status int, body []byte, hasSourceImage bool) string {
-	msg := strings.TrimSpace(string(body))
-	if len(msg) > 800 {
-		msg = msg[:800] + "..."
-	}
+	msg := sanitizeAccountTestUpstreamErrorMessage(body)
 	prefix := fmt.Sprintf("Grok images API returned %d: %s", status, msg)
 	lower := strings.ToLower(msg)
 	if hasSourceImage && (strings.Contains(lower, "too small") || strings.Contains(lower, "at least 8")) {
@@ -2334,7 +2331,7 @@ func (s *AccountTestService) testOpenAICompactConnection(c *gin.Context, account
 			_ = s.accountRepo.UpdateExtra(ctx, account.ID, updates)
 			mergeAccountExtra(account, updates)
 		}
-		return s.sendErrorAndEnd(c, fmt.Sprintf("Request failed: %s", err.Error()))
+		return s.sendErrorAndEnd(c, fmt.Sprintf("Request failed: %s", sanitizeStreamError(err)))
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -2370,7 +2367,7 @@ func (s *AccountTestService) testOpenAICompactConnection(c *gin.Context, account
 			errMsg := fmt.Sprintf("Authentication failed (401): %s", string(body))
 			_ = s.accountRepo.SetError(ctx, account.ID, errMsg)
 		}
-		return s.sendErrorAndEnd(c, fmt.Sprintf("API returned %d: %s", resp.StatusCode, string(body)))
+		return s.sendErrorAndEnd(c, formatAccountTestUpstreamError(resp.StatusCode, body))
 	}
 
 	if !compactionFound {
@@ -2485,13 +2482,13 @@ func (s *AccountTestService) testGeminiAccountConnection(c *gin.Context, account
 
 	resp, err := s.httpUpstream.DoWithTLS(req, proxyURL, account.ID, account.Concurrency, s.tlsFPProfileService.ResolveTLSProfile(account))
 	if err != nil {
-		return s.sendErrorAndEnd(c, fmt.Sprintf("Request failed: %s", err.Error()))
+		return s.sendErrorAndEnd(c, fmt.Sprintf("Request failed: %s", sanitizeStreamError(err)))
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return s.sendErrorAndEnd(c, fmt.Sprintf("API returned %d: %s", resp.StatusCode, string(body)))
+		return s.sendErrorAndEnd(c, formatAccountTestUpstreamError(resp.StatusCode, body))
 	}
 
 	// Process SSE stream
@@ -2746,7 +2743,7 @@ func (s *AccountTestService) processGeminiStream(c *gin.Context, body io.Reader)
 				s.sendEvent(c, TestEvent{Type: "test_complete", Success: true})
 				return nil
 			}
-			return s.sendErrorAndEnd(c, fmt.Sprintf("Stream read error: %s", err.Error()))
+			return s.sendErrorAndEnd(c, fmt.Sprintf("Stream read error: %s", sanitizeStreamError(err)))
 		}
 
 		line = strings.TrimSpace(line)
@@ -2874,7 +2871,7 @@ func (s *AccountTestService) processClaudeStream(c *gin.Context, body io.Reader)
 				s.sendEvent(c, TestEvent{Type: "test_complete", Success: true})
 				return nil
 			}
-			return s.sendErrorAndEnd(c, fmt.Sprintf("Stream read error: %s", err.Error()))
+			return s.sendErrorAndEnd(c, fmt.Sprintf("Stream read error: %s", sanitizeStreamError(err)))
 		}
 
 		line = strings.TrimSpace(line)
@@ -3008,7 +3005,7 @@ func (s *AccountTestService) processOpenAIStream(c *gin.Context, body io.Reader)
 				}
 				return s.sendErrorAndEnd(c, "Stream ended before response.completed")
 			}
-			return s.sendErrorAndEnd(c, fmt.Sprintf("Stream read error: %s", err.Error()))
+			return s.sendErrorAndEnd(c, fmt.Sprintf("Stream read error: %s", sanitizeStreamError(err)))
 		}
 
 		line = strings.TrimSpace(line)
@@ -3118,17 +3115,17 @@ func (s *AccountTestService) testOpenAIImageAPIKey(c *gin.Context, ctx context.C
 
 	resp, err := s.httpUpstream.DoWithTLS(req, proxyURL, account.ID, account.Concurrency, s.tlsFPProfileService.ResolveTLSProfile(account))
 	if err != nil {
-		return s.sendErrorAndEnd(c, fmt.Sprintf("Request failed: %s", err.Error()))
+		return s.sendErrorAndEnd(c, fmt.Sprintf("Request failed: %s", sanitizeStreamError(err)))
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return s.sendErrorAndEnd(c, fmt.Sprintf("Failed to read response: %s", err.Error()))
+		return s.sendErrorAndEnd(c, fmt.Sprintf("Failed to read response: %s", sanitizeStreamError(err)))
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return s.sendErrorAndEnd(c, fmt.Sprintf("API returned %d: %s", resp.StatusCode, string(body)))
+		return s.sendErrorAndEnd(c, formatAccountTestUpstreamError(resp.StatusCode, body))
 	}
 
 	// Parse {"data": [{"b64_json": "...", "revised_prompt": "..."}]}
@@ -3330,6 +3327,23 @@ func (s *AccountTestService) sendEvent(c *gin.Context, event TestEvent) {
 		return
 	}
 	c.Writer.Flush()
+}
+
+// formatAccountTestUpstreamError keeps admin connectivity-test diagnostics useful
+// while preventing the raw upstream body from reaching the admin UI. The full
+// response remains available through the server-side error log.
+func formatAccountTestUpstreamError(status int, body []byte) string {
+	return fmt.Sprintf("API returned %d: %s", status, sanitizeAccountTestUpstreamErrorMessage(body))
+}
+
+func sanitizeAccountTestUpstreamErrorMessage(body []byte) string {
+	sanitized := sanitizeUpstreamErrorBody(body)
+	message := strings.TrimSpace(extractUpstreamErrorMessage(sanitized))
+	message = sanitizeUpstreamErrorMessage(message)
+	if message == "" {
+		message = "Upstream request failed"
+	}
+	return truncateString(message, 1024)
 }
 
 // sendErrorAndEnd sends an error event and ends the stream

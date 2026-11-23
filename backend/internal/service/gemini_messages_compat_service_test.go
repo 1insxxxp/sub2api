@@ -61,6 +61,33 @@ func TestGeminiCompatForwardsTaggedMappedModel(t *testing.T) {
 	}
 }
 
+func TestGeminiChatCompletionsPreservesToolParameterProperties(t *testing.T) {
+	body := []byte(`{"model":"gemini-3-flash","messages":[{"role":"user","content":"search"}],"tools":[{"type":"function","function":{"name":"search_web","description":"Search the web","parameters":{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}}}]}`)
+
+	var ccReq apicompat.ChatCompletionsRequest
+	require.NoError(t, json.Unmarshal(body, &ccReq))
+	responsesReq, err := apicompat.ChatCompletionsToResponses(&ccReq)
+	require.NoError(t, err)
+	anthropicReq, err := apicompat.ResponsesToAnthropicRequestWithDefaultMaxTokens(responsesReq, 0)
+	require.NoError(t, err)
+	claudeBody, err := json.Marshal(anthropicReq)
+	require.NoError(t, err)
+	geminiBody, err := convertClaudeMessagesToGeminiGenerateContent(claudeBody, ccReq.Model)
+	require.NoError(t, err)
+
+	var converted map[string]any
+	require.NoError(t, json.Unmarshal(geminiBody, &converted))
+	tools, ok := converted["tools"].([]any)
+	require.True(t, ok)
+	declarations, ok := requireGeminiMap(t, tools[0])["functionDeclarations"].([]any)
+	require.True(t, ok)
+	declaration := requireGeminiMap(t, declarations[0])
+	parameters := requireGeminiMap(t, declaration["parameters"])
+	properties := requireGeminiMap(t, parameters["properties"])
+	require.Contains(t, properties, "query")
+	require.Equal(t, []any{"query"}, parameters["required"])
+}
+
 func TestGeminiChatCompletions_PreservesToolResultNamesWhenIDsCollideAfterAnthropicMapping(t *testing.T) {
 	// "foo" and "toolu_foo" are distinct OpenAI tool-call IDs, but the old
 	// Responses→Anthropic mapping converted both to "toolu_foo". The result
