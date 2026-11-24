@@ -130,6 +130,11 @@ func IsExclusive(v bool) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldIsExclusive, v))
 }
 
+// MinTotalRechargeUsd applies equality check predicate on the "min_total_recharge_usd" field. It's identical to MinTotalRechargeUsdEQ.
+func MinTotalRechargeUsd(v float64) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldMinTotalRechargeUsd, v))
+}
+
 // Status applies equality check predicate on the "status" field. It's identical to StatusEQ.
 func Status(v string) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldStatus, v))
@@ -1058,6 +1063,46 @@ func IsExclusiveEQ(v bool) predicate.Group {
 // IsExclusiveNEQ applies the NEQ predicate on the "is_exclusive" field.
 func IsExclusiveNEQ(v bool) predicate.Group {
 	return predicate.Group(sql.FieldNEQ(FieldIsExclusive, v))
+}
+
+// MinTotalRechargeUsdEQ applies the EQ predicate on the "min_total_recharge_usd" field.
+func MinTotalRechargeUsdEQ(v float64) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldMinTotalRechargeUsd, v))
+}
+
+// MinTotalRechargeUsdNEQ applies the NEQ predicate on the "min_total_recharge_usd" field.
+func MinTotalRechargeUsdNEQ(v float64) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldMinTotalRechargeUsd, v))
+}
+
+// MinTotalRechargeUsdIn applies the In predicate on the "min_total_recharge_usd" field.
+func MinTotalRechargeUsdIn(vs ...float64) predicate.Group {
+	return predicate.Group(sql.FieldIn(FieldMinTotalRechargeUsd, vs...))
+}
+
+// MinTotalRechargeUsdNotIn applies the NotIn predicate on the "min_total_recharge_usd" field.
+func MinTotalRechargeUsdNotIn(vs ...float64) predicate.Group {
+	return predicate.Group(sql.FieldNotIn(FieldMinTotalRechargeUsd, vs...))
+}
+
+// MinTotalRechargeUsdGT applies the GT predicate on the "min_total_recharge_usd" field.
+func MinTotalRechargeUsdGT(v float64) predicate.Group {
+	return predicate.Group(sql.FieldGT(FieldMinTotalRechargeUsd, v))
+}
+
+// MinTotalRechargeUsdGTE applies the GTE predicate on the "min_total_recharge_usd" field.
+func MinTotalRechargeUsdGTE(v float64) predicate.Group {
+	return predicate.Group(sql.FieldGTE(FieldMinTotalRechargeUsd, v))
+}
+
+// MinTotalRechargeUsdLT applies the LT predicate on the "min_total_recharge_usd" field.
+func MinTotalRechargeUsdLT(v float64) predicate.Group {
+	return predicate.Group(sql.FieldLT(FieldMinTotalRechargeUsd, v))
+}
+
+// MinTotalRechargeUsdLTE applies the LTE predicate on the "min_total_recharge_usd" field.
+func MinTotalRechargeUsdLTE(v float64) predicate.Group {
+	return predicate.Group(sql.FieldLTE(FieldMinTotalRechargeUsd, v))
 }
 
 // StatusEQ applies the EQ predicate on the "status" field.

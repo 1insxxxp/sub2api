@@ -123,6 +123,10 @@ func (u *User) CanBindGroup(groupID int64, isExclusive bool) bool {
 	return false
 }
 
+func (u *User) MeetsGroupRechargeRequirement(group *Group) bool {
+	return group == nil || group.MinTotalRechargeUSD <= 0 || u.TotalRecharged >= group.MinTotalRechargeUSD
+}
+
 func (u *User) SetPassword(password string) error {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {

@@ -887,6 +887,7 @@ export default {
 
     // Groups Management
     groups: {
+      rechargeGate: { label: '充值门槛（累计已完成充值，USD）', placeholder: '0 表示不限制' },
       title: '分组管理',
       description: '管理 API 密钥分组和费率配置',
       searchGroups: '搜索分组...',

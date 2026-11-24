@@ -255,6 +255,7 @@ type CreateGroupInput struct {
 	EmptyResponseCompensationEnabled bool
 	GeminiInputCountingEnabled       *bool
 	IsExclusive                      bool
+	MinTotalRechargeUSD              float64  // 累计已完成充值门槛（USD），0 表示不限制
 	SubscriptionType                 string   // standard/subscription
 	DailyLimitUSD                    *float64 // 日限额 (USD)
 	WeeklyLimitUSD                   *float64 // 周限额 (USD)
@@ -348,6 +349,7 @@ type UpdateGroupInput struct {
 	EmptyResponseCompensationEnabled *bool
 	GeminiInputCountingEnabled       *bool
 	IsExclusive                      *bool
+	MinTotalRechargeUSD              *float64 // 累计已完成充值门槛（USD），nil 表示不修改
 	Status                           string
 	SubscriptionType                 string   // standard/subscription
 	DailyLimitUSD                    *float64 // 日限额 (USD)

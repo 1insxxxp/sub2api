@@ -679,6 +679,7 @@ export interface Group {
   max_reasoning_effort_over_limit?: string // downgrade (default) or deny when over the ceiling
   reasoning_effort_mappings?: ReasoningEffortMapping[]
   is_exclusive: boolean
+  min_total_recharge_usd: number
   status: 'active' | 'inactive'
   subscription_type: SubscriptionType
   system_custom_routing_enabled: boolean
@@ -1093,6 +1094,7 @@ export interface CreateGroupRequest {
   empty_response_compensation_enabled?: boolean
   gemini_input_counting_enabled?: boolean
   is_exclusive?: boolean
+  min_total_recharge_usd?: number
   subscription_type?: SubscriptionType
   daily_limit_usd?: number | null
   weekly_limit_usd?: number | null
@@ -1169,6 +1171,7 @@ export interface UpdateGroupRequest {
   empty_response_compensation_enabled?: boolean
   gemini_input_counting_enabled?: boolean
   is_exclusive?: boolean
+  min_total_recharge_usd?: number
   status?: 'active' | 'inactive'
   subscription_type?: SubscriptionType
   daily_limit_usd?: number | null

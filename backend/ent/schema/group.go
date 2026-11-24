@@ -76,6 +76,11 @@ func (Group) Fields() []ent.Field {
 			Comment("高峰时段叠加倍率，仅在 peak_rate_enabled 且处于 [peak_start, peak_end) 时乘入文本倍率"),
 		field.Bool("is_exclusive").
 			Default(false),
+		field.Float("min_total_recharge_usd").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
+			Default(0).
+			Min(0).
+			Comment("用户累计已完成充值达到该金额后才可使用；0 表示不限制"),
 		field.String("status").
 			MaxLen(20).
 			Default(domain.StatusActive),

@@ -50,8 +50,11 @@ type Group struct {
 	PeakEnd            string
 	PeakRateMultiplier float64
 	IsExclusive        bool
-	Status             string
-	Hydrated           bool // indicates the group was loaded from a trusted repository source
+	// MinTotalRechargeUSD gates the group by the user's cumulative completed
+	// recharge amount. Zero keeps the group unrestricted.
+	MinTotalRechargeUSD float64
+	Status              string
+	Hydrated            bool // indicates the group was loaded from a trusted repository source
 	// DuplicateOperationID is internal persistence metadata used only to recover
 	// an already committed one-click copy. It must never be mapped to API DTOs.
 	DuplicateOperationID string

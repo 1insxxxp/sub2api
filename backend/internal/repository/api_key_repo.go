@@ -1037,6 +1037,7 @@ func groupEntityToService(g *dbent.Group) *service.Group {
 		EmptyResponseCompensationEnabled: g.EmptyResponseCompensationEnabled,
 		GeminiInputCountingEnabled:       g.GeminiInputCountingEnabled,
 		IsExclusive:                      g.IsExclusive,
+		MinTotalRechargeUSD:              g.MinTotalRechargeUsd,
 		Status:                           g.Status,
 		Hydrated:                         true,
 		DuplicateOperationID:             derefString(g.DuplicateOperationID),
