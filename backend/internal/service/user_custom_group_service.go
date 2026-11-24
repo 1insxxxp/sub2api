@@ -294,9 +294,21 @@ func (s *UserCustomGroupService) validateModels(ctx context.Context, userID int6
 	return nil
 }
 
-// CustomGroupSourceModels is shared by the editor, discovery and routing.
+// CustomGroupSourceModels returns the current catalog for editor and lifecycle
+// checks. It deliberately bypasses the listing cache so a restored mapping is
+// visible immediately.
 func (s *GatewayService) CustomGroupSourceModels(ctx context.Context, group *Group) []string {
-	available := s.GetAvailableModels(ctx, &group.ID, group.Platform)
+	available := s.GetAvailableModelsFresh(ctx, &group.ID, group.Platform)
+	return s.customGroupSourceModelsFromAvailable(ctx, group, available)
+}
+
+// CustomGroupSourceModelsCached is reserved for hot-path routing checks. The
+// short-lived cache avoids an account catalog query for every request.
+func (s *GatewayService) CustomGroupSourceModelsCached(ctx context.Context, group *Group) []string {
+	return s.customGroupSourceModelsFromAvailable(ctx, group, s.GetAvailableModels(ctx, &group.ID, group.Platform))
+}
+
+func (s *GatewayService) customGroupSourceModelsFromAvailable(ctx context.Context, group *Group, available []string) []string {
 	if !group.CustomModelsListEnabled() {
 		return available
 	}
@@ -323,7 +335,7 @@ func (c customSourceCatalog) contains(ctx context.Context, group *Group, model s
 	names, loaded := c.models[group.ID]
 	if !loaded {
 		names = make(map[string]bool)
-		for _, name := range c.gateway.CustomGroupSourceModels(ctx, group) {
+		for _, name := range c.gateway.CustomGroupSourceModelsCached(ctx, group) {
 			names[strings.ToLower(name)] = true
 		}
 		c.models[group.ID] = names

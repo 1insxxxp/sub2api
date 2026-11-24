@@ -676,6 +676,9 @@ func (s *GatewayService) handleCCStreamingFromAnthropicWithContinuation(
 		// for billing, including converter handlers that consume event usage.
 		syncAnthropicResponsesUsage(anthState, usage)
 		normalizeAnthropicEventUsageForResponses(event, usage)
+		if applyClaudeChatOutputUsageFallback(anthState, usage, assistantText.String(), 0) {
+			ccState.IncludeUsage = true
+		}
 
 		// Chain: Anthropic event → Responses events → CC chunks
 		responsesEvents := apicompat.AnthropicEventToResponsesEvents(event, anthState)
@@ -746,7 +749,9 @@ func (s *GatewayService) handleCCStreamingFromAnthropicWithContinuation(
 
 			switch event.Type {
 			case "content_block_start":
-				if event.ContentBlock != nil && event.ContentBlock.Type != "text" {
+				if event.ContentBlock != nil && event.ContentBlock.Type == "text" && event.ContentBlock.Text != "" {
+					_, _ = assistantText.WriteString(event.ContentBlock.Text)
+				} else if event.ContentBlock != nil && event.ContentBlock.Type != "text" {
 					continuationSafe = false
 				}
 			case "content_block_delta":
@@ -884,6 +889,14 @@ func (s *GatewayService) handleCCStreamingFromAnthropicWithContinuation(
 		})
 	}
 
+	// If the Anthropic-compatible upstream omitted output usage or explicitly
+	// reported zero despite delivering text, keep the raw provider usage in the
+	// ForwardResult but provide the downstream Chat Completions client with the
+	// same conservative text estimate used by continuation budgeting.
+	if applyClaudeChatOutputUsageFallback(anthState, usage, assistantText.String(), budgetOutputTokens) {
+		ccState.IncludeUsage = true
+	}
+
 	// Finalize both state machines
 	if !clientDisconnected {
 		finalResEvents := apicompat.FinalizeAnthropicResponsesStream(anthState)
@@ -913,6 +926,29 @@ func (s *GatewayService) handleCCStreamingFromAnthropicWithContinuation(
 		outcomeCollector.MarkStreamError(errors.New("client disconnected"), true)
 	}
 	return resultWithUsage(), nil
+}
+
+// applyClaudeChatOutputUsageFallback fills only the client-facing Responses
+// state. The provider usage snapshot returned in ForwardResult remains raw so
+// billing and diagnostics can distinguish upstream evidence from our estimate.
+// A fallback requires semantic assistant text, so empty responses stay at zero.
+func applyClaudeChatOutputUsageFallback(
+	state *apicompat.AnthropicEventToResponsesState,
+	providerUsage ClaudeUsage,
+	deliveredText string,
+	estimatedOutputTokens int,
+) bool {
+	if state == nil || providerUsage.OutputTokens > 0 || state.OutputTokens > 0 || deliveredText == "" {
+		return false
+	}
+	if estimatedOutputTokens <= 0 {
+		estimatedOutputTokens = (len([]rune(deliveredText)) + 3) / 4
+	}
+	if estimatedOutputTokens <= 0 {
+		return false
+	}
+	state.OutputTokens = estimatedOutputTokens
+	return true
 }
 
 // writeGatewayCCError writes an error in OpenAI Chat Completions format for

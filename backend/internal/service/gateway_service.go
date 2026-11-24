@@ -1517,8 +1517,19 @@ func mixedListingModelAllowed(groupPlatform, model string) bool {
 }
 
 func (s *GatewayService) GetAvailableModels(ctx context.Context, groupID *int64, platform string) []string {
+	return s.getAvailableModels(ctx, groupID, platform, true)
+}
+
+// GetAvailableModelsFresh returns the current schedulable model catalog without
+// using the short-lived listing cache. Custom-group editor and lifecycle checks
+// use this path so a restored mapping is visible immediately.
+func (s *GatewayService) GetAvailableModelsFresh(ctx context.Context, groupID *int64, platform string) []string {
+	return s.getAvailableModels(ctx, groupID, platform, false)
+}
+
+func (s *GatewayService) getAvailableModels(ctx context.Context, groupID *int64, platform string, useCache bool) []string {
 	cacheKey := modelsListCacheKey(groupID, platform)
-	if s.modelsListCache != nil {
+	if useCache && s.modelsListCache != nil {
 		if cached, found := s.modelsListCache.Get(cacheKey); found {
 			if models, ok := cached.([]string); ok {
 				modelsListCacheHitTotal.Add(1)
@@ -1555,7 +1566,7 @@ func (s *GatewayService) GetAvailableModels(ctx context.Context, groupID *int64,
 	}
 
 	models := availableModelsForAccounts(accounts, platform)
-	if s.modelsListCache != nil {
+	if useCache && s.modelsListCache != nil {
 		s.modelsListCache.Set(cacheKey, cloneStringSlice(models), s.modelsListCacheTTL)
 		modelsListCacheStoreTotal.Add(1)
 	}

@@ -158,3 +158,50 @@ func TestGeminiChatInterruptedProvisionalZeroUsesDeliveredOutput(t *testing.T) {
 	require.Equal(t, UsageTokenSourceEstimated, logs.lastLog.OutputTokensSource)
 	require.Positive(t, logs.lastLog.OutputCost)
 }
+
+func TestGeminiCompletedExplicitZeroUsesDeliveredOutputFallback(t *testing.T) {
+	const model = "gemini-3-flash-preview"
+
+	collector := NewDownstreamOutputTokenCollector(model)
+	collector.ObserveWritten([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"hello world\"}}]}\n\n"))
+	delivered := collector.TokenCount()
+	require.Positive(t, delivered)
+
+	result := &ForwardResult{
+		Model:                 model,
+		RequireMeasuredUsage:  true,
+		MeasuredUsageComplete: true,
+		Stream:                true,
+		Usage:                 ClaudeUsage{InputTokens: 100, OutputTokens: 0},
+		InputTokensSource:     UsageTokenSourceUpstream,
+		OutputTokensSource:    UsageTokenSourceUpstream,
+		GeminiUsageFallback: &GeminiUsageFallback{
+			UpstreamAccepted: true,
+			UpstreamFinished: true,
+			UsageFields:      3,
+		},
+		Outcome: &ResponseOutcome{
+			HTTPStatus:       200,
+			UpstreamStatus:   200,
+			HasText:          true,
+			StreamCompleted:  true,
+			CollectorVersion: ResponseOutcomeCollectorVersion,
+		},
+	}
+
+	ApplyDeliveredOutputTokens(result, collector)
+	require.NotNil(t, result.DeliveredOutputTokens)
+	require.Equal(t, delivered, *result.DeliveredOutputTokens)
+	require.False(t, result.MeasuredUsageComplete)
+	require.Equal(t, UsageTokenSourceUnreported, result.OutputTokensSource)
+
+	billing := newGatewayRecordUsageServiceWithBillingRepoForTest(
+		&openAIRecordUsageLogRepoStub{inserted: true},
+		&openAIRecordUsageBillingRepoStub{},
+		&openAIRecordUsageUserRepoStub{},
+		&openAIRecordUsageSubRepoStub{},
+	)
+	billing.FinalizeGeminiUsageFallback(context.Background(), &RecordUsageInput{Result: result})
+	require.Equal(t, delivered, result.Usage.OutputTokens)
+	require.Equal(t, UsageTokenSourceEstimated, result.OutputTokensSource)
+}

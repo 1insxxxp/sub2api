@@ -386,7 +386,7 @@ describe('ModelStatusView', () => {
     expect(getModelStatus.mock.calls.length).toBeGreaterThanOrEqual(2)
   })
 
-  it('hides both mobile navigation variants while scrolling and provides a back-to-top action', async () => {
+  it('keeps mobile navigation stable while scrolling and provides a back-to-top action', async () => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 375 })
     Object.defineProperty(window, 'scrollY', { configurable: true, value: 0, writable: true })
     const scrollTo = vi.fn()
@@ -400,7 +400,7 @@ describe('ModelStatusView', () => {
     Object.defineProperty(window, 'scrollY', { configurable: true, value: 100, writable: true })
     window.dispatchEvent(new Event('scroll'))
     await nextTick()
-    expect(document.documentElement.classList.contains('model-status-mobile-header-hidden')).toBe(true)
+    expect(document.documentElement.classList.contains('model-status-mobile-header-hidden')).toBe(false)
 
     Object.defineProperty(window, 'scrollY', { configurable: true, value: 400, writable: true })
     window.dispatchEvent(new Event('scroll'))
@@ -414,17 +414,17 @@ describe('ModelStatusView', () => {
     Object.defineProperty(window, 'scrollY', { configurable: true, value: 396, writable: true })
     window.dispatchEvent(new Event('scroll'))
     await nextTick()
-    expect(document.documentElement.classList.contains('model-status-mobile-header-hidden')).toBe(true)
+    expect(document.documentElement.classList.contains('model-status-mobile-header-hidden')).toBe(false)
 
     Object.defineProperty(window, 'scrollY', { configurable: true, value: 300, writable: true })
     window.dispatchEvent(new Event('scroll'))
     await nextTick()
-    expect(document.documentElement.classList.contains('model-status-mobile-header-hidden')).toBe(true)
+    expect(document.documentElement.classList.contains('model-status-mobile-header-hidden')).toBe(false)
 
     Object.defineProperty(window, 'scrollY', { configurable: true, value: 1, writable: true })
     window.dispatchEvent(new Event('scroll'))
     await nextTick()
-    expect(document.documentElement.classList.contains('model-status-mobile-header-hidden')).toBe(true)
+    expect(document.documentElement.classList.contains('model-status-mobile-header-hidden')).toBe(false)
 
     Object.defineProperty(window, 'scrollY', { configurable: true, value: 0, writable: true })
     window.dispatchEvent(new Event('scroll'))
@@ -490,7 +490,7 @@ describe('ModelStatusView', () => {
     expect(bucket.attributes('aria-expanded')).toBe('true')
   })
 
-  it('shows aggregate success and failure counts without exposing request details', async () => {
+  it('shows the current bucket success rate without exposing request details', async () => {
     const data = report()
     data.groups[0].models[0].buckets![0] = {
       ...data.groups[0].models[0].buckets![0],
@@ -506,7 +506,8 @@ describe('ModelStatusView', () => {
 
     const popover = document.body.querySelector('[data-testid="bucket-popover"]')
     expect(popover?.textContent).toContain('modelStatus.bucketStatus.degraded')
-    expect([...popover!.querySelectorAll('dd')].map(count => count.textContent)).toEqual(['10', '4'])
+    expect(popover?.textContent).toContain('71.4%')
+    expect(popover?.querySelector('.bucket-popover-counts')).toBeNull()
     expect(popover?.textContent).not.toContain('502')
     await bucket.trigger('click')
     expect(document.body.querySelector('[data-testid="bucket-popover"]')).toBeNull()

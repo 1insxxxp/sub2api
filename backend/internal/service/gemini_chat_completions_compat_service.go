@@ -50,7 +50,10 @@ func (s *GeminiMessagesCompatService) ForwardAsChatCompletions(
 
 	originalModel := ccReq.Model
 	clientStream := ccReq.Stream
-	includeUsage := ccReq.StreamOptions != nil && ccReq.StreamOptions.IncludeUsage
+	// Match the OpenAI-compatible relay behavior used by CPA/New API. Streaming
+	// clients receive a terminal usage event by default, while an explicit
+	// include_usage=false still opts out.
+	includeUsage := ccReq.StreamOptions == nil || ccReq.StreamOptions.IncludeUsage
 
 	// 历史推理内容不回传给 Gemini：Gemini 的思考连续性由 thoughtSignature 承载。
 	for i := range ccReq.Messages {

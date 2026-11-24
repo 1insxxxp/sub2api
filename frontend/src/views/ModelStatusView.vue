@@ -165,10 +165,10 @@
           <span class="bucket-popover-dot" :class="`bucket-${bucketOutcome(selectedBucket)}`" aria-hidden="true" />
           {{ bucketStatusLabel(selectedBucket) }}
         </div>
-        <dl class="bucket-popover-counts">
-          <div><dt>{{ t('modelStatus.outcome.success') }}</dt><dd>{{ formatCount(selectedBucket.success) }}</dd></div>
-          <div><dt>{{ t('modelStatus.outcome.failure') }}</dt><dd>{{ formatCount(selectedBucket.failure) }}</dd></div>
-        </dl>
+        <p class="bucket-popover-rate">
+          <span>{{ t('modelStatus.successRate') }}</span>
+          <strong>{{ bucketSuccessRate(selectedBucket) }}</strong>
+        </p>
       </div>
     </Teleport>
   </component>
@@ -218,8 +218,6 @@ const loadingMoreModels = ref(false)
 const loadMoreSentinel = ref<HTMLElement | null>(null)
 const now = ref(Date.now())
 const mobileBreakpoint = 767
-const mobileHeaderHideThreshold = 0
-const mobileHeaderHideDelta = 4
 const backToTopThreshold = 320
 const mobileStatusToolbarHeight = 86
 const refreshIntervalSeconds = 30
@@ -474,6 +472,12 @@ function bucketStatusLabel(bucket: ModelStatusBucket): string {
         : t(`modelStatus.outcome.${outcome}`)
 }
 
+function bucketSuccessRate(bucket: ModelStatusBucket): string {
+  const knownTotal = observedOutcomeTotal(bucket)
+  if (knownTotal === 0) return '-'
+  return `${rateFormatter.value.format((bucket.success / knownTotal) * 100)}%`
+}
+
 function bucketLabel(bucket: ModelStatusBucket): string {
   return `${formatRange(bucket.start_at, bucket.end_at)} · ${bucketStatusLabel(bucket)}`
 }
@@ -579,13 +583,14 @@ function handleVisibilityChange() {
 
 function updateMobileStatusChrome() {
   const scrollY = Math.max(0, window.scrollY || 0)
-  const scrollDelta = scrollY - lastScrollY
   if (window.innerWidth > mobileBreakpoint) {
     mobileNavHidden.value = false
     showBackToTop.value = false
   } else {
-    if (scrollY <= mobileHeaderHideThreshold) mobileNavHidden.value = false
-    if (scrollDelta >= mobileHeaderHideDelta && scrollY > mobileHeaderHideThreshold) mobileNavHidden.value = true
+    // Keep the page chrome stable while the model list is being scrolled.
+    // Hiding the global header on every inertial-scroll direction change
+    // changes the visual viewport and causes pronounced mobile jitter.
+    mobileNavHidden.value = false
     showBackToTop.value = scrollY > backToTopThreshold
   }
   document.documentElement.classList.toggle('model-status-mobile-header-hidden', mobileNavHidden.value)
@@ -823,10 +828,9 @@ onBeforeUnmount(() => {
 .bucket-popover-time { @apply text-slate-500 dark:text-dark-300; margin: 0 0 6px; }
 .bucket-popover-status { display: flex; align-items: center; gap: 6px; font-weight: 600; }
 .bucket-popover-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
-.bucket-popover-counts { @apply border-slate-100 dark:border-dark-700; display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; border-top-width: 1px; margin: 8px 0 0; padding-top: 7px; }
-.bucket-popover-counts > div { display: flex; justify-content: space-between; gap: 4px; }
-.bucket-popover-counts dt { @apply text-slate-500 dark:text-dark-300; }
-.bucket-popover-counts dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+.bucket-popover-rate { @apply border-slate-100 dark:border-dark-700; display: flex; justify-content: space-between; gap: 8px; border-top-width: 1px; margin: 8px 0 0; padding-top: 7px; }
+.bucket-popover-rate span { @apply text-slate-500 dark:text-dark-300; }
+.bucket-popover-rate strong { font-weight: 600; font-variant-numeric: tabular-nums; }
 .dark .model-status-page .model-title :deep(.model-icon path[fill="#000000"]),
 .dark .model-status-page .model-title :deep(.model-icon path[fill="#16191E"]) { fill: #f1f5f9; }
 

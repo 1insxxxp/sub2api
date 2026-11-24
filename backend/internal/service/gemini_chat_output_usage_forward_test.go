@@ -106,11 +106,22 @@ func TestGeminiChatOutputUsageStreamAccumulatesUniqueOutput(t *testing.T) {
 	require.EqualValues(t, 12, u.Get("total_tokens").Int())
 }
 
-func TestGeminiChatOutputUsageDoesNotForceUsageOption(t *testing.T) {
+func TestGeminiChatOutputUsageDefaultsToIncluded(t *testing.T) {
 	svc := newGeminiSignalService("text/event-stream", `data: {"candidates":[{"content":{"parts":[{"text":"abcdefgh"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":10}}`+"\n\n")
 	body := []byte(`{"model":"gemini-test","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
 	c, rec := newAntigravityCompatContext(http.MethodPost, "/v1/chat/completions", body)
 	_, err := svc.ForwardAsChatCompletions(context.Background(), c, geminiSignalTestAccount(), body)
+	require.NoError(t, err)
+	u := geminiChatLastUsageFrame(t, rec.Body.String()).Get("usage")
+	require.Positive(t, u.Get("completion_tokens").Int())
+	require.EqualValues(t, 10+u.Get("completion_tokens").Int(), u.Get("total_tokens").Int())
+
+	// An explicit opt-out remains respected for clients that do not want usage
+	// events in their streaming response.
+	svc = newGeminiSignalService("text/event-stream", `data: {"candidates":[{"content":{"parts":[{"text":"abcdefgh"}]} ,"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":10}}`+"\n\n")
+	body = []byte(`{"model":"gemini-test","stream":true,"stream_options":{"include_usage":false},"messages":[{"role":"user","content":"hi"}]}`)
+	c, rec = newAntigravityCompatContext(http.MethodPost, "/v1/chat/completions", body)
+	_, err = svc.ForwardAsChatCompletions(context.Background(), c, geminiSignalTestAccount(), body)
 	require.NoError(t, err)
 	for _, line := range strings.Split(rec.Body.String(), "\n") {
 		if payload, ok := strings.CutPrefix(line, "data: "); ok {

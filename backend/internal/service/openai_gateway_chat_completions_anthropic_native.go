@@ -344,6 +344,7 @@ func (s *OpenAIGatewayService) handleCCStreamingFromNativeAnthropic(
 	ccState.Model = originalModel
 
 	var usage ClaudeUsage
+	var assistantText strings.Builder
 	var firstTokenMs *int
 	firstChunk := true
 	clientDisconnected := false
@@ -433,11 +434,20 @@ func (s *OpenAIGatewayService) handleCCStreamingFromNativeAnthropic(
 		if event.Type == "message_start" && event.Message != nil {
 			mergeAnthropicUsage(&usage, event.Message.Usage)
 		}
+		if event.Type == "content_block_start" && event.ContentBlock != nil && event.ContentBlock.Type == "text" {
+			_, _ = assistantText.WriteString(event.ContentBlock.Text)
+		}
+		if event.Type == "content_block_delta" && event.Delta != nil && event.Delta.Type == "text_delta" {
+			_, _ = assistantText.WriteString(event.Delta.Text)
+		}
 
 		// Keep the outward Responses/Chat usage on the same normalized buckets used
 		// for billing, including converter handlers that consume event usage.
 		syncAnthropicResponsesUsage(anthState, usage)
 		normalizeAnthropicEventUsageForResponses(event, usage)
+		if applyClaudeChatOutputUsageFallback(anthState, usage, assistantText.String(), 0) {
+			ccState.IncludeUsage = true
+		}
 
 		// 客户端已断开：跳过转换与写出，继续读上游直到流结束（usage 完整、
 		// 连接及时归还），不再提前 return。
@@ -517,6 +527,10 @@ func (s *OpenAIGatewayService) handleCCStreamingFromNativeAnthropic(
 
 	if clientDisconnected {
 		return resultWithUsage(), nil
+	}
+
+	if applyClaudeChatOutputUsageFallback(anthState, usage, assistantText.String(), 0) {
+		ccState.IncludeUsage = true
 	}
 
 	// Finalize only after the upstream has supplied a terminal event.

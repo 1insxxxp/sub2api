@@ -22,14 +22,17 @@ const (
 type GeminiUsageFallback struct {
 	UpstreamFinished      bool
 	InterruptedOutputZero bool
-	Input                 *GeminiInputUsageFallback
-	CandidateTokens       int
-	ThoughtTokens         int
-	UsageFields           uint8
-	MeasuredCandidates    int
-	MeasuredThoughts      int
-	UpstreamAccepted      bool
-	OutputTruncated       bool
+	// DeliveredOutputZero records an explicit upstream output-token zero that
+	// conflicts with semantic output delivered to the downstream client.
+	DeliveredOutputZero bool
+	Input               *GeminiInputUsageFallback
+	CandidateTokens     int
+	ThoughtTokens       int
+	UsageFields         uint8
+	MeasuredCandidates  int
+	MeasuredThoughts    int
+	UpstreamAccepted    bool
+	OutputTruncated     bool
 }
 
 // Output text stays on the live attempt only. Async billing receives token

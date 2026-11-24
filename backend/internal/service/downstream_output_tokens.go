@@ -476,8 +476,8 @@ func AttachDownstreamOutputTokenCollector(c *gin.Context, model string) (*Downst
 
 // ApplyDeliveredOutputTokens snapshots output that reached the client. It is
 // used as a billing fallback by protocols that allow estimates. Gemini measured
-// mode keeps it as delivery evidence; its own fallback counts received upstream
-// semantics, which may include output whose downstream write failed.
+// mode keeps it as delivery evidence, except when an explicit upstream zero is
+// contradicted by semantic output that was successfully delivered.
 func ApplyDeliveredOutputTokens(result *ForwardResult, collector *DownstreamOutputTokenCollector) {
 	if result == nil || collector == nil {
 		return
@@ -498,6 +498,18 @@ func ApplyDeliveredOutputTokens(result *ForwardResult, collector *DownstreamOutp
 		evidence != nil && evidence.UpstreamAccepted && !evidence.UpstreamFinished &&
 		!upstreamUsageComplete(result.Outcome) && !collector.HasDeliveredTerminal() && delivered > 0 && collector.HasDeliveredText() {
 		evidence.InterruptedOutputZero = true
+		result.OutputTokensSource = UsageTokenSourceUnreported
+		result.MeasuredUsageComplete = false
+	}
+	// Some OpenAI-compatible upstreams return candidatesTokenCount=0 even
+	// though the converted Gemini response contains usable text or a tool call.
+	// Keep the provider's zero as evidence, but settle the customer-facing
+	// output from bytes that actually reached the client.
+	if result.RequireMeasuredUsage && result.Stream && !result.GeminiUsageFinalized &&
+		result.OutputTokensSource == UsageTokenSourceUpstream && result.Usage.OutputTokens == 0 &&
+		evidence != nil && evidence.UpstreamAccepted && delivered > 0 &&
+		result.Outcome != nil && result.Outcome.HasEffectiveOutput() {
+		evidence.DeliveredOutputZero = true
 		result.OutputTokensSource = UsageTokenSourceUnreported
 		result.MeasuredUsageComplete = false
 	}

@@ -5,8 +5,10 @@ import (
 	"errors"
 	"strconv"
 	"testing"
+	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	gocache "github.com/patrickmn/go-cache"
 	"github.com/stretchr/testify/require"
 )
 
@@ -291,4 +293,29 @@ func TestUserCustomGroupAutomaticallyTracksSourceLifecycle(t *testing.T) {
 	require.Len(t, restored.Models, 1)
 	require.Equal(t, "my-model", restored.Models[0].PublicModel)
 	require.Equal(t, "renamed", restored.Models[0].SourceGroup.Name)
+}
+
+func TestCustomGroupSourceModelsRefreshesAfterModelIsRestored(t *testing.T) {
+	groupID := int64(11)
+	repo := &customGroupAvailabilityAccountRepoStub{accountsByGroupID: map[int64][]Account{groupID: nil}}
+	gateway := &GatewayService{
+		accountRepo:        repo,
+		modelsListCache:    gocache.New(time.Minute, time.Minute),
+		modelsListCacheTTL: time.Minute,
+	}
+	group := &Group{ID: groupID, Platform: PlatformAnthropic, Status: StatusActive}
+
+	// Prime the ordinary listing cache while the model is offline.
+	require.Empty(t, gateway.GetAvailableModels(context.Background(), &groupID, group.Platform))
+	// The account is restored before the cache expires. A custom group must see
+	// the restored mapping immediately instead of inheriting the stale empty list.
+	repo.accountsByGroupID[groupID] = []Account{{
+		ID:       100,
+		Platform: PlatformAnthropic,
+		Credentials: map[string]any{
+			"model_mapping": map[string]any{"same-name": "same-name"},
+		},
+	}}
+
+	require.Equal(t, []string{"same-name"}, gateway.CustomGroupSourceModels(context.Background(), group))
 }
