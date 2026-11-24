@@ -243,7 +243,6 @@ let loadMoreObserver: IntersectionObserver | null = null
 let loadMoreTimer: ReturnType<typeof setTimeout> | undefined
 let groupContextObserver: IntersectionObserver | null = null
 let disposed = false
-let lastScrollY = 0
 
 function readStoredGroupFilter(): string {
   try {
@@ -594,11 +593,9 @@ function updateMobileStatusChrome() {
     showBackToTop.value = scrollY > backToTopThreshold
   }
   document.documentElement.classList.toggle('model-status-mobile-header-hidden', mobileNavHidden.value)
-  lastScrollY = scrollY
 }
 
 function handleWindowResize() {
-  lastScrollY = window.scrollY || 0
   updateMobileStatusChrome()
   void nextTick().then(observeStatusGroups)
 }
@@ -676,7 +673,6 @@ onMounted(() => {
     void loadReport()
   }, refreshIntervalSeconds * 1000)
   document.addEventListener('visibilitychange', handleVisibilityChange)
-  lastScrollY = window.scrollY || 0
   updateMobileStatusChrome()
   window.addEventListener('scroll', updateMobileStatusChrome, { passive: true })
   window.addEventListener('resize', handleWindowResize)
