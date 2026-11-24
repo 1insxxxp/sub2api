@@ -261,6 +261,7 @@ type CreateGroupRequest struct {
 	EmptyResponseCompensationEnabled bool                          `json:"empty_response_compensation_enabled"`
 	GeminiInputCountingEnabled       *bool                         `json:"gemini_input_counting_enabled"`
 	IsExclusive                      bool                          `json:"is_exclusive"`
+	MinTotalRechargeUSD              float64                       `json:"min_total_recharge_usd"`
 	SubscriptionType                 string                        `json:"subscription_type" binding:"omitempty,oneof=standard subscription"`
 	DailyLimitUSD                    optionalLimitField            `json:"daily_limit_usd"`
 	WeeklyLimitUSD                   optionalLimitField            `json:"weekly_limit_usd"`
@@ -345,6 +346,7 @@ type UpdateGroupRequest struct {
 	EmptyResponseCompensationEnabled *bool                          `json:"empty_response_compensation_enabled"`
 	GeminiInputCountingEnabled       *bool                          `json:"gemini_input_counting_enabled"`
 	IsExclusive                      *bool                          `json:"is_exclusive"`
+	MinTotalRechargeUSD              *float64                       `json:"min_total_recharge_usd"`
 	Status                           string                         `json:"status" binding:"omitempty,oneof=active inactive"`
 	SubscriptionType                 string                         `json:"subscription_type" binding:"omitempty,oneof=standard subscription"`
 	DailyLimitUSD                    optionalLimitField             `json:"daily_limit_usd"`
@@ -763,6 +765,7 @@ func (h *GroupHandler) Create(c *gin.Context) {
 		EmptyResponseCompensationEnabled: req.EmptyResponseCompensationEnabled,
 		GeminiInputCountingEnabled:       req.GeminiInputCountingEnabled,
 		IsExclusive:                      req.IsExclusive,
+		MinTotalRechargeUSD:              req.MinTotalRechargeUSD,
 		SubscriptionType:                 req.SubscriptionType,
 		DailyLimitUSD:                    req.DailyLimitUSD.ToServiceInput(),
 		WeeklyLimitUSD:                   req.WeeklyLimitUSD.ToServiceInput(),
@@ -918,6 +921,7 @@ func (h *GroupHandler) Update(c *gin.Context) {
 		EmptyResponseCompensationEnabled: req.EmptyResponseCompensationEnabled,
 		GeminiInputCountingEnabled:       req.GeminiInputCountingEnabled,
 		IsExclusive:                      req.IsExclusive,
+		MinTotalRechargeUSD:              req.MinTotalRechargeUSD,
 		Status:                           req.Status,
 		SubscriptionType:                 req.SubscriptionType,
 		DailyLimitUSD:                    req.DailyLimitUSD.ToServiceInput(),

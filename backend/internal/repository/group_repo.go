@@ -112,6 +112,7 @@ func createGroupRecord(ctx context.Context, client *dbent.Client, groupIn *servi
 		SetGeminiInputCountingEnabled(groupIn.GeminiInputCountingEnabled).
 		SetSortOrder(groupIn.SortOrder).
 		SetIsExclusive(groupIn.IsExclusive).
+		SetMinTotalRechargeUsd(groupIn.MinTotalRechargeUSD).
 		SetStatus(groupIn.Status).
 		SetSubscriptionType(groupIn.SubscriptionType).
 		SetSystemCustomRoutingEnabled(groupIn.SystemCustomRoutingEnabled).
@@ -319,6 +320,7 @@ func (r *groupRepository) Update(ctx context.Context, groupIn *service.Group) er
 		SetEmptyResponseCompensationEnabled(groupIn.EmptyResponseCompensationEnabled).
 		SetGeminiInputCountingEnabled(groupIn.GeminiInputCountingEnabled).
 		SetIsExclusive(groupIn.IsExclusive).
+		SetMinTotalRechargeUsd(groupIn.MinTotalRechargeUSD).
 		SetStatus(groupIn.Status).
 		SetSubscriptionType(groupIn.SubscriptionType).
 		SetSystemCustomRoutingEnabled(groupIn.SystemCustomRoutingEnabled).

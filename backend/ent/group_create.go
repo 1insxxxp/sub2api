@@ -241,6 +241,20 @@ func (_c *GroupCreate) SetNillableIsExclusive(v *bool) *GroupCreate {
 	return _c
 }
 
+// SetMinTotalRechargeUsd sets the "min_total_recharge_usd" field.
+func (_c *GroupCreate) SetMinTotalRechargeUsd(v float64) *GroupCreate {
+	_c.mutation.SetMinTotalRechargeUsd(v)
+	return _c
+}
+
+// SetNillableMinTotalRechargeUsd sets the "min_total_recharge_usd" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableMinTotalRechargeUsd(v *float64) *GroupCreate {
+	if v != nil {
+		_c.SetMinTotalRechargeUsd(*v)
+	}
+	return _c
+}
+
 // SetStatus sets the "status" field.
 func (_c *GroupCreate) SetStatus(v string) *GroupCreate {
 	_c.mutation.SetStatus(v)
@@ -1349,6 +1363,10 @@ func (_c *GroupCreate) defaults() error {
 		v := group.DefaultIsExclusive
 		_c.mutation.SetIsExclusive(v)
 	}
+	if _, ok := _c.mutation.MinTotalRechargeUsd(); !ok {
+		v := group.DefaultMinTotalRechargeUsd
+		_c.mutation.SetMinTotalRechargeUsd(v)
+	}
 	if _, ok := _c.mutation.Status(); !ok {
 		v := group.DefaultStatus
 		_c.mutation.SetStatus(v)
@@ -1589,6 +1607,14 @@ func (_c *GroupCreate) check() error {
 	}
 	if _, ok := _c.mutation.IsExclusive(); !ok {
 		return &ValidationError{Name: "is_exclusive", err: errors.New(`ent: missing required field "Group.is_exclusive"`)}
+	}
+	if _, ok := _c.mutation.MinTotalRechargeUsd(); !ok {
+		return &ValidationError{Name: "min_total_recharge_usd", err: errors.New(`ent: missing required field "Group.min_total_recharge_usd"`)}
+	}
+	if v, ok := _c.mutation.MinTotalRechargeUsd(); ok {
+		if err := group.MinTotalRechargeUsdValidator(v); err != nil {
+			return &ValidationError{Name: "min_total_recharge_usd", err: fmt.Errorf(`ent: validator failed for field "Group.min_total_recharge_usd": %w`, err)}
+		}
 	}
 	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "Group.status"`)}
@@ -1874,6 +1900,10 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.IsExclusive(); ok {
 		_spec.SetField(group.FieldIsExclusive, field.TypeBool, value)
 		_node.IsExclusive = value
+	}
+	if value, ok := _c.mutation.MinTotalRechargeUsd(); ok {
+		_spec.SetField(group.FieldMinTotalRechargeUsd, field.TypeFloat64, value)
+		_node.MinTotalRechargeUsd = value
 	}
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(group.FieldStatus, field.TypeString, value)
@@ -2574,6 +2604,24 @@ func (u *GroupUpsert) SetIsExclusive(v bool) *GroupUpsert {
 // UpdateIsExclusive sets the "is_exclusive" field to the value that was provided on create.
 func (u *GroupUpsert) UpdateIsExclusive() *GroupUpsert {
 	u.SetExcluded(group.FieldIsExclusive)
+	return u
+}
+
+// SetMinTotalRechargeUsd sets the "min_total_recharge_usd" field.
+func (u *GroupUpsert) SetMinTotalRechargeUsd(v float64) *GroupUpsert {
+	u.Set(group.FieldMinTotalRechargeUsd, v)
+	return u
+}
+
+// UpdateMinTotalRechargeUsd sets the "min_total_recharge_usd" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateMinTotalRechargeUsd() *GroupUpsert {
+	u.SetExcluded(group.FieldMinTotalRechargeUsd)
+	return u
+}
+
+// AddMinTotalRechargeUsd adds v to the "min_total_recharge_usd" field.
+func (u *GroupUpsert) AddMinTotalRechargeUsd(v float64) *GroupUpsert {
+	u.Add(group.FieldMinTotalRechargeUsd, v)
 	return u
 }
 
@@ -3893,6 +3941,27 @@ func (u *GroupUpsertOne) SetIsExclusive(v bool) *GroupUpsertOne {
 func (u *GroupUpsertOne) UpdateIsExclusive() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateIsExclusive()
+	})
+}
+
+// SetMinTotalRechargeUsd sets the "min_total_recharge_usd" field.
+func (u *GroupUpsertOne) SetMinTotalRechargeUsd(v float64) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetMinTotalRechargeUsd(v)
+	})
+}
+
+// AddMinTotalRechargeUsd adds v to the "min_total_recharge_usd" field.
+func (u *GroupUpsertOne) AddMinTotalRechargeUsd(v float64) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.AddMinTotalRechargeUsd(v)
+	})
+}
+
+// UpdateMinTotalRechargeUsd sets the "min_total_recharge_usd" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateMinTotalRechargeUsd() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateMinTotalRechargeUsd()
 	})
 }
 
@@ -5549,6 +5618,27 @@ func (u *GroupUpsertBulk) SetIsExclusive(v bool) *GroupUpsertBulk {
 func (u *GroupUpsertBulk) UpdateIsExclusive() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateIsExclusive()
+	})
+}
+
+// SetMinTotalRechargeUsd sets the "min_total_recharge_usd" field.
+func (u *GroupUpsertBulk) SetMinTotalRechargeUsd(v float64) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetMinTotalRechargeUsd(v)
+	})
+}
+
+// AddMinTotalRechargeUsd adds v to the "min_total_recharge_usd" field.
+func (u *GroupUpsertBulk) AddMinTotalRechargeUsd(v float64) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.AddMinTotalRechargeUsd(v)
+	})
+}
+
+// UpdateMinTotalRechargeUsd sets the "min_total_recharge_usd" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateMinTotalRechargeUsd() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateMinTotalRechargeUsd()
 	})
 }
 

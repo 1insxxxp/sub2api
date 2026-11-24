@@ -203,6 +203,7 @@ func groupFromServiceBase(g *service.Group) Group {
 		RateMultiplier:                   g.RateMultiplier,
 		EmptyResponseCompensationEnabled: g.EmptyResponseCompensationEnabled,
 		IsExclusive:                      g.IsExclusive,
+		MinTotalRechargeUSD:              g.MinTotalRechargeUSD,
 		Status:                           g.Status,
 		SubscriptionType:                 g.SubscriptionType,
 		SystemCustomRoutingEnabled:       g.SystemCustomRoutingEnabled,

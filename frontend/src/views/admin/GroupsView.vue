@@ -864,6 +864,10 @@
               }}
             </span>
           </div>
+          <div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-[auto_12rem] sm:items-center">
+            <label class="text-sm text-gray-600 dark:text-gray-300">{{ t("admin.groups.rechargeGate.label") }}</label>
+            <input v-model.number="createForm.min_total_recharge_usd" type="number" min="0" step="0.01" class="input" :placeholder="t('admin.groups.rechargeGate.placeholder')" />
+          </div>
         </div>
 
         <!-- Subscription Configuration -->
@@ -2661,6 +2665,10 @@
                   : t("admin.groups.public")
               }}
             </span>
+          </div>
+          <div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-[auto_12rem] sm:items-center">
+            <label class="text-sm text-gray-600 dark:text-gray-300">{{ t("admin.groups.rechargeGate.label") }}</label>
+            <input v-model.number="editForm.min_total_recharge_usd" type="number" min="0" step="0.01" class="input" :placeholder="t('admin.groups.rechargeGate.placeholder')" />
           </div>
         </div>
         <div>
@@ -5486,6 +5494,7 @@ const createForm = reactive({
   empty_response_compensation_enabled: false,
   gemini_input_counting_enabled: true,
   is_exclusive: false,
+  min_total_recharge_usd: 0,
   subscription_type: "standard" as SubscriptionType,
   daily_limit_usd: null as number | null,
   weekly_limit_usd: null as number | null,
@@ -5903,6 +5912,7 @@ const editForm = reactive({
   empty_response_compensation_enabled: false,
   gemini_input_counting_enabled: undefined as boolean | undefined,
   is_exclusive: false,
+  min_total_recharge_usd: 0,
   status: "active" as "active" | "inactive",
   subscription_type: "standard" as SubscriptionType,
   daily_limit_usd: null as number | null,
@@ -6592,6 +6602,7 @@ const closeCreateModal = () => {
   createForm.empty_response_compensation_enabled = false;
   createForm.gemini_input_counting_enabled = true;
   createForm.is_exclusive = false;
+  createForm.min_total_recharge_usd = 0;
   createForm.subscription_type = "standard";
   createForm.daily_limit_usd = null;
   createForm.weekly_limit_usd = null;
@@ -6912,6 +6923,7 @@ const handleEdit = async (group: AdminGroup) => {
     group.empty_response_compensation_enabled ?? false;
   editForm.gemini_input_counting_enabled = group.gemini_input_counting_enabled;
   editForm.is_exclusive = group.is_exclusive;
+  editForm.min_total_recharge_usd = group.min_total_recharge_usd || 0;
   editForm.status = group.status;
   editForm.subscription_type = group.subscription_type || "standard";
   editForm.daily_limit_usd = group.daily_limit_usd;

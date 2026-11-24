@@ -266,6 +266,27 @@ func (_u *GroupUpdate) SetNillableIsExclusive(v *bool) *GroupUpdate {
 	return _u
 }
 
+// SetMinTotalRechargeUsd sets the "min_total_recharge_usd" field.
+func (_u *GroupUpdate) SetMinTotalRechargeUsd(v float64) *GroupUpdate {
+	_u.mutation.ResetMinTotalRechargeUsd()
+	_u.mutation.SetMinTotalRechargeUsd(v)
+	return _u
+}
+
+// SetNillableMinTotalRechargeUsd sets the "min_total_recharge_usd" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableMinTotalRechargeUsd(v *float64) *GroupUpdate {
+	if v != nil {
+		_u.SetMinTotalRechargeUsd(*v)
+	}
+	return _u
+}
+
+// AddMinTotalRechargeUsd adds value to the "min_total_recharge_usd" field.
+func (_u *GroupUpdate) AddMinTotalRechargeUsd(v float64) *GroupUpdate {
+	_u.mutation.AddMinTotalRechargeUsd(v)
+	return _u
+}
+
 // SetStatus sets the "status" field.
 func (_u *GroupUpdate) SetStatus(v string) *GroupUpdate {
 	_u.mutation.SetStatus(v)
@@ -1889,6 +1910,11 @@ func (_u *GroupUpdate) check() error {
 			return &ValidationError{Name: "peak_end", err: fmt.Errorf(`ent: validator failed for field "Group.peak_end": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.MinTotalRechargeUsd(); ok {
+		if err := group.MinTotalRechargeUsdValidator(v); err != nil {
+			return &ValidationError{Name: "min_total_recharge_usd", err: fmt.Errorf(`ent: validator failed for field "Group.min_total_recharge_usd": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Status(); ok {
 		if err := group.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Group.status": %w`, err)}
@@ -2023,6 +2049,12 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.IsExclusive(); ok {
 		_spec.SetField(group.FieldIsExclusive, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.MinTotalRechargeUsd(); ok {
+		_spec.SetField(group.FieldMinTotalRechargeUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedMinTotalRechargeUsd(); ok {
+		_spec.AddField(group.FieldMinTotalRechargeUsd, field.TypeFloat64, value)
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(group.FieldStatus, field.TypeString, value)
@@ -3133,6 +3165,27 @@ func (_u *GroupUpdateOne) SetNillableIsExclusive(v *bool) *GroupUpdateOne {
 	if v != nil {
 		_u.SetIsExclusive(*v)
 	}
+	return _u
+}
+
+// SetMinTotalRechargeUsd sets the "min_total_recharge_usd" field.
+func (_u *GroupUpdateOne) SetMinTotalRechargeUsd(v float64) *GroupUpdateOne {
+	_u.mutation.ResetMinTotalRechargeUsd()
+	_u.mutation.SetMinTotalRechargeUsd(v)
+	return _u
+}
+
+// SetNillableMinTotalRechargeUsd sets the "min_total_recharge_usd" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableMinTotalRechargeUsd(v *float64) *GroupUpdateOne {
+	if v != nil {
+		_u.SetMinTotalRechargeUsd(*v)
+	}
+	return _u
+}
+
+// AddMinTotalRechargeUsd adds value to the "min_total_recharge_usd" field.
+func (_u *GroupUpdateOne) AddMinTotalRechargeUsd(v float64) *GroupUpdateOne {
+	_u.mutation.AddMinTotalRechargeUsd(v)
 	return _u
 }
 
@@ -4772,6 +4825,11 @@ func (_u *GroupUpdateOne) check() error {
 			return &ValidationError{Name: "peak_end", err: fmt.Errorf(`ent: validator failed for field "Group.peak_end": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.MinTotalRechargeUsd(); ok {
+		if err := group.MinTotalRechargeUsdValidator(v); err != nil {
+			return &ValidationError{Name: "min_total_recharge_usd", err: fmt.Errorf(`ent: validator failed for field "Group.min_total_recharge_usd": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Status(); ok {
 		if err := group.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Group.status": %w`, err)}
@@ -4923,6 +4981,12 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if value, ok := _u.mutation.IsExclusive(); ok {
 		_spec.SetField(group.FieldIsExclusive, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.MinTotalRechargeUsd(); ok {
+		_spec.SetField(group.FieldMinTotalRechargeUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedMinTotalRechargeUsd(); ok {
+		_spec.AddField(group.FieldMinTotalRechargeUsd, field.TypeFloat64, value)
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(group.FieldStatus, field.TypeString, value)

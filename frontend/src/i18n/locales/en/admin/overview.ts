@@ -890,6 +890,7 @@ export default {
 
     // Groups
     groups: {
+      rechargeGate: { label: 'Recharge gate (cumulative completed recharge, USD)', placeholder: '0 means unrestricted' },
       title: 'Group Management',
       description: 'Manage API key groups and rate multipliers',
       searchGroups: 'Search groups...',

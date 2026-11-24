@@ -519,7 +519,7 @@ func validateAPIKeyGroupAllowed(apiKey *service.APIKey) bool {
 		// Category entries derive admission from current source permissions at resolution.
 		return true
 	}
-	return apiKey.User.CanBindGroup(group.ID, group.IsExclusive)
+	return apiKey.User.MeetsGroupRechargeRequirement(group) && apiKey.User.CanBindGroup(group.ID, group.IsExclusive)
 }
 
 func validateAPIKeyGroupAvailable(apiKey *service.APIKey) (string, string, bool) {

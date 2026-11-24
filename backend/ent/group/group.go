@@ -48,6 +48,8 @@ const (
 	FieldPeakRateMultiplier = "peak_rate_multiplier"
 	// FieldIsExclusive holds the string denoting the is_exclusive field in the database.
 	FieldIsExclusive = "is_exclusive"
+	// FieldMinTotalRechargeUsd holds the string denoting the min_total_recharge_usd field in the database.
+	FieldMinTotalRechargeUsd = "min_total_recharge_usd"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
 	// FieldDuplicateOperationID holds the string denoting the duplicate_operation_id field in the database.
@@ -312,6 +314,7 @@ var Columns = []string{
 	FieldPeakEnd,
 	FieldPeakRateMultiplier,
 	FieldIsExclusive,
+	FieldMinTotalRechargeUsd,
 	FieldStatus,
 	FieldDuplicateOperationID,
 	FieldPlatform,
@@ -443,6 +446,10 @@ var (
 	DefaultPeakRateMultiplier float64
 	// DefaultIsExclusive holds the default value on creation for the "is_exclusive" field.
 	DefaultIsExclusive bool
+	// DefaultMinTotalRechargeUsd holds the default value on creation for the "min_total_recharge_usd" field.
+	DefaultMinTotalRechargeUsd float64
+	// MinTotalRechargeUsdValidator is a validator for the "min_total_recharge_usd" field. It is called by the builders before save.
+	MinTotalRechargeUsdValidator func(float64) error
 	// DefaultStatus holds the default value on creation for the "status" field.
 	DefaultStatus string
 	// StatusValidator is a validator for the "status" field. It is called by the builders before save.
@@ -638,6 +645,11 @@ func ByPeakRateMultiplier(opts ...sql.OrderTermOption) OrderOption {
 // ByIsExclusive orders the results by the is_exclusive field.
 func ByIsExclusive(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldIsExclusive, opts...).ToFunc()
+}
+
+// ByMinTotalRechargeUsd orders the results by the min_total_recharge_usd field.
+func ByMinTotalRechargeUsd(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldMinTotalRechargeUsd, opts...).ToFunc()
 }
 
 // ByStatus orders the results by the status field.

@@ -112,6 +112,7 @@ type Group struct {
 	RateMultiplier                   float64           `json:"rate_multiplier"`
 	EmptyResponseCompensationEnabled bool              `json:"empty_response_compensation_enabled"`
 	IsExclusive                      bool              `json:"is_exclusive"`
+	MinTotalRechargeUSD              float64           `json:"min_total_recharge_usd"`
 	Status                           string            `json:"status"`
 
 	SubscriptionType           string   `json:"subscription_type"`
