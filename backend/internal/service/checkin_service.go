@@ -36,6 +36,9 @@ var (
 	ErrCheckinInsufficientSpend       = infraerrors.New(http.StatusForbidden, "CHECKIN_INSUFFICIENT_SPEND", "minimum cumulative spend is required before check-in")
 	ErrCheckinInsufficientDailyUsage  = infraerrors.New(http.StatusForbidden, "CHECKIN_INSUFFICIENT_DAILY_USAGE", "minimum daily usage count is required before check-in")
 	ErrCheckinNotFound                = infraerrors.NotFound("CHECKIN_NOT_FOUND", "check-in record not found")
+	ErrCheckinReviewRequired          = infraerrors.New(http.StatusForbidden, "CHECKIN_REVIEW_REQUIRED", "当前签到需要审核，请联系客服")
+	ErrCheckinReviewRejected          = infraerrors.Forbidden("CHECKIN_REVIEW_REJECTED", "本次签到审核未通过，可联系客服复核")
+	ErrCheckinBrowserCookieRequired   = infraerrors.New(http.StatusForbidden, "CHECKIN_BROWSER_COOKIE_REQUIRED", "请开启浏览器 Cookie 后重试签到")
 	errCheckinAlreadyRecorded         = errors.New("check-in already recorded")
 )
 
@@ -247,9 +250,11 @@ func ProvideCheckinService(
 	settingRepo SettingRepository,
 	authCacheInvalidator APIKeyAuthCacheInvalidator,
 	billingCacheService BillingCache,
+	timingWheel *TimingWheelService,
 ) *CheckinService {
 	svc := NewCheckinService(entClient, authCacheInvalidator, billingCacheService)
 	svc.SetSettingRepository(settingRepo)
+	svc.scheduleAccountRiskMaintenance(timingWheel)
 	return svc
 }
 
@@ -389,6 +394,17 @@ func (s *CheckinService) currentCheckinPolicyState(ctx context.Context, userID i
 }
 
 func (s *CheckinService) Checkin(ctx context.Context, userID int64) (*CheckinResult, error) {
+	return s.CheckinWithBrowser(ctx, userID, CheckinBrowser{})
+}
+
+type CheckinBrowser struct {
+	Hash          string
+	CookiePresent bool
+	IP            string
+	UserAgent     string
+}
+
+func (s *CheckinService) CheckinWithBrowser(ctx context.Context, userID int64, browser CheckinBrowser) (*CheckinResult, error) {
 	checkinDate, nextReset := s.currentBeijingDay()
 	existing, err := s.getCheckinByUserAndDate(ctx, userID, checkinDate)
 	if err != nil {
@@ -428,8 +444,21 @@ func (s *CheckinService) Checkin(ctx context.Context, userID int64) (*CheckinRes
 		balanceBefore      float64
 		balanceAfter       float64
 		reward             float64
+		reviewRequired     bool
 	)
 	err = s.withCheckinCampaignConfigReadTx(ctx, func(client *dbent.Client, txRepo SettingRepository) error {
+		// Acquire the account lock before rechecking today's award. A concurrent
+		// winner on another browser must be returned as an idempotent success.
+		if browser.Hash != "" && client.Driver().Dialect() == "postgres" {
+			rows, err := client.QueryContext(ctx, `SELECT id FROM users WHERE id=$1 FOR NO KEY UPDATE`, userID)
+			if err != nil {
+				return err
+			}
+			var locked int64
+			if err = scanRiskRow(rows, &locked); err != nil {
+				return err
+			}
+		}
 		txExisting, getErr := s.getCheckinByUserAndDateWithClient(ctx, client, userID, checkinDate)
 		if getErr != nil {
 			return getErr
@@ -487,6 +516,32 @@ func (s *CheckinService) Checkin(ctx context.Context, userID int64) (*CheckinRes
 			}
 			if !checkinSpendEligible(txTotalUsage, cfg.MinTotalUsageUSD, txTotalRecharge, cfg.MinTotalRechargeUSD) {
 				return checkinEligibilityError(*cfg)
+			}
+		}
+		mode := "observe"
+		if txRepo != nil {
+			stored, err := txRepo.GetValue(ctx, checkinModeKey)
+			if err != nil && !errors.Is(err, ErrSettingNotFound) {
+				return err
+			}
+			if err == nil {
+				mode = stored
+			}
+		}
+		if mode == "enforce" && (!browser.CookiePresent || browser.Hash == "") {
+			return ErrCheckinBrowserCookieRequired
+		}
+		if browser.Hash != "" {
+			reviewRequired, configErr = claimCheckinBrowser(ctx, client, browser.Hash, checkinDate, userID, mode == "enforce")
+			if configErr != nil {
+				return configErr
+			}
+			_, err := client.ExecContext(ctx, `INSERT INTO account_risk_events (user_id,event_type,browser_hash,ip_address,user_agent) VALUES ($1,'checkin',$2,$3,$4)`, userID, browser.Hash, sanitizeAuthSourceIP(browser.IP), strings.ToValidUTF8(sanitizeAuthSourceUserAgent(strings.ReplaceAll(browser.UserAgent, "\x00", "")), ""))
+			if err != nil {
+				return err
+			}
+			if reviewRequired {
+				return nil
 			}
 		}
 
@@ -587,6 +642,9 @@ func (s *CheckinService) Checkin(ctx context.Context, userID int64) (*CheckinRes
 	}
 	if err != nil {
 		return nil, err
+	}
+	if reviewRequired {
+		return nil, ErrCheckinReviewRequired
 	}
 	s.invalidateBalanceCaches(ctx, userID)
 

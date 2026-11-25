@@ -103,7 +103,14 @@ func (r *userRepository) create(ctx context.Context, userIn *service.User, guard
 	}
 
 	lockKeys := []string{normalizedEmailUniquenessLockKey(userIn.Email)}
+	var risk *service.RegistrationRiskSource
 	if guardEmailAlias {
+		risk = service.RegistrationRiskSourceFrom(ctx)
+		if risk != nil {
+			lockKeys = append(lockKeys, "registration_ip:"+risk.IP)
+			userIn.RegistrationIP = risk.IP
+			userIn.RegistrationUserAgent = risk.UserAgent
+		}
 		// 别名变体的字面量不同，唯一索引无法兜底；用收件箱身份锁把同一收件箱的并发注册串行化。
 		lockKeys = append(lockKeys, emailAliasUniquenessLockKey(userIn.Email))
 	}
@@ -171,6 +178,16 @@ func (r *userRepository) create(ctx context.Context, userIn *service.User, guard
 		Save(txCtx)
 	if err != nil {
 		return translatePersistenceError(err, nil, service.ErrEmailExists)
+	}
+
+	if risk != nil {
+		cfg, err := service.ReadAccountRiskConfig(txCtx, NewSettingRepository(txClient))
+		if err != nil {
+			return err
+		}
+		if err = risk.CompleteRegistration(txCtx, txClient, cfg, created.ID, userIn.Email, time.Now().UTC()); err != nil {
+			return err
+		}
 	}
 
 	if err := r.syncUserAllowedGroupsWithClient(txCtx, txClient, created.ID, userIn.AllowedGroups); err != nil {

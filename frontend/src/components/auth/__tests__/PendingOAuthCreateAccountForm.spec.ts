@@ -51,6 +51,23 @@ describe('PendingOAuthCreateAccountForm', () => {
     })
   })
 
+  it('reveals the widget for a challenged DingTalk registration with the entered email intact', async () => {
+    getPublicSettings.mockResolvedValueOnce({ turnstile_enabled: false })
+      .mockResolvedValueOnce({ turnstile_enabled: true, turnstile_site_key: 'site' })
+    sendPendingOAuthVerifyCode.mockRejectedValueOnce({ reason: 'REGISTRATION_CAPTCHA_REQUIRED', message: 'Verify first' })
+    const wrapper = mount(PendingOAuthCreateAccountForm, {
+      props: { testIdPrefix: 'dingtalk', initialEmail: 'user@example.com', isSubmitting: false },
+      global: { stubs: { TurnstileWidget: { template: '<div data-test="captcha" />', methods: { reset() {} } } } }
+    })
+    await flushPromises()
+    await wrapper.get('[data-testid="dingtalk-create-account-send-code"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-test="captcha"]').exists()).toBe(true)
+    expect((wrapper.get('input[type="email"]').element as HTMLInputElement).value).toBe('user@example.com')
+    expect(showError).toHaveBeenCalledWith('Verify first')
+    wrapper.unmount()
+  })
+
   it('does not restart the code cooldown after switching away during a send', async () => {
     vi.useFakeTimers()
     let finish!: (value: { countdown: number }) => void

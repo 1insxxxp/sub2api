@@ -178,6 +178,7 @@
 </template>
 
 <script setup lang="ts">
+import { useRegistrationCaptcha } from '@/composables/useRegistrationCaptcha'
 import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -206,6 +207,12 @@ import {
   loadAffiliateReferralCode,
   oauthAffiliatePayload
 } from '@/utils/oauthAffiliate'
+
+const {
+  turnstileEnabled, turnstileSiteKey, tencentCaptchaEnabled, tencentCaptchaAppId,
+  tencentCaptchaRegion, aliyunCaptchaEnabled, aliyunCaptchaSceneId, aliyunCaptchaPrefix,
+  aliyunCaptchaRegion, captchaEnabled, actionCaptchaEnabled, applyCaptchaSettings, refreshChallenge
+} = useRegistrationCaptcha()
 
 const { t, locale } = useI18n()
 
@@ -262,16 +269,7 @@ const pendingAdoptionDecision = ref<{
 const hasRegisterData = ref<boolean>(false)
 
 // Public settings
-const turnstileEnabled = ref<boolean>(false)
-const turnstileSiteKey = ref<string>('')
 const siteName = ref<string>('Passion')
-const tencentCaptchaEnabled = ref<boolean>(false)
-const tencentCaptchaAppId = ref<string>('')
-const tencentCaptchaRegion = ref<string>('cn')
-const aliyunCaptchaEnabled = ref<boolean>(false)
-const aliyunCaptchaSceneId = ref<string>('')
-const aliyunCaptchaPrefix = ref<string>('')
-const aliyunCaptchaRegion = ref<string>('cn')
 const registrationEmailSuffixWhitelist = ref<string[]>([])
 // 域名限量注册开关：开启时非白名单域名可注册 1 个账户（由后端判定），前端不做白名单预检。
 const emailDomainQuotaEnabled = ref<boolean>(false)
@@ -284,22 +282,7 @@ const resendTencentCaptchaRandstr = ref<string>('')
 const createAccountTurnstileToken = ref<string>('')
 const createAccountTencentCaptchaRandstr = ref<string>('')
 const showResendTurnstile = ref<boolean>(false)
-const aliyunCaptchaReady = computed(
-  () =>
-    aliyunCaptchaEnabled.value &&
-    Boolean(aliyunCaptchaSceneId.value) &&
-    Boolean(aliyunCaptchaPrefix.value)
-)
 // 动作触发式验证码（腾讯/阿里云）：重发验证码、创建账号时弹窗验证
-const actionCaptchaEnabled = computed(
-  () =>
-    (tencentCaptchaEnabled.value && Boolean(tencentCaptchaAppId.value)) ||
-    aliyunCaptchaReady.value
-)
-const captchaEnabled = computed(
-  () =>
-    (turnstileEnabled.value && Boolean(turnstileSiteKey.value)) || actionCaptchaEnabled.value
-)
 
 const errors = ref({
   code: '',
@@ -369,16 +352,8 @@ onMounted(async () => {
 
   // Load public settings
   try {
-    const settings = await getPublicSettings()
-    turnstileEnabled.value = settings.turnstile_enabled
-    turnstileSiteKey.value = settings.turnstile_site_key || ''
-    tencentCaptchaEnabled.value = settings.tencent_captcha_enabled === true
-    tencentCaptchaAppId.value = settings.tencent_captcha_app_id || ''
-    tencentCaptchaRegion.value = settings.tencent_captcha_region || 'cn'
-    aliyunCaptchaEnabled.value = settings.aliyun_captcha_enabled === true
-    aliyunCaptchaSceneId.value = settings.aliyun_captcha_scene_id || ''
-    aliyunCaptchaPrefix.value = settings.aliyun_captcha_prefix || ''
-    aliyunCaptchaRegion.value = settings.aliyun_captcha_region || 'cn'
+    const settings = await getPublicSettings('registration')
+    applyCaptchaSettings(settings)
     siteName.value = settings.site_name || 'Passion'
     registrationEmailSuffixWhitelist.value = normalizeRegistrationEmailSuffixWhitelist(
       settings.registration_email_suffix_whitelist || []
@@ -589,6 +564,7 @@ async function sendCode(): Promise<void> {
 
     showResendTurnstile.value = false
   } catch (error: unknown) {
+    if (await refreshChallenge(error) && turnstileEnabled.value) showResendTurnstile.value = true
     errorMessage.value = buildRegistrationErrorMessage(error, t('auth.sendCodeFailed'))
 
     appStore.showError(errorMessage.value)
@@ -754,6 +730,7 @@ async function handleVerify(): Promise<void> {
     // Redirect to dashboard
     await router.push(pendingRedirect.value || '/dashboard')
   } catch (error: unknown) {
+    if (await refreshChallenge(error) && turnstileEnabled.value) showResendTurnstile.value = true
     errorMessage.value = buildRegistrationErrorMessage(error, t('auth.verifyFailed'))
 
     appStore.showError(errorMessage.value)
@@ -792,7 +769,11 @@ function buildEmailSuffixNotAllowedMessage(): string {
 }
 
 function buildRegistrationErrorMessage(error: unknown, fallback: string): string {
-  if (extractApiErrorCode(error) === 'EMAIL_DOMAIN_REGISTRATION_LIMIT') {
+  const code = extractApiErrorCode(error)
+  if (code === 'REGISTRATION_COOLDOWN' || code === 'REGISTRATION_CAPTCHA_REQUIRED' || code === 'REGISTRATION_CAPTCHA_UNAVAILABLE') {
+    return t(`auth.errors.${code}`)
+  }
+  if (code === 'EMAIL_DOMAIN_REGISTRATION_LIMIT') {
     return t('auth.emailDomainRegistrationLimit')
   }
   if (extractApiErrorCode(error) === 'EMAIL_BLOCKED') {

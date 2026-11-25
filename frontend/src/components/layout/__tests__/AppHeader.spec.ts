@@ -94,6 +94,7 @@ vi.mock('vue-i18n', async () => {
     'checkin.loading': '加载中',
     'checkin.success': '签到成功，获得 $3.00',
     'checkin.failed': '签到失败',
+    'checkin.errors.CHECKIN_REVIEW_REJECTED': '本次签到审核未通过，如需复核请联系客服。',
     'checkin.eligibilityTitle': 'Check-in eligibility',
     'checkin.cumulativeEligibilityTitle': 'Cumulative eligibility',
     'checkin.dailyUsageSectionTitle': 'Daily check-in requirement',
@@ -480,6 +481,16 @@ describe('AppHeader daily check-in entry', () => {
 
     expect(getCheckinStatus).toHaveBeenCalledTimes(1)
     expect(wrapper.find('[data-test="daily-checkin-button"]').exists()).toBe(false)
+  })
+
+  it('shows the appeal message after a rejected check-in', async () => {
+    getCheckinStatus.mockResolvedValue({ enabled: true, checked_in: false, eligible: true, blacklisted: false })
+    submitCheckin.mockRejectedValue({ reason: 'CHECKIN_REVIEW_REJECTED', message: 'original message' })
+    const wrapper = await mountHeader()
+    await wrapper.get('[data-test="daily-checkin-button"]').trigger('click')
+    await flushPromises()
+    expect(showError).toHaveBeenCalledWith('本次签到审核未通过，如需复核请联系客服。')
+    expect(refreshUser).not.toHaveBeenCalled()
   })
 
   it('marks the button checked and refreshes balance after a successful check-in', async () => {

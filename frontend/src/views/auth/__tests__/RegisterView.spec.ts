@@ -124,6 +124,22 @@ describe('RegisterView invitation layout', () => {
     registerMock.mockResolvedValue({})
   })
 
+  it('reveals a newly required captcha without clearing the registration form', async () => {
+    getPublicSettingsMock.mockResolvedValueOnce({ ...publicSettings, turnstile_enabled: false })
+    registerMock.mockRejectedValueOnce({ reason: 'REGISTRATION_CAPTCHA_REQUIRED', message: 'verification required' })
+    const wrapper = mountRegister()
+    await flushPromises()
+    await wrapper.get('#email').setValue('risk@example.com')
+    await wrapper.get('#password').setValue('secret-123')
+    await wrapper.get('#confirmPassword').setValue('secret-123')
+    await wrapper.get('form').trigger('submit.prevent')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="turnstile-widget"]').exists()).toBe(true)
+    expect((wrapper.get('#email').element as HTMLInputElement).value).toBe('risk@example.com')
+    expect((wrapper.get('#password').element as HTMLInputElement).value).toBe('secret-123')
+    expect(registerMock).toHaveBeenCalledTimes(1)
+  })
+
   it('does not flash the promo-code field before disabled settings finish loading', async () => {
     let resolveSettings!: (settings: typeof publicSettings) => void
     getPublicSettingsMock.mockReturnValueOnce(

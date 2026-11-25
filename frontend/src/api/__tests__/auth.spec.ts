@@ -9,7 +9,7 @@ vi.mock('@/api/client', () => ({
   apiClient: { get, post }
 }))
 
-import { getAffiliateReferralStatus, resolveAffiliateReferral } from '@/api/auth'
+import { getAffiliateReferralStatus, getPublicSettings, resolveAffiliateReferral } from '@/api/auth'
 
 describe('affiliate referral lock API', () => {
   beforeEach(() => {
@@ -41,5 +41,32 @@ describe('affiliate referral lock API', () => {
     post.mockRejectedValue(error)
 
     await expect(resolveAffiliateReferral('AFF123')).rejects.toBe(error)
+  })
+})
+
+describe('registration-only human verification', () => {
+  const settings = { registration_enabled: true, turnstile_enabled: false, turnstile_site_key: 'widget-id' }
+
+  beforeEach(() => get.mockReset())
+
+  it('activates the configured widget only for a challenged registration', async () => {
+    get.mockResolvedValueOnce({ data: settings }).mockResolvedValueOnce({ data: { provider: 'turnstile' } })
+    await expect(getPublicSettings('registration')).resolves.toMatchObject({
+      turnstile_enabled: true,
+      turnstile_site_key: 'widget-id'
+    })
+    expect(get).toHaveBeenNthCalledWith(2, '/auth/registration-challenge')
+    expect(settings.turnstile_enabled).toBe(false)
+  })
+
+  it('keeps the other public settings when the preflight cannot be read', async () => {
+    get.mockResolvedValueOnce({ data: settings }).mockRejectedValueOnce(new Error('unavailable'))
+    await expect(getPublicSettings('registration')).resolves.toBe(settings)
+  })
+
+  it('loads ordinary login settings without a challenge lookup', async () => {
+    get.mockResolvedValueOnce({ data: settings })
+    await expect(getPublicSettings()).resolves.toBe(settings)
+    expect(get).toHaveBeenCalledTimes(1)
   })
 })

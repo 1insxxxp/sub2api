@@ -6,10 +6,18 @@ export default {
   },
   auth: {
     errors: {
+      REGISTRATION_COOLDOWN: '当前注册过于频繁，请稍后重试。',
+      REGISTRATION_CAPTCHA_REQUIRED: '请在注册页面完成人机验证后重试。',
+      REGISTRATION_CAPTCHA_UNAVAILABLE: '注册验证暂时不可用，请稍后重试。',
       AUTH_IP_BLOCKED: '当前 IP 被限制登录，请联系管理员处理。'
     }
   },
   checkin: {
+    errors: {
+      CHECKIN_REVIEW_REJECTED: '本次签到审核未通过，如需复核请联系客服。',
+      CHECKIN_REVIEW_REQUIRED: '当前签到需要审核，请联系客服',
+      CHECKIN_BROWSER_COOKIE_REQUIRED: '请允许本站使用 Cookie 后重试签到。',
+    },
     action: '签到',
     checked: '已签到',
     unavailable: '暂不可签',

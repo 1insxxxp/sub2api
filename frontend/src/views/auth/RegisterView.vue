@@ -384,6 +384,7 @@
 </template>
 
 <script setup lang="ts">
+import { useRegistrationCaptcha } from '@/composables/useRegistrationCaptcha'
 import { computed, ref, reactive, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -423,6 +424,12 @@ import {
 } from '@/utils/oauthAffiliate'
 import type { LoginAgreementDocument } from '@/types'
 
+const {
+  turnstileEnabled, turnstileSiteKey, tencentCaptchaEnabled, tencentCaptchaAppId,
+  tencentCaptchaRegion, aliyunCaptchaEnabled, aliyunCaptchaSceneId, aliyunCaptchaPrefix,
+  aliyunCaptchaRegion, captchaEnabled, actionCaptchaEnabled, applyCaptchaSettings, refreshChallenge
+} = useRegistrationCaptcha()
+
 const { t, locale } = useI18n()
 const LOGIN_AGREEMENT_STORAGE_KEY = 'sub2api_login_agreement_consent'
 
@@ -459,16 +466,7 @@ const promoCodeEnabled = ref<boolean>(
 )
 const invitationCodeEnabled = ref<boolean>(false)
 const affiliateEnabled = ref<boolean>(false)
-const turnstileEnabled = ref<boolean>(false)
-const turnstileSiteKey = ref<string>('')
 const siteName = ref<string>('Passion')
-const tencentCaptchaEnabled = ref<boolean>(false)
-const tencentCaptchaAppId = ref<string>('')
-const tencentCaptchaRegion = ref<string>('cn')
-const aliyunCaptchaEnabled = ref<boolean>(false)
-const aliyunCaptchaSceneId = ref<string>('')
-const aliyunCaptchaPrefix = ref<string>('')
-const aliyunCaptchaRegion = ref<string>('cn')
 const linuxdoOAuthEnabled = ref<boolean>(false)
 const wechatOAuthEnabled = ref<boolean>(false)
 const oidcOAuthEnabled = ref<boolean>(false)
@@ -490,22 +488,7 @@ const showAgreementModal = ref<boolean>(false)
 const turnstileRef = ref<InstanceType<typeof TurnstileWidget> | null>(null)
 const turnstileToken = ref<string>('')
 const tencentCaptchaRandstr = ref<string>('')
-const aliyunCaptchaReady = computed(
-  () =>
-    aliyunCaptchaEnabled.value &&
-    Boolean(aliyunCaptchaSceneId.value) &&
-    Boolean(aliyunCaptchaPrefix.value)
-)
 // 动作触发式验证码（腾讯/阿里云）：提交、OAuth 启动时弹窗验证
-const actionCaptchaEnabled = computed(
-  () =>
-    (tencentCaptchaEnabled.value && Boolean(tencentCaptchaAppId.value)) ||
-    aliyunCaptchaReady.value
-)
-const captchaEnabled = computed(
-  () =>
-    (turnstileEnabled.value && Boolean(turnstileSiteKey.value)) || actionCaptchaEnabled.value
-)
 
 // Promo code validation
 const promoValidating = ref<boolean>(false)
@@ -680,21 +663,13 @@ onMounted(async () => {
   void refreshAffiliateReferralLock()
 
   try {
-    const settings = await getPublicSettings()
+    const settings = await getPublicSettings('registration')
     registrationEnabled.value = settings.registration_enabled
     emailVerifyEnabled.value = settings.email_verify_enabled
     promoCodeEnabled.value = settings.promo_code_enabled
     invitationCodeEnabled.value = settings.invitation_code_enabled
     affiliateEnabled.value = settings.affiliate_enabled
-    turnstileEnabled.value = settings.turnstile_enabled
-    turnstileSiteKey.value = settings.turnstile_site_key || ''
-    tencentCaptchaEnabled.value = settings.tencent_captcha_enabled === true
-    tencentCaptchaAppId.value = settings.tencent_captcha_app_id || ''
-    tencentCaptchaRegion.value = settings.tencent_captcha_region || 'cn'
-    aliyunCaptchaEnabled.value = settings.aliyun_captcha_enabled === true
-    aliyunCaptchaSceneId.value = settings.aliyun_captcha_scene_id || ''
-    aliyunCaptchaPrefix.value = settings.aliyun_captcha_prefix || ''
-    aliyunCaptchaRegion.value = settings.aliyun_captcha_region || 'cn'
+    applyCaptchaSettings(settings)
     siteName.value = settings.site_name || 'Passion'
     linuxdoOAuthEnabled.value = settings.linuxdo_oauth_enabled
     wechatOAuthEnabled.value = isWeChatWebOAuthEnabled(settings)
@@ -982,14 +957,22 @@ async function acquireActionProof(): Promise<boolean> {
 async function handleOAuthStart(request: OAuthLoginStart): Promise<void> {
   if (registrationActionDisabled.value) return
 
-  if (!actionCaptchaEnabled.value) {
+  const cloudflareProof = turnstileEnabled.value ? turnstileToken.value : ''
+  if (turnstileEnabled.value && !cloudflareProof) {
+    errors.turnstile = t('auth.completeVerification')
+    appStore.showError(errors.turnstile)
+    return
+  }
+  if (!actionCaptchaEnabled.value && !cloudflareProof) {
     window.location.href = buildOAuthLoginStartURL(request)
     return
   }
 
   isLoading.value = true
   try {
-    const proof = await turnstileRef.value?.verifyAction()
+    const proof = actionCaptchaEnabled.value
+      ? await turnstileRef.value?.verifyAction()
+      : { token: cloudflareProof, randstr: '' }
     if (!proof) return
 
     const result = await startOAuthLogin(
@@ -1216,6 +1199,7 @@ async function handleRegister(): Promise<void> {
     await router.push('/dashboard')
   } catch (error: unknown) {
     // Handle registration error
+    await refreshChallenge(error)
     errorMessage.value = buildRegistrationErrorMessage(error, t('auth.registrationFailed'))
 
     // Also show error toast
@@ -1229,7 +1213,11 @@ async function handleRegister(): Promise<void> {
 }
 
 function buildRegistrationErrorMessage(error: unknown, fallback: string): string {
-  if (extractApiErrorCode(error) === 'EMAIL_DOMAIN_REGISTRATION_LIMIT') {
+  const code = extractApiErrorCode(error)
+  if (code === 'REGISTRATION_COOLDOWN' || code === 'REGISTRATION_CAPTCHA_REQUIRED' || code === 'REGISTRATION_CAPTCHA_UNAVAILABLE') {
+    return t(`auth.errors.${code}`)
+  }
+  if (code === 'EMAIL_DOMAIN_REGISTRATION_LIMIT') {
     return t('auth.emailDomainRegistrationLimit')
   }
   if (extractApiErrorCode(error) === 'EMAIL_BLOCKED') {

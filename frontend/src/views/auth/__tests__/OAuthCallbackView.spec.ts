@@ -1,4 +1,4 @@
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import OAuthCallbackView from '@/views/auth/OAuthCallbackView.vue'
 
@@ -65,6 +65,7 @@ vi.mock('@/api/auth', async () => {
   const actual = await vi.importActual<typeof import('@/api/auth')>('@/api/auth')
   return {
     ...actual,
+    getPublicSettings: vi.fn().mockResolvedValue({ turnstile_enabled: true, turnstile_site_key: 'site' }),
     exchangePendingOAuthCompletion: (...args: any[]) => exchangePendingOAuthCompletionMock(...args),
     persistOAuthTokenContext: vi.fn(),
   }
@@ -223,4 +224,34 @@ describe('OAuthCallbackView', () => {
     expect(apiPostMock.mock.calls[0][1]).not.toHaveProperty('email')
     expect(setTokenMock).toHaveBeenCalledWith('token-2')
   })
+  it('completes a challenged verified email signup in the same pending session', async () => {
+    routeState.path = '/auth/oauth/callback'
+    exchangePendingOAuthCompletionMock.mockResolvedValue({
+      error: 'registration_completion_required', provider: 'google', resolved_email: 'verified@example.com'
+    })
+    apiPostMock.mockRejectedValueOnce({ reason: 'REGISTRATION_CAPTCHA_REQUIRED', message: 'Verify first' })
+      .mockResolvedValueOnce({ data: { access_token: 'new-token' } })
+    const wrapper = mount(OAuthCallbackView, {
+      global: {
+        stubs: { CaptchaChallenge: { template: `<button data-test="verify" @click="$emit('verify', 'solved', '')">Verify</button>`, methods: { reset() {} } } }
+      }
+    })
+    await flushPromises()
+    const fields = wrapper.findAll('input[type="password"]')
+    await fields[0].setValue('secret-123')
+    await fields[1].setValue('secret-123')
+    await wrapper.get('.btn-primary').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('Verify first')
+    expect((fields[0].element as HTMLInputElement).value).toBe('secret-123')
+    await wrapper.get('[data-test="verify"]').trigger('click')
+    await wrapper.get('.btn-primary').trigger('click')
+    await flushPromises()
+    expect(apiPostMock).toHaveBeenLastCalledWith('/auth/oauth/google/complete-registration', {
+      password: 'secret-123', turnstile_token: 'solved'
+    })
+    expect(exchangePendingOAuthCompletionMock).toHaveBeenCalledTimes(1)
+    expect(setTokenMock).toHaveBeenCalledWith('new-token')
+  })
+
 })

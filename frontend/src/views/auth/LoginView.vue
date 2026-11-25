@@ -669,14 +669,17 @@ async function handlePasskeyLogin(): Promise<void> {
 async function handleOAuthStart(request: OAuthLoginStart): Promise<void> {
   if (authActionDisabled.value) return
 
-  if (!actionCaptchaEnabled.value) {
+  const cloudflareProof = turnstileEnabled.value ? turnstileToken.value : ''
+  if (!actionCaptchaEnabled.value && !cloudflareProof) {
     window.location.href = buildOAuthLoginStartURL(request)
     return
   }
 
   isLoading.value = true
   try {
-    const proof = await turnstileRef.value?.verifyAction()
+    const proof = actionCaptchaEnabled.value
+      ? await turnstileRef.value?.verifyAction()
+      : { token: cloudflareProof, randstr: '' }
     if (!proof) return
 
     const result = await startOAuthLogin(

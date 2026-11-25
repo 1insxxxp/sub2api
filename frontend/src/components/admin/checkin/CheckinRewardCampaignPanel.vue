@@ -227,6 +227,7 @@
 </template>
 
 <script setup lang="ts">
+import { beijingToday } from '@/utils/format'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
@@ -418,18 +419,6 @@ function canDisable(campaign: AdminCheckinRewardCampaign): boolean {
   return campaign.lifecycle_status === 'active' || campaign.lifecycle_status === 'upcoming'
 }
 
-function beijingToday(): string {
-  const parts = new Intl.DateTimeFormat('en', {
-    timeZone: 'Asia/Shanghai',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(new Date())
-  const year = parts.find((part) => part.type === 'year')?.value ?? ''
-  const month = parts.find((part) => part.type === 'month')?.value ?? ''
-  const day = parts.find((part) => part.type === 'day')?.value ?? ''
-  return `${year}-${month}-${day}`
-}
 
 function lifecycleClass(lifecycle: CheckinRewardCampaignLifecycle): string {
   const classes: Record<CheckinRewardCampaignLifecycle, string> = {

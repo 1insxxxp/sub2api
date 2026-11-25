@@ -327,6 +327,13 @@ func registerCategoryDefaultGroupRoutes(admin *gin.RouterGroup, h *handler.Handl
 func registerCheckinRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	checkins := admin.Group("/checkins")
 	{
+		checkins.GET("/risk/config", h.Admin.Checkin.GetAccountRiskConfig)
+		checkins.PUT("/risk/config", h.Admin.Checkin.UpdateAccountRiskConfig)
+		checkins.GET("/risk/associations", h.Admin.Checkin.ListRiskAssociations)
+		checkins.GET("/risk/reviews", h.Admin.Checkin.ListBrowserReviews)
+		checkins.POST("/risk/reviews/decision", h.Admin.Checkin.DecideBrowserReview)
+		checkins.GET("/risk/whitelist", h.Admin.Checkin.ListBrowserWhitelist)
+		checkins.PUT("/risk/whitelist", h.Admin.Checkin.UpdateBrowserWhitelist)
 		checkins.GET("/config", h.Admin.Checkin.GetConfig)
 		checkins.PUT("/config", h.Admin.Checkin.UpdateConfig)
 		checkins.GET("/stats", h.Admin.Checkin.GetStats)

@@ -87,6 +87,7 @@
                 @keyup.enter="handleSubmitInvitation"
               />
             </div>
+            <OAuthRegistrationChallenge ref="registrationChallenge" />
             <button
               class="btn btn-primary w-full"
               :disabled="isSubmitting || !invitationCode.trim()"
@@ -146,6 +147,7 @@
               {{ t('auth.oauthFlow.createAccountHint') }}
             </p>
             <PendingOAuthCreateAccountForm
+              ref="pendingRegistrationForm"
               test-id-prefix="dingtalk"
               :initial-email="pendingAccountEmail"
               :is-submitting="isSubmitting"
@@ -235,6 +237,7 @@
 </template>
 
 <script setup lang="ts">
+import OAuthRegistrationChallenge from '@/components/auth/OAuthRegistrationChallenge.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -262,6 +265,8 @@ import {
 
 const route = useRoute()
 const router = useRouter()
+const registrationChallenge = ref<InstanceType<typeof OAuthRegistrationChallenge> | null>(null)
+const pendingRegistrationForm = ref<InstanceType<typeof PendingOAuthCreateAccountForm> | null>(null)
 const { t, te } = useI18n()
 
 const authStore = useAuthStore()
@@ -639,12 +644,18 @@ async function handleSubmitInvitation() {
 
   isSubmitting.value = true
   try {
+    const proof = registrationChallenge.value ? await registrationChallenge.value.proof() : {}
+    if (!proof) {
+      invitationError.value = t('auth.completeVerification')
+      return
+    }
     const affCode = loadOAuthAffiliateCode()
     const decision = currentAdoptionDecision()
     const { data: completion } = await apiClient.post<DingTalkPendingActionResponse>(
       '/auth/oauth/dingtalk/complete-registration',
       {
         pending_oauth_token: legacyPendingOAuthToken.value || undefined,
+        ...proof,
         invitation_code: invitationCode.value.trim(),
         ...oauthAffiliatePayload(affCode),
         ...serializeAdoptionDecision(decision)
@@ -652,6 +663,7 @@ async function handleSubmitInvitation() {
     )
     await finalizePendingAccountResponse(completion)
   } catch (e: unknown) {
+    await registrationChallenge.value?.failed(e)
     const err = e as { message?: string; response?: { data?: { message?: string } } }
     invitationError.value =
       err.response?.data?.message || err.message || t('auth.dingtalk.completeRegistrationFailed')
@@ -696,6 +708,7 @@ async function handleCreateAccount(payload: PendingOAuthCreateAccountPayload) {
     })
     await finalizePendingAccountResponse(data)
   } catch (e: unknown) {
+    await pendingRegistrationForm.value?.refreshChallenge(e)
     if (isCreateAccountRecoveryError(e)) {
       switchToBindLoginMode(payload.email.trim())
       return

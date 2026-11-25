@@ -65,6 +65,7 @@
               @keyup.enter="handleSubmitRegistration"
             />
           </div>
+          <OAuthRegistrationChallenge ref="registrationChallenge" />
           <p v-if="registrationError" class="text-sm text-red-600 dark:text-red-400">
             {{ registrationError }}
           </p>
@@ -146,6 +147,7 @@
 </template>
 
 <script setup lang="ts">
+import OAuthRegistrationChallenge from '@/components/auth/OAuthRegistrationChallenge.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -166,6 +168,7 @@ import {
 
 const route = useRoute()
 const router = useRouter()
+const registrationChallenge = ref<InstanceType<typeof OAuthRegistrationChallenge> | null>(null)
 const { t } = useI18n()
 const { copyToClipboard } = useClipboard()
 const appStore = useAppStore()
@@ -342,7 +345,13 @@ async function handleSubmitRegistration() {
 
   isSubmitting.value = true
   try {
+    const proof = registrationChallenge.value ? await registrationChallenge.value.proof() : {}
+    if (!proof) {
+      registrationError.value = t('auth.completeVerification')
+      return
+    }
     const payload: { password: string; invitation_code?: string; aff_code?: string } = {
+      ...proof,
       password: password.value,
       ...oauthAffiliatePayload(loadOAuthAffiliateCode())
     }
@@ -355,6 +364,7 @@ async function handleSubmitRegistration() {
     )
     await finalizeTokenResponse(data, redirectTo.value)
   } catch (e: unknown) {
+    await registrationChallenge.value?.failed(e)
     const err = e as { message?: string; response?: { data?: { message?: string } } }
     registrationError.value =
       err.response?.data?.message || err.message || t('auth.oidc.completeRegistrationFailed')

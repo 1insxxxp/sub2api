@@ -135,6 +135,26 @@ describe('EmailVerifyView', () => {
     setTokenMock.mockResolvedValue({})
   })
 
+  it('shows a newly required widget on a failed send without losing the registration draft', async () => {
+    getPublicSettingsMock.mockResolvedValueOnce({ turnstile_enabled: false })
+      .mockResolvedValueOnce({ turnstile_enabled: true, turnstile_site_key: 'site' })
+    sendVerifyCodeMock.mockRejectedValueOnce({ reason: 'REGISTRATION_CAPTCHA_REQUIRED', message: 'Verify first' })
+    const draft = JSON.stringify({ email: 'email@example.com', password: 'secret-123' })
+    sessionStorage.setItem('register_data', draft)
+    const wrapper = mount(EmailVerifyView, {
+      global: { stubs: {
+        AuthLayout: { template: '<div><slot /></div>' },
+        Icon: true,
+        TurnstileWidget: { template: '<div data-test="captcha" />' }
+      } }
+    })
+    await flushPromises()
+    expect(wrapper.get('[data-test="captcha"]').exists()).toBe(true)
+    expect(sessionStorage.getItem('register_data')).toBe(draft)
+    expect(sendVerifyCodeMock).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
+
   it('acquires a fresh Tencent proof for each resend action', async () => {
     getPublicSettingsMock.mockResolvedValue({
       turnstile_enabled: false,

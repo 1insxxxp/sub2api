@@ -4,6 +4,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -175,4 +176,18 @@ func TestOAuthStartGetRemainsCompatibleWhenTencentDisabled(t *testing.T) {
 	require.Equal(t, http.StatusFound, recorder.Code)
 	require.Equal(t, "https://provider.example/authorize", recorder.Header().Get("Location"))
 	require.Zero(t, verifier.calls)
+}
+
+func TestOAuthCompletionRiskProof(t *testing.T) {
+	h, verifier := newOAuthCaptchaTestHandler(true)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodPost, "/api/v1/auth/oauth/google/complete-registration", nil)
+	require.True(t, h.verifyOAuthCompletionProof(c, "new@example.com", oauthStartCaptchaRequest{}))
+	require.Zero(t, verifier.calls, "completed start proofs are consumed only inside the registration transaction")
+	var req completeEmailOAuthRequest
+	require.NoError(t, json.Unmarshal([]byte(`{"password":"secret-123","tencent_captcha_ticket":"ticket","tencent_captcha_randstr":"@rand"}`), &req))
+	require.True(t, h.verifyOAuthCompletionProof(c, "new@example.com", req.oauthStartCaptchaRequest))
+	require.Equal(t, 1, verifier.calls)
+	require.Equal(t, "ticket", verifier.proof.Ticket)
+	require.Equal(t, "@rand", verifier.proof.Randstr)
 }

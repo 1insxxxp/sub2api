@@ -600,7 +600,7 @@ import SubscriptionProgressMini from '@/components/common/SubscriptionProgressMi
 import AnnouncementBell from '@/components/common/AnnouncementBell.vue'
 import DefaultUserAvatar from '@/components/common/DefaultUserAvatar.vue'
 import Icon from '@/components/icons/Icon.vue'
-import { extractApiErrorMessage } from '@/utils/apiError'
+import { extractApiErrorCode, extractApiErrorMessage } from '@/utils/apiError'
 import { sanitizeUrl } from '@/utils/url'
 import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
 import { resolveRouteMetaKeys } from '@/router/title'
@@ -957,7 +957,12 @@ async function handleCheckin() {
     appStore.showSuccess(t('checkin.success', { amount: creditedAmount.toFixed(2) }))
     await authStore.refreshUser()
   } catch (error) {
-    appStore.showError(extractApiErrorMessage(error, t('checkin.failed')))
+    const reason = extractApiErrorCode(error)
+    if (reason === 'CHECKIN_BROWSER_COOKIE_REQUIRED' || reason === 'CHECKIN_REVIEW_REQUIRED' || reason === 'CHECKIN_REVIEW_REJECTED') {
+      appStore.showError(t(`checkin.errors.${reason}`))
+    } else {
+      appStore.showError(extractApiErrorMessage(error, t('checkin.failed')))
+    }
   } finally {
     checkinSubmitting.value = false
   }

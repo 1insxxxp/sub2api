@@ -9,10 +9,18 @@ export default {
   },
   auth: {
     errors: {
+      REGISTRATION_COOLDOWN: 'Too many registrations. Please try again later.',
+      REGISTRATION_CAPTCHA_REQUIRED: 'Complete human verification on the registration page and try again.',
+      REGISTRATION_CAPTCHA_UNAVAILABLE: 'Registration verification is temporarily unavailable. Please try again later.',
       AUTH_IP_BLOCKED: 'Login from your current IP is blocked. Please contact the administrator.'
     }
   },
   checkin: {
+    errors: {
+      CHECKIN_REVIEW_REJECTED: 'Your check-in review was declined. Contact support to request another review.',
+      CHECKIN_REVIEW_REQUIRED: 'Your check-in needs review. Please contact support.',
+      CHECKIN_BROWSER_COOKIE_REQUIRED: 'Allow cookies for this site and try checking in again.',
+    },
     action: 'Check in',
     checked: 'Checked',
     unavailable: 'Unavailable',

@@ -27,6 +27,55 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+func TestCheckinWithBrowserReviewDoesNotCreditBalance(t *testing.T) {
+	ctx := context.Background()
+	client := newCheckinServiceTestClient(t)
+	_, err := client.ExecContext(ctx, `CREATE TABLE account_risk_events (user_id BIGINT,event_type TEXT,browser_hash TEXT,ip_address TEXT,user_agent TEXT); CREATE TABLE checkin_browser_claims (browser_hash TEXT, checkin_date TEXT, user_id BIGINT, PRIMARY KEY(browser_hash, checkin_date));
+		CREATE TABLE checkin_browser_reviews (user_id BIGINT, browser_hash TEXT, checkin_date TEXT, status TEXT, PRIMARY KEY(user_id, browser_hash, checkin_date));
+		CREATE TABLE checkin_browser_whitelist (user_id BIGINT PRIMARY KEY);`)
+	require.NoError(t, err)
+	repo := newCheckinSettingRepoStub()
+	svc := NewCheckinService(client, nil, nil)
+	svc.SetSettingRepository(repo)
+	configureCheckinCampaignAwardBaseline(t, ctx, svc)
+	repo.values["checkin_browser_risk_mode"] = "enforce"
+	first := createCheckinTestUser(t, ctx, client, "first@example.com", 0)
+	second := createCheckinTestUser(t, ctx, client, "second@example.com", 0)
+	createCheckinUsage(t, ctx, client, first.ID, 5, 5)
+	createCheckinUsage(t, ctx, client, second.ID, 5, 5)
+	_, err = svc.CheckinWithBrowser(ctx, first.ID, CheckinBrowser{Hash: "shared-browser", CookiePresent: true})
+	require.NoError(t, err)
+	_, err = svc.CheckinWithBrowser(ctx, second.ID, CheckinBrowser{Hash: "shared-browser", CookiePresent: true})
+	require.ErrorIs(t, err, ErrCheckinReviewRequired)
+	updated, err := client.User.Get(ctx, second.ID)
+	require.NoError(t, err)
+	require.Zero(t, updated.Balance)
+	rows, err := client.QueryContext(ctx, `SELECT status FROM checkin_browser_reviews WHERE user_id=$1`, second.ID)
+	require.NoError(t, err)
+	require.True(t, rows.Next())
+	var status string
+	require.NoError(t, rows.Scan(&status))
+	require.NoError(t, rows.Close())
+	require.Equal(t, "pending", status)
+}
+
+func TestCheckinRequiresExistingBrowserCookieInEnforcementMode(t *testing.T) {
+	ctx := context.Background()
+	client := newCheckinServiceTestClient(t)
+	repo := newCheckinSettingRepoStub()
+	svc := NewCheckinService(client, nil, nil)
+	svc.SetSettingRepository(repo)
+	configureCheckinCampaignAwardBaseline(t, ctx, svc)
+	repo.values["checkin_browser_risk_mode"] = "enforce"
+	user := createCheckinTestUser(t, ctx, client, "cookie@example.com", 0)
+	createCheckinUsage(t, ctx, client, user.ID, 5, 5)
+	_, err := svc.CheckinWithBrowser(ctx, user.ID, CheckinBrowser{Hash: "new-browser"})
+	require.ErrorIs(t, err, ErrCheckinBrowserCookieRequired)
+	updated, err := client.User.Get(ctx, user.ID)
+	require.NoError(t, err)
+	require.Zero(t, updated.Balance)
+}
+
 func newCheckinServiceTestClient(t *testing.T) *dbent.Client {
 	t.Helper()
 

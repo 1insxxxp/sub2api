@@ -456,6 +456,8 @@
         </div>
       </section>
 
+      <CheckinRiskPanel />
+
       <CheckinRewardCampaignPanel
         :default-tiers="campaignDefaultTiers"
         :default-tiers-ready="campaignDefaultTiersReady"
@@ -791,6 +793,7 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import DataTable from '@/components/common/DataTable.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import Icon from '@/components/icons/Icon.vue'
+import CheckinRiskPanel from '@/components/admin/checkin/CheckinRiskPanel.vue'
 import CheckinRewardCampaignPanel from '@/components/admin/checkin/CheckinRewardCampaignPanel.vue'
 
 const { t } = useI18n()

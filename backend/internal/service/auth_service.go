@@ -293,6 +293,8 @@ func (s *AuthService) RegisterWithVerificationAndMetadata(ctx context.Context, e
 	if err := s.createUserAndClaimInvitation(ctx, user, invitationRedeemCode); err != nil {
 		// 优先检查邮箱冲突错误（竞态条件下可能发生）
 		switch {
+		case isRegistrationRiskError(err):
+			return "", nil, s.registrationRiskPublicError(ctx, err)
 		case errors.Is(err, ErrEmailExists):
 			return "", nil, ErrEmailExists
 		case errors.Is(err, ErrEmailDomainRegistrationLimit):
@@ -445,6 +447,10 @@ func (s *AuthService) VerifyCaptcha(ctx context.Context, proof CaptchaProof, rem
 		logger.LegacyPrintf("service.auth", "%s", "[Auth] Failed to read captcha provider settings")
 		return ErrServiceUnavailable
 	}
+	return s.verifyCaptchaWithConfig(ctx, providerConfig, proof, remoteIP, required)
+}
+
+func (s *AuthService) verifyCaptchaWithConfig(ctx context.Context, providerConfig CaptchaProviderConfig, proof CaptchaProof, remoteIP string, required bool) error {
 	turnstileEnabled := providerConfig.TurnstileEnabled
 	tencentEnabled := providerConfig.Tencent.Enabled
 	aliyunEnabled := providerConfig.Aliyun.Enabled
@@ -720,6 +726,9 @@ func (s *AuthService) LoginOrRegisterOAuth(ctx context.Context, email, username 
 			}
 
 			if err := s.userRepo.CreateWithEmailAliasGuard(ctx, newUser); err != nil {
+				if isRegistrationRiskError(err) {
+					return "", nil, s.registrationRiskPublicError(ctx, err)
+				}
 				if errors.Is(err, ErrEmailExists) {
 					// 并发场景：GetByEmail 与 Create 之间用户被创建。
 					user, err = s.recoverOAuthCreateEmailConflict(ctx, email)
@@ -877,6 +886,9 @@ func (s *AuthService) loginOrRegisterOAuthWithTokenPair(ctx context.Context, ema
 				txCtx := dbent.NewTxContext(ctx, tx)
 
 				if err := s.userRepo.CreateWithEmailAliasGuard(txCtx, newUser); err != nil {
+					if isRegistrationRiskError(err) {
+						return nil, nil, s.registrationRiskPublicError(ctx, err)
+					}
 					if errors.Is(err, ErrEmailExists) {
 						user, err = s.recoverOAuthCreateEmailConflict(ctx, email)
 						if err != nil {
@@ -904,6 +916,9 @@ func (s *AuthService) loginOrRegisterOAuthWithTokenPair(ctx context.Context, ema
 				}
 			} else {
 				if err := s.userRepo.CreateWithEmailAliasGuard(ctx, newUser); err != nil {
+					if isRegistrationRiskError(err) {
+						return nil, nil, s.registrationRiskPublicError(ctx, err)
+					}
 					if errors.Is(err, ErrEmailExists) {
 						user, err = s.recoverOAuthCreateEmailConflict(ctx, email)
 						if err != nil {

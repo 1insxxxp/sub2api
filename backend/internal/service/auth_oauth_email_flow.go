@@ -171,6 +171,8 @@ func (s *AuthService) RegisterOAuthEmailAccount(
 
 	if err := s.createUserWithRegistrationEmailGuard(ctx, user); err != nil {
 		switch {
+		case isRegistrationRiskError(err):
+			return nil, nil, s.registrationRiskPublicError(ctx, err)
 		case errors.Is(err, ErrEmailExists):
 			return nil, nil, ErrEmailExists
 		case errors.Is(err, ErrEmailDomainRegistrationLimit):
@@ -258,6 +260,8 @@ func (s *AuthService) RegisterVerifiedOAuthEmailAccount(
 
 	if err := s.createUserWithRegistrationEmailGuard(ctx, user); err != nil {
 		switch {
+		case isRegistrationRiskError(err):
+			return nil, nil, s.registrationRiskPublicError(ctx, err)
 		case errors.Is(err, ErrEmailExists):
 			return nil, nil, ErrEmailExists
 		case errors.Is(err, ErrEmailDomainRegistrationLimit):
@@ -500,6 +504,12 @@ func (s *AuthService) RecordSuccessfulLogin(ctx context.Context, userID int64) {
 }
 
 func (s *AuthService) RecordSuccessfulLoginWithMetadata(ctx context.Context, userID int64, metadata AuthSourceMetadata) {
+	if src := RegistrationRiskSourceFrom(ctx); src != nil && s != nil && s.entClient != nil && userID > 0 {
+		metadata = AuthSourceMetadata{IP: src.IP, UserAgent: src.UserAgent}
+		if err := src.recordEvent(ctx, s.entClient, userID, "login", time.Now().UTC()); err != nil {
+			slog.Warn("failed to record login browser evidence", "error", err)
+		}
+	}
 	if s != nil && s.userRepo != nil && userID > 0 {
 		user, err := s.userRepo.GetByID(ctx, userID)
 		if err == nil && user != nil && !isReservedEmail(user.Email) {

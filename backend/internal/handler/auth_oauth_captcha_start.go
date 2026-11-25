@@ -30,7 +30,7 @@ func (h *AuthHandler) requireActionCaptchaForOAuthLoginStart(c *gin.Context) boo
 	if c.Request.Method == http.MethodPost {
 		_ = c.ShouldBindJSON(&req)
 	}
-	if err := h.authService.VerifyActionCaptchaIfEnabled(c.Request.Context(), service.CaptchaProof{
+	if err := h.authService.VerifyOAuthStartCaptcha(c.Request.Context(), service.CaptchaProof{
 		TurnstileToken: req.TurnstileToken,
 		TencentTicket:  req.TencentCaptchaTicket,
 		TencentRandstr: req.TencentCaptchaRandstr,

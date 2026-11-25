@@ -194,6 +194,9 @@ func (s *AuthService) createEmailOAuthUser(ctx context.Context, email, username,
 		SignupSource: providerType,
 	}
 	if err := s.userRepo.CreateWithEmailAliasGuard(ctx, user); err != nil {
+		if isRegistrationRiskError(err) {
+			return nil, false, s.registrationRiskPublicError(ctx, err)
+		}
 		if errors.Is(err, ErrEmailExists) {
 			existing, loadErr := s.recoverOAuthCreateEmailConflict(ctx, email)
 			if loadErr != nil {

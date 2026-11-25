@@ -87,3 +87,27 @@ describe('user check-in campaign response contract', () => {
     expect(post).toHaveBeenCalledWith('/user/checkin')
   })
 })
+
+describe('browser cookie check-in retry', () => {
+  it('retries only the explicit cookie bootstrap response once', async () => {
+    const noCookie = { reason: 'CHECKIN_BROWSER_COOKIE_REQUIRED' }
+    post.mockReset().mockRejectedValue(noCookie)
+    await expect(submitCheckin()).rejects.toBe(noCookie)
+    expect(post).toHaveBeenCalledTimes(2)
+  })
+
+  it('returns the reward from the retry when the browser accepted its cookie', async () => {
+    const result = { ...campaignStatus, checked_in: true, balance_after: 11 }
+    post.mockReset().mockRejectedValueOnce({ reason: 'CHECKIN_BROWSER_COOKIE_REQUIRED' })
+      .mockResolvedValueOnce({ data: result })
+    await expect(submitCheckin()).resolves.toBe(result)
+    expect(post).toHaveBeenCalledTimes(2)
+  })
+
+  it('surfaces review decisions without retrying', async () => {
+    const pending = { reason: 'CHECKIN_REVIEW_REQUIRED' }
+    post.mockReset().mockRejectedValue(pending)
+    await expect(submitCheckin()).rejects.toBe(pending)
+    expect(post).toHaveBeenCalledTimes(1)
+  })
+})

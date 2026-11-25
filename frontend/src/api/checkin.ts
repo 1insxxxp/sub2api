@@ -3,6 +3,7 @@
  */
 
 import { apiClient } from './client'
+import { extractApiErrorCode } from '@/utils/apiError'
 
 export interface CheckinStatus {
   enabled: boolean
@@ -78,6 +79,11 @@ export async function getCheckinStatus(): Promise<CheckinStatus> {
 }
 
 export async function submitCheckin(): Promise<CheckinResult> {
-  const { data } = await apiClient.post<CheckinResult>('/user/checkin')
-  return data
+  const claim = async () => (await apiClient.post<CheckinResult>('/user/checkin')).data
+  try {
+    return await claim()
+  } catch (error) {
+    if (extractApiErrorCode(error) !== 'CHECKIN_BROWSER_COOKIE_REQUIRED') throw error
+    return claim()
+  }
 }

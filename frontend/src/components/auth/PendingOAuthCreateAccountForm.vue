@@ -97,7 +97,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useRegistrationCaptcha } from '@/composables/useRegistrationCaptcha'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TurnstileWidget from '@/components/CaptchaChallenge.vue'
 import { getPublicSettings, sendPendingOAuthVerifyCode } from '@/api/auth'
@@ -125,6 +126,12 @@ const emit = defineEmits<{
   switchToBind: [email: string]
 }>()
 
+const {
+  turnstileEnabled, turnstileSiteKey, tencentCaptchaEnabled, tencentCaptchaAppId,
+  tencentCaptchaRegion, aliyunCaptchaEnabled, aliyunCaptchaSceneId, aliyunCaptchaPrefix,
+  aliyunCaptchaRegion, captchaEnabled, actionCaptchaEnabled, applyCaptchaSettings, refreshChallenge
+} = useRegistrationCaptcha()
+
 const { t } = useI18n()
 const appStore = useAppStore()
 
@@ -138,34 +145,10 @@ const sendCodeSuccess = ref(false)
 const countdown = ref(0)
 const invitationCodeEnabled = ref(false)
 const emailVerifyEnabled = ref(true)
-const turnstileEnabled = ref(false)
-const turnstileSiteKey = ref('')
-const tencentCaptchaEnabled = ref(false)
-const tencentCaptchaAppId = ref('')
-const tencentCaptchaRegion = ref('cn')
-const aliyunCaptchaEnabled = ref(false)
-const aliyunCaptchaSceneId = ref('')
-const aliyunCaptchaPrefix = ref('')
-const aliyunCaptchaRegion = ref('cn')
 const turnstileToken = ref('')
 const tencentCaptchaRandstr = ref('')
 const turnstileRef = ref<InstanceType<typeof TurnstileWidget> | null>(null)
-const aliyunCaptchaReady = computed(
-  () =>
-    aliyunCaptchaEnabled.value &&
-    Boolean(aliyunCaptchaSceneId.value) &&
-    Boolean(aliyunCaptchaPrefix.value)
-)
 // 动作触发式验证码（腾讯/阿里云）：发送验证码、提交时弹窗验证
-const actionCaptchaEnabled = computed(
-  () =>
-    (tencentCaptchaEnabled.value && Boolean(tencentCaptchaAppId.value)) ||
-    aliyunCaptchaReady.value
-)
-const captchaEnabled = computed(
-  () =>
-    (turnstileEnabled.value && Boolean(turnstileSiteKey.value)) || actionCaptchaEnabled.value
-)
 
 let countdownTimer: ReturnType<typeof setInterval> | null = null
 let disposed = false
@@ -293,6 +276,7 @@ async function handleSendCode() {
     sendCodeSuccess.value = true
     startCountdown(response.countdown)
   } catch (error: unknown) {
+    await refreshChallenge(error)
     sendCodeError.value = getRequestErrorMessage(error, t('auth.sendCodeFailed'))
   } finally {
     if (captchaEnabled.value) {
@@ -341,24 +325,18 @@ async function handleSubmit() {
   }
 }
 
+defineExpose({ refreshChallenge })
+
 function emitSwitchToBind() {
   emit('switchToBind', email.value.trim())
 }
 
 onMounted(async () => {
   try {
-    const settings = await getPublicSettings()
+    const settings = await getPublicSettings('registration')
     invitationCodeEnabled.value = settings.invitation_code_enabled === true
     emailVerifyEnabled.value = settings.email_verify_enabled !== false
-    turnstileEnabled.value = settings.turnstile_enabled === true
-    turnstileSiteKey.value = settings.turnstile_site_key || ''
-    tencentCaptchaEnabled.value = settings.tencent_captcha_enabled === true
-    tencentCaptchaAppId.value = settings.tencent_captcha_app_id || ''
-    tencentCaptchaRegion.value = settings.tencent_captcha_region || 'cn'
-    aliyunCaptchaEnabled.value = settings.aliyun_captcha_enabled === true
-    aliyunCaptchaSceneId.value = settings.aliyun_captcha_scene_id || ''
-    aliyunCaptchaPrefix.value = settings.aliyun_captcha_prefix || ''
-    aliyunCaptchaRegion.value = settings.aliyun_captcha_region || 'cn'
+    applyCaptchaSettings(settings)
   } catch {
     invitationCodeEnabled.value = false
     emailVerifyEnabled.value = true

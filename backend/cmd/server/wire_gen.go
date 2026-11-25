@@ -329,7 +329,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	paymentHandler := admin.NewPaymentHandler(paymentService, paymentConfigService)
 	affiliateHandler := admin.NewAffiliateHandler(affiliateService, adminService)
 	complianceHandler := admin.NewComplianceHandler(settingService)
-	checkinService := service.ProvideCheckinService(client, settingRepository, apiKeyAuthCacheInvalidator, billingCache)
+	checkinService := service.ProvideCheckinService(client, settingRepository, apiKeyAuthCacheInvalidator, billingCache, timingWheelService)
 	checkinHandler := admin.NewCheckinHandler(checkinService)
 	auditLogRepository := repository.NewAuditLogRepository(db)
 	auditLogService := service.ProvideAuditLogService(auditLogRepository, settingService)
