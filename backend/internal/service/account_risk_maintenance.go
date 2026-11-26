@@ -64,13 +64,15 @@ func (s *CheckinService) maintainAccountRiskEvidence(ctx context.Context) error 
 	for rows.Next() {
 		var bucket time.Time
 		if err = rows.Scan(&bucket); err != nil {
-			rows.Close()
+			_ = rows.Close()
 			return err
 		}
 		buckets = append(buckets, bucket)
 	}
 	err = rows.Err()
-	rows.Close()
+	if closeErr := rows.Close(); err == nil {
+		err = closeErr
+	}
 	if err != nil {
 		return err
 	}

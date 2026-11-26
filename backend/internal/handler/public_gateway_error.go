@@ -99,7 +99,7 @@ func (w *publicGatewayWriter) Write(body []byte) (int, error) {
 		if !w.Written() && strings.HasPrefix(w.Header().Get("Content-Type"), "application/json") {
 			if safe, ok := publicJSONError(body); ok {
 				if gjson.GetBytes(body, "status").String() != "failed" {
-					w.ResponseWriter.WriteHeader(http.StatusBadGateway)
+					w.WriteHeader(http.StatusBadGateway)
 					return len(body), w.writeError(body)
 				}
 				w.Header().Del("Content-Length")
@@ -267,7 +267,7 @@ func (w *publicGatewayWriter) writeError(body []byte) error {
 		envelope = gin.H{"type": "error", "error": gin.H{"type": public.Type(), "message": public.Message}}
 	}
 	safe, _ := json.Marshal(envelope)
-	w.ResponseWriter.WriteHeader(public.Status)
+	w.WriteHeader(public.Status)
 	_, err := w.ResponseWriter.Write(safe)
 	return err
 }

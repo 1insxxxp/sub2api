@@ -37,7 +37,7 @@ func TestRegistrationRiskChallengeCooldownAndExpiry(t *testing.T) {
 	signup := func(n int, at time.Time) error {
 		tx, err := client.Tx(ctx)
 		require.NoError(t, err)
-		defer tx.Rollback()
+		defer func() { _ = tx.Rollback() }()
 		if err = source.CompleteRegistration(ctx, tx.Client(), cfg, int64(n), "user@example.com", at); err != nil {
 			return err
 		}

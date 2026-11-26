@@ -56,7 +56,7 @@ func (source *RegistrationRiskSource) decision(ctx context.Context, client *dben
 	if err != nil {
 		return "", 0, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var cooldown bool
 	var count int
 	if !rows.Next() {
@@ -93,7 +93,7 @@ func (source *RegistrationRiskSource) hasEmailReceipt(ctx context.Context, clien
 	if err != nil {
 		return false, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	found := rows.Next()
 	return found, rows.Err()
 }
@@ -161,7 +161,7 @@ func (s *CheckinService) RegistrationRiskHitsToday(ctx context.Context) (map[str
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	hits := map[string]int64{"challenge": 0, "cooldown": 0}
 	for rows.Next() {
 		var action string
@@ -327,7 +327,7 @@ func (s *AuthService) VerifyOAuthStartCaptcha(ctx context.Context, proof Captcha
 			return ErrRegistrationCaptchaUnavailable
 		}
 	}
-	if !providers.Tencent.Enabled && !providers.Aliyun.Enabled && !(providers.TurnstileEnabled && proof.TurnstileToken != "") {
+	if !providers.Tencent.Enabled && !providers.Aliyun.Enabled && (!providers.TurnstileEnabled || proof.TurnstileToken == "") {
 		return nil
 	}
 	if err = s.verifyCaptchaWithConfig(ctx, providers, proof, src.IP, false); err != nil {

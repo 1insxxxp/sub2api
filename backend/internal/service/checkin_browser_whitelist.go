@@ -13,7 +13,7 @@ import (
 
 // scanRiskRow closes the Ent client's database rows before returning to the transaction.
 func scanRiskRow(rows *sql.Rows, dest ...any) error {
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	if rows.Next() {
 		return rows.Scan(dest...)
 	}
@@ -93,7 +93,7 @@ func (s *CheckinService) ListBrowserWhitelist(ctx context.Context, page, pageSiz
 	if err != nil {
 		return nil, 0, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []CheckinBrowserWhitelistEntry{}
 	for rows.Next() {
 		var item CheckinBrowserWhitelistEntry

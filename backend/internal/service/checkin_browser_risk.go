@@ -46,7 +46,7 @@ func (s *CheckinService) ListCheckinBrowserReviews(ctx context.Context, page, pa
 	if err != nil {
 		return nil, 0, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := make([]CheckinBrowserReview, 0)
 	for rows.Next() {
 		var item CheckinBrowserReview

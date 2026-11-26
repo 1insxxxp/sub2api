@@ -7,10 +7,12 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
-	"github.com/gin-gonic/gin"
+	"errors"
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
 const (
@@ -31,28 +33,35 @@ var standaloneBrowserCookieKey = sync.OnceValue(func() []byte { return []byte(ra
 // BrowserCookieSigner supplies a domain-separated key shared by the panel instances.
 func BrowserCookieSigner(secret string) gin.HandlerFunc {
 	signer := hmac.New(sha256.New, []byte(secret))
-	signer.Write([]byte("sub2api.browser-cookie.v1"))
+	_, _ = signer.Write([]byte("sub2api.browser-cookie.v1"))
 	key := signer.Sum(nil)
 	return func(c *gin.Context) { c.Set(browserSignerContext, key); c.Next() }
 }
 
 func checkinBrowserIdentity(c *gin.Context) (string, bool, error) {
 	if cached, ok := c.Get(browserIdentityContext); ok {
-		v := cached.(browserIdentity)
+		v, ok := cached.(browserIdentity)
+		if !ok {
+			return "", false, errors.New("invalid cached browser identity")
+		}
 		return v.hash, v.present, nil
 	}
 	key, ok := c.Get(browserSignerContext)
 	if !ok {
 		key = standaloneBrowserCookieKey()
 	}
-	mac := hmac.New(sha256.New, key.([]byte))
+	signingKey, ok := key.([]byte)
+	if !ok {
+		return "", false, errors.New("invalid browser signing key")
+	}
+	mac := hmac.New(sha256.New, signingKey)
 	value, _ := c.Cookie(checkinBrowserCookie)
 	payload, _ := base64.RawURLEncoding.DecodeString(value)
 	const dataSize = 8 + 32
 	now := time.Now()
 	valid := false
 	if len(payload) == dataSize+sha256.Size {
-		mac.Write(payload[:dataSize])
+		_, _ = mac.Write(payload[:dataSize])
 		expires := int64(binary.BigEndian.Uint64(payload[:8]))
 		valid = expires > now.Unix() && hmac.Equal(mac.Sum(nil), payload[dataSize:])
 	}
@@ -63,7 +72,7 @@ func checkinBrowserIdentity(c *gin.Context) (string, bool, error) {
 			return "", false, err
 		}
 		mac.Reset()
-		mac.Write(payload)
+		_, _ = mac.Write(payload)
 		payload = mac.Sum(payload)
 		http.SetCookie(c.Writer, &http.Cookie{Name: checkinBrowserCookie, Value: base64.RawURLEncoding.EncodeToString(payload), Path: "/", MaxAge: int(browserLifetime.Seconds()), Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode})
 	}
