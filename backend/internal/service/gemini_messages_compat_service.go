@@ -726,6 +726,10 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 	}
 	if req.Stream && !isImageGenerationModel(originalModel) && !isImageGenerationModel(mappedModel) {
 		requestContext, firstOutputGuard, firstOutputPolicy = newModelFirstOutputGuard(ctx, c, s.settingService, account.Platform, originalModel)
+		if firstOutputGuard == nil {
+			stopKeepalive := startModelFirstOutputKeepalive(c, 15*time.Second)
+			defer stopKeepalive()
+		}
 		if firstOutputGuard != nil {
 			defer func() {
 				returnErr = preferNextAccountBeforeFirstOutput(returnErr, firstOutputGuard)
@@ -1384,6 +1388,10 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 	}
 	if stream && !isImageGenerationModel(originalModel) && !isImageGenerationModel(mappedModel) {
 		requestContext, firstOutputGuard, firstOutputPolicy = newModelFirstOutputGuard(ctx, c, s.settingService, account.Platform, originalModel)
+		if firstOutputGuard == nil {
+			stopKeepalive := startModelFirstOutputKeepalive(c, 15*time.Second)
+			defer stopKeepalive()
+		}
 		if firstOutputGuard != nil {
 			defer func() {
 				returnErr = preferNextAccountBeforeFirstOutput(returnErr, firstOutputGuard)
@@ -2603,8 +2611,9 @@ func (s *GeminiMessagesCompatService) handleStreamingResponseWithContext(ctx con
 				delta, _ := envelope["delta"].(map[string]any)
 				deltaType, _ := delta["type"].(string)
 				text, _ := delta["text"].(string)
+				thinking, _ := delta["thinking"].(string)
 				partialJSON, _ := delta["partial_json"].(string)
-				semantic = (deltaType == "text_delta" && strings.TrimSpace(text) != "") ||
+				semantic = (deltaType == "thinking_delta" && strings.TrimSpace(thinking) != "") || (deltaType == "text_delta" && strings.TrimSpace(text) != "") ||
 					(deltaType == "input_json_delta" && strings.TrimSpace(partialJSON) != "")
 			}
 		}

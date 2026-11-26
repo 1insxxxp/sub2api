@@ -48,8 +48,12 @@ type geminiMessagesKeepaliveStream struct {
 }
 
 func newGeminiMessagesKeepaliveStream(t *testing.T, guarded bool, interval time.Duration) *geminiMessagesKeepaliveStream {
+	return newGeminiKeepaliveStream(t, guarded, interval, "messages")
+}
+
+func newGeminiKeepaliveStream(t *testing.T, guarded bool, interval time.Duration, protocol string) *geminiMessagesKeepaliveStream {
 	t.Helper()
-	c, rec := newModelKeepaliveTestContext("/v1/messages")
+	c, rec := newModelKeepaliveTestContext("/v1/" + protocol)
 	ctx, cancel := context.WithCancel(c.Request.Context())
 	c.Request = c.Request.WithContext(ctx)
 	reader, writer := io.Pipe()
@@ -77,9 +81,15 @@ func newGeminiMessagesKeepaliveStream(t *testing.T, guarded bool, interval time.
 		}
 	})
 	go func() {
-		result, err := (&GeminiMessagesCompatService{}).handleStreamingResponseWithContext(ctx, c, &http.Response{
-			StatusCode: http.StatusOK, Header: make(http.Header), Body: h.body,
-		}, time.Now(), "gemini-3.1-pro-preview", nil, h.guard, policy)
+		resp := &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: h.body}
+		svc := &GeminiMessagesCompatService{}
+		var result *geminiStreamResult
+		var err error
+		if protocol == "chat" {
+			result, err = svc.handleChatCompletionsStreamingResponseFromGemini(ctx, c, resp, time.Now(), "gemini-3.1-pro-preview", nil, false, true, h.guard, policy)
+		} else {
+			result, err = svc.handleStreamingResponseWithContext(ctx, c, resp, time.Now(), "gemini-3.1-pro-preview", nil, h.guard, policy)
+		}
 		h.done <- geminiMessagesKeepaliveResult{result: result, err: err}
 	}()
 	h.waitForRead(t)
@@ -125,12 +135,11 @@ func (h *geminiMessagesKeepaliveStream) finish(t *testing.T) geminiMessagesKeepa
 	}
 }
 
-func TestGeminiMessagesKeepalive_WaitingEventsKeepHeartbeatUntilVisibleText(t *testing.T) {
+func TestGeminiMessagesKeepalive_WaitingEventsKeepHeartbeatUntilReasoning(t *testing.T) {
 	h := newGeminiMessagesKeepaliveStream(t, true, 5*time.Millisecond)
 	for _, phase := range []struct{ name, data string }{
 		{"message_start", ""},
 		{"metadata", `{"usageMetadata":{"promptTokenCount":100}}`},
-		{"thought", `{"candidates":[{"content":{"parts":[{"text":"Plan the reply","thought":true}]}}]}`},
 		{"whitespace", `{"candidates":[{"content":{"parts":[{"text":"   "}]}}]}`},
 	} {
 		if phase.data != "" {
@@ -150,6 +159,9 @@ func TestGeminiMessagesKeepalive_WaitingEventsKeepHeartbeatUntilVisibleText(t *t
 		require.Empty(t, strings.ReplaceAll(body, ": keepalive\n\n", ""), "%s must remain staged for safe account failover", phase.name)
 		require.Equal(t, -1, ModelFirstOutputKeepaliveAdjustedWrittenSize(h.c))
 	}
+	h.send(t, `{"candidates":[{"content":{"parts":[{"text":"Plan the reply","thought":true}]}}]}`)
+	require.Contains(t, h.rec.Body.String(), `"thinking":"Plan the reply"`)
+	require.True(t, h.guard.stopped.Load())
 	h.send(t, `{"candidates":[{"content":{"parts":[{"text":"Hello"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":100,"candidatesTokenCount":7,"thoughtsTokenCount":4}}`)
 	result := h.finish(t)
 	require.NoError(t, result.err)
@@ -166,7 +178,7 @@ func TestGeminiMessagesKeepalive_WaitingEventsKeepHeartbeatUntilVisibleText(t *t
 			started = append(started, event.blockType)
 		}
 	}
-	require.Equal(t, []string{"thinking", "text"}, started)
+	require.Equal(t, []string{"text", "thinking", "text"}, started)
 }
 
 func TestGeminiMessagesKeepalive_NoBodyBeforeTimeoutOrClientCancel(t *testing.T) {
@@ -174,7 +186,7 @@ func TestGeminiMessagesKeepalive_NoBodyBeforeTimeoutOrClientCancel(t *testing.T)
 		t.Run(cause, func(t *testing.T) {
 			h := newGeminiMessagesKeepaliveStream(t, true, time.Hour)
 			h.send(t, `{"usageMetadata":{"promptTokenCount":100}}`)
-			h.send(t, `{"candidates":[{"content":{"parts":[{"text":"Still thinking","thought":true},{"text":"   "}]}}]}`)
+			h.send(t, `{"candidates":[{"content":{"parts":[{"text":"   "}]}}]}`)
 			require.True(t, h.attempt.beat(), "waiting events must not stop keepalive or commit a response")
 			require.True(t, h.attempt.beat())
 			require.Equal(t, -1, ModelFirstOutputKeepaliveAdjustedWrittenSize(h.c), "comments alone must preserve failover eligibility")
@@ -209,4 +221,20 @@ func TestGeminiMessagesKeepalive_UnguardedThoughtsStillStreamImmediately(t *test
 	require.NoError(t, result.err)
 	require.Contains(t, h.rec.Body.String(), `"text":"Hello"`)
 	require.Contains(t, h.rec.Body.String(), "event: message_stop")
+}
+
+func TestGeminiLongThinkingStreamsBeforeVisibleAnswer(t *testing.T) {
+	for _, protocol := range []string{"messages", "chat"} {
+		t.Run(protocol, func(t *testing.T) {
+			h := newGeminiKeepaliveStream(t, true, time.Hour, protocol)
+			h.send(t, `{"candidates":[{"content":{"parts":[{"text":"Plan the reply","thought":true}]}}]}`)
+			require.Contains(t, h.rec.Body.String(), "Plan the reply")
+			require.True(t, h.guard.stopped.Load())
+			require.NoError(t, h.guard.ctx.Err())
+			h.send(t, `{"candidates":[{"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":100,"candidatesTokenCount":0,"thoughtsTokenCount":9}}`)
+			result := h.finish(t)
+			require.NoError(t, result.err)
+			require.Equal(t, 9, result.result.usage.OutputTokens)
+		})
+	}
 }

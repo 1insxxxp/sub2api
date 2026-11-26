@@ -171,7 +171,7 @@ func TestGeminiForwardAsChatCompletions_FirstOutputTimeoutFailsOver(t *testing.T
 		prelude string
 	}{
 		{name: "no_events"},
-		{name: "thought_only", prelude: `data: {"candidates":[{"content":{"parts":[{"text":"still thinking","thought":true}]}}]}` + "\n\n"},
+		{name: "whitespace_only", prelude: `data: {"candidates":[{"content":{"parts":[{"text":"   "}]}}]}` + "\n\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			testGeminiChatFirstOutputTimeout(t, tc.prelude)

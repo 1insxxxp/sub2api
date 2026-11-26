@@ -151,6 +151,10 @@ func (s *GeminiMessagesCompatService) forwardClaudeBodyAsChatCompletions(
 	}
 	if clientStream && !isImageGenerationModel(originalModel) && !isImageGenerationModel(mappedModel) {
 		requestContext, firstOutputGuard, firstOutputPolicy = newModelFirstOutputGuard(ctx, c, s.settingService, account.Platform, originalModel)
+		if firstOutputGuard == nil {
+			stopKeepalive := startModelFirstOutputKeepalive(c, 15*time.Second)
+			defer stopKeepalive()
+		}
 		if firstOutputGuard != nil {
 			defer func() {
 				returnErr = preferNextAccountBeforeFirstOutput(returnErr, firstOutputGuard)
@@ -737,8 +741,6 @@ func (s *GeminiMessagesCompatService) handleChatCompletionsStreamingResponseFrom
 	var outputUsage geminiNativeOutputUsage
 	var firstTokenMs *int
 	streamStarted := false
-	sawVisibleOutput := false
-	var pendingAnthropicEvents []*apicompat.AnthropicStreamEvent
 
 	writeChatChunk := func(chunk apicompat.ChatCompletionsChunk) bool {
 		if clientDisconnected {
@@ -767,12 +769,6 @@ func (s *GeminiMessagesCompatService) handleChatCompletionsStreamingResponseFrom
 
 	emitAnthropicEvent := func(evt *apicompat.AnthropicStreamEvent) bool {
 		if clientDisconnected {
-			return false
-		}
-		// Keep thought-only attempts eligible for first-answer timeout and
-		// failover. Release their reasoning in order once text or a tool starts.
-		if !streamStarted {
-			pendingAnthropicEvents = append(pendingAnthropicEvents, evt)
 			return false
 		}
 		responsesEvents := apicompat.AnthropicEventToResponsesEvents(evt, anthState)
@@ -821,12 +817,6 @@ func (s *GeminiMessagesCompatService) handleChatCompletionsStreamingResponseFrom
 		}) {
 			return true
 		}
-		for _, evt := range pendingAnthropicEvents {
-			if emitAnthropicEvent(evt) {
-				return true
-			}
-		}
-		pendingAnthropicEvents = nil
 		return false
 	}
 
@@ -880,7 +870,6 @@ func (s *GeminiMessagesCompatService) handleChatCompletionsStreamingResponseFrom
 		if startStream() {
 			return true
 		}
-		sawVisibleOutput = true
 		if openBlockType != "text" {
 			if closeOpenBlock() {
 				return true
@@ -946,6 +935,14 @@ func (s *GeminiMessagesCompatService) handleChatCompletionsStreamingResponseFrom
 								if text, ok := part["text"].(string); ok {
 									delta := seenThought.next(text)
 									if delta != "" {
+										// Reasoning is real output. Commit it immediately so a long
+										// thinking phase neither buffers indefinitely nor times out.
+										if firstOutputGuard != nil {
+											firstOutputGuard.Stop()
+										}
+										if startStream() {
+											return &geminiStreamResult{usage: &usage, firstTokenMs: firstTokenMs}, nil
+										}
 										if openToolIndex >= 0 && closeOpenTool() {
 											return &geminiStreamResult{usage: &usage, firstTokenMs: firstTokenMs}, nil
 										}
@@ -1023,7 +1020,6 @@ func (s *GeminiMessagesCompatService) handleChatCompletionsStreamingResponseFrom
 									openToolIndex = idx
 									openToolName = name
 									sawToolUse = true
-									sawVisibleOutput = true
 									if emitAnthropicEvent(&apicompat.AnthropicStreamEvent{
 										Type:  "content_block_start",
 										Index: &idx,
@@ -1062,7 +1058,7 @@ func (s *GeminiMessagesCompatService) handleChatCompletionsStreamingResponseFrom
 			break
 		}
 		if err != nil {
-			if firstOutputGuard != nil && firstOutputGuard.TimedOut() && !sawVisibleOutput {
+			if firstOutputGuard != nil && firstOutputGuard.TimedOut() && !streamStarted {
 				_ = resp.Body.Close()
 				return nil, newModelFirstOutputTimeoutFailoverError(c, account, originalModel, firstOutputPolicy, resp.Header)
 			}
@@ -1080,7 +1076,7 @@ func (s *GeminiMessagesCompatService) handleChatCompletionsStreamingResponseFrom
 			break
 		}
 	}
-	if firstOutputGuard != nil && firstOutputGuard.TimedOut() && !sawVisibleOutput {
+	if firstOutputGuard != nil && firstOutputGuard.TimedOut() && !streamStarted {
 		_ = resp.Body.Close()
 		return nil, newModelFirstOutputTimeoutFailoverError(c, account, originalModel, firstOutputPolicy, resp.Header)
 	}
@@ -1110,7 +1106,7 @@ func (s *GeminiMessagesCompatService) handleChatCompletionsStreamingResponseFrom
 		streamErr := writeGeminiChatStreamError(c, flusher, "incomplete_stream", message)
 		return &geminiStreamResult{usage: &usage, firstTokenMs: firstTokenMs}, streamErr
 	}
-	if !sawVisibleOutput {
+	if !streamStarted {
 		err := s.handleEmptyGeminiChatResponse(c, finishReason)
 		var failover *UpstreamFailoverError
 		if errors.As(err, &failover) {

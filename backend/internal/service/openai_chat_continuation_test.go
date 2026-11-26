@@ -362,7 +362,7 @@ func TestStreamRawChatContinuationReturnsNextRoundError(t *testing.T) {
 	require.Contains(t, err.Error(), "continuation upstream request failed")
 }
 
-func TestStreamRawChatContinuationDeadlineClosesStalledCurrentAndNextRounds(t *testing.T) {
+func TestStreamRawChatContinuationDeadlineAppliesOnlyToAdditionalRounds(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	t.Run("current round", func(t *testing.T) {
 		serverDone := make(chan struct{})
@@ -378,6 +378,9 @@ func TestStreamRawChatContinuationDeadlineClosesStalledCurrentAndNextRounds(t *t
 		recorder := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(recorder)
 		c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"x"}`))
+		clientCtx, cancel := context.WithTimeout(c.Request.Context(), 1500*time.Millisecond)
+		defer cancel()
+		c.Request = c.Request.WithContext(clientCtx)
 		start := time.Now()
 		_, err = (&OpenAIGatewayService{}).streamRawChatCompletions(c, initialResp, &Account{ID: 1, Platform: PlatformOpenAI}, "x", "x", "x", nil, nil, start, 32,
 			domain.AntiTruncationPolicy{Enabled: true, MaxDurationSeconds: 1}, func(context.Context, string, int) (*http.Response, error) {
@@ -385,6 +388,7 @@ func TestStreamRawChatContinuationDeadlineClosesStalledCurrentAndNextRounds(t *t
 				return nil, nil
 			})
 		require.Error(t, err)
+		require.GreaterOrEqual(t, time.Since(start), 1400*time.Millisecond)
 		require.Less(t, time.Since(start), 2*time.Second)
 		select {
 		case <-serverDone:
@@ -543,4 +547,22 @@ func clampRawChatOutputTokens(body []byte, maxOutputTokens int) ([]byte, error) 
 		return body, nil
 	}
 	return sjson.SetBytes(body, path, maxOutputTokens)
+}
+
+func TestRawChatContinuationBudgetStartsAfterInitialGeneration(t *testing.T) {
+	c, rec := newModelKeepaliveTestContext("/v1/chat/completions")
+	called := false
+	result, err := (&OpenAIGatewayService{}).streamRawChatCompletions(c, continuationBudgetCCResponse("partial", "length", 5, 3), &Account{ID: 1, Platform: PlatformOpenAI}, "x", "x", "x", nil, nil, time.Now().Add(-time.Hour), 32,
+		domain.AntiTruncationPolicy{Enabled: true, MaxRounds: 1, MaxDurationSeconds: 1}, func(ctx context.Context, _ string, _ int) (*http.Response, error) {
+			called = true
+			require.NoError(t, ctx.Err())
+			deadline, ok := ctx.Deadline()
+			require.True(t, ok)
+			require.Greater(t, time.Until(deadline), 500*time.Millisecond)
+			return continuationBudgetCCResponse("done", "stop", 5, 2), nil
+		})
+	require.NoError(t, err)
+	require.True(t, called)
+	require.NotNil(t, result)
+	require.Contains(t, rec.Body.String(), "done")
 }

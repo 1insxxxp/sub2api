@@ -477,7 +477,7 @@ func TestGeminiForwardAsChatCompletions_StreamUnexpectedEOFBeforeOutputFailsOver
 func TestGeminiForwardAsChatCompletions_StreamEmptyTerminalFailsOver(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	upstreamBody := `data: {"candidates":[{"content":{"parts":[{"text":"hidden","thought":true}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":2,"candidatesTokenCount":4}}` + "\n\n" +
+	upstreamBody := `data: {"candidates":[{"content":{"parts":[]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":2,"candidatesTokenCount":0}}` + "\n\n" +
 		"data: [DONE]\n\n"
 	httpStub := &geminiCompatHTTPUpstreamStub{response: &http.Response{
 		StatusCode: http.StatusOK,

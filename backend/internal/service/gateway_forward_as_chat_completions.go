@@ -573,21 +573,17 @@ func (s *GatewayService) handleCCStreamingFromAnthropicWithContinuation(
 		requestCtx = c.Request.Context()
 	}
 	deadlineCtx := requestCtx
-	deadlineCancel := func() {}
-	if continueRequest != nil {
-		deadlineCtx, deadlineCancel = context.WithDeadline(requestCtx, startTime.Add(maxDuration))
-	}
-	defer deadlineCancel()
 	var responseBodyMu sync.Mutex
-	stopCloseOnCancel := context.AfterFunc(deadlineCtx, func() {
+	closeResponseBody := func() {
 		responseBodyMu.Lock()
 		body := resp.Body
 		responseBodyMu.Unlock()
 		if body != nil {
 			_ = body.Close()
 		}
-	})
-	defer stopCloseOnCancel()
+	}
+	stopCloseOnCancel := context.AfterFunc(deadlineCtx, closeResponseBody)
+	defer func() { stopCloseOnCancel() }()
 
 	resultWithUsage := func() *ForwardResult {
 		outcome := outcomeCollector.Snapshot()
@@ -841,6 +837,14 @@ func (s *GatewayService) handleCCStreamingFromAnthropicWithContinuation(
 			completedUsage = usage
 			roundUsage = ClaudeUsage{}
 			refreshUsage()
+			// The duration budget belongs to additional rounds only.
+			if antiTruncationRounds == 0 {
+				stopCloseOnCancel()
+				var deadlineCancel context.CancelFunc
+				deadlineCtx, deadlineCancel = context.WithTimeout(requestCtx, maxDuration)
+				defer deadlineCancel()
+				stopCloseOnCancel = context.AfterFunc(deadlineCtx, closeResponseBody)
+			}
 			nextResp, err := continueRequest(deadlineCtx, assistantText.String(), remaining)
 			if err != nil {
 				streamErr = err

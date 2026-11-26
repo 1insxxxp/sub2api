@@ -63,11 +63,7 @@ func TestGeminiStreamPhaseTiming(t *testing.T) {
 			require.NotNil(t, outcome.UpstreamFirstTextMs)
 			require.NotNil(t, outcome.DownstreamFirstContentMs)
 			require.GreaterOrEqual(t, *outcome.UpstreamFirstTextMs-*outcome.UpstreamFirstReasoningMs, 20)
-			if protocol == "chat" {
-				require.GreaterOrEqual(t, *outcome.DownstreamFirstContentMs, *outcome.UpstreamFirstTextMs)
-			} else {
-				require.Less(t, *outcome.DownstreamFirstContentMs, *outcome.UpstreamFirstTextMs)
-			}
+			require.Less(t, *outcome.DownstreamFirstContentMs, *outcome.UpstreamFirstTextMs)
 			require.True(t, strings.Contains(rec.Body.String(), "answer"))
 		})
 	}

@@ -322,3 +322,16 @@ func TestGeminiFirstOutputTraversal_ErrorAfterHeartbeatKeepsSSEEnvelope(t *testi
 		})
 	}
 }
+
+func TestGeminiStreamingKeepaliveWithoutFirstOutputDeadline(t *testing.T) {
+	for _, path := range []string{"chat", "messages", "native"} {
+		t.Run(path, func(t *testing.T) {
+			svc := &GeminiMessagesCompatService{httpUpstream: &geminiTraversalUpstream{firstStatus: http.StatusBadGateway}, cfg: &config.Config{}}
+			c, rec := newModelKeepaliveTestContext("/v1/" + path)
+			_, err := callGeminiTraversalPath(t, path, svc, c, geminiPoolModeAPIKeyAccount(), "gemini-4-carbon", true)
+			require.Error(t, err)
+			require.NotNil(t, modelFirstOutputKeepaliveStateFromContext(c))
+			require.NotContains(t, rec.Body.String(), ": keepalive")
+		})
+	}
+}

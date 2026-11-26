@@ -200,3 +200,21 @@ func anthropicChatContinuationAllowed(body []byte) bool {
 	}
 	return true
 }
+
+func TestAnthropicContinuationBudgetStartsAfterInitialGeneration(t *testing.T) {
+	c, rec := newModelKeepaliveTestContext("/v1/chat/completions")
+	called := false
+	result, err := (&GatewayService{}).handleCCStreamingFromAnthropicWithContinuation(continuationBudgetAnthropicResponse("partial", "max_tokens", 5, 3), c, "claude-public", "claude-upstream", "", nil, time.Now().Add(-time.Hour), domain.AntiTruncationPolicy{Enabled: true, MaxRounds: 1, MaxDurationSeconds: 1},
+		func(ctx context.Context, _ string, _ int) (*http.Response, error) {
+			called = true
+			require.NoError(t, ctx.Err())
+			deadline, ok := ctx.Deadline()
+			require.True(t, ok)
+			require.Greater(t, time.Until(deadline), 500*time.Millisecond)
+			return continuationBudgetAnthropicResponse("done", "end_turn", 5, 2), nil
+		})
+	require.NoError(t, err)
+	require.True(t, called)
+	require.NotNil(t, result)
+	require.Contains(t, rec.Body.String(), "done")
+}

@@ -395,21 +395,17 @@ func (s *OpenAIGatewayService) streamRawChatCompletions(
 	}
 	maxOutputTokens := antiTruncationPolicy.MaxOutputTokens
 	deadlineCtx := c.Request.Context()
-	deadlineCancel := func() {}
-	if continueRequest != nil {
-		deadlineCtx, deadlineCancel = context.WithDeadline(deadlineCtx, startTime.Add(maxDuration))
-	}
-	defer deadlineCancel()
 	var responseBodyMu sync.Mutex
-	stopCloseOnDeadline := context.AfterFunc(deadlineCtx, func() {
+	closeResponseBody := func() {
 		responseBodyMu.Lock()
 		body := resp.Body
 		responseBodyMu.Unlock()
 		if body != nil {
 			_ = body.Close()
 		}
-	})
-	defer stopCloseOnDeadline()
+	}
+	stopCloseOnDeadline := context.AfterFunc(deadlineCtx, closeResponseBody)
+	defer func() { stopCloseOnDeadline() }()
 
 	writeLine := func(line string) {
 		if clientDisconnected {
@@ -571,7 +567,7 @@ func (s *OpenAIGatewayService) streamRawChatCompletions(
 		shouldContinue := continueRequest != nil && continuationSafe && !clientDisconnected && c.Request.Context().Err() == nil && deadlineCtx.Err() == nil && !toolCallSeen && finishReason != "tool_calls" && semanticOutput &&
 			!errors.Is(scanErr, context.Canceled) && !errors.Is(scanErr, context.DeadlineExceeded) &&
 			(finishReason == "length" || (finishReason == "" && cleanEOF)) && antiTruncationRounds < maxRounds &&
-			time.Since(startTime) < maxDuration && (maxOutputTokens <= 0 || budgetOutputTokens < maxOutputTokens)
+			(maxOutputTokens <= 0 || budgetOutputTokens < maxOutputTokens)
 		if shouldContinue {
 			for _, line := range terminalContentLines {
 				writeLine(line)
@@ -587,6 +583,14 @@ func (s *OpenAIGatewayService) streamRawChatCompletions(
 					capture.delivered.MarkCompleted(finishReason)
 				}
 				_ = resp.Body.Close()
+				// The duration budget belongs to additional rounds only.
+				if antiTruncationRounds == 0 {
+					stopCloseOnDeadline()
+					var deadlineCancel context.CancelFunc
+					deadlineCtx, deadlineCancel = context.WithTimeout(c.Request.Context(), maxDuration)
+					defer deadlineCancel()
+					stopCloseOnDeadline = context.AfterFunc(deadlineCtx, closeResponseBody)
+				}
 				nextResp, nextErr := continueRequest(deadlineCtx, assistantText.String(), remaining)
 				if nextErr != nil {
 					capture.markError(nextErr, errors.Is(c.Request.Context().Err(), context.Canceled), deadlineCtx.Err() != nil)

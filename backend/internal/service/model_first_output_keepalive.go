@@ -32,7 +32,8 @@ type modelFirstOutputKeepaliveAttempt struct {
 	stopped bool
 }
 
-// startModelFirstOutputKeepalive is only called for guarded Gemini text streams.
+// startModelFirstOutputKeepalive protects Gemini text streams while waiting for
+// upstream headers or content, independently of the first-output timeout policy.
 // Delaying the first beat preserves normal HTTP status codes for fast failures.
 // Header preparation is isolated from heartbeat writes: Gemini prepares its SSE
 // headers before semantic output, so Header must not stop this timer.
