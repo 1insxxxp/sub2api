@@ -75,10 +75,6 @@
           <span v-else class="text-sm text-gray-400 dark:text-gray-500">-</span>
         </template>
 
-        <template #cell-platform="{ row }">
-          <span class="text-sm text-gray-900 dark:text-white">{{ row.platform || '-' }}</span>
-        </template>
-
         <template #cell-client_ip="{ row }">
           <div @click.stop>
             <div v-if="row.client_ip">
@@ -175,7 +171,6 @@ const allColumns = computed<Column[]>(() => [
   { key: 'client_ip', label: 'IP' },
   { key: 'group', label: t('admin.usage.group') },
   { key: 'type', label: t('usage.type') },
-  { key: 'platform', label: t('usage.errors.platform') },
   { key: 'category', label: t('usage.errors.category') },
   { key: 'status', label: t('usage.errors.status'), sortable: true },
   { key: 'message', label: t('usage.errors.message') },

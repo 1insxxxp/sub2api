@@ -2654,7 +2654,7 @@ export interface UserErrorRequest {
   status_code: number
   client_canceled?: boolean
   category: string
-  platform: string
+  request_id?: string
   message: string
   key_name: string
   key_deleted: boolean
@@ -2665,10 +2665,7 @@ export interface UserErrorRequest {
   user_agent?: string
 }
 
-export interface UserErrorRequestDetail extends UserErrorRequest {
-  error_body: string
-  upstream_status_code?: number
-}
+export type UserErrorRequestDetail = UserErrorRequest
 
 export interface UserErrorListParams {
   page?: number

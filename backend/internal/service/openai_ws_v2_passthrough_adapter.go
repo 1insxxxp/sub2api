@@ -656,6 +656,9 @@ func (c *openAIWSClientFrameConn) WriteFrame(ctx context.Context, msgType coderw
 	if c.projectUsage != nil {
 		payload = c.projectUsage(payload)
 	}
+	if safe, ok := PublicGatewayErrorEvent("", payload); ok {
+		payload = safe
+	}
 	return c.conn.Write(ctx, msgType, payload)
 }
 

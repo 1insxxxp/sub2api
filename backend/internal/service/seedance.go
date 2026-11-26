@@ -130,8 +130,13 @@ func (s *OpenAIGatewayService) ForwardSeedance(ctx context.Context, c *gin.Conte
 		return nil, err
 	}
 	// Do not retry ambiguous asynchronous creates: the upstream may already have
-	// accepted a billable job. Preserve native error codes and response bodies.
+	// accepted a billable job. Keep the original status available for diagnosis.
 	if resp.StatusCode >= 300 {
+		SetOpsUpstreamError(c, resp.StatusCode, extractUpstreamErrorMessage(responseBody), "")
+		if resp.StatusCode < 400 {
+			c.Status(http.StatusBadGateway)
+			return nil, fmt.Errorf("seedance upstream status %d", resp.StatusCode)
+		}
 		writeGrokMediaResponse(c, resp, responseBody, s.responseHeaderFilter)
 		return nil, fmt.Errorf("seedance upstream status %d", resp.StatusCode)
 	}

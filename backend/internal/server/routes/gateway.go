@@ -55,6 +55,8 @@ func RegisterGatewayRoutes(
 		bodyLimit(c)
 	}
 	clientRequestID := middleware.ClientRequestID()
+	publicErrors := handler.PublicGatewayErrorMiddleware(true)
+	classifyPublicErrors := handler.PublicGatewayErrorsAfterIngress()
 	opsErrorLogger := handler.OpsErrorLoggerMiddleware(opsService)
 	endpointNorm := handler.InboundEndpointMiddleware()
 	compositeTarget := compositeTargetPlatformMiddleware(compositeResolver)
@@ -233,7 +235,7 @@ func RegisterGatewayRoutes(
 	}
 
 	// API网关（Claude API兼容）
-	gateway := r.Group("/v1")
+	gateway := r.Group("/v1", publicErrors)
 	gateway.Use(groupBodyLimit)
 	gateway.Use(clientRequestID)
 	gateway.Use(opsErrorLogger)
@@ -250,7 +252,7 @@ func RegisterGatewayRoutes(
 	gateway.Use(systemTarget)
 	gateway.Use(customTarget)
 	gateway.Use(compositeTarget)
-	gateway.Use(requireGroupAnthropic, bindInputProtection)
+	gateway.Use(requireGroupAnthropic, bindInputProtection, classifyPublicErrors)
 	{
 		// /v1/messages: auto-route based on group platform
 		gateway.POST("/messages", func(c *gin.Context) {
@@ -400,7 +402,7 @@ func RegisterGatewayRoutes(
 	}
 
 	registerOpenAICompatibleRelayRoutes := func(prefix string, relayMode gin.HandlerFunc) {
-		relay := r.Group(prefix)
+		relay := r.Group(prefix, publicErrors)
 		relay.Use(bodyLimit)
 		relay.Use(clientRequestID)
 		relay.Use(opsErrorLogger)
@@ -414,7 +416,7 @@ func RegisterGatewayRoutes(
 		relay.Use(systemTarget)
 		relay.Use(customTarget)
 		relay.Use(compositeTarget)
-		relay.Use(requireGroupAnthropic, bindInputProtection)
+		relay.Use(requireGroupAnthropic, bindInputProtection, classifyPublicErrors)
 		relay.GET("/models", modelsHandler)
 		relay.POST("/responses", func(c *gin.Context) {
 			if isOpenAIResponsesCompatibleGatewayPlatform(c) {
@@ -442,7 +444,7 @@ func RegisterGatewayRoutes(
 	registerOpenAICompatibleRelayRoutes("/relay-nonstream/v1", handler.OpenAICompatibleRelayForceNonStreamMiddleware())
 
 	// Gemini 原生 API 兼容层（Gemini SDK/CLI 直连）
-	gemini := r.Group("/v1beta")
+	gemini := r.Group("/v1beta", publicErrors)
 	gemini.Use(bodyLimit)
 	gemini.Use(clientRequestID)
 	gemini.Use(opsErrorLogger)
@@ -454,7 +456,7 @@ func RegisterGatewayRoutes(
 	gemini.Use(systemGeminiTarget)
 	gemini.Use(customGeminiTarget)
 	gemini.Use(compositeGeminiTarget)
-	gemini.Use(requireGroupGoogle, bindInputProtection)
+	gemini.Use(requireGroupGoogle, bindInputProtection, classifyPublicErrors)
 	{
 		gemini.GET("/models", h.Gateway.GeminiV1BetaListModels)
 		gemini.GET("/models/:model", h.Gateway.GeminiV1BetaGetModel)
@@ -477,7 +479,7 @@ func RegisterGatewayRoutes(
 		h.Gateway.Responses(c)
 	}
 	rootRoute := func(method, path string, limit gin.HandlerFunc, handler gin.HandlerFunc) {
-		r.Handle(method, path, limit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), captureOriginalCustomerInput, checkCategoryFields, categoryTarget, systemUnsupportedOpenAI, groupModelAllowlist, rejectConflictingFields, compositeTarget, requireGroupAnthropic, bindInputProtection, handler)
+		r.Handle(method, path, publicErrors, limit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), captureOriginalCustomerInput, checkCategoryFields, categoryTarget, systemUnsupportedOpenAI, groupModelAllowlist, rejectConflictingFields, compositeTarget, requireGroupAnthropic, bindInputProtection, classifyPublicErrors, handler)
 	}
 	for _, prefix := range []string{"/api/v3", "/v3", "/v1", ""} {
 		rootRoute(http.MethodPost, prefix+"/contents/generations/tasks", bodyLimit, h.OpenAIGateway.SeedanceTasks)
@@ -493,8 +495,8 @@ func RegisterGatewayRoutes(
 	rootRoute(http.MethodGet, "/models", bodyLimit, modelsHandler)
 	rootRoute(http.MethodGet, "/models/:model", bodyLimit, h.Gateway.Models)
 	rootRoute(http.MethodPost, "/messages/count_tokens", bodyLimit, countTokensHandler)
-	codexDirect := r.Group("/backend-api/codex")
-	codexDirect.Use(groupBodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), captureOriginalCustomerInput, checkCategoryFields, categoryTarget, systemUnsupportedOpenAI, groupModelAllowlist, rejectConflictingFields, compositeTarget, requireGroupAnthropic, bindInputProtection)
+	codexDirect := r.Group("/backend-api/codex", publicErrors)
+	codexDirect.Use(groupBodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), captureOriginalCustomerInput, checkCategoryFields, categoryTarget, systemUnsupportedOpenAI, groupModelAllowlist, rejectConflictingFields, compositeTarget, requireGroupAnthropic, bindInputProtection, classifyPublicErrors)
 	{
 		codexDirect.POST("/realtime/calls", h.OpenAIGateway.Live)
 		codexDirect.GET("/:call_id", h.OpenAIGateway.LiveSideband)
@@ -598,10 +600,10 @@ func RegisterGatewayRoutes(
 	})
 
 	// Antigravity 模型列表
-	r.GET("/antigravity/models", gin.HandlerFunc(apiKeyAuth), categoryTarget, systemUnsupportedAnthropic, requireGroupAnthropic, h.Gateway.AntigravityModels)
+	r.GET("/antigravity/models", publicErrors, gin.HandlerFunc(apiKeyAuth), categoryTarget, systemUnsupportedAnthropic, requireGroupAnthropic, classifyPublicErrors, h.Gateway.AntigravityModels)
 
 	// Antigravity 专用路由（仅使用 antigravity 账户，不混合调度）
-	antigravityV1 := r.Group("/antigravity/v1")
+	antigravityV1 := r.Group("/antigravity/v1", publicErrors)
 	antigravityV1.Use(bodyLimit)
 	antigravityV1.Use(clientRequestID)
 	antigravityV1.Use(opsErrorLogger)
@@ -614,7 +616,7 @@ func RegisterGatewayRoutes(
 	antigravityV1.Use(groupModelAllowlist)
 	antigravityV1.Use(rejectConflictingFields)
 	antigravityV1.Use(systemUnsupportedAnthropic)
-	antigravityV1.Use(requireGroupAnthropic, bindInputProtection)
+	antigravityV1.Use(requireGroupAnthropic, bindInputProtection, classifyPublicErrors)
 	{
 		antigravityV1.POST("/messages", h.Gateway.Messages)
 		antigravityV1.POST("/messages/count_tokens", h.Gateway.CountTokens)
@@ -622,7 +624,7 @@ func RegisterGatewayRoutes(
 		antigravityV1.GET("/usage", h.Gateway.Usage)
 	}
 
-	antigravityV1Beta := r.Group("/antigravity/v1beta")
+	antigravityV1Beta := r.Group("/antigravity/v1beta", publicErrors)
 	antigravityV1Beta.Use(bodyLimit)
 	antigravityV1Beta.Use(clientRequestID)
 	antigravityV1Beta.Use(opsErrorLogger)
@@ -633,7 +635,7 @@ func RegisterGatewayRoutes(
 	antigravityV1Beta.Use(groupModelAllowlist)
 	antigravityV1Beta.Use(rejectConflictingFields)
 	antigravityV1Beta.Use(systemUnsupportedGoogle)
-	antigravityV1Beta.Use(requireGroupGoogle, bindInputProtection)
+	antigravityV1Beta.Use(requireGroupGoogle, bindInputProtection, classifyPublicErrors)
 	{
 		antigravityV1Beta.GET("/models", h.Gateway.GeminiV1BetaListModels)
 		antigravityV1Beta.GET("/models/:model", h.Gateway.GeminiV1BetaGetModel)

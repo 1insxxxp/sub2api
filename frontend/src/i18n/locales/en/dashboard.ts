@@ -626,6 +626,7 @@ export default {
         title: 'Error Request Detail',
         responseBody: 'Response Body',
         upstreamStatus: 'Upstream Status',
+        requestId: 'Request ID',
         loadFailed: 'Failed to load detail, please try again',
       },
     },

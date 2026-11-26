@@ -90,10 +90,10 @@ func TestToUserErrorRequest_RedactsSensitiveFields(t *testing.T) {
 	if out.Category != "rate_limit" {
 		t.Errorf("category=%q", out.Category)
 	}
-	if out.StatusCode != 429 || out.InboundEndpoint != "/v1/chat/completions" || out.Platform != "openai" {
+	if out.StatusCode != 429 || out.InboundEndpoint != "/v1/chat/completions" {
 		t.Errorf("basic fields wrong: %+v", out)
 	}
-	if out.Message != "rate limit exceeded" {
+	if out.Message != ClassifyPublicGatewayError(429, src.Message).Message {
 		t.Errorf("want message=%q, got %q", "rate limit exceeded", out.Message)
 	}
 	if out.KeyName != "my-key" {
@@ -140,14 +140,8 @@ func TestToUserErrorRequestDetail_WhitelistAndRedacts(t *testing.T) {
 	if out.ID != 999 {
 		t.Errorf("want ID=999, got %d", out.ID)
 	}
-	if out.Message != "upstream error" {
-		t.Errorf("want message=%q, got %q", "upstream error", out.Message)
-	}
-	if out.ErrorBody != src.ErrorBody {
-		t.Errorf("ErrorBody mismatch")
-	}
-	if out.UpstreamStatusCode == nil || *out.UpstreamStatusCode != 503 {
-		t.Errorf("UpstreamStatusCode mismatch")
+	if out.Message != ClassifyPublicGatewayError(502, "").Message {
+		t.Errorf("unexpected public message %q", out.Message)
 	}
 
 	// client_ip / user_agent / group_name / stream 经产品决策开放（与用量明细口径对齐）
@@ -170,7 +164,7 @@ func TestToUserErrorRequestDetail_WhitelistAndRedacts(t *testing.T) {
 		t.Fatalf("json.Marshal failed: %v", err)
 	}
 	raw := string(b)
-	for _, forbidden := range []string{"user_email", "upstream_endpoint"} {
+	for _, forbidden := range []string{"user_email", "upstream_endpoint", "upstream_status_code", "error_body"} {
 		if strings.Contains(raw, forbidden) {
 			t.Errorf("sensitive field %q leaked in JSON output: %s", forbidden, raw)
 		}
@@ -198,8 +192,8 @@ func TestUserErrorPrivacyHistoricalOutput(t *testing.T) {
 					t.Errorf("historical %s leaked in %s", secret, name)
 				}
 			}
-			if !strings.Contains(string(payload), "Invalid max_tokens") {
-				t.Fatal("actionable diagnostic was removed")
+			if strings.Contains(string(payload), "Invalid max_tokens") {
+				t.Fatal("internal diagnostic was exposed")
 			}
 		})
 	}
@@ -220,8 +214,8 @@ func TestUserErrorPrivacyHistoricalTruncatedPayload(t *testing.T) {
 			if strings.Contains(string(payload), "PRIVATE_REQUEST") {
 				t.Fatal("truncated historical request payload was exposed")
 			}
-			if !strings.Contains(string(payload), "max_tokens must exceed thinking.budget_tokens") {
-				t.Fatal("actionable parameter diagnostic was removed")
+			if strings.Contains(string(payload), "max_tokens must exceed thinking.budget_tokens") {
+				t.Fatal("internal parameter diagnostic was exposed")
 			}
 		})
 	}

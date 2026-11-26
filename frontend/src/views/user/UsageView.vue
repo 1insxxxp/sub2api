@@ -1243,7 +1243,6 @@ const errAllColumns = computed<Column[]>(() => [
   { key: 'client_ip', label: 'IP' },
   { key: 'group', label: t('admin.usage.group') },
   { key: 'type', label: t('usage.type') },
-  { key: 'platform', label: t('usage.errors.platform') },
   { key: 'category', label: t('usage.errors.category') },
   { key: 'status', label: t('usage.errors.status') },
   { key: 'message', label: t('usage.errors.message') },

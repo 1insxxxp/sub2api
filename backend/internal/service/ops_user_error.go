@@ -9,7 +9,7 @@ import "time"
 // client_ip / user_agent / group_name / request_type / stream 均为该用户
 // 自己请求的属性，经产品决策（2026-07-03）开放，
 // 与用量明细已向用户展示自身 ip_address/user_agent/分组/类型 的口径对齐；
-// error_body 仅在详情接口（GetUserErrorRequestDetail）按归属校验后返回。
+// 上游诊断正文仅供管理员排查。
 type UserErrorRequest struct {
 	ID              int64     `json:"id"`
 	CreatedAt       time.Time `json:"created_at"`
@@ -18,7 +18,7 @@ type UserErrorRequest struct {
 	StatusCode      int       `json:"status_code"`
 	ClientCanceled  bool      `json:"client_canceled"`
 	Category        string    `json:"category"`
-	Platform        string    `json:"platform"`
+	RequestID       string    `json:"request_id,omitempty"`
 	Message         string    `json:"message"`
 	KeyName         string    `json:"key_name"`
 	KeyDeleted      bool      `json:"key_deleted"`
@@ -106,8 +106,14 @@ func ToUserErrorRequest(e *OpsErrorLog) *UserErrorRequest {
 		clientIP = *e.ClientIP
 	}
 	category := MapUserErrorCategory(e.Phase, e.Type)
-	statusCode := e.StatusCode
-	message := sanitizeUpstreamErrorMessage(e.Message)
+	public := ClassifyPublicGatewayError(e.StatusCode, e.Type+" "+e.Message)
+	if public.Code == "request_failed" && (e.Phase == "auth" || e.Phase == "request") && e.Owner != "provider" && e.Source != "upstream_http" {
+		if local, ok := PublicLocalGatewayError(e.StatusCode, e.Type, e.Message); ok {
+			public = local
+		}
+	}
+	statusCode := public.Status
+	message := public.Message
 	if e.ClientCanceled {
 		category = "client_cancel"
 		statusCode = e.DownstreamStatusCode
@@ -121,7 +127,7 @@ func ToUserErrorRequest(e *OpsErrorLog) *UserErrorRequest {
 		StatusCode:      statusCode,
 		ClientCanceled:  e.ClientCanceled,
 		Category:        category,
-		Platform:        e.Platform,
+		RequestID:       e.RequestID,
 		Message:         message,
 		KeyName:         e.APIKeyName,
 		KeyDeleted:      e.APIKeyDeleted,
@@ -133,24 +139,24 @@ func ToUserErrorRequest(e *OpsErrorLog) *UserErrorRequest {
 	}
 }
 
-// UserErrorRequestDetail 是错误请求详情的脱敏视图(点击单行查看)。
-// 在 UserErrorRequest 基础上额外暴露 error_body(上游错误响应正文)与 upstream_status_code;
-// 仍严禁任何内部/敏感字段。
+// UserErrorRequestDetail uses the same public fields as the request list.
 type UserErrorRequestDetail struct {
 	UserErrorRequest
-	ErrorBody          string `json:"error_body"`
-	UpstreamStatusCode *int   `json:"upstream_status_code,omitempty"`
 }
 
-// ToUserErrorRequestDetail 把内部 OpsErrorLogDetail 裁剪为用户安全详情视图。
 func ToUserErrorRequestDetail(e *OpsErrorLogDetail) *UserErrorRequestDetail {
 	if e == nil {
 		return nil
 	}
 	base := ToUserErrorRequest(&e.OpsErrorLog)
-	return &UserErrorRequestDetail{
-		UserErrorRequest:   *base,
-		ErrorBody:          string(sanitizeUpstreamErrorBody([]byte(e.ErrorBody))),
-		UpstreamStatusCode: e.UpstreamStatusCode,
+	if !e.ClientCanceled && e.UpstreamErrorMessage != "" {
+		status := e.StatusCode
+		if e.UpstreamStatusCode != nil {
+			status = *e.UpstreamStatusCode
+		}
+		public := ClassifyPublicGatewayError(status, e.UpstreamErrorMessage+" "+e.Message)
+		base.Message = public.Message
+		base.StatusCode = public.Status
 	}
+	return &UserErrorRequestDetail{UserErrorRequest: *base}
 }

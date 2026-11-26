@@ -3529,7 +3529,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				// gateway-chosen close frame; mirror the client's clean 1000
 				// rather than the 1011 the proxy-failure tail would have sent.
 				if hasClientCloseErr {
-					closeOpenAIClientWS(wsConn, closeErr.StatusCode(), closeErr.Reason())
+					closeOpenAIClientWS(wsConn, closeErr.StatusCode(), service.ClassifyPublicGatewayError(0, closeErr.Reason()).Message)
 				} else {
 					closeOpenAIClientWS(wsConn, coderws.StatusNormalClosure, "")
 				}
@@ -3558,7 +3558,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 			}
 			reqLog.Warn("openai.websocket_proxy_failed", proxyFailedFields...)
 			if hasClientCloseErr {
-				closeOpenAIClientWS(wsConn, closeErr.StatusCode(), closeErr.Reason())
+				closeOpenAIClientWS(wsConn, closeErr.StatusCode(), service.ClassifyPublicGatewayError(0, closeErr.Reason()).Message)
 				return
 			}
 			closeOpenAIClientWS(wsConn, coderws.StatusInternalError, "upstream websocket proxy failed")

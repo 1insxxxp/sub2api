@@ -509,7 +509,11 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		writeCtx, cancel := newOpenAIWSDownstreamWriteContext(ctx, hooks, s.openAIWSWriteTimeout())
 		defer cancel()
 		message = restoreCodexToolNamesFromContext(c, message)
-		return clientConn.Write(writeCtx, coderws.MessageText, turnProtection.project(message))
+		message = turnProtection.project(message)
+		if safe, ok := PublicGatewayErrorEvent("", message); ok {
+			message = safe
+		}
+		return clientConn.Write(writeCtx, coderws.MessageText, message)
 	}
 
 	readClientMessage := func() ([]byte, error) {

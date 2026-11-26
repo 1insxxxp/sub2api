@@ -44,15 +44,9 @@
           <span class="font-medium text-gray-500 dark:text-dark-400">{{ t('usage.errors.category') }}</span>
           <p class="mt-0.5 text-gray-900 dark:text-dark-100">{{ t('usage.errors.categories.' + (detail.client_canceled ? 'client_cancel' : detail.category)) }}</p>
         </div>
-        <!-- Platform -->
-        <div>
-          <span class="font-medium text-gray-500 dark:text-dark-400">{{ t('usage.errors.platform') }}</span>
-          <p class="mt-0.5 text-gray-900 dark:text-dark-100">{{ detail.platform || '-' }}</p>
-        </div>
-        <!-- Upstream status code -->
-        <div v-if="detail.upstream_status_code != null">
-          <span class="font-medium text-gray-500 dark:text-dark-400">{{ t('usage.errors.detail.upstreamStatus') }}</span>
-          <p class="mt-0.5 text-gray-900 dark:text-dark-100">{{ detail.upstream_status_code }}</p>
+        <div v-if="detail.request_id">
+          <span class="font-medium text-gray-500 dark:text-dark-400">{{ t('usage.errors.detail.requestId') }}</span>
+          <p class="mt-0.5 break-all font-mono text-gray-900 dark:text-dark-100">{{ detail.request_id }}</p>
         </div>
       </div>
 
@@ -64,11 +58,6 @@
         <p class="mt-0.5 text-gray-900 dark:text-dark-100 break-all">{{ detail.message }}</p>
       </div>
 
-      <!-- Error Body -->
-      <div v-if="detail.error_body">
-        <span class="font-medium text-gray-500 dark:text-dark-400">{{ t('usage.errors.detail.responseBody') }}</span>
-        <pre class="mt-1 overflow-auto max-h-[40vh] whitespace-pre-wrap break-all rounded-lg bg-gray-50 dark:bg-dark-900 border border-gray-200 dark:border-dark-700 p-3 text-xs text-gray-800 dark:text-dark-200">{{ detail.error_body }}</pre>
-      </div>
     </div>
   </BaseDialog>
 </template>
