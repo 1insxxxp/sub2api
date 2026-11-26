@@ -50,13 +50,14 @@ func (r *usageLogRepository) upsertResponseOutcome(ctx context.Context, log *ser
 			has_media, output_bytes, event_count, stream_completed, finish_reason,
 			disconnect_source, upstream_error_kind, collector_version, anti_truncation_rounds,
 			input_tokens_source, output_tokens_source,
-			upstream_input_tokens, input_token_policy, input_token_policy_count
+			upstream_input_tokens, input_token_policy, input_token_policy_count,
+			upstream_first_event_ms, upstream_first_reasoning_ms, upstream_first_text_ms, downstream_first_content_ms
 		)
 		SELECT
 			ul.id, $1::varchar(64), $2, $3, $4, $5,
 			$6, $7, $8, $9, $10,
 			$11, $12, $13, $14, $15,
-			$16, $17, $18, $19, $20, $21, $22, $23, $24
+			$16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28
 		FROM usage_logs ul
 		WHERE ul.request_id = $1::varchar(64) AND ul.api_key_id = $2
 		ON CONFLICT (request_id, api_key_id) DO UPDATE SET
@@ -82,7 +83,11 @@ func (r *usageLogRepository) upsertResponseOutcome(ctx context.Context, log *ser
 			output_tokens_source = CASE WHEN EXCLUDED.output_tokens_source <> 'unknown' THEN EXCLUDED.output_tokens_source ELSE usage_response_outcomes.output_tokens_source END,
 			upstream_input_tokens = COALESCE(EXCLUDED.upstream_input_tokens, usage_response_outcomes.upstream_input_tokens),
 			input_token_policy = CASE WHEN EXCLUDED.input_token_policy <> '' THEN EXCLUDED.input_token_policy ELSE usage_response_outcomes.input_token_policy END,
-			input_token_policy_count = COALESCE(EXCLUDED.input_token_policy_count, usage_response_outcomes.input_token_policy_count)
+			input_token_policy_count = COALESCE(EXCLUDED.input_token_policy_count, usage_response_outcomes.input_token_policy_count),
+			upstream_first_event_ms = COALESCE(EXCLUDED.upstream_first_event_ms, usage_response_outcomes.upstream_first_event_ms),
+			upstream_first_reasoning_ms = COALESCE(EXCLUDED.upstream_first_reasoning_ms, usage_response_outcomes.upstream_first_reasoning_ms),
+			upstream_first_text_ms = COALESCE(EXCLUDED.upstream_first_text_ms, usage_response_outcomes.upstream_first_text_ms),
+			downstream_first_content_ms = COALESCE(EXCLUDED.downstream_first_content_ms, usage_response_outcomes.downstream_first_content_ms)
 	`
 	result, err := r.sql.ExecContext(ctx, query,
 		requestID,
@@ -109,6 +114,10 @@ func (r *usageLogRepository) upsertResponseOutcome(ctx context.Context, log *ser
 		outcome.UpstreamInputTokens,
 		outcome.InputTokenPolicy,
 		outcome.InputTokenPolicyCount,
+		outcome.UpstreamFirstEventMs,
+		outcome.UpstreamFirstReasoningMs,
+		outcome.UpstreamFirstTextMs,
+		outcome.DownstreamFirstContentMs,
 	)
 	if err != nil {
 		return fmt.Errorf("upsert response outcome: %w", err)

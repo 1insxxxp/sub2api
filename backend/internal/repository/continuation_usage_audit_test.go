@@ -93,7 +93,7 @@ func TestSettledProtectedSingleCallAuditSurvivesPersistence(t *testing.T) {
 	mock.ExpectExec(`INSERT INTO usage_response_outcomes`).WithArgs(
 		"protected-call", int64(2), int64(1), int64(3), nil,
 		0, 0, false, false, false, false, int64(0), 0, false, "", "none", "none",
-		int16(0), 0, "unknown", "unknown", rawInput, "group_input_token_protection", limit,
+		int16(0), 0, "unknown", "unknown", rawInput, "group_input_token_protection", limit, nil, nil, nil, nil,
 	).WillReturnResult(sqlmock.NewResult(1, 1))
 	rawAudit, err := json.Marshal(log.Outcome.ContinuationUsage)
 	require.NoError(t, err)

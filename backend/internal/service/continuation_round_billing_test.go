@@ -346,3 +346,23 @@ func TestContinuationRoundOpenAIQuotaKeepsRawOutputCost(t *testing.T) {
 	require.InDelta(t, .1201, billing.lastCmd.BalanceCost, 1e-10)
 	require.InDelta(t, .13, billing.lastCmd.AccountQuotaCost, 1e-10)
 }
+
+func TestContinuationRoundStreamPhasesUseFirstRoundOnly(t *testing.T) {
+	event, reasoning, text, downstream, later := 10, 20, 30, 40, 50
+	first := &ForwardResult{Outcome: &ResponseOutcome{UpstreamFirstEventMs: &event, UpstreamFirstReasoningMs: &reasoning, UpstreamFirstTextMs: &text, DownstreamFirstContentMs: &downstream}}
+	second := &ForwardResult{Outcome: &ResponseOutcome{UpstreamFirstEventMs: &later, UpstreamFirstReasoningMs: &later, UpstreamFirstTextMs: &later, DownstreamFirstContentMs: &later}}
+	result, err := AggregateForwardContinuationResults([]*ForwardResult{first, second})
+	require.NoError(t, err)
+	require.Equal(t, &event, result.Outcome.UpstreamFirstEventMs)
+	require.Equal(t, &reasoning, result.Outcome.UpstreamFirstReasoningMs)
+	require.Equal(t, &text, result.Outcome.UpstreamFirstTextMs)
+	require.Nil(t, result.Outcome.DownstreamFirstContentMs)
+
+	first.Outcome = nil
+	result, err = AggregateForwardContinuationResults([]*ForwardResult{first, second})
+	require.NoError(t, err)
+	require.Nil(t, result.Outcome.UpstreamFirstEventMs)
+	require.Nil(t, result.Outcome.UpstreamFirstReasoningMs)
+	require.Nil(t, result.Outcome.UpstreamFirstTextMs)
+	require.Nil(t, result.Outcome.DownstreamFirstContentMs)
+}

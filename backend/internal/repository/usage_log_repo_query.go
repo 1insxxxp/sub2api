@@ -229,7 +229,8 @@ func (r *usageLogRepository) hydrateUsageLogCompensation(ctx context.Context, lo
 			uro.stream_completed, uro.finish_reason, uro.disconnect_source,
 			uro.upstream_error_kind, uro.collector_version, uro.anti_truncation_rounds,
 			uro.input_tokens_source, uro.output_tokens_source,
-			uro.upstream_input_tokens, uro.input_token_policy, uro.input_token_policy_count
+			uro.upstream_input_tokens, uro.input_token_policy, uro.input_token_policy_count,
+			uro.upstream_first_event_ms, uro.upstream_first_reasoning_ms, uro.upstream_first_text_ms, uro.downstream_first_content_ms
 		FROM usage_logs ul
 		LEFT JOIN empty_response_claims erc ON erc.usage_log_id = ul.id
 		LEFT JOIN usage_response_outcomes uro ON uro.usage_log_id = ul.id
@@ -250,6 +251,7 @@ func (r *usageLogRepository) hydrateUsageLogCompensation(ctx context.Context, lo
 		var hasText, hasToolCall, hasReasoning, hasMedia, streamCompleted sql.NullBool
 		var upstreamInputTokens, inputTokenPolicyCount sql.NullInt64
 		var inputTokenPolicy sql.NullString
+		var upstreamFirstEventMs, upstreamFirstReasoningMs, upstreamFirstTextMs, downstreamFirstContentMs sql.NullInt64
 		if err := rows.Scan(
 			&usageID, &claimID, &claimStatus, &reasonCode,
 			&httpStatus, &upstreamStatus, &hasText, &hasToolCall,
@@ -258,6 +260,7 @@ func (r *usageLogRepository) hydrateUsageLogCompensation(ctx context.Context, lo
 			&upstreamErrorKind, &collectorVersion, &antiTruncationRounds,
 			&inputTokensSource, &outputTokensSource,
 			&upstreamInputTokens, &inputTokenPolicy, &inputTokenPolicyCount,
+			&upstreamFirstEventMs, &upstreamFirstReasoningMs, &upstreamFirstTextMs, &downstreamFirstContentMs,
 		); err != nil {
 			return err
 		}
@@ -279,7 +282,7 @@ func (r *usageLogRepository) hydrateUsageLogCompensation(ctx context.Context, lo
 		// Scalar accounting audit remains readable at version zero without
 		// pretending a response collector ran or changing the request status.
 		hasInputCountingAudit := upstreamInputTokens.Valid || inputTokenPolicy.String != "" || inputTokenPolicyCount.Valid
-		if (collectorVersion.Valid && collectorVersion.Int64 > 0) || hasInputCountingAudit {
+		if (collectorVersion.Valid && collectorVersion.Int64 > 0) || hasInputCountingAudit || upstreamFirstEventMs.Valid || upstreamFirstReasoningMs.Valid || upstreamFirstTextMs.Valid || downstreamFirstContentMs.Valid {
 			log.Outcome = &service.ResponseOutcome{
 				HTTPStatus: int(httpStatus.Int64), UpstreamStatus: int(upstreamStatus.Int64),
 				HasText: hasText.Bool, HasToolCall: hasToolCall.Bool,
@@ -290,6 +293,20 @@ func (r *usageLogRepository) hydrateUsageLogCompensation(ctx context.Context, lo
 				UpstreamErrorKind: service.UpstreamErrorKind(upstreamErrorKind.String),
 				CollectorVersion:  int(collectorVersion.Int64),
 				InputTokenPolicy:  inputTokenPolicy.String,
+			}
+			for _, pair := range []struct {
+				value  sql.NullInt64
+				target **int
+			}{
+				{upstreamFirstEventMs, &log.Outcome.UpstreamFirstEventMs},
+				{upstreamFirstReasoningMs, &log.Outcome.UpstreamFirstReasoningMs},
+				{upstreamFirstTextMs, &log.Outcome.UpstreamFirstTextMs},
+				{downstreamFirstContentMs, &log.Outcome.DownstreamFirstContentMs},
+			} {
+				if pair.value.Valid {
+					value := int(pair.value.Int64)
+					*pair.target = &value
+				}
 			}
 			if upstreamInputTokens.Valid {
 				count := int(upstreamInputTokens.Int64)

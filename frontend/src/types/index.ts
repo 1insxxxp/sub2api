@@ -2278,6 +2278,10 @@ interface PendingProviderUsage {
 }
 
 export interface AdminUsageLog extends UsageLog {
+  upstream_first_event_ms?: number | null
+  upstream_first_reasoning_ms?: number | null
+  upstream_first_text_ms?: number | null
+  downstream_first_content_ms?: number | null
   pending_provider_evidence?: PendingProviderUsage & {
     input_includes_cache?: boolean
     input_limit?: number

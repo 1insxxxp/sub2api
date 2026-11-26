@@ -102,7 +102,7 @@ func TestUsageLogRepositoryUpsertInputCountingAuditPreservesIdentity(t *testing.
 	mock.ExpectExec(`(?s)INSERT INTO usage_response_outcomes.*upstream_input_tokens, input_token_policy, input_token_policy_count.*ON CONFLICT \(request_id, api_key_id\) DO UPDATE`).WithArgs(
 		"audit-input", int64(2), int64(1), int64(3), nil,
 		0, 0, false, false, false, false, int64(0), 0, false, "", "none", "none", int16(1), 0, "unknown", "unknown",
-		1037, "vertex_like_discount_v1", 667,
+		1037, "vertex_like_discount_v1", 667, nil, nil, nil, nil,
 	).WillReturnResult(sqlmock.NewResult(1, 1))
 	require.NoError(t, newUsageLogRepositoryWithSQL(nil, db).upsertResponseOutcome(context.Background(), log))
 	require.NoError(t, mock.ExpectationsWereMet())
@@ -113,8 +113,8 @@ func TestUsageLogRepositoryHydratesInputCountingAuditWithoutPublicProjection(t *
 	require.NoError(t, err)
 	defer db.Close()
 	mock.ExpectQuery(`(?s)SELECT ul.id, erc.id, erc.status, erc.reason_code.*upstream_input_tokens.*input_token_policy.*input_token_policy_count`).WithArgs("{42,43}").WillReturnRows(sqlmock.NewRows([]string{
-		"usage_id", "claim_id", "claim_status", "reason_code", "http_status", "upstream_status", "has_text", "has_tool_call", "has_reasoning", "has_media", "output_bytes", "event_count", "stream_completed", "finish_reason", "disconnect_source", "upstream_error_kind", "collector_version", "anti_truncation_rounds", "input_tokens_source", "output_tokens_source", "upstream_input_tokens", "input_token_policy", "input_token_policy_count",
-	}).AddRow(42, nil, nil, nil, 200, 200, true, false, false, false, 10, 2, true, "stop", "none", "none", 1, 0, "estimated", "upstream", 1037, "vertex_like_discount_v1", 667).AddRow(43, nil, nil, nil, 200, 200, true, false, false, false, 10, 2, true, "stop", "none", "none", 1, 0, "unknown", "unknown", nil, "", nil))
+		"usage_id", "claim_id", "claim_status", "reason_code", "http_status", "upstream_status", "has_text", "has_tool_call", "has_reasoning", "has_media", "output_bytes", "event_count", "stream_completed", "finish_reason", "disconnect_source", "upstream_error_kind", "collector_version", "anti_truncation_rounds", "input_tokens_source", "output_tokens_source", "upstream_input_tokens", "input_token_policy", "input_token_policy_count", "upstream_first_event_ms", "upstream_first_reasoning_ms", "upstream_first_text_ms", "downstream_first_content_ms",
+	}).AddRow(42, nil, nil, nil, 200, 200, true, false, false, false, 10, 2, true, "stop", "none", "none", 1, 0, "estimated", "upstream", 1037, "vertex_like_discount_v1", 667, nil, nil, nil, nil).AddRow(43, nil, nil, nil, 200, 200, true, false, false, false, 10, 2, true, "stop", "none", "none", 1, 0, "unknown", "unknown", nil, "", nil, nil, nil, nil, nil))
 	logs := []service.UsageLog{{ID: 42}, {ID: 43}}
 	require.NoError(t, newUsageLogRepositoryWithSQL(nil, db).hydrateUsageLogCompensation(context.Background(), logs))
 	require.NotNil(t, logs[0].Outcome)
@@ -139,12 +139,12 @@ func TestUsageLogRepositoryInputCountingAuditOnlyKeepsUnknownOutcome(t *testing.
 	mock.ExpectExec(`(?s)INSERT INTO usage_response_outcomes.*upstream_input_tokens`).WithArgs(
 		"audit-only", int64(2), int64(1), int64(3), nil,
 		0, 0, false, false, false, false, int64(0), 0, false, "", "none", "none", int16(0), 0, "unknown", "unknown",
-		1037, "vertex_like_discount_v1", 667,
+		1037, "vertex_like_discount_v1", 667, nil, nil, nil, nil,
 	).WillReturnResult(sqlmock.NewResult(1, 1))
 	require.NoError(t, repo.UpsertResponseOutcome(context.Background(), log), "accounting audit must not invent collector evidence")
 	mock.ExpectQuery(`SELECT ul.id, erc.id, erc.status, erc.reason_code`).WithArgs("{42}").WillReturnRows(sqlmock.NewRows([]string{
-		"usage_id", "claim_id", "claim_status", "reason_code", "http_status", "upstream_status", "has_text", "has_tool_call", "has_reasoning", "has_media", "output_bytes", "event_count", "stream_completed", "finish_reason", "disconnect_source", "upstream_error_kind", "collector_version", "anti_truncation_rounds", "input_tokens_source", "output_tokens_source", "upstream_input_tokens", "input_token_policy", "input_token_policy_count",
-	}).AddRow(42, nil, nil, nil, 0, 0, false, false, false, false, 0, 0, false, "", "none", "none", 0, 0, "unknown", "unknown", 1037, "vertex_like_discount_v1", 667))
+		"usage_id", "claim_id", "claim_status", "reason_code", "http_status", "upstream_status", "has_text", "has_tool_call", "has_reasoning", "has_media", "output_bytes", "event_count", "stream_completed", "finish_reason", "disconnect_source", "upstream_error_kind", "collector_version", "anti_truncation_rounds", "input_tokens_source", "output_tokens_source", "upstream_input_tokens", "input_token_policy", "input_token_policy_count", "upstream_first_event_ms", "upstream_first_reasoning_ms", "upstream_first_text_ms", "downstream_first_content_ms",
+	}).AddRow(42, nil, nil, nil, 0, 0, false, false, false, false, 0, 0, false, "", "none", "none", 0, 0, "unknown", "unknown", 1037, "vertex_like_discount_v1", 667, nil, nil, nil, nil))
 	read := []service.UsageLog{{ID: 42}}
 	require.NoError(t, repo.hydrateUsageLogCompensation(context.Background(), read))
 	require.NotNil(t, read[0].Outcome, "internal audit stays readable without implying response collection")

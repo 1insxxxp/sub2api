@@ -699,6 +699,7 @@ func (s *GeminiMessagesCompatService) handleChatCompletionsStreamingResponseFrom
 	}
 	imageCounter := beginGeminiImageOutputObservation(c)
 	_, outcomeCollector := EnsureResponseOutcomeCollector(ctx, c, resp.StatusCode, resp.StatusCode)
+	timing := geminiStreamPhaseTiming{start: startTime}
 	clientDisconnected := false
 	finishReason := ""
 	defer func() {
@@ -715,6 +716,7 @@ func (s *GeminiMessagesCompatService) handleChatCompletionsStreamingResponseFrom
 			result.clientDisconnect = clientDisconnected
 			result.finished = finishReason != ""
 			result.outcome = outcomeCollector.Snapshot()
+			timing.apply(&result.outcome)
 		}
 		markGeminiInterruptedStream(c, err, clientDisconnected)
 	}()
@@ -746,8 +748,19 @@ func (s *GeminiMessagesCompatService) handleChatCompletionsStreamingResponseFrom
 		if err != nil {
 			return false
 		}
-		if _, err := io.WriteString(c.Writer, sse); err != nil {
+		n, err := io.WriteString(c.Writer, sse)
+		if err != nil {
 			clientDisconnected = true
+		} else if n == len(sse) {
+			for _, choice := range chunk.Choices {
+				delta := choice.Delta
+				if (delta.Content != nil && *delta.Content != "") ||
+					(delta.ReasoningContent != nil && *delta.ReasoningContent != "") ||
+					(delta.Reasoning != nil && *delta.Reasoning != "") || len(delta.ToolCalls) > 0 {
+					timing.mark(&timing.downstreamContent)
+					break
+				}
+			}
 		}
 		return false
 	}
@@ -911,6 +924,7 @@ func (s *GeminiMessagesCompatService) handleChatCompletionsStreamingResponseFrom
 							rawBytes = innerBytes
 						}
 					}
+					timing.observeUpstream(rawBytes)
 					outcomeCollector.ObserveEvent(len(rawBytes))
 					_ = outcomeCollector.ObserveJSONPayload(ResponseOutcomeProtocolGemini, rawBytes)
 

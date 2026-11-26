@@ -1854,6 +1854,7 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 	clientDisconnect := false
 	streamFinished := false
 	var forwardErr error
+	var streamOutcome *ResponseOutcome
 	_, outcomeCollector := EnsureResponseOutcomeCollector(ctx, c, http.StatusOK, resp.StatusCode)
 
 	if stream {
@@ -1866,6 +1867,7 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 		firstTokenMs = streamRes.firstTokenMs
 		clientDisconnect = streamRes.clientDisconnect
 		streamFinished = streamRes.finished
+		streamOutcome = &streamRes.outcome
 		if firstTokenMs != nil {
 			recordGeminiFirstOutput(ctx, account.ID, originalModel, time.Duration(*firstTokenMs)*time.Millisecond, false)
 		}
@@ -1914,6 +1916,10 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 		imageCount = observedGeminiImageOutputs(c)
 	}
 
+	if streamOutcome == nil {
+		streamOutcome = ResponseOutcomeSnapshotFromContext(c.Request.Context())
+	}
+
 	return &ForwardResult{
 		RequestID:                     requestID,
 		UpstreamHeaders:               resp.Header,
@@ -1931,7 +1937,7 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 		ImageCount:                    imageCount,
 		ImageSize:                     imageSize,
 		ImageInputSize:                imageInputSize,
-		Outcome:                       ResponseOutcomeSnapshotFromContext(c.Request.Context()),
+		Outcome:                       streamOutcome,
 		UpstreamPriceMultiplier:       VertexUpstreamPriceMultiplier(account, mappedModel, cachedContentLocation),
 	}, forwardErr
 }
@@ -3363,6 +3369,7 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponse(c *gin.Conte
 
 func (s *GeminiMessagesCompatService) handleNativeStreamingResponseWithContext(ctx context.Context, c *gin.Context, resp *http.Response, startTime time.Time, originalModel string, isOAuth bool, account *Account, upstreamRequestID string, firstOutputGuard *modelFirstOutputGuard, firstOutputPolicy ModelFirstOutputTimeoutPolicy) (result *geminiNativeStreamResult, err error) {
 	_, outcomeCollector := EnsureResponseOutcomeCollector(ctx, c, resp.StatusCode, resp.StatusCode)
+	timing := geminiStreamPhaseTiming{start: startTime}
 	defer func() {
 		if result != nil && result.clientDisconnect {
 			outcomeCollector.MarkStreamError(context.Canceled, true)
@@ -3373,6 +3380,7 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponseWithContext(c
 		}
 		if result != nil {
 			result.outcome = outcomeCollector.Snapshot()
+			timing.apply(&result.outcome)
 		}
 		markGeminiInterruptedStream(c, err, result != nil && result.clientDisconnect)
 	}()
@@ -3425,6 +3433,7 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponseWithContext(c
 	var nativeJSON bytes.Buffer
 	bufferNativeJSON := false
 	allowNativeJSON := true
+	pendingSemanticEvent := false
 	writeNative := func(line string, semantic bool) {
 		if !semanticCommitted {
 			stagedLines = append(stagedLines, line)
@@ -3440,7 +3449,20 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponseWithContext(c
 			}
 			stagedLines = stagedLines[:0]
 		}
-		_, _ = io.WriteString(c.Writer, line)
+		n, writeErr := io.WriteString(c.Writer, line)
+		if writeErr != nil || n != len(line) {
+			pendingSemanticEvent = false
+		} else {
+			pendingSemanticEvent = pendingSemanticEvent || semantic
+			eventComplete := strings.TrimRight(line, "\r\n") == "" ||
+				strings.HasSuffix(line, "\n\n") || strings.HasSuffix(line, "\r\n\r\n")
+			if eventComplete {
+				if pendingSemanticEvent {
+					timing.mark(&timing.downstreamContent)
+				}
+				pendingSemanticEvent = false
+			}
+		}
 		flusher.Flush()
 	}
 	defer func() {
@@ -3487,6 +3509,7 @@ func (s *GeminiMessagesCompatService) handleNativeStreamingResponseWithContext(c
 						rawBytes = []byte(payload)
 					}
 
+					timing.observeUpstream(rawBytes)
 					sawDataEvent = true
 					if sig, ok := detectGeminiResponseSignal(rawBytes); ok && sig.Kind > best.Kind {
 						best = sig

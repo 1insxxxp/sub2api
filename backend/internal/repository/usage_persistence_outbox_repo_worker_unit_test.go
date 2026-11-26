@@ -68,7 +68,7 @@ func TestUsagePersistenceOutboxDeliver_UsageOutcomeAndAckShareOneTransaction(t *
 			outcome := mock.ExpectExec(`(?s)INSERT INTO usage_response_outcomes.*upstream_input_tokens, input_token_policy, input_token_policy_count.*FROM usage_logs ul`).WithArgs(
 				log.RequestID, log.APIKeyID, log.UserID, log.AccountID, nil,
 				200, 0, true, false, false, false, int64(14), 0, false, "", "none", "none", int16(1), 0, "unknown", "unknown",
-				1037, "vertex_like_discount_v1", 667,
+				1037, "vertex_like_discount_v1", 667, nil, nil, nil, nil,
 			)
 			if failOutcome {
 				outcome.WillReturnError(errors.New("injected outcome failure"))

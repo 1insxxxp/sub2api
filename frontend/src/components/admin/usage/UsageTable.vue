@@ -283,6 +283,15 @@
               <span class="font-medium tabular-nums" :class="LATENCY_TEXT_CLASSES[durationSeverity(row.duration_ms ?? 0)]">{{ formatDuration(row.duration_ms) }}</span>
               <span class="text-gray-400 dark:text-gray-500" :title="t('usage.outputTpsHint')">{{ t('usage.outputTps') }}</span>
               <span data-testid="output-tps" class="font-medium tabular-nums text-gray-700 dark:text-gray-300">{{ formatUsageOutputRate(row) }}</span>
+              <details v-if="showUsageDiagnostics && row.stream" data-testid="stream-phases" class="col-span-2 text-gray-500 dark:text-gray-400">
+                <summary class="cursor-pointer select-none">{{ t('usage.streamPhases') }}</summary>
+                <dl class="mt-1 grid grid-cols-[max-content_max-content] gap-x-2 gap-y-0.5 tabular-nums">
+                  <dt>{{ t('usage.upstreamFirstEvent') }}</dt><dd>{{ row.upstream_first_event_ms == null ? '—' : formatDuration(row.upstream_first_event_ms) }}</dd>
+                  <dt>{{ t('usage.upstreamFirstReasoning') }}</dt><dd>{{ row.upstream_first_reasoning_ms == null ? '—' : formatDuration(row.upstream_first_reasoning_ms) }}</dd>
+                  <dt>{{ t('usage.upstreamFirstText') }}</dt><dd>{{ row.upstream_first_text_ms == null ? '—' : formatDuration(row.upstream_first_text_ms) }}</dd>
+                  <dt>{{ t('usage.downstreamFirstContent') }}</dt><dd>{{ row.downstream_first_content_ms == null ? '—' : formatDuration(row.downstream_first_content_ms) }}</dd>
+                </dl>
+              </details>
             </div>
           </div>
         </template>

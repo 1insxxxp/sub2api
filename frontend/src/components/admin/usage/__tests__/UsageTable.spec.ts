@@ -189,6 +189,27 @@ describe('admin UsageTable tooltip', () => {
     }
   })
 
+  it('shows stream phase timing to administrators with missing values for historical records', () => {
+    const row = { ...baseImageRow, stream: true, upstream_first_event_ms: 100, upstream_first_reasoning_ms: 250, upstream_first_text_ms: 1500, downstream_first_content_ms: 1600 }
+    const historical = { ...baseImageRow, stream: true, request_id: 'historical' }
+    const wrapper = mount(UsageTable, {
+      props: { data: [row, historical], loading: false, columns: [{ key: 'latency', label: 'Latency' }] },
+      global: { stubs: { DataTable: DataTableStub, EmptyState: true, Icon: true, Teleport: true } },
+    })
+    const phases = wrapper.findAll('[data-testid="stream-phases"]')
+    expect(phases).toHaveLength(2)
+    for (const value of ['100ms', '250ms', '1.50s', '1.60s']) expect(phases[0].text()).toContain(value)
+    expect(phases[1].text().match(/—/g)).toHaveLength(4)
+    wrapper.unmount()
+
+    const userWrapper = mount(UsageTable, {
+      props: { data: [row], loading: false, columns: [{ key: 'latency', label: 'Latency' }], showUsageDiagnostics: false },
+      global: { stubs: { DataTable: DataTableStub, EmptyState: true, Icon: true, Teleport: true } },
+    })
+    expect(userWrapper.find('[data-testid="stream-phases"]').exists()).toBe(false)
+    userWrapper.unmount()
+  })
+
   it('shows output TPS in the latency cell using total duration', () => {
     const row = { ...baseImageRow, image_count: 0, billing_mode: 'token', output_tokens: 1000, duration_ms: 20_000, first_token_ms: 10_000 }
     const wrapper = mount(UsageTable, {

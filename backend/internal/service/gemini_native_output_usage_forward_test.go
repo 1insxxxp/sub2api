@@ -138,3 +138,15 @@ func TestGeminiCollectedResponseRepairsOnlyClientUsage(t *testing.T) {
 	require.EqualValues(t, 15, gjson.GetBytes(projected, "usageMetadata.totalTokenCount").Int())
 	require.Equal(t, 3, usage.OutputTokens)
 }
+
+func TestGeminiNativeForwardReturnsStreamPhaseTiming(t *testing.T) {
+	body := "data: " + `{"candidates":[{"content":{"parts":[{"text":"answer"}]},"finishReason":"STOP"}]}` + "\n\n"
+	svc := newGeminiSignalService("text/event-stream", body)
+	c, _ := newGeminiNativeTestContext(t)
+	result, err := svc.ForwardNative(context.Background(), c, geminiSignalTestAccount(), "gemini-test", "streamGenerateContent", true, geminiSignalTestRequest())
+	require.NoError(t, err)
+	require.NotNil(t, result.Outcome)
+	require.NotNil(t, result.Outcome.UpstreamFirstEventMs)
+	require.NotNil(t, result.Outcome.UpstreamFirstTextMs)
+	require.NotNil(t, result.Outcome.DownstreamFirstContentMs)
+}

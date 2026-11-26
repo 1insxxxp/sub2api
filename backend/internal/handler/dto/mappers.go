@@ -860,7 +860,7 @@ func UsageLogFromServiceAdmin(l *service.UsageLog) *AdminUsageLog {
 	}
 	usageLog := usageLogFromServiceUser(l)
 	usageLog.UpstreamEndpoint = l.UpstreamEndpoint
-	return &AdminUsageLog{
+	result := &AdminUsageLog{
 		UsageLog:                usageLog,
 		PendingEvidence:         l.PendingEvidence,
 		OutcomeStatus:           usageOutcomeStatus(l),
@@ -879,6 +879,13 @@ func UsageLogFromServiceAdmin(l *service.UsageLog) *AdminUsageLog {
 		IPAddress:               l.IPAddress,
 		Account:                 AccountSummaryFromService(l.Account),
 	}
+	if l.Outcome != nil {
+		result.UpstreamFirstEventMs = l.Outcome.UpstreamFirstEventMs
+		result.UpstreamFirstReasoningMs = l.Outcome.UpstreamFirstReasoningMs
+		result.UpstreamFirstTextMs = l.Outcome.UpstreamFirstTextMs
+		result.DownstreamFirstContentMs = l.Outcome.DownstreamFirstContentMs
+	}
+	return result
 }
 
 // usageOutcomeStatus maps privacy-safe response evidence to the small status

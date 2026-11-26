@@ -726,7 +726,11 @@ type UsageLog struct {
 
 // AdminUsageLog 是管理员接口使用的 usage log DTO（包含管理员字段）。
 type AdminUsageLog struct {
-	PendingEvidence *service.PendingUsageEvidence `json:"pending_provider_evidence,omitempty"`
+	UpstreamFirstEventMs     *int                          `json:"upstream_first_event_ms,omitempty"`
+	UpstreamFirstReasoningMs *int                          `json:"upstream_first_reasoning_ms,omitempty"`
+	UpstreamFirstTextMs      *int                          `json:"upstream_first_text_ms,omitempty"`
+	DownstreamFirstContentMs *int                          `json:"downstream_first_content_ms,omitempty"`
+	PendingEvidence          *service.PendingUsageEvidence `json:"pending_provider_evidence,omitempty"`
 	UsageLog
 
 	// OutcomeStatus is a privacy-safe classification for monitoring. It is

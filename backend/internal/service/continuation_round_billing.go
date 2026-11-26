@@ -103,7 +103,7 @@ func AggregateForwardContinuationResults(rounds []*ForwardResult) (*ForwardResul
 	}
 	refreshForwardContinuationUsage(result)
 	result.FirstTokenMs = cloneContinuationPointer(rounds[0].FirstTokenMs)
-	result.Outcome = aggregateContinuationOutcome(result.Outcome, func(visit func(*ResponseOutcome)) {
+	result.Outcome = aggregateContinuationOutcome(result.Outcome, rounds[0].Outcome, func(visit func(*ResponseOutcome)) {
 		for _, round := range rounds {
 			visit(round.Outcome)
 		}
@@ -124,7 +124,7 @@ func AggregateOpenAIContinuationResults(rounds []*OpenAIForwardResult) (*OpenAIF
 	}
 	refreshOpenAIContinuationUsage(result)
 	result.FirstTokenMs = cloneContinuationPointer(rounds[0].FirstTokenMs)
-	result.Outcome = aggregateContinuationOutcome(result.Outcome, func(visit func(*ResponseOutcome)) {
+	result.Outcome = aggregateContinuationOutcome(result.Outcome, rounds[0].Outcome, func(visit func(*ResponseOutcome)) {
 		for _, round := range rounds {
 			visit(round.Outcome)
 		}
@@ -361,10 +361,22 @@ func continuationCustomerForwardLeaf(round *ForwardResult, account *Account, ver
 	return projected
 }
 
-func aggregateContinuationOutcome(last *ResponseOutcome, visit func(func(*ResponseOutcome))) *ResponseOutcome {
+func aggregateContinuationOutcome(last, first *ResponseOutcome, visit func(func(*ResponseOutcome))) *ResponseOutcome {
 	var summary ResponseOutcome
 	if last != nil {
 		summary = *last
+	}
+	// Each round has its own start time, so later round timings cannot be
+	// interpreted as offsets from the first round. The continuation writer may
+	// buffer or rewrite frames, so its inner write is not downstream delivery.
+	summary.UpstreamFirstEventMs = nil
+	summary.UpstreamFirstReasoningMs = nil
+	summary.UpstreamFirstTextMs = nil
+	summary.DownstreamFirstContentMs = nil
+	if first != nil {
+		summary.UpstreamFirstEventMs = cloneContinuationPointer(first.UpstreamFirstEventMs)
+		summary.UpstreamFirstReasoningMs = cloneContinuationPointer(first.UpstreamFirstReasoningMs)
+		summary.UpstreamFirstTextMs = cloneContinuationPointer(first.UpstreamFirstTextMs)
 	}
 	found := last != nil
 	summary.OutputBytes, summary.EventCount = 0, 0

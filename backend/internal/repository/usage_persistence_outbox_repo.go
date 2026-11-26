@@ -17,6 +17,7 @@ import (
 const (
 	usagePersistencePayloadCategoryDefaultVersion = 4
 	usagePersistenceContinuationVersion           = 5
+	usagePersistenceStreamTimingVersion           = 6
 	usagePersistencePayloadVersion                = 3
 	usagePersistencePayloadProvenanceVersion      = 2
 	usagePersistencePayloadLegacyVersion          = 1
@@ -107,23 +108,27 @@ type usagePersistenceUsage struct {
 }
 
 type usagePersistenceOutcome struct {
-	ContinuationUsage     []service.ContinuationUsageAudit `json:"continuation_usage,omitempty"`
-	HTTPStatus            int                              `json:"http_status"`
-	UpstreamStatus        int                              `json:"upstream_status"`
-	HasText               bool                             `json:"has_text"`
-	HasToolCall           bool                             `json:"has_tool_call"`
-	HasReasoning          bool                             `json:"has_reasoning"`
-	HasMedia              bool                             `json:"has_media"`
-	OutputBytes           int64                            `json:"output_bytes"`
-	EventCount            int                              `json:"event_count"`
-	StreamCompleted       bool                             `json:"stream_completed"`
-	FinishReason          string                           `json:"finish_reason"`
-	DisconnectSource      service.DisconnectSource         `json:"disconnect_source"`
-	UpstreamErrorKind     service.UpstreamErrorKind        `json:"upstream_error_kind"`
-	CollectorVersion      int                              `json:"collector_version"`
-	UpstreamInputTokens   *int                             `json:"upstream_input_tokens,omitempty"`
-	InputTokenPolicy      string                           `json:"input_token_policy,omitempty"`
-	InputTokenPolicyCount *int                             `json:"input_token_policy_count,omitempty"`
+	UpstreamFirstEventMs     *int                             `json:"upstream_first_event_ms,omitempty"`
+	UpstreamFirstReasoningMs *int                             `json:"upstream_first_reasoning_ms,omitempty"`
+	UpstreamFirstTextMs      *int                             `json:"upstream_first_text_ms,omitempty"`
+	DownstreamFirstContentMs *int                             `json:"downstream_first_content_ms,omitempty"`
+	ContinuationUsage        []service.ContinuationUsageAudit `json:"continuation_usage,omitempty"`
+	HTTPStatus               int                              `json:"http_status"`
+	UpstreamStatus           int                              `json:"upstream_status"`
+	HasText                  bool                             `json:"has_text"`
+	HasToolCall              bool                             `json:"has_tool_call"`
+	HasReasoning             bool                             `json:"has_reasoning"`
+	HasMedia                 bool                             `json:"has_media"`
+	OutputBytes              int64                            `json:"output_bytes"`
+	EventCount               int                              `json:"event_count"`
+	StreamCompleted          bool                             `json:"stream_completed"`
+	FinishReason             string                           `json:"finish_reason"`
+	DisconnectSource         service.DisconnectSource         `json:"disconnect_source"`
+	UpstreamErrorKind        service.UpstreamErrorKind        `json:"upstream_error_kind"`
+	CollectorVersion         int                              `json:"collector_version"`
+	UpstreamInputTokens      *int                             `json:"upstream_input_tokens,omitempty"`
+	InputTokenPolicy         string                           `json:"input_token_policy,omitempty"`
+	InputTokenPolicyCount    *int                             `json:"input_token_policy_count,omitempty"`
 }
 
 func encodeUsagePersistencePayload(cmd *service.UsageBillingCommand, thresholdExemptCost float64) ([]byte, error) {
@@ -227,24 +232,31 @@ func encodeUsagePersistencePayload(cmd *service.UsageBillingCommand, thresholdEx
 			payload.Version = usagePersistenceContinuationVersion
 		}
 		payload.Usage.Outcome = &usagePersistenceOutcome{
-			ContinuationUsage:     log.Outcome.ContinuationUsage,
-			HTTPStatus:            log.Outcome.HTTPStatus,
-			UpstreamStatus:        log.Outcome.UpstreamStatus,
-			HasText:               log.Outcome.HasText,
-			HasToolCall:           log.Outcome.HasToolCall,
-			HasReasoning:          log.Outcome.HasReasoning,
-			HasMedia:              log.Outcome.HasMedia,
-			OutputBytes:           log.Outcome.OutputBytes,
-			EventCount:            log.Outcome.EventCount,
-			StreamCompleted:       log.Outcome.StreamCompleted,
-			FinishReason:          log.Outcome.FinishReason,
-			DisconnectSource:      log.Outcome.DisconnectSource,
-			UpstreamErrorKind:     log.Outcome.UpstreamErrorKind,
-			CollectorVersion:      log.Outcome.CollectorVersion,
-			UpstreamInputTokens:   log.Outcome.UpstreamInputTokens,
-			InputTokenPolicy:      log.Outcome.InputTokenPolicy,
-			InputTokenPolicyCount: log.Outcome.InputTokenPolicyCount,
+			UpstreamFirstEventMs:     log.Outcome.UpstreamFirstEventMs,
+			UpstreamFirstReasoningMs: log.Outcome.UpstreamFirstReasoningMs,
+			UpstreamFirstTextMs:      log.Outcome.UpstreamFirstTextMs,
+			DownstreamFirstContentMs: log.Outcome.DownstreamFirstContentMs,
+			ContinuationUsage:        log.Outcome.ContinuationUsage,
+			HTTPStatus:               log.Outcome.HTTPStatus,
+			UpstreamStatus:           log.Outcome.UpstreamStatus,
+			HasText:                  log.Outcome.HasText,
+			HasToolCall:              log.Outcome.HasToolCall,
+			HasReasoning:             log.Outcome.HasReasoning,
+			HasMedia:                 log.Outcome.HasMedia,
+			OutputBytes:              log.Outcome.OutputBytes,
+			EventCount:               log.Outcome.EventCount,
+			StreamCompleted:          log.Outcome.StreamCompleted,
+			FinishReason:             log.Outcome.FinishReason,
+			DisconnectSource:         log.Outcome.DisconnectSource,
+			UpstreamErrorKind:        log.Outcome.UpstreamErrorKind,
+			CollectorVersion:         log.Outcome.CollectorVersion,
+			UpstreamInputTokens:      log.Outcome.UpstreamInputTokens,
+			InputTokenPolicy:         log.Outcome.InputTokenPolicy,
+			InputTokenPolicyCount:    log.Outcome.InputTokenPolicyCount,
 		}
+	}
+	if log.Outcome != nil && (log.Outcome.UpstreamFirstEventMs != nil || log.Outcome.UpstreamFirstReasoningMs != nil || log.Outcome.UpstreamFirstTextMs != nil || log.Outcome.DownstreamFirstContentMs != nil) {
+		payload.Version = usagePersistenceStreamTimingVersion
 	}
 	if log.CategoryDefaultGroupID != nil {
 		if *log.CategoryDefaultGroupID <= 0 || log.GroupID == nil || *log.GroupID <= 0 || *log.GroupID == *log.CategoryDefaultGroupID || log.SubscriptionID != nil {
@@ -284,7 +296,7 @@ func decodeUsagePersistencePayload(raw []byte, requestID string, apiKeyID int64)
 	if err := decoder.Decode(new(any)); err != io.EOF {
 		return nil, errors.New("invalid trailing usage persistence snapshot")
 	}
-	if payload.Version != usagePersistencePayloadLegacyVersion && payload.Version != usagePersistencePayloadProvenanceVersion && payload.Version != usagePersistencePayloadVersion && payload.Version != usagePersistencePayloadCategoryDefaultVersion && payload.Version != usagePersistenceContinuationVersion {
+	if payload.Version != usagePersistencePayloadLegacyVersion && payload.Version != usagePersistencePayloadProvenanceVersion && payload.Version != usagePersistencePayloadVersion && payload.Version != usagePersistencePayloadCategoryDefaultVersion && payload.Version != usagePersistenceContinuationVersion && payload.Version != usagePersistenceStreamTimingVersion {
 		return nil, errors.New("unsupported usage persistence snapshot version")
 	}
 	usage := payload.Usage
@@ -447,23 +459,27 @@ func decodeUsagePersistencePayload(raw []byte, requestID string, apiKeyID int64)
 	}
 	if usage.Outcome != nil {
 		log.Outcome = &service.ResponseOutcome{
-			ContinuationUsage:     usage.Outcome.ContinuationUsage,
-			HTTPStatus:            usage.Outcome.HTTPStatus,
-			UpstreamStatus:        usage.Outcome.UpstreamStatus,
-			HasText:               usage.Outcome.HasText,
-			HasToolCall:           usage.Outcome.HasToolCall,
-			HasReasoning:          usage.Outcome.HasReasoning,
-			HasMedia:              usage.Outcome.HasMedia,
-			OutputBytes:           usage.Outcome.OutputBytes,
-			EventCount:            usage.Outcome.EventCount,
-			StreamCompleted:       usage.Outcome.StreamCompleted,
-			FinishReason:          usage.Outcome.FinishReason,
-			DisconnectSource:      usage.Outcome.DisconnectSource,
-			UpstreamErrorKind:     usage.Outcome.UpstreamErrorKind,
-			CollectorVersion:      usage.Outcome.CollectorVersion,
-			UpstreamInputTokens:   usage.Outcome.UpstreamInputTokens,
-			InputTokenPolicy:      usage.Outcome.InputTokenPolicy,
-			InputTokenPolicyCount: usage.Outcome.InputTokenPolicyCount,
+			UpstreamFirstEventMs:     usage.Outcome.UpstreamFirstEventMs,
+			UpstreamFirstReasoningMs: usage.Outcome.UpstreamFirstReasoningMs,
+			UpstreamFirstTextMs:      usage.Outcome.UpstreamFirstTextMs,
+			DownstreamFirstContentMs: usage.Outcome.DownstreamFirstContentMs,
+			ContinuationUsage:        usage.Outcome.ContinuationUsage,
+			HTTPStatus:               usage.Outcome.HTTPStatus,
+			UpstreamStatus:           usage.Outcome.UpstreamStatus,
+			HasText:                  usage.Outcome.HasText,
+			HasToolCall:              usage.Outcome.HasToolCall,
+			HasReasoning:             usage.Outcome.HasReasoning,
+			HasMedia:                 usage.Outcome.HasMedia,
+			OutputBytes:              usage.Outcome.OutputBytes,
+			EventCount:               usage.Outcome.EventCount,
+			StreamCompleted:          usage.Outcome.StreamCompleted,
+			FinishReason:             usage.Outcome.FinishReason,
+			DisconnectSource:         usage.Outcome.DisconnectSource,
+			UpstreamErrorKind:        usage.Outcome.UpstreamErrorKind,
+			CollectorVersion:         usage.Outcome.CollectorVersion,
+			UpstreamInputTokens:      usage.Outcome.UpstreamInputTokens,
+			InputTokenPolicy:         usage.Outcome.InputTokenPolicy,
+			InputTokenPolicyCount:    usage.Outcome.InputTokenPolicyCount,
 		}
 	}
 	return log, nil
