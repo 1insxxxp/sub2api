@@ -149,7 +149,7 @@ func (s *OpenAIGatewayService) buildNovelAIImagesRequest(
 	if userAgent := account.GetOpenAIUserAgent(); userAgent != "" {
 		req.Header.Set("User-Agent", userAgent)
 	}
-	account.ApplyHeaderOverrides(req.Header)
+	account.ApplyHeaderOverrides(ctx, req.Header)
 	return req, nil
 }
 

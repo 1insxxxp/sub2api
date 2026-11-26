@@ -142,6 +142,7 @@ type CreateAccountRequest struct {
 	GroupIDs                []int64           `json:"group_ids"`
 	ExpiresAt               *int64            `json:"expires_at"`
 	AutoPauseOnExpired      *bool             `json:"auto_pause_on_expired"`
+	GroupSyncEnabled        *bool             `json:"upstream_billing_group_sync_enabled"`
 	ProbeEnabled            *bool             `json:"upstream_billing_probe_enabled"`
 	ConfirmMixedChannelRisk *bool             `json:"confirm_mixed_channel_risk"` // 用户确认混合渠道风险
 }
@@ -164,6 +165,7 @@ type UpdateAccountRequest struct {
 	GroupIDs                *[]int64           `json:"group_ids"`
 	ExpiresAt               *int64             `json:"expires_at"`
 	AutoPauseOnExpired      *bool              `json:"auto_pause_on_expired"`
+	GroupSyncEnabled        *bool              `json:"upstream_billing_group_sync_enabled"`
 	ProbeEnabled            *bool              `json:"upstream_billing_probe_enabled"`
 	RateSyncEnabled         *bool              `json:"upstream_billing_rate_sync_enabled"`
 	ConfirmMixedChannelRisk *bool              `json:"confirm_mixed_channel_risk"` // 用户确认混合渠道风险
@@ -171,21 +173,22 @@ type UpdateAccountRequest struct {
 
 // BulkUpdateAccountsRequest represents the payload for bulk editing accounts
 type BulkUpdateAccountsRequest struct {
-	AccountIDs              []int64                   `json:"account_ids"`
-	Filters                 *BulkUpdateAccountFilters `json:"filters"`
-	Name                    string                    `json:"name"`
-	ProxyID                 *int64                    `json:"proxy_id"`
-	Concurrency             *int                      `json:"concurrency"`
-	Priority                *int                      `json:"priority"`
-	RateMultiplier          *float64                  `json:"rate_multiplier"`
-	LoadFactor              *int                      `json:"load_factor"`
-	Status                  string                    `json:"status" binding:"omitempty,oneof=active inactive error"`
-	Schedulable             *bool                     `json:"schedulable"`
-	GroupIDs                *[]int64                  `json:"group_ids"`
-	Credentials             map[string]any            `json:"credentials"`
-	Extra                   map[string]any            `json:"extra"`
-	ProbeEnabled            *bool                     `json:"upstream_billing_probe_enabled"`
-	ConfirmMixedChannelRisk *bool                     `json:"confirm_mixed_channel_risk"` // 用户确认混合渠道风险
+	AccountIDs     []int64                   `json:"account_ids"`
+	Filters        *BulkUpdateAccountFilters `json:"filters"`
+	Name           string                    `json:"name"`
+	ProxyID        *int64                    `json:"proxy_id"`
+	Concurrency    *int                      `json:"concurrency"`
+	Priority       *int                      `json:"priority"`
+	RateMultiplier *float64                  `json:"rate_multiplier"`
+	LoadFactor     *int                      `json:"load_factor"`
+	Status         string                    `json:"status" binding:"omitempty,oneof=active inactive error"`
+	Schedulable    *bool                     `json:"schedulable"`
+	GroupIDs       *[]int64                  `json:"group_ids"`
+	Credentials    map[string]any            `json:"credentials"`
+	Extra          map[string]any            `json:"extra"`
+
+	ProbeEnabled            *bool `json:"upstream_billing_probe_enabled"`
+	ConfirmMixedChannelRisk *bool `json:"confirm_mixed_channel_risk"` // 用户确认混合渠道风险
 }
 
 type BulkUpdateAccountFilters struct {
@@ -1087,6 +1090,7 @@ func (h *AccountHandler) Create(c *gin.Context) {
 			ExpiresAt:             req.ExpiresAt,
 			AutoPauseOnExpired:    req.AutoPauseOnExpired,
 			ProbeEnabled:          req.ProbeEnabled,
+			GroupSyncEnabled:      req.GroupSyncEnabled,
 			SkipMixedChannelCheck: skipCheck,
 		})
 		if execErr != nil {
@@ -1220,6 +1224,7 @@ func (h *AccountHandler) Update(c *gin.Context) {
 		ExpiresAt:             req.ExpiresAt,
 		AutoPauseOnExpired:    req.AutoPauseOnExpired,
 		ProbeEnabled:          req.ProbeEnabled,
+		GroupSyncEnabled:      req.GroupSyncEnabled,
 		RateSyncEnabled:       req.RateSyncEnabled,
 		SkipMixedChannelCheck: skipCheck,
 	})

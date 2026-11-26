@@ -4708,11 +4708,12 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_InvalidEncrypted
 		return message
 	}
 
-	// turn1：携带失效密文，上游以 invalid_encrypted_content 拒绝（error + response.failed 透传给客户端）。
+	// turn1：携带失效密文，上游以 invalid_encrypted_content 拒绝，客户端收到分类后的 error 和 response.failed。
 	writeMessage(`{"type":"response.create","model":"gpt-5.1","stream":false,"input":[{"type":"reasoning","id":"rs_1","encrypted_content":"stale-cipher","summary":[]},{"type":"input_text","text":"hi"}]}`)
 	firstEvent := readMessage()
 	require.Equal(t, "error", gjson.GetBytes(firstEvent, "type").String())
-	require.Equal(t, "invalid_encrypted_content", gjson.GetBytes(firstEvent, "error.code").String())
+	require.Equal(t, "request_failed", gjson.GetBytes(firstEvent, "error.code").String())
+	require.NotContains(t, string(firstEvent), "invalid_encrypted_content")
 	secondEvent := readMessage()
 	require.Equal(t, "response.failed", gjson.GetBytes(secondEvent, "type").String())
 

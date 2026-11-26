@@ -31,20 +31,12 @@ func (r *openAIWSIngressCapacityShedRepo) UpdateExtra(context.Context, int64, ma
 	return nil
 }
 
-// ctx_pool 的 ingress 直写路径把 error / response.failed 交给 WS 客户端前，必须和
-// HTTP/SSE（openai_gateway_response_handling.go）与 http_bridge
-// （openai_ws_http_bridge.go）两条路径一样，把容量降载码改写为可重试的
-// server_error：Codex 按闭集判定，server_is_overloaded / slow_down 属致命集，
-// 客户端会打印 "Selected model is at capacity" 并直接终止会话而不是退避重试。
-//
-// 第二个用例锁住改写范围：非容量类错误码必须原样下发，客户端依赖原码各自处理。
-func TestProxyResponsesWebSocketFromClient_RewritesCapacityShedCodeForClient(t *testing.T) {
+func TestProxyResponsesWebSocketFromClient_ClassifiesPublicErrors(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	tests := []struct {
 		name           string
 		upstreamEvents [][]byte
-		wantContains   []string
 		wantAbsent     []string
 	}{
 		{
@@ -53,23 +45,15 @@ func TestProxyResponsesWebSocketFromClient_RewritesCapacityShedCodeForClient(t *
 				[]byte(`{"type":"error","error":{"type":"service_unavailable_error","code":"server_is_overloaded","message":"Our servers are currently overloaded. Please try again later."}}`),
 				[]byte(`{"type":"response.failed","response":{"id":"resp_shed","status":"failed","error":{"code":"server_is_overloaded","message":"Our servers are currently overloaded. Please try again later."}}}`),
 			},
-			wantContains: []string{
-				`"code":"server_error"`,
-				"Our servers are currently overloaded",
-			},
-			wantAbsent: []string{"server_is_overloaded"},
+			wantAbsent: []string{"server_is_overloaded", "Our servers are currently overloaded"},
 		},
 		{
-			name: "non_capacity_error_code_is_passed_through",
+			name: "unmapped_non_capacity_error_uses_default",
 			upstreamEvents: [][]byte{
 				[]byte(`{"type":"error","error":{"type":"invalid_request_error","code":"workspace_suspended","message":"workspace is suspended"}}`),
 				[]byte(`{"type":"response.failed","response":{"id":"resp_suspended","status":"failed","error":{"code":"workspace_suspended","message":"workspace is suspended"}}}`),
 			},
-			wantContains: []string{
-				`"code":"workspace_suspended"`,
-				"workspace is suspended",
-			},
-			wantAbsent: []string{"server_error"},
+			wantAbsent: []string{"workspace_suspended", "workspace is suspended"},
 		},
 	}
 
@@ -167,11 +151,14 @@ func TestProxyResponsesWebSocketFromClient_RewritesCapacityShedCodeForClient(t *
 			// 本轮已终止，主动断开客户端让 ingress 退出 turn 循环。
 			_ = clientConn.CloseNow()
 
-			require.NotEmpty(t, frames, "客户端应至少收到一个下发事件")
-			joined := strings.Join(frames, "\n")
-			for _, want := range tt.wantContains {
-				require.Contains(t, joined, want, "客户端收到的事件:\n%s", joined)
+			require.Len(t, frames, 2)
+			require.Equal(t, "error", gjson.Get(frames[0], "type").String())
+			require.Equal(t, "response.failed", gjson.Get(frames[1], "type").String())
+			for i, path := range []string{"error", "response.error"} {
+				require.Equal(t, "request_failed", gjson.Get(frames[i], path+".code").String())
+				require.Equal(t, "模型服务请求失败，请稍后重试。如持续出现，请提供请求 ID 联系支持。", gjson.Get(frames[i], path+".message").String())
 			}
+			joined := strings.Join(frames, "\n")
 			for _, absent := range tt.wantAbsent {
 				require.NotContains(t, joined, absent, "客户端收到的事件:\n%s", joined)
 			}

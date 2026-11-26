@@ -39,7 +39,7 @@ func (s *activityHeatmapRepoStub) GetUserActivityHeatmap(
 func newActivityHeatmapTestRouter(repo *activityHeatmapRepoStub, userID int64) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	usageSvc := service.NewUsageService(repo, nil, nil, nil)
-	handler := NewUsageHandler(usageSvc, nil, nil, nil)
+	handler := NewUsageHandler(usageSvc, nil, nil, nil, nil)
 	router := gin.New()
 	router.Use(func(c *gin.Context) {
 		c.Set(string(middleware2.ContextKeyUser), middleware2.AuthSubject{UserID: userID})

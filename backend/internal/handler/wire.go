@@ -187,9 +187,10 @@ func ProvideUsageHandler(
 	apiKeyService *service.APIKeyService,
 	opsService *service.OpsService,
 	settingService *service.SettingService,
+	channelService *service.ChannelService,
 	claimService *service.EmptyResponseClaimService,
 ) *UsageHandler {
-	h := NewUsageHandler(usageService, apiKeyService, opsService, settingService)
+	h := NewUsageHandler(usageService, apiKeyService, opsService, settingService, channelService)
 	h.SetEmptyResponseClaimService(claimService)
 	return h
 }

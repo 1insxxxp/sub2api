@@ -27,7 +27,7 @@ func TestPendingUsageDetailPreservesOwnership(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	for _, owner := range []int64{42, 43} {
 		repo := &pendingUsageDetailRepoStub{owner: owner}
-		handler := NewUsageHandler(service.NewUsageService(repo, nil, nil, nil), nil, nil, nil)
+		handler := NewUsageHandler(service.NewUsageService(repo, nil, nil, nil), nil, nil, nil, nil)
 		router := gin.New()
 		router.Use(func(c *gin.Context) {
 			c.Set(string(middleware2.ContextKeyUser), middleware2.AuthSubject{UserID: 42})

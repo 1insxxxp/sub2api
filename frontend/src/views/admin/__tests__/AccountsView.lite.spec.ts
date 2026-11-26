@@ -20,6 +20,8 @@ const {
   getAllProxies,
   getAllGroups,
   refreshCredentials,
+  previewUpstreamGroup,
+  updateAccount,
   showError,
   showWarning
 } = vi.hoisted(() => ({
@@ -32,6 +34,8 @@ const {
   getAllProxies: vi.fn(),
   getAllGroups: vi.fn(),
   refreshCredentials: vi.fn(),
+  previewUpstreamGroup: vi.fn(),
+  updateAccount: vi.fn(),
   showError: vi.fn(),
   showWarning: vi.fn()
 }))
@@ -49,9 +53,11 @@ vi.mock('@/api/admin', () => ({
       batchClearError: vi.fn(),
       batchRefresh: vi.fn(),
       toggleSchedulable: vi.fn(),
-      refreshCredentials
+      refreshCredentials,
+      previewUpstreamGroup,
+      update: updateAccount
     },
-    proxies: { getAll: getAllProxies },
+    proxies: { getAllWithCount: getAllProxies },
     groups: { getAll: getAllGroups }
   }
 }))
@@ -74,6 +80,7 @@ const DataTableStub = defineComponent({
   template: `
     <div>
       <template v-if="!loading"><div v-for="row in data" :key="row.id" :data-account-name="row.name">
+        <slot name="cell-name" :row="row" :value="row.name" />
         <slot name="cell-groups" :row="row" />
         <slot name="cell-usage" :row="row" />
         <slot name="cell-actions" :row="row" />
@@ -87,8 +94,14 @@ const AccountGroupsCellStub = defineComponent({
   template: '<span data-test="account-groups">{{ groups.map(group => group.name).join(",") }}</span>'
 })
 
+const CreateAccountModalStub = defineComponent({
+  name: 'CreateAccountModal',
+  props: { show: Boolean, proxies: Array },
+  template: '<div data-test="create-account-modal" />'
+})
+
 const EditAccountModalStub = defineComponent({
-  props: { show: Boolean, account: { type: Object, default: null } },
+  props: { show: Boolean, account: { type: Object, default: null }, proxies: Array },
   template: '<div data-test="edit-account">{{ show ? account?.name : "" }}</div>'
 })
 
@@ -110,7 +123,7 @@ function mountView(stubActionMenu = true, realUsageCell = false) {
         AppLayout: { template: '<div><slot /></div>' },
         TablePageLayout: { template: '<div><slot name="filters" /><slot name="table" /><slot name="pagination" /></div>' },
         DataTable: DataTableStub,
-        AccountTableActions: { template: `<div><button data-test="manual-refresh" @click="$emit('refresh')">refresh</button><slot name="after" /></div>` },
+        AccountTableActions: { template: `<div><button data-test="manual-refresh" @click="$emit('refresh')">refresh</button><button data-test="create-account" @click="$emit('create')">create</button><slot name="after" /></div>` },
         AccountTableFilters: true,
         AccountBulkActionsBar: true,
         Pagination: true,
@@ -125,7 +138,7 @@ function mountView(stubActionMenu = true, realUsageCell = false) {
         TempUnschedStatusModal: true,
         ErrorPassthroughRulesModal: true,
         TLSFingerprintProfilesModal: true,
-        CreateAccountModal: true,
+        CreateAccountModal: CreateAccountModalStub,
         EditAccountModal: EditAccountModalStub,
         BulkEditAccountModal: true,
         PlatformTypeBadge: true,
@@ -190,6 +203,45 @@ describe('admin AccountsView lite account list', () => {
     expect(accountsViewSource).toContain('admin-workbench-page')
     expect(accountsViewSource).toContain('account-toolbar-action')
     expect(accountsViewSource).toMatch(/overflow-wrap:\s*anywhere/)
+  })
+
+
+  it('loads proxies with account counts and passes them to create and edit modals', async () => {
+    const proxies = [
+      { id: 1, name: 'Unused proxy', account_count: 0 },
+      { id: 2, name: 'Shared proxy', account_count: 7 }
+    ]
+    getAllProxies.mockResolvedValue(proxies)
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(getAllProxies).toHaveBeenCalledTimes(1)
+    await wrapper.get('[data-test="create-account"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.findComponent(CreateAccountModalStub).props('proxies')).toEqual(proxies)
+    await wrapper.get('button[aria-label="common.edit"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.findComponent(EditAccountModalStub).props('proxies')).toEqual(proxies)
+    wrapper.unmount()
+  })
+
+  it('syncs the selected row without clearing notes missing from the upstream', async () => {
+    const account = { ...listRow, type: 'apikey', notes: 'local notes' }
+    listAccounts.mockResolvedValue({ items: [account], total: 1, page: 1, page_size: 20, pages: 1 })
+    previewUpstreamGroup.mockResolvedValueOnce({}).mockResolvedValueOnce({ name: 'New group' })
+    updateAccount.mockReset().mockResolvedValue({ ...account, name: 'New group' })
+    const wrapper = mountView()
+    await flushPromises()
+    const sync = wrapper.get('button[aria-label="admin.accounts.upstreamBilling.saveGroup"]')
+    await sync.trigger('click')
+    await flushPromises()
+    expect(updateAccount).not.toHaveBeenCalled()
+    await sync.trigger('click')
+    await flushPromises()
+    expect(previewUpstreamGroup).toHaveBeenLastCalledWith({ account_id: account.id })
+    expect(updateAccount).toHaveBeenCalledWith(account.id, { name: 'New group' })
+    expect(wrapper.find('[data-account-name="New group"]').exists()).toBe(true)
+    wrapper.unmount()
   })
 
   it.each([

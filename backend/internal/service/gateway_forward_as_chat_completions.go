@@ -541,6 +541,7 @@ func (s *GatewayService) handleCCStreamingFromAnthropicWithContinuation(
 	anthState.Model = originalModel
 	ccState := apicompat.NewResponsesEventToChatState()
 	ccState.Model = originalModel
+	toolNameRestorer := newToolNameStreamRestorer(toolNameRewriteFromContext(c))
 
 	var usage ClaudeUsage
 	var completedUsage ClaudeUsage
@@ -637,6 +638,20 @@ func (s *GatewayService) handleCCStreamingFromAnthropicWithContinuation(
 		usage = completedUsage
 		addClaudeUsage(&usage, roundUsage)
 	}
+	writeEvent := func(event *apicompat.AnthropicStreamEvent) bool {
+		responsesEvents := apicompat.AnthropicEventToResponsesEvents(event, anthState)
+		for _, resEvt := range responsesEvents {
+			ccChunks := apicompat.ResponsesEventToChatChunks(&resEvt, ccState)
+			for _, chunk := range ccChunks {
+				if writeChunk(chunk) {
+					return true
+				}
+			}
+		}
+		c.Writer.Flush()
+		clientDisconnected = ccRequestCanceled(c)
+		return clientDisconnected
+	}
 	processAnthropicEvent := func(event *apicompat.AnthropicStreamEvent, payload string, usageAlreadyMerged bool) bool {
 		if event == nil {
 			return false
@@ -680,27 +695,24 @@ func (s *GatewayService) handleCCStreamingFromAnthropicWithContinuation(
 			ccState.IncludeUsage = true
 		}
 
-		// Chain: Anthropic event → Responses events → CC chunks
-		responsesEvents := apicompat.AnthropicEventToResponsesEvents(event, anthState)
-		for _, resEvt := range responsesEvents {
-			ccChunks := apicompat.ResponsesEventToChatChunks(&resEvt, ccState)
-			for _, chunk := range ccChunks {
-				if disconnected := writeChunk(chunk); disconnected {
-					return true
+		if toolNameRestorer == nil {
+			return writeEvent(event)
+		}
+		raw := streamEventBytes(payload)
+		var restored [2][]byte
+		n := toolNameRestorer.restoreInto(raw, &restored)
+		for _, data := range restored[:n] {
+			// Keep the normalized usage on unchanged message events.
+			next := event
+			if !bytes.Equal(raw, data) {
+				next = new(apicompat.AnthropicStreamEvent)
+				if err := json.Unmarshal(data, next); err != nil {
+					continue
 				}
 			}
-		}
-		if len(responsesEvents) > 0 && !clientDisconnected {
-			c.Writer.Flush()
-			if ccRequestCanceled(c) {
-				clientDisconnected = true
+			if writeEvent(next) {
 				return true
 			}
-		} else if !clientDisconnected {
-			// Flush even when the converter emits no chunk for an intermediate
-			// event. This keeps streamed deltas and heartbeat timing observable to
-			// clients that use the flush boundary as their progress signal.
-			c.Writer.Flush()
 		}
 		return false
 	}
@@ -792,6 +804,13 @@ func (s *GatewayService) handleCCStreamingFromAnthropicWithContinuation(
 		if stream.clientDisconnected {
 			clientDisconnected = true
 		}
+		if !clientDisconnected && !ccRequestCanceled(c) {
+			flushToolNameCarry(c, c.Writer.Size() != writerSizeBeforeStream, toolNameRestorer, func(event *apicompat.AnthropicStreamEvent) {
+				if !clientDisconnected {
+					writeEvent(event)
+				}
+			})
+		}
 		if stream.upstreamErrType != "" {
 			streamErr = &sseStreamErrorEventError{RawData: stream.upstreamErrPayload}
 		}
@@ -803,7 +822,7 @@ func (s *GatewayService) handleCCStreamingFromAnthropicWithContinuation(
 			roundOutputTokens = (len([]rune(roundAssistantText.String())) + 3) / 4
 		}
 		budgetOutputTokens += roundOutputTokens
-		cleanEOF := streamErr == nil && !ccRequestCanceled(c)
+		cleanEOF := streamErr == nil && !clientDisconnected && !ccRequestCanceled(c)
 		shouldContinue := continuationSafe && cleanEOF && sawSemanticText &&
 			(roundStopReason == "max_tokens" || (roundStopReason == "" && !sawMessageStop)) &&
 			antiTruncationRounds < maxRounds && deadlineCtx.Err() == nil &&

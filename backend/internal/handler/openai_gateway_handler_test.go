@@ -3305,11 +3305,17 @@ func runOpenAIResponsesWebSocketUsageLogCase(t *testing.T, tc openAIResponsesWSU
 				status = coderws.StatusPolicyViolation
 			}
 			require.Equal(t, status, closeErr.Code)
-			reason := tc.closeReason
-			if reason == "" {
-				reason = "not available for this group"
+			// The native ingress handler classifies proxy close reasons before sending them.
+			switch tc.ingressMode {
+			case service.OpenAIWSIngressModeDedicated, service.OpenAIWSIngressModeCtxPool:
+				want := "模型服务请求失败，请稍后重试。如持续出现，请提供请求 ID 联系支持。"
+				if tc.closeReason == "not available for this group" {
+					want = "模型不可用"
+				}
+				require.Equal(t, want, closeErr.Reason)
+			default:
+				require.Contains(t, closeErr.Reason, tc.closeReason)
 			}
-			require.Contains(t, closeErr.Reason, reason)
 			require.Len(t, upstreamPayloadCh, turnCount-1, "rejected turn must not reach upstream")
 			_ = clientConn.CloseNow()
 			return openAIResponsesWSUsageLogResult{}

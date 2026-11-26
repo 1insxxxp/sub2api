@@ -18,7 +18,7 @@ func TestUserUsageRoutesDoNotRegisterBulkEmptyResponseClaim(t *testing.T) {
 
 	RegisterUserRoutes(
 		router.Group("/api/v1"),
-		&handler.Handlers{Usage: handler.NewUsageHandler(nil, nil, nil, nil)},
+		&handler.Handlers{Usage: handler.NewUsageHandler(nil, nil, nil, nil, nil)},
 		middleware.JWTAuthMiddleware(noop),
 		middleware.AuditLogMiddleware(noop),
 		nil,

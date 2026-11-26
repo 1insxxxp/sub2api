@@ -1571,7 +1571,7 @@ func newContractDeps(t *testing.T) *contractDeps {
 	)
 	authHandler := handler.NewAuthHandler(cfg, nil, userService, settingService, nil, redeemService, nil, nil)
 	apiKeyHandler := handler.NewAPIKeyHandler(apiKeyService)
-	usageHandler := handler.NewUsageHandler(usageService, apiKeyService, nil, nil)
+	usageHandler := handler.NewUsageHandler(usageService, apiKeyService, nil, nil, nil)
 	adminSettingHandler := adminhandler.NewSettingHandler(settingService, nil, nil, nil, nil, nil, nil)
 	adminAccountHandler := adminhandler.NewAccountHandler(adminService, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 
@@ -1983,9 +1983,7 @@ func (s *stubAccountRepo) Update(ctx context.Context, account *service.Account) 
 func (s *stubAccountRepo) UpdateWithAccountBillingSettings(
 	ctx context.Context,
 	account *service.Account,
-	probeEnabled *bool,
-	rateSyncEnabled *bool,
-	rateMultiplier *float64,
+	settings service.AccountBillingSettingsUpdate,
 ) error {
 	return errors.New("not implemented")
 }
