@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
@@ -101,10 +100,7 @@ func (h *GatewayHandler) SystemOne(c *gin.Context) {
 	}
 	if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription, service.QuotaPlatform(c.Request.Context(), apiKey)); err != nil {
 		reqLog.Info("systemone.billing_eligibility_check_failed", zap.Error(err))
-		status, code, message, retryAfter := billingErrorDetails(err)
-		if retryAfter > 0 {
-			c.Header("Retry-After", strconv.Itoa(retryAfter))
-		}
+		status, code, message := prepareBillingErrorResponse(c, err)
 		h.errorResponse(c, status, code, message)
 		return
 	}
@@ -112,10 +108,7 @@ func (h *GatewayHandler) SystemOne(c *gin.Context) {
 	inflightRelease, err := reserveInflightBalance(c, h.billingCacheService, h.gatewayService, apiKey, subscription, tokenInflightEstimate(model, body))
 	if err != nil {
 		reqLog.Info("systemone.inflight_reservation_rejected", zap.Error(err))
-		status, code, message, retryAfter := billingErrorDetails(err)
-		if retryAfter > 0 {
-			c.Header("Retry-After", strconv.Itoa(retryAfter))
-		}
+		status, code, message := prepareBillingErrorResponse(c, err)
 		h.errorResponse(c, status, code, message)
 		return
 	}

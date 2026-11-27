@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -19,6 +20,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
 )
 
 func TestGatewayPrecharge_RejectsInsufficientFundsBeforeUpstream(t *testing.T) {
@@ -57,12 +59,103 @@ func TestGatewayPrecharge_ExactFixedPriceCanCallUpstream(t *testing.T) {
 	}
 }
 
+func TestGatewayPrecharge_InflightBalanceReturnsRetryableError(t *testing.T) {
+	for _, protocol := range []string{"chat", "messages", "responses", "gemini"} {
+		for _, mode := range []service.BillingMode{service.BillingModePerRequest, service.BillingModeToken} {
+			for _, committed := range []bool{false, true} {
+				t.Run(fmt.Sprintf("%s/%s/committed=%t", protocol, mode, committed), func(t *testing.T) {
+					recorder, upstream, cache := runGatewayPrechargeWithSetup(t, protocol, mode, 0.5, 1000, func(c *gin.Context, cache *handlerInflightCache) {
+						cache.res["existing-request"] = 0.49
+						if committed {
+							c.Header("Content-Type", "text/event-stream")
+							_, _ = c.Writer.WriteString(": ping\n\n")
+							c.Writer.Flush()
+						}
+					})
+					body := recorder.Body.String()
+					if committed {
+						require.Equal(t, http.StatusOK, recorder.Code, body)
+						if protocol == "responses" {
+							require.Contains(t, body, "event: response.failed")
+						}
+						if protocol == "messages" {
+							require.Contains(t, body, "event: error")
+						}
+						if protocol == "chat" {
+							require.Contains(t, body, "data: [DONE]")
+						}
+						for _, line := range strings.Split(body, "\n") {
+							if strings.HasPrefix(line, "data: {") {
+								body = strings.TrimPrefix(line, "data: ")
+								break
+							}
+						}
+					} else {
+						require.Equal(t, http.StatusTooManyRequests, recorder.Code, body)
+						require.Equal(t, "2", recorder.Result().Header.Get("Retry-After"))
+					}
+					require.True(t, gjson.Valid(body), body)
+					if committed && protocol == "responses" {
+						require.NotEmpty(t, gjson.Get(body, "response.id").String())
+						require.Positive(t, gjson.Get(body, "response.created_at").Int())
+						require.True(t, gjson.Get(body, "sequence_number").Exists())
+					}
+					if protocol == "gemini" {
+						require.Equal(t, int64(429), gjson.Get(body, "error.code").Int())
+						require.Equal(t, "RESOURCE_EXHAUSTED", gjson.Get(body, "error.status").String())
+					}
+					require.Contains(t, body, "当前余额 US$0.50")
+					require.Contains(t, body, "其他请求已预扣 US$0.49")
+					require.Contains(t, body, "本次预扣额度")
+					require.Contains(t, body, "请等待其他请求结算后重试")
+					require.Zero(t, upstream.calls)
+					require.Equal(t, 1, cache.count())
+					require.Equal(t, 0.49, cache.res["existing-request"])
+					balance, err := cache.GetUserBalance(context.Background(), 9903)
+					require.NoError(t, err)
+					require.Equal(t, 0.5, balance)
+				})
+			}
+		}
+	}
+}
+
+func TestGatewayPrecharge_InsufficientBalanceAfterStreamStarted(t *testing.T) {
+	for _, protocol := range []string{"chat", "messages", "responses", "gemini"} {
+		t.Run(protocol, func(t *testing.T) {
+			recorder, upstream, cache := runGatewayPrechargeWithSetup(t, protocol, service.BillingModePerRequest, 0.01, 1000, func(c *gin.Context, _ *handlerInflightCache) {
+				c.Header("Content-Type", "text/event-stream")
+				_, _ = c.Writer.WriteString(": ping\n\n")
+				c.Writer.Flush()
+			})
+			require.Equal(t, http.StatusOK, recorder.Code)
+			body := recorder.Body.String()
+			require.Contains(t, body, "当前余额 US$0.01")
+			require.Contains(t, body, "本次预扣额度 US$0.50")
+			if protocol == "gemini" {
+				require.Contains(t, body, `"code":403`)
+				require.Contains(t, body, "PERMISSION_DENIED")
+			}
+			if protocol == "responses" {
+				require.Contains(t, body, "event: response.failed")
+			}
+			require.Zero(t, upstream.calls)
+			require.Zero(t, cache.count())
+		})
+	}
+}
+
 func runGatewayPrecharge(t *testing.T, protocol string, mode service.BillingMode, balance float64, metadata ...string) (*httptest.ResponseRecorder, *compatStreamUsageUpstream, *handlerInflightCache) {
 	t.Helper()
 	return runGatewayPrechargeWithBudget(t, protocol, mode, balance, 1000, metadata...)
 }
 
 func runGatewayPrechargeWithBudget(t *testing.T, protocol string, mode service.BillingMode, balance float64, maxTokens int, metadata ...string) (*httptest.ResponseRecorder, *compatStreamUsageUpstream, *handlerInflightCache) {
+	t.Helper()
+	return runGatewayPrechargeWithSetup(t, protocol, mode, balance, maxTokens, nil, metadata...)
+}
+
+func runGatewayPrechargeWithSetup(t *testing.T, protocol string, mode service.BillingMode, balance float64, maxTokens int, setup func(*gin.Context, *handlerInflightCache), metadata ...string) (*httptest.ResponseRecorder, *compatStreamUsageUpstream, *handlerInflightCache) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	cfg := &config.Config{}
@@ -125,23 +218,30 @@ func runGatewayPrechargeWithBudget(t *testing.T, protocol string, mode service.B
 		body = string(encoded)
 	}
 	recorder := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(recorder)
+	engine := gin.New()
+	engine.Use(PublicGatewayErrorMiddleware(true), PublicGatewayErrorsAfterIngress())
+	engine.POST(strings.SplitN(path, "?", 2)[0], func(c *gin.Context) {
+		c.Set(string(middleware.ContextKeyAPIKey), apiKey)
+		c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: apiKey.UserID, Concurrency: 1})
+		if setup != nil {
+			setup(c, cache)
+		}
+		switch protocol {
+		case "messages":
+			h.Messages(c)
+		case "responses":
+			h.Responses(c)
+		case "gemini":
+			c.Params = gin.Params{{Key: "modelAction", Value: "/" + model + ":streamGenerateContent"}}
+			h.GeminiV1BetaModels(c)
+		default:
+			h.ChatCompletions(c)
+		}
+	})
 	ctx := context.WithValue(context.Background(), ctxkey.Group, group)
-	c.Request = httptest.NewRequest(http.MethodPost, path, bytes.NewBufferString(body)).WithContext(ctx)
-	c.Request.Header.Set("Content-Type", "application/json")
-	c.Set(string(middleware.ContextKeyAPIKey), apiKey)
-	c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: apiKey.UserID, Concurrency: 1})
-	switch protocol {
-	case "messages":
-		h.Messages(c)
-	case "responses":
-		h.Responses(c)
-	case "gemini":
-		c.Params = gin.Params{{Key: "modelAction", Value: "/" + model + ":streamGenerateContent"}}
-		h.GeminiV1BetaModels(c)
-	default:
-		h.ChatCompletions(c)
-	}
+	req := httptest.NewRequest(http.MethodPost, path, bytes.NewBufferString(body)).WithContext(ctx)
+	req.Header.Set("Content-Type", "application/json")
+	engine.ServeHTTP(recorder, req)
 	return recorder, upstream, cache
 }
 

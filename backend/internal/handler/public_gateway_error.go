@@ -32,11 +32,12 @@ func PublicGatewayErrorMiddleware(afterIngress bool) gin.HandlerFunc {
 
 type publicGatewayWriter struct {
 	gin.ResponseWriter
-	context    *gin.Context
-	mu         sync.Mutex
-	pending    string
-	wroteError bool
-	enabled    bool
+	context           *gin.Context
+	mu                sync.Mutex
+	pending           string
+	wroteError        bool
+	enabled           bool
+	localBillingError *service.PublicGatewayError
 }
 
 // SSE accepts CR, LF and CRLF, including mixed line endings.
@@ -98,6 +99,9 @@ func (w *publicGatewayWriter) Write(body []byte) (int, error) {
 	if !w.isStream() {
 		if !w.Written() && strings.HasPrefix(w.Header().Get("Content-Type"), "application/json") {
 			if safe, ok := publicJSONError(body); ok {
+				if w.localBillingError != nil {
+					return len(body), w.writeClassifiedError(*w.localBillingError)
+				}
 				if gjson.GetBytes(body, "status").String() != "failed" {
 					w.WriteHeader(http.StatusBadGateway)
 					return len(body), w.writeError(body)
@@ -174,6 +178,18 @@ func (w *publicGatewayWriter) isStream() bool {
 
 func (w *publicGatewayWriter) writeFrame(frame string) error {
 	event, payload := parseOpsSSEFrameEnvelope([]byte(frame))
+	if local := w.localBillingError; local != nil {
+		message := gjson.GetBytes(payload, "error.message").String()
+		if message == "" {
+			message = gjson.GetBytes(payload, "response.error.message").String()
+		}
+		if message == local.Message {
+			// These terminal frames were constructed by our typed billing error
+			// handlers. Keep the protocol envelope, including Responses metadata.
+			_, err := w.ResponseWriter.WriteString(frame)
+			return err
+		}
+	}
 	upstream, _ := w.context.Get(service.OpsUpstreamStatusCodeKey)
 	status, _ := upstream.(int)
 	if safe, ok := service.PublicGatewayErrorEvent(string(event), payload, status); ok {
@@ -213,7 +229,9 @@ func (w *publicGatewayWriter) writeError(body []byte) error {
 	if w.wroteError {
 		return nil
 	}
-	w.wroteError = true
+	if w.localBillingError != nil {
+		return w.writeClassifiedError(*w.localBillingError)
+	}
 	upstream, _ := w.context.Get(service.OpsUpstreamStatusCodeKey)
 	upstreamStatus, _ := upstream.(int)
 	diagnostic := service.ExtractUpstreamErrorMessage(body)
@@ -239,6 +257,11 @@ func (w *publicGatewayWriter) writeError(body []byte) error {
 			public = local
 		}
 	}
+	return w.writeClassifiedError(public)
+}
+
+func (w *publicGatewayWriter) writeClassifiedError(public service.PublicGatewayError) error {
+	w.wroteError = true
 	header := w.Header()
 	retryAfter := header.Get("Retry-After")
 	requestID, _ := w.context.Request.Context().Value(ctxkey.RequestID).(string)

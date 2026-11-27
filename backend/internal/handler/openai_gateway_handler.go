@@ -677,10 +677,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 	// 2. Re-check billing eligibility after wait
 	if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription, service.QuotaPlatform(c.Request.Context(), apiKey)); err != nil {
 		reqLog.Info("openai.billing_eligibility_check_failed", zap.Error(err))
-		status, code, message, retryAfter := billingErrorDetails(err)
-		if retryAfter > 0 {
-			c.Header("Retry-After", strconv.Itoa(retryAfter))
-		}
+		status, code, message := prepareBillingErrorResponse(c, err)
 		h.handleStreamingAwareError(c, status, code, message, streamStarted)
 		return
 	}
@@ -689,10 +686,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 	inflightRelease, err := reserveInflightBalance(c, h.billingCacheService, h.gatewayService, apiKey, subscription, tokenInflightEstimate(reqModel, body))
 	if err != nil {
 		reqLog.Info("openai.inflight_reservation_rejected", zap.Error(err))
-		status, code, message, retryAfter := billingErrorDetails(err)
-		if retryAfter > 0 {
-			c.Header("Retry-After", strconv.Itoa(retryAfter))
-		}
+		status, code, message := prepareBillingErrorResponse(c, err)
 		h.handleStreamingAwareError(c, status, code, message, streamStarted)
 		return
 	}
@@ -1354,10 +1348,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 
 	if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription, service.QuotaPlatform(c.Request.Context(), apiKey)); err != nil {
 		reqLog.Info("openai_messages.billing_eligibility_check_failed", zap.Error(err))
-		status, code, message, retryAfter := billingErrorDetails(err)
-		if retryAfter > 0 {
-			c.Header("Retry-After", strconv.Itoa(retryAfter))
-		}
+		status, code, message := prepareBillingErrorResponse(c, err)
 		h.anthropicStreamingAwareError(c, status, code, message, streamStarted)
 		return
 	}
@@ -1365,10 +1356,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 	// 余额模式在途预留（与计费同口径估算；计费任务扣减余额缓存后才释放）。
 	inflightDone, inflightErr := reserveInflightBalance(c, h.billingCacheService, h.gatewayService, apiKey, subscription, tokenInflightEstimate(reqModel, body))
 	if inflightErr != nil {
-		status, code, message, retryAfter := billingErrorDetails(inflightErr)
-		if retryAfter > 0 {
-			c.Header("Retry-After", strconv.Itoa(retryAfter))
-		}
+		status, code, message := prepareBillingErrorResponse(c, inflightErr)
 		h.anthropicStreamingAwareError(c, status, code, message, streamStarted)
 		return
 	}

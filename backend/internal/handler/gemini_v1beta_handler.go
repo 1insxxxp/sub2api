@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"regexp"
 	"slices"
-	"strconv"
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
@@ -633,11 +632,9 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 	// 2) billing eligibility check (after wait)
 	if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription, service.QuotaPlatform(c.Request.Context(), apiKey)); err != nil {
 		reqLog.Info("gemini.billing_eligibility_check_failed", zap.Error(err))
-		status, code, message, retryAfter := billingErrorDetails(err)
-		if retryAfter > 0 {
-			c.Header("Retry-After", strconv.Itoa(retryAfter))
-		}
-		googleErrorWithType(c, status, code, "", message)
+		status, code, message := prepareBillingErrorResponse(c, err)
+		service.SetOpsLocalErrorType(c, code, "")
+		writeModelFirstOutputProtocolError(c, "gemini", status, code, "", message)
 		return
 	}
 
@@ -645,11 +642,9 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 	inflightRelease, err := reserveInflightBalance(c, h.billingCacheService, h.gatewayService, apiKey, subscription, tokenInflightEstimate(modelName, body))
 	if err != nil {
 		reqLog.Info("gemini.inflight_reservation_rejected", zap.Error(err))
-		status, code, message, retryAfter := billingErrorDetails(err)
-		if retryAfter > 0 {
-			c.Header("Retry-After", strconv.Itoa(retryAfter))
-		}
-		googleErrorWithType(c, status, code, "", message)
+		status, code, message := prepareBillingErrorResponse(c, err)
+		service.SetOpsLocalErrorType(c, code, "")
+		writeModelFirstOutputProtocolError(c, "gemini", status, code, "", message)
 		return
 	}
 	defer inflightRelease()
