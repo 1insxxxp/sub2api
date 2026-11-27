@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"regexp"
@@ -102,16 +101,7 @@ func (w *publicGatewayWriter) Write(body []byte) (int, error) {
 	}
 	if !w.isStream() {
 		if !w.Written() && strings.HasPrefix(w.Header().Get("Content-Type"), "application/json") {
-			if safe, ok := publicJSONError(w.context.Request.Context(), body); ok {
-				if w.localBillingError != nil {
-					return len(body), w.writeClassifiedError(*w.localBillingError)
-				}
-				if gjson.GetBytes(body, "status").String() != "failed" {
-					w.WriteHeader(http.StatusBadGateway)
-					return len(body), w.writeError(body)
-				}
-				w.Header().Del("Content-Length")
-				_, err := w.ResponseWriter.Write(safe)
+			if handled, err := w.writeJSONError(body); handled {
 				return len(body), err
 			}
 		}
@@ -208,25 +198,64 @@ func (w *publicGatewayWriter) writeFrame(frame string) error {
 
 // Asynchronous task APIs can report failure with HTTP 200. Preserve the
 // task envelope while replacing its untrusted diagnostic fields.
-func publicJSONError(ctx context.Context, body []byte) ([]byte, bool) {
+func (w *publicGatewayWriter) writeJSONError(body []byte) (bool, error) {
 	if !gjson.ValidBytes(body) {
-		return nil, false
+		return false, nil
 	}
+	c := w.context
 	root := gjson.ParseBytes(body)
 	errorValue := root.Get("error")
-	if root.Get("status").String() != "failed" && (!errorValue.Exists() || errorValue.Type == gjson.Null) {
-		return nil, false
+	// Batch status is a locally constructed response without an error field.
+	// Keep its task metadata when a batch itself has failed.
+	if c != nil && strings.HasSuffix(c.FullPath(), "/images/batches/:id") && root.Get("object").String() == "image.batch" && !errorValue.Exists() {
+		return false, nil
 	}
-	diagnostic := errorValue.Get("code").String() + " " + errorValue.Get("message").String()
+	if root.Get("status").String() != "failed" && (!errorValue.Exists() || errorValue.Type == gjson.Null) {
+		return false, nil
+	}
+	if w.localBillingError != nil {
+		return true, w.writeClassifiedError(*w.localBillingError)
+	}
+	diagnostic := errorValue.Get("code").String() + " " + errorValue.Get("message").String() + " " + service.ExtractUpstreamErrorMessage([]byte(errorValue.Raw))
 	for _, key := range []string{"error_message", "failure_reason", "message", "detail"} {
 		diagnostic += " " + root.Get(key).String()
 	}
-	public := service.ClassifyPublicGatewayErrorContext(ctx, 0, diagnostic)
-	safe, _ := json.Marshal(gin.H{
+	status := int(errorValue.Get("status_code").Int())
+	if status == 0 {
+		status = int(errorValue.Get("code").Int())
+	}
+	if status == 0 {
+		status = int(root.Get("status_code").Int())
+	}
+	if status == 0 {
+		status = int(root.Get("http_status").Int())
+	}
+	if upstream := c.GetInt(service.OpsUpstreamStatusCodeKey); upstream >= 400 && upstream <= 599 {
+		status = upstream
+	}
+	if original := c.GetString(service.OpsUpstreamErrorMessageKey); original != "" {
+		diagnostic += " " + original
+	}
+	public := service.ClassifyPublicGatewayErrorContext(c.Request.Context(), status, diagnostic)
+	if root.Get("status").String() != "failed" {
+		return true, w.writeClassifiedError(public)
+	}
+	result := gin.H{
 		"status": "failed",
 		"error":  gin.H{"code": public.Code, "message": public.Message},
-	})
-	return safe, true
+	}
+	if c != nil && strings.HasSuffix(c.FullPath(), "/images/tasks/:task_id") && root.Get("object").String() == "image.generation.task" {
+		for _, key := range []string{"id", "task_id", "object", "created_at", "completed_at", "expires_at"} {
+			if value := root.Get(key); value.Exists() {
+				result[key] = value.Value()
+			}
+		}
+		result["http_status"] = public.Status
+	}
+	safe, _ := json.Marshal(result)
+	w.Header().Del("Content-Length")
+	_, err := w.ResponseWriter.Write(safe)
+	return true, err
 }
 
 func (w *publicGatewayWriter) writeError(body []byte) error {

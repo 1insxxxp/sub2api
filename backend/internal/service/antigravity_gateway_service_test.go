@@ -51,6 +51,30 @@ func TestAntigravityUpstreamErrorBodyReadLimit_RespectsDiagnosticLimit(t *testin
 	require.Equal(t, int64(svc.settingService.cfg.Gateway.LogUpstreamErrorBodyMaxBytes), svc.upstreamErrorBodyReadLimit())
 }
 
+func TestAntigravityConnectionTestLongPrompt(t *testing.T) {
+	svc := &AntigravityGatewayService{}
+	prompt := strings.Repeat("请说明你可以确定的身份和工具。\n", 12)
+	for _, tc := range []struct {
+		model string
+		build func(string, string, string) ([]byte, error)
+	}{
+		{"gemini-4-argon", svc.buildGeminiTestRequestWithPrompt},
+		{"claude-sonnet-4-6", svc.buildClaudeTestRequest},
+	} {
+		t.Run(tc.model, func(t *testing.T) {
+			wire, err := tc.build("proj-123", tc.model, prompt)
+			require.NoError(t, err)
+			var req antigravity.V1InternalRequest
+			require.NoError(t, json.Unmarshal(wire, &req))
+			require.Len(t, req.Request.Contents, 1)
+			require.Len(t, req.Request.Contents[0].Parts, 1)
+			require.Equal(t, strings.TrimSpace(prompt), req.Request.Contents[0].Parts[0].Text)
+			require.NotNil(t, req.Request.GenerationConfig)
+			require.GreaterOrEqual(t, req.Request.GenerationConfig.MaxOutputTokens, 1024)
+		})
+	}
+}
+
 func TestStripSignatureSensitiveBlocksFromClaudeRequest(t *testing.T) {
 	req := &antigravity.ClaudeRequest{
 		Model: "claude-sonnet-4-5",

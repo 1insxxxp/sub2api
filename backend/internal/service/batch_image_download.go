@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -239,6 +240,12 @@ func (s *BatchImageDownloadService) StreamZip(ctx context.Context, owner BatchIm
 		return result, ErrBatchImageDownloadFailed.WithCause(err)
 	}
 	zipErrors = append(zipErrors, batchImageZipErrorsFromItems(failedItems)...)
+	for i := range zipErrors {
+		status, _ := strconv.Atoi(strings.TrimSpace(zipErrors[i].Code))
+		public := ClassifyPublicGatewayErrorContext(ctx, status, zipErrors[i].Code+" "+zipErrors[i].Message)
+		zipErrors[i].Code = public.Code
+		zipErrors[i].Message = public.Message
+	}
 	if err := writeBatchImageZipJSON(zipWriter, "manifest.json", batchImageZipManifest{
 		BatchID:      job.BatchID,
 		Model:        job.Model,
@@ -637,7 +644,7 @@ func batchImageZipErrorsFromItems(items []*BatchImageItem) []batchImageZipError 
 		out = append(out, batchImageZipError{
 			CustomID: item.CustomID,
 			Code:     batchImageDerefString(item.ErrorCode),
-			Message:  sanitizeBatchImagePublicMessage(batchImageDerefString(item.ErrorMessage)),
+			Message:  batchImageDerefString(item.ErrorMessage),
 		})
 	}
 	return out

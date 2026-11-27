@@ -81,6 +81,20 @@
         />
       </div>
 
+      <div v-if="supportsTextPromptPreset" class="space-y-1.5">
+        <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+          {{ t('admin.accounts.textPromptPresetLabel') }}
+        </label>
+        <Select
+          v-model="selectedTextPromptPreset"
+          :options="textPromptPresetOptions"
+          :disabled="status === 'connecting' || batchRunning"
+        />
+        <p v-if="selectedTextPromptPreset === 'channel_identity'" class="text-xs text-gray-500 dark:text-gray-400">
+          {{ t('admin.accounts.channelIdentityHint') }}
+        </p>
+      </div>
+
       <div v-if="supportsPromptInput" class="space-y-1.5">
         <TextArea
           v-model="testPrompt"
@@ -272,6 +286,10 @@
                 </span>
               </div>
             </div>
+            <details v-if="result.reply" class="w-full text-slate-700 dark:text-slate-300">
+              <summary class="cursor-pointer">{{ t('admin.accounts.selfCheckReply') }}</summary>
+              <div class="mt-1 max-h-64 overflow-y-auto whitespace-pre-wrap [overflow-wrap:anywhere]">{{ result.reply }}</div>
+            </details>
             <span
               v-if="result.error"
               class="batch-test-error block max-h-24 w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto rounded-lg border border-red-100/80 bg-red-50/70 px-2.5 py-1.5 text-[11px] leading-relaxed text-red-500 break-words whitespace-pre-wrap [overflow-wrap:anywhere] dark:border-red-900/50 dark:bg-red-950/20 dark:text-red-400"
@@ -448,6 +466,7 @@ import { useClipboard } from '@/composables/useClipboard'
 import { buildApiUrl } from '@/api/client'
 import { ADMIN_UI_REQUEST_HEADER } from '@/api/adminUIRequest'
 import { adminAPI } from '@/api/admin'
+import channelIdentityPrompt from './channel-identity-prompt.md?raw'
 import type { Account, ClaudeModel } from '@/types'
 
 const { t } = useI18n()
@@ -465,6 +484,7 @@ interface BatchModelResult {
   displayName: string
   status: BatchModelStatus
   error?: string
+  reply?: string
   durationMs?: number
 }
 
@@ -490,6 +510,7 @@ const errorMessage = ref('')
 const availableModels = ref<ClaudeModel[]>([])
 const selectedModelId = ref('')
 const testPrompt = ref('')
+const selectedTextPromptPreset = ref<'basic' | 'channel_identity'>('basic')
 const loadingModels = ref(false)
 let abortController: AbortController | null = null
 const generatedImages = ref<PreviewMedia[]>([])
@@ -515,6 +536,17 @@ const openAITestModeOptions = computed(() => [
   { value: 'default', label: t('admin.accounts.openai.testModeDefault') },
   { value: 'compact', label: t('admin.accounts.openai.testModeCompact') }
 ])
+const textPromptPresetOptions = computed(() => [
+  { value: 'basic', label: t('admin.accounts.textPromptPresetBasic') },
+  { value: 'channel_identity', label: t('admin.accounts.textPromptPresetChannelIdentity') }
+])
+const selectedTextPrompt = computed(() =>
+  selectedTextPromptPreset.value === 'channel_identity' ? channelIdentityPrompt.trimEnd() : 'hi'
+)
+const selectedTextPromptLabel = computed(() =>
+  textPromptPresetOptions.value.find((option) => option.value === selectedTextPromptPreset.value)?.label ||
+  textPromptPresetOptions.value[0].label
+)
 const grokTestModeOptions = computed(() => [
   { value: 'text', label: t('admin.accounts.grok.testModeText') },
   { value: 'image', label: t('admin.accounts.grok.testModeImage') },
@@ -525,19 +557,6 @@ const grokTestModeOptions = computed(() => [
   { value: 'realtime', label: t('admin.accounts.grok.testModeRealtime') }
 ])
 const prioritizedGeminiModels = ['gemini-3.1-flash-image', 'gemini-2.5-flash-image', 'gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-3-flash-preview', 'gemini-3-pro-preview', 'gemini-2.0-flash']
-const supportsGeminiImageTest = computed(() => {
-  const modelID = selectedModelId.value.toLowerCase()
-  if (!modelID.startsWith('gemini-') || !modelID.includes('-image')) return false
-
-  return props.account?.platform === 'gemini' || props.account?.platform === 'antigravity'
-})
-
-const supportsOpenAIImageTest = computed(() => {
-  const modelID = selectedModelId.value.toLowerCase()
-  if (!modelID.startsWith('gpt-image-')) return false
-  return props.account?.platform === 'openai'
-})
-
 const isGrokImageModel = (id: string) => {
   const modelID = id.toLowerCase()
   return (
@@ -552,16 +571,38 @@ const isGrokVideoModel = (id: string) => {
 }
 const isGrokTextModel = (id: string) => !isGrokImageModel(id) && !isGrokVideoModel(id)
 
-const supportsGrokImageTest = computed(
-  () => isGrokAccount.value && grokTestMode.value === 'image'
-)
-const supportsGrokVideoTest = computed(
-  () => isGrokAccount.value && grokTestMode.value === 'video'
-)
+function testTargetModel(account: Account, modelId: string) {
+  const mapping = account.credentials?.model_mapping as Record<string, unknown> | undefined
+  if (!mapping) return modelId
+  // Native Gemini tests use exact aliases only for API keys and service accounts.
+  if (account.platform === 'gemini' && account.type !== 'apikey' && account.type !== 'service_account') return modelId
+  const exact = mapping[modelId]
+  if (typeof exact === 'string') return exact
+  if (account.platform === 'gemini') return modelId
+  const pattern = Object.keys(mapping)
+    .filter(key => key.endsWith('*') && modelId.startsWith(key.slice(0, -1)))
+    .sort((left, right) => right.length - left.length)[0]
+  const target = mapping[pattern]
+  return typeof target === 'string' ? target : modelId
+}
 
-const supportsImageTest = computed(
-  () => supportsGeminiImageTest.value || supportsOpenAIImageTest.value || supportsGrokImageTest.value
-)
+function testKindForModel(modelId: string) {
+  const account = props.account
+  if (!account || account.platform === 'typesafe' || account.extra?.synthetic_ui_test === true) return 'probe'
+  if (!modelId && showModelSelect.value) return 'probe'
+  if (isGrokAccount.value) return grokTestMode.value
+  if (isOpenAIAccount.value && testMode.value === 'compact') return 'compact'
+  const target = testTargetModel(account, modelId).toLowerCase().replace(/^models\//, '')
+  if (account.platform === 'openai' && target.startsWith('gpt-image-')) return 'image'
+  if ((account.platform === 'gemini' || account.platform === 'antigravity') &&
+      target.startsWith('gemini-') && target.includes('-image')) return 'image'
+  return 'text'
+}
+
+const selectedTestKind = computed(() => testKindForModel(selectedModelId.value))
+const supportsTextPromptPreset = computed(() => selectedTestKind.value === 'text')
+const supportsImageTest = computed(() => selectedTestKind.value === 'image')
+const supportsGrokVideoTest = computed(() => selectedTestKind.value === 'video')
 
 // Model select only when the mode needs a model.
 const showModelSelect = computed(() => {
@@ -583,17 +624,10 @@ const modelOptionsForMode = computed(() => {
   return []
 })
 
-const supportsPromptInput = computed(() => {
-  if (!isGrokAccount.value) {
-    return supportsImageTest.value
-  }
-  return (
-    grokTestMode.value === 'image' ||
-    grokTestMode.value === 'video' ||
-    grokTestMode.value === 'search' ||
-    grokTestMode.value === 'tts'
-  )
-})
+const acceptsCustomPrompt = (kind: ReturnType<typeof testKindForModel>) =>
+  kind === 'image' || kind === 'video' || kind === 'search' || kind === 'tts'
+
+const supportsPromptInput = computed(() => acceptsCustomPrompt(selectedTestKind.value))
 
 const supportsImageUpload = computed(
   () => isGrokAccount.value && (grokTestMode.value === 'image' || grokTestMode.value === 'video')
@@ -738,26 +772,21 @@ const promptInputHint = computed(() => {
 })
 
 const testModeSummary = computed(() => {
-  if (isGrokAccount.value) {
-    switch (grokTestMode.value) {
-      case 'video':
-        return t('admin.accounts.videoTestMode')
-      case 'image':
-        return t('admin.accounts.imageTestMode')
-      case 'search':
-        return t('admin.accounts.grok.searchTestMode')
-      case 'tts':
-        return t('admin.accounts.grok.ttsTestMode')
-      case 'stt':
-        return t('admin.accounts.grok.sttTestMode')
-      case 'realtime':
-        return t('admin.accounts.grok.realtimeTestMode')
-      default:
-        return t('admin.accounts.grok.textTestMode')
-    }
+  const kind = selectedTestKind.value
+  if (kind === 'text') {
+    return t('admin.accounts.selectedTestPromptSummary', { prompt: selectedTextPromptLabel.value })
   }
-  if (supportsImageTest.value) return t('admin.accounts.imageTestMode')
-  return t('admin.accounts.testPrompt')
+  const summaryKeys = {
+    video: 'admin.accounts.videoTestMode',
+    image: 'admin.accounts.imageTestMode',
+    search: 'admin.accounts.grok.searchTestMode',
+    tts: 'admin.accounts.grok.ttsTestMode',
+    stt: 'admin.accounts.grok.sttTestMode',
+    realtime: 'admin.accounts.grok.realtimeTestMode',
+    compact: 'admin.accounts.openai.testModeCompact',
+    probe: 'admin.accounts.connectionProbe'
+  } as const
+  return t(summaryKeys[kind])
 })
 
 const canStartTest = computed(() => {
@@ -865,6 +894,7 @@ watch(
   async (newVal) => {
     if (newVal && props.account) {
       testPrompt.value = ''
+      selectedTextPromptPreset.value = 'basic'
       testMode.value = 'default'
       grokTestMode.value = 'text'
       resetState()
@@ -986,13 +1016,18 @@ interface AccountTestRequestBody {
 
 interface BatchRunOutcome {
   success: boolean
+  reply?: string
   error?: string
 }
 
 const buildTestRequestBody = (modelId: string): AccountTestRequestBody => {
+  const kind = testKindForModel(modelId)
+  let prompt = ''
+  if (kind === 'text') prompt = selectedTextPrompt.value
+  if (acceptsCustomPrompt(kind)) prompt = testPrompt.value.trim()
   const requestBody: AccountTestRequestBody = {
     model_id: showModelSelect.value ? modelId : '',
-    prompt: supportsPromptInput.value ? testPrompt.value.trim() : ''
+    prompt
   }
   if (isOpenAIAccount.value) {
     requestBody.mode = testMode.value
@@ -1019,7 +1054,7 @@ const buildTestRequestBody = (modelId: string): AccountTestRequestBody => {
 
 const readSSEEvents = async (
   response: Response,
-  onEvent: (event: { type: string; success?: boolean; error?: string }) => void
+  onEvent: (event: { type: string; text?: string; success?: boolean; error?: string }) => void
 ) => {
   const reader = response.body?.getReader()
   if (!reader) {
@@ -1066,9 +1101,15 @@ const runBatchModel = async (modelId: string, signal: AbortSignal): Promise<Batc
     return { success: false, error: `HTTP error! status: ${response.status}` }
   }
 
-  let outcome: BatchRunOutcome | null = null
+  const collectReply = selectedTextPromptPreset.value === 'channel_identity' && testKindForModel(modelId) === 'text'
+  let reply = ''
+  let outcome: BatchRunOutcome = { success: false, error: t('admin.accounts.batchNoCompletion') }
   await readSSEEvents(response, (event) => {
-    if (event.type === 'error') {
+    if (collectReply && event.type === 'content' && typeof event.text === 'string') {
+      reply += event.text
+    } else if (collectReply && event.type === 'status' && typeof event.text === 'string' && event.text) {
+      reply = `${reply.trimEnd()}${reply ? '\n\n' : ''}[${event.text}]\n`
+    } else if (event.type === 'error') {
       outcome = { success: false, error: event.error || t('admin.accounts.testFailed') }
     } else if (event.type === 'test_complete') {
       outcome = event.success
@@ -1076,8 +1117,7 @@ const runBatchModel = async (modelId: string, signal: AbortSignal): Promise<Batc
         : { success: false, error: event.error || t('admin.accounts.testFailed') }
     }
   })
-
-  return outcome || { success: false, error: t('admin.accounts.batchNoCompletion') }
+  return { ...outcome, reply }
 }
 
 const runBatchResult = async (
@@ -1094,6 +1134,7 @@ const runBatchResult = async (
     if (runToken !== batchRunToken || signal.aborted) return
     result.status = outcome.success ? 'success' : 'failed'
     result.error = outcome.error
+    result.reply = outcome.reply
   } catch (error: unknown) {
     if (runToken !== batchRunToken || signal.aborted) return
     result.status = 'failed'
@@ -1216,6 +1257,24 @@ const startTest = async () => {
   }
 }
 
+const sendingTestMessage = computed(() => {
+  const kind = selectedTestKind.value
+  if (kind === 'text') {
+    return t('admin.accounts.sendingSelectedTestMessage', { prompt: selectedTextPromptLabel.value })
+  }
+  const messages = {
+    video: 'admin.accounts.sendingVideoRequest',
+    image: 'admin.accounts.sendingImageRequest',
+    search: 'admin.accounts.grok.sendingSearchRequest',
+    tts: 'admin.accounts.grok.sendingTTSRequest',
+    stt: 'admin.accounts.grok.sendingSTTRequest',
+    realtime: 'admin.accounts.grok.sendingRealtimeRequest',
+    compact: 'admin.accounts.openai.testModeCompact',
+    probe: 'admin.accounts.connectionProbe'
+  } as const
+  return t(messages[kind])
+})
+
 const handleEvent = (event: {
   type: string
   text?: string
@@ -1233,26 +1292,7 @@ const handleEvent = (event: {
       if (event.model) {
         addLine(t('admin.accounts.usingModel', { model: event.model }), 'text-cyan-400')
       }
-      addLine(
-        isGrokAccount.value
-          ? grokTestMode.value === 'video'
-            ? t('admin.accounts.sendingVideoRequest')
-            : grokTestMode.value === 'image'
-              ? t('admin.accounts.sendingImageRequest')
-              : grokTestMode.value === 'search'
-                ? t('admin.accounts.grok.sendingSearchRequest')
-                : grokTestMode.value === 'tts'
-                  ? t('admin.accounts.grok.sendingTTSRequest')
-                  : grokTestMode.value === 'stt'
-                    ? t('admin.accounts.grok.sendingSTTRequest')
-                    : grokTestMode.value === 'realtime'
-                      ? t('admin.accounts.grok.sendingRealtimeRequest')
-                      : t('admin.accounts.sendingTestMessage')
-          : supportsImageTest.value
-            ? t('admin.accounts.sendingImageRequest')
-            : t('admin.accounts.sendingTestMessage'),
-        'text-gray-400'
-      )
+      addLine(sendingTestMessage.value, 'text-gray-400')
       addLine('', 'text-gray-300')
       addLine(t('admin.accounts.response'), 'text-yellow-400')
       break

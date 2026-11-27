@@ -3,9 +3,11 @@
 package service
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
 )
 
 func TestCreateTestPayload_Temperature(t *testing.T) {
@@ -25,7 +27,7 @@ func TestCreateTestPayload_Temperature(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.model, func(t *testing.T) {
-			payload, err := createTestPayload(tt.model)
+			payload, err := createTestPayload(tt.model, "")
 			require.NoError(t, err)
 
 			temperature, present := payload["temperature"]
@@ -38,6 +40,15 @@ func TestCreateTestPayload_Temperature(t *testing.T) {
 	}
 }
 
+func TestCreateTestPayload_UsesProvidedPrompt(t *testing.T) {
+	payload, err := createTestPayload("claude-sonnet-4-6", "inspect this channel")
+	require.NoError(t, err)
+
+	body, err := json.Marshal(payload)
+	require.NoError(t, err)
+	require.Equal(t, "inspect this channel", gjson.GetBytes(body, "messages.0.content.0.text").String())
+}
+
 func TestBuildBedrockTestPayload_Temperature(t *testing.T) {
 	tests := []struct {
 		model           string
@@ -48,8 +59,24 @@ func TestBuildBedrockTestPayload_Temperature(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.model, func(t *testing.T) {
-			_, present := buildBedrockTestPayload(tt.model)["temperature"]
+			_, present := buildBedrockTestPayload(tt.model, "")["temperature"]
 			require.Equal(t, tt.wantTemperature, present)
 		})
 	}
+}
+
+func TestBuildBedrockTestPayload_UsesProvidedPrompt(t *testing.T) {
+	payload := buildBedrockTestPayload("us.anthropic.claude-sonnet-4-6", "inspect this channel")
+
+	body, err := json.Marshal(payload)
+	require.NoError(t, err)
+	require.Equal(t, "inspect this channel", gjson.GetBytes(body, "messages.0.content.0.text").String())
+}
+
+func TestCreateOpenAITestPayload_UsesProvidedPrompt(t *testing.T) {
+	payload := createOpenAITestPayload("gpt-5.4", false, "inspect this channel")
+
+	body, err := json.Marshal(payload)
+	require.NoError(t, err)
+	require.Equal(t, "inspect this channel", gjson.GetBytes(body, "input.0.content.0.text").String())
 }

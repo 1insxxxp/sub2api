@@ -150,7 +150,7 @@ func (s *GrokQuotaService) probeUsage(ctx context.Context, accountID int64) (*Gr
 	}
 
 	probeModel := grokQuotaProbeModel()
-	body, err := buildGrokQuotaProbeBody(probeModel)
+	body, err := buildGrokResponsesProbeBody(probeModel, grokQuotaProbeInput)
 	if err != nil {
 		return nil, infraerrors.Newf(http.StatusBadRequest, "GROK_QUOTA_PROBE_BODY_ERROR", "failed to build probe body: %v", err)
 	}
@@ -566,14 +566,14 @@ func grokQuotaProbeModel() string {
 	return grokQuotaDefaultModel
 }
 
-func buildGrokQuotaProbeBody(model string) ([]byte, error) {
+func buildGrokResponsesProbeBody(model, prompt string) ([]byte, error) {
 	model = strings.TrimSpace(model)
 	if model == "" {
 		model = grokQuotaDefaultModel
 	}
 	return json.Marshal(map[string]any{
 		"model":  model,
-		"input":  grokQuotaProbeInput,
+		"input":  prompt,
 		"stream": true,
 	})
 }

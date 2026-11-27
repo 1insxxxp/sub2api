@@ -122,7 +122,28 @@ func TestBatchImageDownloadService_StreamZip(t *testing.T) {
 		require.NoError(t, json.Unmarshal(files["errors.json"], &errorsJSON))
 		require.Len(t, errorsJSON, 1)
 		require.Equal(t, "bad", errorsJSON[0]["custom_id"])
-		require.Equal(t, "SAFETY_BLOCKED", errorsJSON[0]["code"])
+		require.Equal(t, "request_failed", errorsJSON[0]["code"])
+		require.Contains(t, errorsJSON[0]["message"], "模型服务请求失败")
+	})
+
+	t.Run("uses configured error without leaking upstream details", func(t *testing.T) {
+		svc, repo, _ := newTestBatchImageDownloadService()
+		code, diagnostic, message := "400", "antigravity signature https://private.invalid", "请检查参数"
+		repo.items["imgbatch_download"][1].ErrorCode = &code
+		repo.items["imgbatch_download"][1].ErrorMessage = &diagnostic
+		settingsService := NewSettingService(newMockSettingRepo(), &config.Config{})
+		settings := DefaultPublicGatewayErrorSettings()
+		settings.Rules = []PublicGatewayErrorRule{{ID: "signature", Name: "工具参数", Enabled: true, UpstreamStatuses: []int{400}, Pattern: "signature", Status: 400, Code: "invalid_tool_request", Message: message}}
+		require.NoError(t, settingsService.SetPublicGatewayErrorSettings(ctx, settings))
+		configuredCtx := WithPublicGatewayErrorSettings(ctx, settingsService)
+		var buf bytes.Buffer
+		_, err := svc.StreamZip(configuredCtx, testBatchImageOwner(), "imgbatch_download", BatchImageZipOptions{}, &buf)
+		require.NoError(t, err)
+		errorsJSON := string(readZipFiles(t, buf.Bytes())["errors.json"])
+		require.Contains(t, errorsJSON, message)
+		require.Contains(t, errorsJSON, "invalid_tool_request")
+		require.NotContains(t, errorsJSON, "antigravity")
+		require.NotContains(t, errorsJSON, "private.invalid")
 	})
 
 	t.Run("limiter denial returns public limit error", func(t *testing.T) {

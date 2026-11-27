@@ -199,3 +199,52 @@ func TestPublicGatewayErrorMiddleware(t *testing.T) {
 		require.NotContains(t, out.Body.String(), "antigravity")
 	})
 }
+
+func TestPublicGatewayPreservesLocalImageTaskMetadata(t *testing.T) {
+	engine := gin.New()
+	engine.Use(PublicGatewayErrorMiddleware(false))
+	engine.GET("/v1/images/tasks/:task_id", func(c *gin.Context) {
+		c.JSON(200, gin.H{"id": "task-1", "task_id": "task-1", "object": "image.generation.task", "status": "failed", "http_status": 400, "created_at": 123, "error": gin.H{"message": "antigravity https://private.invalid"}})
+	})
+	engine.GET("/v1/images/batches/:id", func(c *gin.Context) {
+		c.JSON(200, gin.H{"id": "batch-1", "object": "image.batch", "status": "failed", "item_count": 3})
+	})
+	task := httptest.NewRecorder()
+	engine.ServeHTTP(task, httptest.NewRequest(http.MethodGet, "/v1/images/tasks/task-1", nil))
+	require.JSONEq(t, `{"id":"task-1","task_id":"task-1","object":"image.generation.task","status":"failed","http_status":400,"created_at":123,"error":{"code":"invalid_request","message":"参数异常"}}`, task.Body.String())
+	batch := httptest.NewRecorder()
+	engine.ServeHTTP(batch, httptest.NewRequest(http.MethodGet, "/v1/images/batches/batch-1", nil))
+	require.JSONEq(t, `{"id":"batch-1","object":"image.batch","status":"failed","item_count":3}`, batch.Body.String())
+}
+
+func TestPublicGatewayEmbeddedHTTPErrorUsesSavedSettings(t *testing.T) {
+	settings := service.DefaultPublicGatewayErrorSettings()
+	settings.Rules = []service.PublicGatewayErrorRule{{ID: "tool", Name: "工具参数", Enabled: true, UpstreamStatuses: []int{400}, Pattern: "invalid tool", Status: 422, Code: "invalid_tool_request", Message: "工具参数有误"}}
+	settings.BadRequestFallback = service.PublicGatewayError{Status: 409, Code: "custom_bad_request", Message: "请检查请求"}
+	raw, err := json.Marshal(settings)
+	require.NoError(t, err)
+	for _, tc := range []struct {
+		diagnostic, code, message string
+		status                    int
+	}{
+		{"unknown failure at private.invalid", "custom_bad_request", "请检查请求", 409},
+		{"invalid tool at private.invalid", "invalid_tool_request", "工具参数有误", 422},
+	} {
+		t.Run(tc.code, func(t *testing.T) {
+			repo := &publicGatewaySettingsRepo{settings: string(raw)}
+			svc := service.NewSettingService(repo, &config.Config{})
+			engine := gin.New()
+			engine.Use(PublicGatewayErrorMiddleware(false, svc))
+			engine.GET("/v1/chat/completions", func(c *gin.Context) {
+				c.JSON(http.StatusOK, gin.H{"error": gin.H{"code": "400", "message": tc.diagnostic}})
+			})
+			out := httptest.NewRecorder()
+			engine.ServeHTTP(out, httptest.NewRequest(http.MethodGet, "/v1/chat/completions", nil))
+			require.Equal(t, tc.status, out.Code)
+			require.Contains(t, out.Body.String(), tc.code)
+			require.Contains(t, out.Body.String(), tc.message)
+			require.NotContains(t, out.Body.String(), "private.invalid")
+			require.Equal(t, 1, repo.reads)
+		})
+	}
+}
