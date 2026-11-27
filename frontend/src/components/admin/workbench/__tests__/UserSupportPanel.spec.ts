@@ -230,6 +230,16 @@ describe('support request records', () => {
     expect(rows[0].get('[data-test="support-error-status"]').text()).toBe('HTTP 502｜userSupport.categories.service_unavailable'); expect(rows[0].text()).toContain('userSupport.errorKinds.upstream'); expect(rows[0].get('[data-test="support-error-original"]').text()).toContain(originalMessage)
     expect(rows[1].get('[data-test="support-error-original"]').text()).toContain('<img src=x onerror="alert(1)"> raw'); expect(rows[1].find('img').exists()).toBe(false); expect(view.html()).not.toMatch(/SECRET-UPSTREAM|secret\.invalid|sk-secret/)
   })
+  it('shows the original Chinese key quota error without a missing translation notice', async () => {
+    const data = result()
+    Object.assign(data.errors.items[0], { status_code: 429, original_message: 'API key 额度已用完' })
+    lookup.mockResolvedValue(data)
+    const view = createView(); await query(view); await showErrors(view)
+    const row = view.findAll('[data-test="support-error-row"]')[0]
+    expect(row.get('[data-test="support-error-status"]').text()).toContain('HTTP 429')
+    expect(row.get('[data-test="support-error-original"]').text()).toContain('API key 额度已用完')
+    expect(row.find('[data-test="support-error-chinese"]').exists()).toBe(false)
+  })
   it('omits invalid HTTP prefixes and explains missing original messages', async () => {
     const data = result(); data.errors.items = [0, 99, 600, 429.5, null].map((status, i) => ({ ...data.errors.items[i], status_code: status, error_kind: 'arbitrary', original_message: i ? '' : '  ' })); lookup.mockResolvedValue(data)
     const view = createView(); await query(view); await showErrors(view)

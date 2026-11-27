@@ -50,6 +50,9 @@ var (
 	supportOriginalIdentityName  = regexp.MustCompile(`(?i)\b(?:(?:project|org(?:anization)?|account|tenant|workspace|subscription|consumer|channel)[_ -]?name|(?:provider|upstream|proxy)(?:[_ -]?(?:account|channel))?[_ -]?name)["']?\s*[:=#]\s*`)
 	supportOriginalMessageDomain = regexp.MustCompile(`(?i)\b(?:[a-z0-9](?:[a-z0-9_-]*[a-z0-9_])?\.)+[a-z][a-z0-9_-]{1,62}(?::[0-9]{1,5})?(?:/[^\s"'<>]*)?`)
 	supportOriginalNaturalPrompt = regexp.MustCompile(`(?i)^Gemini rejected (?:the )?prompt:[ \t]+PROHIBITED_CONTENT(?:$|[.;, \t])`)
+	// Fixed API key diagnostics contain no credential. Match a complete leading
+	// clause so an actual value following the word "key" still gets masked.
+	supportOriginalKeyDiagnostic = regexp.MustCompile(`(?i)^API key (?:额度已用完|(?:5小时|日|7天)限额已用完|已过期|quota exhausted|is (?:invalid|disabled))(?:$|[;\n])`)
 	supportOriginalPayload       = regexp.MustCompile(`(?i)\b(?:request[_ -]?(?:body|payload|headers)|(?:response|upstream)[_ -]?(?:body|headers)|headers|debug(?:[_ -]?(?:data|payload|info))?|prompt|messages|contents|input)["']?\s*[:=]\s*`)
 	supportOriginalPrivateValue  = regexp.MustCompile(`(?i)\b(?:api[_-]?key|x-api-key|x-goog-api-key|access[_-]?token|refresh[_-]?token|id[_-]?token|session[_-]?token|token|client[_-]?(?:secret|id)|password|passwd|secret|credential|signature|private[_ -]?key|endpoint|upstream[_ -]?(?:url|endpoint)|host(?:name)?|proxy[_ -]?url)["']?\s*[:=]\s*`)
 	supportOriginalOpaque        = regexp.MustCompile(`\b[a-zA-Z0-9_+/=-]{24,}\b`)
@@ -117,7 +120,11 @@ func supportOriginalPublicReason(message string) string {
 	message = supportMaskValues(message, upstreamNamedCredentialRegex)
 	message = supportMaskValues(message, supportOriginalPrivateValue)
 	message = supportMaskIdentityValues(message)
-	message = supportMaskValues(message, supportOriginalIdentityValue)
+	identityStart := 0
+	if diagnostic := supportOriginalKeyDiagnostic.FindStringIndex(message); diagnostic != nil {
+		identityStart = diagnostic[1]
+	}
+	message = message[:identityStart] + supportMaskValues(message[identityStart:], supportOriginalIdentityValue)
 	message = supportOriginalResourceValue.ReplaceAllString(message, "*")
 	message = supportOriginalURL.ReplaceAllString(message, "*")
 	message = upstreamEmailRegex.ReplaceAllString(message, "*")

@@ -33,6 +33,52 @@ func TestPublicUserSupportOriginalMessagePreservesRecordedReason(t *testing.T) {
 	}
 }
 
+func TestPublicUserSupportOriginalMessagePreservesAPIKeyDiagnostics(t *testing.T) {
+	for _, reason := range []string{
+		"API key 额度已用完",
+		"api key 日限额已用完",
+		"API key 已过期",
+		"API key quota exhausted",
+		"API key is invalid",
+		"Invalid API key",
+	} {
+		t.Run(reason, func(t *testing.T) {
+			for _, tc := range []struct{ primary, upstream string }{
+				{reason, ""},
+				{supportPrivacyJSON(t, map[string]any{"error": map[string]any{"message": reason}}), ""},
+				{"", reason},
+			} {
+				got := PublicUserSupportOriginalMessage(tc.primary, tc.upstream)
+				if got != reason {
+					t.Errorf("API key diagnostic changed: got %q, want %q", got, reason)
+				}
+				if again := PublicUserSupportOriginalMessage(got, ""); again != got {
+					t.Errorf("repeated projection changed the diagnostic: %q -> %q", got, again)
+				}
+			}
+		})
+	}
+}
+
+func TestPublicUserSupportOriginalMessageMasksAPIKeyAssignments(t *testing.T) {
+	const reason = "API key 额度已用完"
+	for _, assignment := range []string{
+		"key=shortSecret", "key: shortSecret", "key#shortSecret", "key/shortSecret", "API key shortSecret",
+		`"key":"shortSecret"`, "API key=shortSecret", "api_key=shortSecret",
+		"api-key=shortSecret", "private key=shortSecret", "key=Bearer shortSecret",
+	} {
+		t.Run(assignment, func(t *testing.T) {
+			got := PublicUserSupportOriginalMessage(reason+"; "+assignment+"; retry later", "")
+			if !strings.HasPrefix(got, reason+"; ") || !strings.HasSuffix(got, "; retry later") || strings.Contains(got, "shortSecret") {
+				t.Errorf("mask the secret and preserve the diagnostic: %q", got)
+			}
+			if again := PublicUserSupportOriginalMessage(got, ""); again != got {
+				t.Errorf("masking must be stable: %q -> %q", got, again)
+			}
+		})
+	}
+}
+
 func TestPublicUserSupportOriginalMessageDropsPrivateDiagnostics(t *testing.T) {
 	const reason = "Gemini rejected the prompt (PROHIBITED_CONTENT). Review the text and attached media, then try again."
 	for _, tc := range []struct {
