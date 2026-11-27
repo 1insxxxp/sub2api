@@ -152,6 +152,10 @@ func TestPasskeyLoginAuditUsesCanonicalLoginActionAndOmitsCredentialBody(t *test
 	require.Contains(t, auditBodyOmittedRoutes, route)
 }
 
+func TestPublicGatewayErrorPreviewOmitsDiagnosticAuditBody(t *testing.T) {
+	require.Contains(t, auditBodyOmittedRoutes, "POST /api/v1/admin/settings/public-gateway-errors/preview")
+}
+
 // Ollama 会话保存的请求体整体就是浏览器 Cookie 明文，键级脱敏清单曾漏掉裸键
 // "session"，必须走整体不入库路径，防止会话凭证长期留存在 audit_logs。
 func TestOllamaCloudUsageSessionRouteOmitsAuditBody(t *testing.T) {

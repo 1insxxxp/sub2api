@@ -3517,7 +3517,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				// gateway-chosen close frame; mirror the client's clean 1000
 				// rather than the 1011 the proxy-failure tail would have sent.
 				if hasClientCloseErr {
-					closeOpenAIClientWS(wsConn, closeErr.StatusCode(), service.ClassifyPublicGatewayError(0, closeErr.Reason()).Message)
+					closeOpenAIClientWS(wsConn, closeErr.StatusCode(), publicOpenAIWSClientCloseReason(c.Request.Context(), closeErr))
 				} else {
 					closeOpenAIClientWS(wsConn, coderws.StatusNormalClosure, "")
 				}
@@ -3546,7 +3546,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 			}
 			reqLog.Warn("openai.websocket_proxy_failed", proxyFailedFields...)
 			if hasClientCloseErr {
-				closeOpenAIClientWS(wsConn, closeErr.StatusCode(), service.ClassifyPublicGatewayError(0, closeErr.Reason()).Message)
+				closeOpenAIClientWS(wsConn, closeErr.StatusCode(), publicOpenAIWSClientCloseReason(c.Request.Context(), closeErr))
 				return
 			}
 			closeOpenAIClientWS(wsConn, coderws.StatusInternalError, "upstream websocket proxy failed")
@@ -4241,13 +4241,20 @@ func blockedModelAllowlistCandidate(group *service.Group, candidates []string) s
 	return ""
 }
 
+func publicOpenAIWSClientCloseReason(ctx context.Context, closeErr *service.OpenAIWSClientCloseError) string {
+	if openAIWSIngressEndedByClient(closeErr) {
+		return ""
+	}
+	return service.ClassifyPublicGatewayErrorContext(ctx, 0, closeErr.Reason()).Message
+}
+
 func closeOpenAIClientWS(conn *coderws.Conn, status coderws.StatusCode, reason string) {
 	if conn == nil {
 		return
 	}
 	reason = strings.TrimSpace(reason)
 	if len(reason) > 120 {
-		reason = reason[:120]
+		reason = strings.ToValidUTF8(reason[:120], "")
 	}
 	_ = conn.Close(status, reason)
 	_ = conn.CloseNow()
@@ -4300,7 +4307,16 @@ func closeOpenAIWSFailoverExhausted(c *gin.Context, conn *coderws.Conn, failover
 	}
 
 	service.MarkOpsStreamFailure(c, errorType, errorCode, message, intendedStatus)
-	closeOpenAIClientWS(conn, closeStatus, message)
+	upstreamStatus := intendedStatus
+	diagnostic := message
+	if failoverErr != nil {
+		if failoverErr.StatusCode >= 400 && failoverErr.StatusCode <= 599 {
+			upstreamStatus = failoverErr.StatusCode
+		}
+		diagnostic += " " + string(failoverErr.ResponseBody)
+	}
+	public := service.ClassifyPublicGatewayErrorContext(c.Request.Context(), upstreamStatus, diagnostic)
+	closeOpenAIClientWS(conn, closeStatus, public.Message)
 }
 
 func writeContentModerationWSError(ctx context.Context, conn *coderws.Conn, decision *service.ContentModerationDecision) {

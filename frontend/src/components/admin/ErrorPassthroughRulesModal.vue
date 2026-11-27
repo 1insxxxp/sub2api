@@ -3,9 +3,22 @@
     :show="show"
     :title="t('admin.errorPassthrough.title')"
     width="extra-wide"
-    @close="$emit('close')"
+    :close-on-escape="!publicSaving"
+    :show-close-button="!publicSaving"
+    @close="handleClose"
   >
-    <div class="space-y-4">
+    <div class="error-rule-tabs mb-4" role="tablist" :aria-label="t('admin.errorPassthrough.title')" @keydown="handleTabKey">
+      <button id="public-errors-tab" type="button" role="tab" data-testid="public-errors-tab"
+        :aria-selected="activeTab === 'public'" :tabindex="activeTab === 'public' ? 0 : -1" aria-controls="public-errors-panel"
+        @click="activeTab = 'public'">{{ t('admin.errorPassthrough.clientMappingTab') }}</button>
+      <button id="upstream-errors-tab" type="button" role="tab" data-testid="upstream-errors-tab"
+        :aria-selected="activeTab === 'upstream'" :tabindex="activeTab === 'upstream' ? 0 : -1" aria-controls="upstream-errors-panel"
+        @click="activeTab = 'upstream'">{{ t('admin.errorPassthrough.upstreamTab') }}</button>
+    </div>
+    <div v-show="activeTab === 'public'" id="public-errors-panel" role="tabpanel" aria-labelledby="public-errors-tab">
+      <PublicGatewayErrorRules v-if="show" @dirty-change="publicDirty = $event" @saving-change="publicSaving = $event" />
+    </div>
+    <div v-show="activeTab === 'upstream'" id="upstream-errors-panel" role="tabpanel" aria-labelledby="upstream-errors-tab" class="space-y-4">
       <!-- Header -->
       <div class="flex items-center justify-between">
         <p class="text-sm text-gray-500 dark:text-gray-400">
@@ -201,8 +214,9 @@
     </div>
 
     <template #footer>
-      <div class="flex justify-end">
-        <button @click="$emit('close')" class="btn btn-secondary">
+      <div class="flex w-full items-center justify-end gap-3">
+        <span v-if="activeTab === 'upstream' && publicDirty" class="mr-auto text-xs text-amber-700 dark:text-amber-300" role="status">{{ t('admin.publicGatewayErrors.unsavedMapping') }}</span>
+        <button :disabled="publicSaving" data-testid="error-rules-close" @click="handleClose" class="btn btn-secondary">
           {{ t('common.close') }}
         </button>
       </div>
@@ -426,6 +440,16 @@
       @confirm="confirmDelete"
       @cancel="showDeleteDialog = false"
     />
+    <ConfirmDialog
+      :show="showDiscardDialog"
+      :title="t('admin.publicGatewayErrors.discardTitle')"
+      :message="t('admin.publicGatewayErrors.discardMessage')"
+      :confirm-text="t('admin.publicGatewayErrors.discard')"
+      :cancel-text="t('admin.publicGatewayErrors.keepEditing')"
+      :danger="true"
+      @confirm="discardAndClose"
+      @cancel="showDiscardDialog = false"
+    />
   </BaseDialog>
 </template>
 
@@ -439,6 +463,7 @@ import type { ErrorPassthroughRule } from '@/api/admin/errorPassthrough'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import Icon from '@/components/icons/Icon.vue'
+import PublicGatewayErrorRules from './PublicGatewayErrorRules.vue'
 
 const props = defineProps<{
   show: boolean
@@ -448,11 +473,45 @@ const emit = defineEmits<{
   close: []
 }>()
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-void emit // suppress unused warning - emit is used via $emit in template
-
 const { t } = useI18n()
 const appStore = useAppStore()
+
+const activeTab = ref<'public' | 'upstream'>('public')
+const publicDirty = ref(false)
+const publicSaving = ref(false)
+const showDiscardDialog = ref(false)
+
+watch(() => props.show, show => {
+  if (show) activeTab.value = 'public'
+  else {
+    publicDirty.value = false
+    publicSaving.value = false
+    showDiscardDialog.value = false
+  }
+})
+
+function handleTabKey(event: KeyboardEvent) {
+  const tabs = ['public', 'upstream'] as const
+  const index = tabs.indexOf(activeTab.value)
+  const targets: Record<string, number> = { ArrowRight: (index + 1) % 2, ArrowLeft: (index + 1) % 2, Home: 0, End: 1 }
+  const next = targets[event.key]
+  if (next === undefined) return
+  event.preventDefault()
+  activeTab.value = tabs[next]
+  const buttons = (event.currentTarget as HTMLElement).querySelectorAll<HTMLButtonElement>('[role="tab"]')
+  buttons[next]?.focus()
+}
+
+function handleClose() {
+  if (publicSaving.value) return
+  if (publicDirty.value) showDiscardDialog.value = true
+  else emit('close')
+}
+
+function discardAndClose() {
+  showDiscardDialog.value = false
+  emit('close')
+}
 
 const rules = ref<ErrorPassthroughRule[]>([])
 const loading = ref(false)
@@ -644,3 +703,10 @@ const confirmDelete = async () => {
   }
 }
 </script>
+
+<style scoped>
+.error-rule-tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--workspace-divider); padding-bottom: 8px; }
+.error-rule-tabs button { min-height: 44px; padding: 8px 12px; border: 1px solid transparent; border-radius: 6px; color: var(--workspace-muted); font-size: 13px; font-weight: 500; }
+.error-rule-tabs button[aria-selected='true'] { border-color: var(--workspace-rule); color: rgb(var(--brand-rgb)); background: var(--workspace-surface); box-shadow: inset 0 1px 0 var(--workspace-highlight); }
+.error-rule-tabs button:focus-visible { outline: 2px solid var(--workspace-focus); outline-offset: 2px; }
+</style>

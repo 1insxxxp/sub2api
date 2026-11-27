@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"regexp"
@@ -18,8 +19,11 @@ const publicGatewayWriterKey = "public_gateway_error_writer"
 
 // PublicGatewayErrorMiddleware wraps the writer before the ops logger observes
 // it, so the logger retains the original error and the wire gets a new body.
-func PublicGatewayErrorMiddleware(afterIngress bool) gin.HandlerFunc {
+func PublicGatewayErrorMiddleware(afterIngress bool, settings ...*service.SettingService) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if len(settings) > 0 {
+			c.Request = c.Request.WithContext(service.WithPublicGatewayErrorSettings(c.Request.Context(), settings[0]))
+		}
 		original := c.Writer
 		writer := &publicGatewayWriter{ResponseWriter: original, context: c, enabled: !afterIngress}
 		c.Writer = writer
@@ -98,7 +102,7 @@ func (w *publicGatewayWriter) Write(body []byte) (int, error) {
 	}
 	if !w.isStream() {
 		if !w.Written() && strings.HasPrefix(w.Header().Get("Content-Type"), "application/json") {
-			if safe, ok := publicJSONError(body); ok {
+			if safe, ok := publicJSONError(w.context.Request.Context(), body); ok {
 				if w.localBillingError != nil {
 					return len(body), w.writeClassifiedError(*w.localBillingError)
 				}
@@ -192,7 +196,7 @@ func (w *publicGatewayWriter) writeFrame(frame string) error {
 	}
 	upstream, _ := w.context.Get(service.OpsUpstreamStatusCodeKey)
 	status, _ := upstream.(int)
-	if safe, ok := service.PublicGatewayErrorEvent(string(event), payload, status); ok {
+	if safe, ok := service.PublicGatewayErrorEventContext(w.context.Request.Context(), string(event), payload, status); ok {
 		frame = "data: " + string(safe) + "\n\n"
 		if string(event) == "error" || string(event) == "response.failed" {
 			frame = "event: " + string(event) + "\n" + frame
@@ -204,7 +208,7 @@ func (w *publicGatewayWriter) writeFrame(frame string) error {
 
 // Asynchronous task APIs can report failure with HTTP 200. Preserve the
 // task envelope while replacing its untrusted diagnostic fields.
-func publicJSONError(body []byte) ([]byte, bool) {
+func publicJSONError(ctx context.Context, body []byte) ([]byte, bool) {
 	if !gjson.ValidBytes(body) {
 		return nil, false
 	}
@@ -217,7 +221,7 @@ func publicJSONError(body []byte) ([]byte, bool) {
 	for _, key := range []string{"error_message", "failure_reason", "message", "detail"} {
 		diagnostic += " " + root.Get(key).String()
 	}
-	public := service.ClassifyPublicGatewayError(0, diagnostic)
+	public := service.ClassifyPublicGatewayErrorContext(ctx, 0, diagnostic)
 	safe, _ := json.Marshal(gin.H{
 		"status": "failed",
 		"error":  gin.H{"code": public.Code, "message": public.Message},
@@ -251,12 +255,12 @@ func (w *publicGatewayWriter) writeError(body []byte) error {
 	if status == 0 {
 		status = w.Status()
 	}
-	public := service.ClassifyPublicGatewayError(status, code+" "+errType+" "+diagnostic)
 	if upstreamStatus == 0 {
 		if local, ok := service.PublicLocalGatewayError(w.Status(), code, diagnostic); ok {
-			public = local
+			return w.writeClassifiedError(local)
 		}
 	}
+	public := service.ClassifyPublicGatewayErrorContext(w.context.Request.Context(), status, code+" "+errType+" "+diagnostic)
 	return w.writeClassifiedError(public)
 }
 

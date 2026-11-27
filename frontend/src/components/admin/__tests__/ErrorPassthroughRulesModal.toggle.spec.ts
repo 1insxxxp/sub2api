@@ -4,6 +4,7 @@ import ErrorPassthroughRulesModal from '../ErrorPassthroughRulesModal.vue'
 
 const mocks = vi.hoisted(() => ({ list: vi.fn(), toggleEnabled: vi.fn(), showError: vi.fn() }))
 vi.mock('@/api/admin', () => ({ adminAPI: { errorPassthrough: mocks } }))
+vi.mock('@/api/admin/publicGatewayErrors', () => ({ publicGatewayErrorsAPI: {} }))
 vi.mock('@/stores/app', () => ({ useAppStore: () => ({ showError: mocks.showError }) }))
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
 enableAutoUnmount(afterEach)
@@ -21,11 +22,12 @@ async function openRules(enabled = true) {
     props: { show: false },
     global: { stubs: {
       BaseDialog: { props: ['show'], template: '<div v-if="show"><slot /></div>' },
-      ConfirmDialog: true, Icon: true
+      ConfirmDialog: true, Icon: true, PublicGatewayErrorRules: true
     } }
   })
   await wrapper.setProps({ show: true })
   await flushPromises()
+  await wrapper.get('[data-testid="upstream-errors-tab"]').trigger('click')
   return wrapper
 }
 

@@ -48,6 +48,7 @@ const sourceGroup = (platform: GroupPlatform, enabled?: boolean): AdminGroup => 
   description: null,
   platform,
   rate_multiplier: 1,
+  min_total_recharge_usd: 0,
   empty_response_compensation_enabled: false,
   is_exclusive: false,
   status: 'active',

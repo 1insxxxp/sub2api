@@ -825,7 +825,8 @@ func TestResponsesWebSocketCredentialFailoverLoop(t *testing.T) {
 		cancel()
 		var closeErr coderws.CloseError
 		require.ErrorAs(t, err, &closeErr)
-		require.Contains(t, closeErr.Reason, service.GrokCredentialUnavailableClientMessage)
+		require.Equal(t, "模型服务请求失败，请稍后重试。如持续出现，请提供请求 ID 联系支持。", closeErr.Reason)
+		require.NotContains(t, closeErr.Reason, "OAuth")
 		require.Equal(t, 1, repo.selectorCalls())
 		require.Empty(t, upstream.accountHits())
 	})

@@ -840,6 +840,9 @@ func registerSettingsRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpA
 		// 流超时处理配置
 		adminSettings.GET("/stream-timeout", h.Admin.Setting.GetStreamTimeoutSettings)
 		adminSettings.PUT("/stream-timeout", h.Admin.Setting.UpdateStreamTimeoutSettings)
+		adminSettings.GET("/public-gateway-errors", h.Admin.Setting.GetPublicGatewayErrorSettings)
+		adminSettings.PUT("/public-gateway-errors", h.Admin.Setting.UpdatePublicGatewayErrorSettings)
+		adminSettings.POST("/public-gateway-errors/preview", h.Admin.Setting.PreviewPublicGatewayError)
 		// 模型首字超时与换号配置
 		adminSettings.GET("/model-first-output-timeout", h.Admin.Setting.GetModelFirstOutputTimeoutSettings)
 		adminSettings.PUT("/model-first-output-timeout", h.Admin.Setting.UpdateModelFirstOutputTimeoutSettings)

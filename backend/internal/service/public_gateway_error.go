@@ -1,10 +1,9 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
-	"net/http"
 	"regexp"
-	"slices"
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/googleapi"
@@ -12,9 +11,9 @@ import (
 )
 
 type PublicGatewayError struct {
-	Status  int
-	Code    string
-	Message string
+	Status  int    `json:"status"`
+	Code    string `json:"code"`
+	Message string `json:"message"`
 }
 
 var publicGatewayErrorRules = []struct {
@@ -47,18 +46,7 @@ var publicGatewayErrorRules = []struct {
 }
 
 func ClassifyPublicGatewayError(status int, diagnostic string) PublicGatewayError {
-	for _, rule := range publicGatewayErrorRules {
-		if status != 0 && !slices.Contains(rule.upstreamStatuses, status) {
-			continue
-		}
-		if rule.pattern.MatchString(diagnostic) {
-			return PublicGatewayError{rule.status, rule.code, rule.message}
-		}
-	}
-	if status == http.StatusBadRequest {
-		return PublicGatewayError{400, "invalid_request", "参数异常"}
-	}
-	return PublicGatewayError{502, "request_failed", "模型服务请求失败，请稍后重试。如持续出现，请提供请求 ID 联系支持。"}
+	return defaultPublicGatewayErrorPolicy.Classify(status, diagnostic).PublicGatewayError
 }
 
 func (e PublicGatewayError) Type() string {
@@ -78,6 +66,26 @@ func (e PublicGatewayError) Type() string {
 
 // PublicGatewayErrorEvent rebuilds protocol error events from fixed public fields.
 func PublicGatewayErrorEvent(eventName string, payload []byte, upstreamStatus ...int) ([]byte, bool) {
+	return publicGatewayErrorEvent(eventName, payload, nil, upstreamStatus...)
+}
+
+func PublicGatewayErrorEventContext(ctx context.Context, eventName string, payload []byte, upstreamStatus ...int) ([]byte, bool) {
+	// Successful frames avoid both policy loading and shared-store I/O.
+	return publicGatewayErrorEventWithClassifier(eventName, payload, func(status int, diagnostic string) PublicGatewayError {
+		return ClassifyPublicGatewayErrorContext(ctx, status, diagnostic)
+	}, upstreamStatus...)
+}
+
+func publicGatewayErrorEvent(eventName string, payload []byte, policy *PublicGatewayErrorPolicy, upstreamStatus ...int) ([]byte, bool) {
+	if policy == nil {
+		policy = defaultPublicGatewayErrorPolicy
+	}
+	return publicGatewayErrorEventWithClassifier(eventName, payload, func(status int, diagnostic string) PublicGatewayError {
+		return policy.Classify(status, diagnostic).PublicGatewayError
+	}, upstreamStatus...)
+}
+
+func publicGatewayErrorEventWithClassifier(eventName string, payload []byte, classify func(int, string) PublicGatewayError, upstreamStatus ...int) ([]byte, bool) {
 	parsed := gjson.ParseBytes(payload)
 	kind := parsed.Get("type").String()
 	if eventName == "response.failed" || kind == "response.failed" || parsed.Get("response.status").String() == "failed" {
@@ -108,7 +116,7 @@ func PublicGatewayErrorEvent(eventName string, payload []byte, upstreamStatus ..
 	if source.Get("message").String() == "" {
 		diagnostic += " " + extractUpstreamErrorMessage(payload)
 	}
-	e := ClassifyPublicGatewayError(status, diagnostic)
+	e := classify(status, diagnostic)
 	errorObject := map[string]any{"type": e.Type(), "code": e.Code, "message": e.Message}
 	var output any = map[string]any{"type": "error", "error": errorObject}
 	if kind == "response.failed" {

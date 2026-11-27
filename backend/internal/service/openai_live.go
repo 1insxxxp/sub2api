@@ -545,7 +545,7 @@ func (s *OpenAIGatewayService) ProxyLiveSideband(
 				return
 			}
 			publicPayload := payload
-			if safe, ok := PublicGatewayErrorEvent("", payload); ok {
+			if safe, ok := PublicGatewayErrorEventContext(proxyCtx, "", payload); ok {
 				publicPayload = safe
 			}
 			if writeErr := downstream.Write(proxyCtx, messageType, publicPayload); writeErr != nil {

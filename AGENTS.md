@@ -632,6 +632,27 @@ x-api-key: admin-xxx
 
 > 以下接口文档中，`${BASE}` 代表环境基础地址，`${KEY}` 代表 `.env` 中的 `ADMIN_API_KEY`。操作前执行 `source .env` 或 `export KEY=$ADMIN_API_KEY` 加载。
 
+### 客户提示映射（2026-11-27）
+
+- 入口位于账号管理的“更多操作 → 错误处理规则 → 客户提示映射”，沿用完整管理员权限。
+- `GET /api/v1/admin/settings/public-gateway-errors` 返回 `rules`、`fallback` 和 `bad_request_fallback`。尚未保存配置时返回内置规则。
+- `PUT /api/v1/admin/settings/public-gateway-errors` 整体保存上述配置。规则包含 `id`、`name`、`enabled`、`priority`、`upstream_statuses`、`pattern`、`status`、`code`、`message`。优先级数值较小的先匹配，同值按列表顺序匹配。配置存入共享设置，两端网关的新请求使用保存后的规则。
+- `POST /api/v1/admin/settings/public-gateway-errors/preview` 接受 `settings`、`status`、`diagnostic`、`format`，返回命中规则和脱敏后的协议错误。`format` 支持 `http`、`sse`、`responses`、`gemini`，未知来源状态码填 `0`。预览使用提交的草稿配置，原始诊断仅作为匹配输入。
+- 本站认证和余额错误优先保留其可信提示。单个请求及其流使用同一份配置快照，成功请求无需读取映射设置。
+
+更新文件应先读取并合并现有完整配置。预览文件的 `settings` 可填写待保存的草稿。
+
+```bash
+curl -fsS "${BASE}/api/v1/admin/settings/public-gateway-errors" \
+  -H "x-api-key: ${KEY}"
+curl -fsS -X PUT "${BASE}/api/v1/admin/settings/public-gateway-errors" \
+  -H "x-api-key: ${KEY}" -H 'Content-Type: application/json' \
+  --data-binary @public-gateway-errors.json
+curl -fsS -X POST "${BASE}/api/v1/admin/settings/public-gateway-errors/preview" \
+  -H "x-api-key: ${KEY}" -H 'Content-Type: application/json' \
+  --data-binary @public-gateway-error-preview.json
+```
+
 ---
 
 ### 已手动补偿的空回登记（2026-11-09）

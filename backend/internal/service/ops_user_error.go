@@ -1,6 +1,9 @@
 package service
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 // UserErrorRequest 是面向终端用户的"错误请求"精简脱敏视图（白名单）。
 // 严禁包含 account / api_key_prefix / upstream_endpoint / user_email 等
@@ -94,6 +97,10 @@ func CategoryToFilter(category string) (phases []string, errorTypes []string) {
 
 // ToUserErrorRequest 把内部 OpsErrorLog 裁剪为用户安全视图。
 func ToUserErrorRequest(e *OpsErrorLog) *UserErrorRequest {
+	return ToUserErrorRequestContext(context.Background(), e)
+}
+
+func ToUserErrorRequestContext(ctx context.Context, e *OpsErrorLog) *UserErrorRequest {
 	if e == nil {
 		return nil
 	}
@@ -106,12 +113,7 @@ func ToUserErrorRequest(e *OpsErrorLog) *UserErrorRequest {
 		clientIP = *e.ClientIP
 	}
 	category := MapUserErrorCategory(e.Phase, e.Type)
-	public := ClassifyPublicGatewayError(e.StatusCode, e.Type+" "+e.Message)
-	if public.Code == "request_failed" && (e.Phase == "auth" || e.Phase == "request") && e.Owner != "provider" && e.Source != "upstream_http" {
-		if local, ok := PublicLocalGatewayError(e.StatusCode, e.Type, e.Message); ok {
-			public = local
-		}
-	}
+	public := userErrorPublicMessage(ctx, e, e.StatusCode, e.Type+" "+e.Message)
 	statusCode := public.Status
 	message := public.Message
 	if e.ClientCanceled {
@@ -145,18 +147,31 @@ type UserErrorRequestDetail struct {
 }
 
 func ToUserErrorRequestDetail(e *OpsErrorLogDetail) *UserErrorRequestDetail {
+	return ToUserErrorRequestDetailContext(context.Background(), e)
+}
+
+func ToUserErrorRequestDetailContext(ctx context.Context, e *OpsErrorLogDetail) *UserErrorRequestDetail {
 	if e == nil {
 		return nil
 	}
-	base := ToUserErrorRequest(&e.OpsErrorLog)
+	base := ToUserErrorRequestContext(ctx, &e.OpsErrorLog)
 	if !e.ClientCanceled && e.UpstreamErrorMessage != "" {
 		status := e.StatusCode
 		if e.UpstreamStatusCode != nil {
 			status = *e.UpstreamStatusCode
 		}
-		public := ClassifyPublicGatewayError(status, e.UpstreamErrorMessage+" "+e.Message)
+		public := userErrorPublicMessage(ctx, &e.OpsErrorLog, status, e.UpstreamErrorMessage+" "+e.Message)
 		base.Message = public.Message
 		base.StatusCode = public.Status
 	}
 	return &UserErrorRequestDetail{UserErrorRequest: *base}
+}
+
+func userErrorPublicMessage(ctx context.Context, e *OpsErrorLog, status int, diagnostic string) PublicGatewayError {
+	if (e.Phase == "auth" || e.Phase == "request") && e.Owner != "provider" && e.Source != "upstream_http" {
+		if local, ok := PublicLocalGatewayError(e.StatusCode, e.Type, e.Message); ok {
+			return local
+		}
+	}
+	return ClassifyPublicGatewayErrorContext(ctx, status, diagnostic)
 }

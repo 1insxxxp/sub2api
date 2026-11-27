@@ -55,7 +55,7 @@ func RegisterGatewayRoutes(
 		bodyLimit(c)
 	}
 	clientRequestID := middleware.ClientRequestID()
-	publicErrors := handler.PublicGatewayErrorMiddleware(true)
+	publicErrors := handler.PublicGatewayErrorMiddleware(true, settingService)
 	classifyPublicErrors := handler.PublicGatewayErrorsAfterIngress()
 	opsErrorLogger := handler.OpsErrorLoggerMiddleware(opsService)
 	endpointNorm := handler.InboundEndpointMiddleware()
