@@ -10,7 +10,7 @@ import (
 )
 
 func TestAPIKeyAuthSnapshotAccountExclusionsRoundtrip(t *testing.T) {
-	require.Equal(t, 32, apiKeyAuthSnapshotVersion, "old cached credentials must reload access, category routing, privacy, scoped RPM and forced Ultra Fast policies")
+	require.Equal(t, 33, apiKeyAuthSnapshotVersion, "old cached credentials must reload access policies and recharge requirements")
 	svc := &APIKeyService{}
 	key := &APIKey{ID: 2, UserID: 7, User: &User{ID: 7}}
 	field := reflect.ValueOf(key.User).Elem().FieldByName("GroupAccountExclusions")

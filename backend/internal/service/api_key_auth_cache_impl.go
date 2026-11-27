@@ -14,7 +14,7 @@ import (
 	"github.com/dgraph-io/ristretto"
 )
 
-const apiKeyAuthSnapshotVersion = 32 // v32: preserve custom routing/RPM snapshots and add group force_openai_ultrafast
+const apiKeyAuthSnapshotVersion = 33 // v33: include group minimum cumulative recharge in auth snapshots
 
 type apiKeyAuthCacheConfig struct {
 	l1Size        int
@@ -391,6 +391,7 @@ func (s *APIKeyService) snapshotFromAPIKey(ctx context.Context, apiKey *APIKey) 
 			Name:                            apiKey.Group.Name,
 			Platform:                        apiKey.Group.Platform,
 			IsExclusive:                     apiKey.Group.IsExclusive,
+			MinTotalRechargeUSD:             apiKey.Group.MinTotalRechargeUSD,
 			Status:                          apiKey.Group.Status,
 			SubscriptionType:                apiKey.Group.SubscriptionType,
 			IsCategoryDefault:               apiKey.Group.IsCategoryDefault,
@@ -509,6 +510,7 @@ func (s *APIKeyService) snapshotToAPIKey(key string, snapshot *APIKeyAuthSnapsho
 			Name:                            snapshot.Group.Name,
 			Platform:                        snapshot.Group.Platform,
 			IsExclusive:                     snapshot.Group.IsExclusive,
+			MinTotalRechargeUSD:             snapshot.Group.MinTotalRechargeUSD,
 			Status:                          snapshot.Group.Status,
 			Hydrated:                        true,
 			SubscriptionType:                snapshot.Group.SubscriptionType,

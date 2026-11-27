@@ -8,6 +8,26 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestAPIKeyAuthSnapshotRechargeGateRoundtrip(t *testing.T) {
+	groupID := int64(58)
+	key := &APIKey{
+		GroupID: &groupID,
+		User:    &User{ID: 42, TotalRecharged: 49},
+		Group:   &Group{ID: groupID, MinTotalRechargeUSD: 50},
+	}
+	svc := &APIKeyService{}
+	raw, err := json.Marshal(&APIKeyAuthCacheEntry{Snapshot: svc.snapshotFromAPIKey(context.Background(), key)})
+	require.NoError(t, err)
+	var cached APIKeyAuthCacheEntry
+	require.NoError(t, json.Unmarshal(raw, &cached))
+	materialized, used, err := svc.applyAuthCacheEntry("recharge-gate", &cached)
+	require.NoError(t, err)
+	require.True(t, used)
+	require.False(t, materialized.User.MeetsGroupRechargeRequirement(materialized.Group))
+	materialized.User.TotalRecharged = 50
+	require.True(t, materialized.User.MeetsGroupRechargeRequirement(materialized.Group))
+}
+
 func TestAPIKeyAuthSnapshotGeminiInputCountingRoundtrip(t *testing.T) {
 	groupID := int64(58)
 	group := &Group{ID: groupID, Name: "discount", Platform: PlatformGemini, Status: StatusActive, Hydrated: true, GeminiInputCountingEnabled: true}

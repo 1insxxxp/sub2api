@@ -625,6 +625,7 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		EmptyResponseCompensationEnabled: input.EmptyResponseCompensationEnabled,
 		GeminiInputCountingEnabled:       newGroupInputProtectionEnabled(input.GeminiInputCountingEnabled),
 		IsExclusive:                      input.IsExclusive,
+		MinTotalRechargeUSD:              input.MinTotalRechargeUSD,
 		Status:                           StatusActive,
 		SubscriptionType:                 subscriptionType,
 		DailyLimitUSD:                    dailyLimit,
@@ -891,6 +892,12 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	}
 	if input.IsExclusive != nil {
 		group.IsExclusive = *input.IsExclusive
+	}
+	if input.MinTotalRechargeUSD != nil {
+		if *input.MinTotalRechargeUSD < 0 {
+			return nil, infraerrors.BadRequest("INVALID_MIN_TOTAL_RECHARGE", "minimum total recharge must be non-negative")
+		}
+		group.MinTotalRechargeUSD = *input.MinTotalRechargeUSD
 	}
 	if input.Status != "" {
 		group.Status = input.Status

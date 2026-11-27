@@ -71,6 +71,7 @@ func TestAPIKeyRepository_GetByKeyForAuth_PreservesDefaultReasoningEffort(t *tes
 		SetSubscriptionType(service.SubscriptionTypeStandard).
 		SetRateMultiplier(1).
 		SetDefaultReasoningEffort("low").
+		SetMinTotalRechargeUsd(50).
 		Save(ctx)
 	require.NoError(t, err)
 
@@ -87,6 +88,7 @@ func TestAPIKeyRepository_GetByKeyForAuth_PreservesDefaultReasoningEffort(t *tes
 	require.NoError(t, err)
 	require.NotNil(t, got.Group)
 	require.Equal(t, "low", got.Group.DefaultReasoningEffort)
+	require.Equal(t, 50.0, got.Group.MinTotalRechargeUSD)
 }
 
 func TestAPIKeyRepository_GetByKeyForAuth_PreservesMessagesDispatchModelConfig_SQLite(t *testing.T) {
