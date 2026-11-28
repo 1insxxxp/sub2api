@@ -295,6 +295,7 @@ func registerSubAdminCommissionRoutes(admin *gin.RouterGroup, h *handler.Handler
 		commissions.GET("/settings", h.Admin.SubAdminCommission.GetSettings)
 		commissions.PUT("/settings", h.Admin.SubAdminCommission.UpdateSettings)
 		commissions.GET("/exclusions", h.Admin.SubAdminCommission.ListExclusions)
+		commissions.GET("/exclusions/status", h.Admin.SubAdminCommission.ListExcludedUserIDs)
 		commissions.POST("/exclusions", h.Admin.SubAdminCommission.AddExclusion)
 		commissions.DELETE("/exclusions/:user_id", h.Admin.SubAdminCommission.RemoveExclusion)
 		commissions.GET("/grants", h.Admin.SubAdminCommission.ListGrants)

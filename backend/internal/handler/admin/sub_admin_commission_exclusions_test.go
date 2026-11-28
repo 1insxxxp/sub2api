@@ -31,6 +31,10 @@ func (s *commissionExclusionsHandlerStub) ListExclusions(_ context.Context, para
 	return []service.SubAdminCommissionExclusion{{ID: 1, UserID: 7, UserEmail: "test@example.com", Username: "Customer", Notes: s.notes, StartedAt: time.Date(2026, 10, 18, 4, 0, 0, 0, time.UTC)}}, pagination.PaginationResult{Page: params.Page, PageSize: params.PageSize, Total: 1}, s.err
 }
 
+func (s *commissionExclusionsHandlerStub) ListExcludedUserIDs(_ context.Context, userIDs []int64) ([]int64, error) {
+	return userIDs, nil
+}
+
 func (s *commissionExclusionsHandlerStub) AddExclusion(_ context.Context, userID, operatorID int64) (*service.SubAdminCommissionExclusion, error) {
 	s.called++
 	s.userID, s.operatorID = userID, operatorID

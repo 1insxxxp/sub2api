@@ -102,6 +102,7 @@ type SubAdminCommissionRepository interface {
 	ListDayGroups(ctx context.Context, subAdminID int64, date string, commissionRate float64) ([]SubAdminCommissionDayGroup, error)
 	ListDayGroupLogs(ctx context.Context, subAdminID, groupID int64, date string, params pagination.PaginationParams) ([]SubAdminCommissionUsageLog, pagination.PaginationResult, error)
 	ListExclusions(ctx context.Context, params pagination.PaginationParams) ([]SubAdminCommissionExclusion, pagination.PaginationResult, error)
+	ListExcludedUserIDs(ctx context.Context, userIDs []int64) ([]int64, error)
 	AddExclusion(ctx context.Context, userID, operatorID int64) (*SubAdminCommissionExclusion, error)
 	RemoveExclusion(ctx context.Context, userID int64) error
 }
@@ -149,6 +150,13 @@ func (s *SubAdminCommissionService) ListExclusions(ctx context.Context, params p
 		return nil, pagination.PaginationResult{}, ErrSubAdminCommissionRepoMissing
 	}
 	return s.repo.ListExclusions(ctx, params)
+}
+
+func (s *SubAdminCommissionService) ListExcludedUserIDs(ctx context.Context, userIDs []int64) ([]int64, error) {
+	if s == nil || s.repo == nil {
+		return nil, ErrSubAdminCommissionRepoMissing
+	}
+	return s.repo.ListExcludedUserIDs(ctx, userIDs)
 }
 
 func (s *SubAdminCommissionService) AddExclusion(ctx context.Context, userID, operatorID int64) (*SubAdminCommissionExclusion, error) {

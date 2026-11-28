@@ -1,12 +1,50 @@
 package admin
 
 import (
+	"strconv"
+	"strings"
+
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 )
+
+func (h *SubAdminCommissionHandler) ListExcludedUserIDs(c *gin.Context) {
+	if _, ok := requireCommissionAdmin(c); !ok || !h.ensureService(c) {
+		return
+	}
+	raw := strings.TrimSpace(c.Query("user_ids"))
+	if raw == "" {
+		response.BadRequest(c, "user_ids is required")
+		return
+	}
+	parts := strings.Split(raw, ",")
+	ids := make([]int64, 0, len(parts))
+	seen := map[int64]bool{}
+	for _, part := range parts {
+		id, err := strconv.ParseInt(strings.TrimSpace(part), 10, 64)
+		if err != nil || id <= 0 {
+			response.BadRequest(c, "user_ids must contain positive integers")
+			return
+		}
+		if !seen[id] {
+			seen[id] = true
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) > 100 {
+		response.BadRequest(c, "too many user_ids")
+		return
+	}
+	result, err := h.service.ListExcludedUserIDs(c.Request.Context(), ids)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, gin.H{"user_ids": result})
+}
 
 type commissionExclusionResponse struct {
 	ID        int64  `json:"id"`

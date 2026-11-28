@@ -1094,7 +1094,10 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 		c.Next()
 		w.finalizeCapture()
 
-		if _, rejected := middleware2.GetIngressRejectReason(c); rejected {
+		if reason, rejected := middleware2.GetIngressRejectReason(c); rejected {
+			if ops != nil && ops.IsMonitoringEnabled(c.Request.Context()) {
+				recordOpsIngressRejection(c, ops, reason)
+			}
 			return
 		}
 
@@ -1297,6 +1300,33 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 
 		enqueueOpsErrorLog(ops, entry)
 	}
+}
+
+func recordOpsIngressRejection(c *gin.Context, ops *service.OpsService, reason middleware2.IngressRejectReason) {
+	if c == nil || ops == nil {
+		return
+	}
+	status := c.Writer.Status()
+	if status < 400 {
+		status = http.StatusUnauthorized
+	}
+	requestID, _ := c.Request.Context().Value(ctxkey.RequestID).(string)
+	entry := &service.OpsInsertErrorLogInput{
+		RequestID: requestID, RequestPath: c.Request.URL.Path, StatusCode: status,
+		ErrorPhase: "admission", ErrorType: "authentication_error", ErrorOwner: "client",
+		ErrorSource: "gateway", ErrorMessage: string(reason), UserAgent: c.GetHeader("User-Agent"), CreatedAt: time.Now(),
+	}
+	if apiKey, ok := middleware2.GetAPIKeyFromContext(c); ok && apiKey != nil {
+		entry.APIKeyID = &apiKey.ID
+		if apiKey.User != nil {
+			entry.UserID = &apiKey.User.ID
+		}
+		entry.APIKeyPrefix = keyPrefix(apiKey.Key, 8)
+	}
+	if clientIP := strings.TrimSpace(ip.GetClientIP(c)); clientIP != "" {
+		entry.ClientIP = &clientIP
+	}
+	enqueueOpsErrorLog(ops, entry)
 }
 
 func logOpsRecoveredUpstream(c *gin.Context, ops *service.OpsService, finalStatus int) {

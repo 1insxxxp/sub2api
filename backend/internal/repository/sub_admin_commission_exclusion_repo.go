@@ -4,10 +4,38 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
+
+func (r *subAdminCommissionRepository) ListExcludedUserIDs(ctx context.Context, userIDs []int64) ([]int64, error) {
+	if len(userIDs) == 0 {
+		return []int64{}, nil
+	}
+	args := make([]any, len(userIDs))
+	placeholders := make([]string, len(userIDs))
+	for i, userID := range userIDs {
+		args[i] = userID
+		placeholders[i] = fmt.Sprintf("$%d", i+1)
+	}
+	rows, err := r.sql.QueryContext(ctx, `SELECT user_id FROM sub_admin_commission_exclusions WHERE ended_at IS NULL AND user_id IN (`+strings.Join(placeholders, ",")+") ORDER BY user_id", args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := make([]int64, 0, len(userIDs))
+	for rows.Next() {
+		var userID int64
+		if err := rows.Scan(&userID); err != nil {
+			return nil, err
+		}
+		result = append(result, userID)
+	}
+	return result, rows.Err()
+}
 
 func (r *subAdminCommissionRepository) ListExclusions(ctx context.Context, params pagination.PaginationParams) ([]service.SubAdminCommissionExclusion, pagination.PaginationResult, error) {
 	params = normalizePagination(params)

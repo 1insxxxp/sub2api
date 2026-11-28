@@ -257,7 +257,7 @@ func setupOpsErrorLogTestQueue(t *testing.T, size int) {
 	opsErrorLogMu.Unlock()
 }
 
-func TestOpsErrorLoggerMiddleware_HardSkipsIngressRejection(t *testing.T) {
+func TestOpsErrorLoggerMiddleware_RecordsIngressRejection(t *testing.T) {
 	setupOpsErrorLogTestQueue(t, 4)
 	gin.SetMode(gin.TestMode)
 
@@ -280,9 +280,11 @@ func TestOpsErrorLoggerMiddleware_HardSkipsIngressRejection(t *testing.T) {
 
 	require.Equal(t, http.StatusUnauthorized, w.Code)
 	require.JSONEq(t, `{"code":"INVALID_API_KEY","message":"Invalid API key"}`, w.Body.String())
-	require.Zero(t, settings.getValueCalls, "ingress rejection must bypass monitoring settings reads")
-	require.Zero(t, repo.insertCalls, "ingress rejection must bypass inserts")
-	require.Zero(t, OpsErrorLogEnqueuedTotal(), "ingress rejection must not enter the error queue")
+	require.Equal(t, int64(1), OpsErrorLogEnqueuedTotal(), "ingress rejection must enter the error queue")
+	job := <-opsErrorLogQueue
+	require.Equal(t, "invalid_api_key", job.entry.ErrorMessage)
+	require.Equal(t, "admission", job.entry.ErrorPhase)
+	require.Equal(t, http.StatusUnauthorized, job.entry.StatusCode)
 }
 
 func TestOpsErrorLoggerMiddleware_DedicatedCyberSessionBlockRecordsExactlyOnce(t *testing.T) {

@@ -150,6 +150,17 @@ export async function listExclusions(
   return data
 }
 
+export async function getExcludedUserIDs(
+  userIDs: number[],
+  config?: { signal?: AbortSignal }
+): Promise<number[]> {
+  const { data } = await apiClient.get<{ user_ids: number[] }>(
+    '/admin/sub-admin-commissions/exclusions/status',
+    { params: { user_ids: userIDs.join(',') }, signal: config?.signal }
+  )
+  return data.user_ids
+}
+
 export async function addExclusion(
   payload: { user_id: number }
 ): Promise<SubAdminCommissionExclusion> {
@@ -174,6 +185,7 @@ export const subAdminCommissionAPI = {
   getWorkbenchMonthlyReport,
   getWorkbenchDayGroups,
   listExclusions,
+  getExcludedUserIDs,
   addExclusion,
   removeExclusion,
 }

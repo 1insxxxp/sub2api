@@ -16,6 +16,7 @@ import (
 
 type subAdminCommissionService interface {
 	ListExclusions(ctx context.Context, params pagination.PaginationParams) ([]service.SubAdminCommissionExclusion, pagination.PaginationResult, error)
+	ListExcludedUserIDs(ctx context.Context, userIDs []int64) ([]int64, error)
 	AddExclusion(ctx context.Context, userID, operatorID int64) (*service.SubAdminCommissionExclusion, error)
 	RemoveExclusion(ctx context.Context, userID int64) error
 	GetSettings(ctx context.Context) (float64, error)
