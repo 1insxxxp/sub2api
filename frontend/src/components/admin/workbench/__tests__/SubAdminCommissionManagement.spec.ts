@@ -3,7 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import SubAdminCommissionManagement from '../SubAdminCommissionManagement.vue'
 
 const { api, showError } = vi.hoisted(() => ({
-  api: { getSettings: vi.fn(), listGrants: vi.fn(), getAll: vi.fn(), listExclusions: vi.fn(), addExclusion: vi.fn(), removeExclusion: vi.fn(), listUsers: vi.fn(), getUser: vi.fn(), updateSettings: vi.fn(), replaceGrants: vi.fn() },
+  api: { getSettings: vi.fn(), listGrants: vi.fn(), getAll: vi.fn(), listExclusions: vi.fn(), getExcludedUserIDs: vi.fn(), addExclusion: vi.fn(), removeExclusion: vi.fn(), listUsers: vi.fn(), getUser: vi.fn(), updateSettings: vi.fn(), replaceGrants: vi.fn() },
   showError: vi.fn(),
 }))
 vi.mock('@/api/admin', () => ({ adminAPI: {
@@ -49,6 +49,7 @@ beforeEach(() => {
   api.listGrants.mockResolvedValue([])
   api.getAll.mockResolvedValue([])
   api.listExclusions.mockResolvedValue(page([exclusion]))
+  api.getExcludedUserIDs.mockResolvedValue([])
   api.listUsers.mockResolvedValue(page([{ id: 43, email: 'new@example.com', username: 'New' }]))
   api.getUser.mockResolvedValue({ id: 43, email: 'new@example.com', username: 'New' })
   api.addExclusion.mockResolvedValue({ ...exclusion, user_id: 43 })
@@ -105,6 +106,19 @@ describe('commission exclusion management', () => {
     expect(customer.textContent).toContain('admin.users.username：New')
     expect(customer.textContent).toContain('admin.users.notes：Corporate contact')
     expect(api.getUser).not.toHaveBeenCalled()
+  })
+
+  it('marks a customer as excluded when their blacklist entry is on another page', async () => {
+    api.listExclusions.mockResolvedValueOnce(page([exclusion], 21))
+    api.listUsers.mockResolvedValueOnce(page([{ id: 43, email: 'new@example.com', username: 'New' }]))
+    api.getExcludedUserIDs.mockResolvedValueOnce([43])
+    const wrapper = create()
+    await open(wrapper)
+    await search(wrapper, 'new@')
+    const button = wrapper.get('[data-test="commission-exclusion-add-43"]')
+    expect(api.getExcludedUserIDs).toHaveBeenCalledWith([43], { signal: expect.any(AbortSignal) })
+    expect(button.text()).toBe('adminWorkbench.commission.alreadyExcluded')
+    expect((button.element as HTMLButtonElement).disabled).toBe(true)
   })
 
   it('searches a small page, then adds a selected customer and refreshes summaries', async () => {
