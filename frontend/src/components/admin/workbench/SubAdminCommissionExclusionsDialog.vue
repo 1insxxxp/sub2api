@@ -220,7 +220,9 @@ async function searchUsers(keyword: string, requestID: number) {
     if (!disposed && requestID === searchRequestID) {
       const foundIDs = new Set(found.map((user) => user.id))
       const known = new Set([...excludedUserIDs.value].filter((id) => !foundIDs.has(id)))
-      const excluded = await adminAPI.subAdminCommission.getExcludedUserIDs([...foundIDs], { signal: controller.signal })
+      const excluded = foundIDs.size
+        ? await adminAPI.subAdminCommission.getExcludedUserIDs([...foundIDs], { signal: controller.signal })
+        : []
       excluded.forEach((id) => known.add(id))
       if (disposed || requestID !== searchRequestID || controller.signal.aborted) return
       excludedUserIDs.value = known

@@ -1065,11 +1065,7 @@ func (state *opsCaptureWriterState) appendCapturedResponse(chunk []byte) {
 }
 
 func (state *opsCaptureWriterState) shouldCapture() bool {
-	if state.ctx == nil {
-		return true
-	}
-	_, rejected := middleware2.GetIngressRejectReason(state.ctx)
-	return !rejected
+	return true
 }
 
 // OpsErrorLoggerMiddleware records error responses (status >= 400) into ops_error_logs.
@@ -1093,13 +1089,6 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 		c.Writer = w
 		c.Next()
 		w.finalizeCapture()
-
-		if reason, rejected := middleware2.GetIngressRejectReason(c); rejected {
-			if ops != nil && ops.IsMonitoringEnabled(c.Request.Context()) {
-				recordOpsIngressRejection(c, ops, reason)
-			}
-			return
-		}
 
 		if ops == nil {
 			return
@@ -1300,33 +1289,6 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 
 		enqueueOpsErrorLog(ops, entry)
 	}
-}
-
-func recordOpsIngressRejection(c *gin.Context, ops *service.OpsService, reason middleware2.IngressRejectReason) {
-	if c == nil || ops == nil {
-		return
-	}
-	status := c.Writer.Status()
-	if status < 400 {
-		status = http.StatusUnauthorized
-	}
-	requestID, _ := c.Request.Context().Value(ctxkey.RequestID).(string)
-	entry := &service.OpsInsertErrorLogInput{
-		RequestID: requestID, RequestPath: c.Request.URL.Path, StatusCode: status,
-		ErrorPhase: "admission", ErrorType: "authentication_error", ErrorOwner: "client",
-		ErrorSource: "gateway", ErrorMessage: string(reason), UserAgent: c.GetHeader("User-Agent"), CreatedAt: time.Now(),
-	}
-	if apiKey, ok := middleware2.GetAPIKeyFromContext(c); ok && apiKey != nil {
-		entry.APIKeyID = &apiKey.ID
-		if apiKey.User != nil {
-			entry.UserID = &apiKey.User.ID
-		}
-		entry.APIKeyPrefix = keyPrefix(apiKey.Key, 8)
-	}
-	if clientIP := strings.TrimSpace(ip.GetClientIP(c)); clientIP != "" {
-		entry.ClientIP = &clientIP
-	}
-	enqueueOpsErrorLog(ops, entry)
 }
 
 func logOpsRecoveredUpstream(c *gin.Context, ops *service.OpsService, finalStatus int) {
@@ -2590,31 +2552,6 @@ func shouldSkipOpsErrorLog(ctx context.Context, ops *service.OpsService, message
 	// Check if context canceled errors should be ignored (client disconnects)
 	if settings.IgnoreContextCanceled {
 		if strings.Contains(msgLower, opsErrContextCanceled) || strings.Contains(bodyLower, opsErrContextCanceled) {
-			return true
-		}
-	}
-
-	// Check if "no available accounts" errors should be ignored
-	if settings.IgnoreNoAvailableAccounts {
-		if strings.Contains(msgLower, opsErrNoAvailableAccounts) || strings.Contains(bodyLower, opsErrNoAvailableAccounts) {
-			return true
-		}
-	}
-
-	// Check if invalid/missing API key errors should be ignored (user misconfiguration)
-	if settings.IgnoreInvalidApiKeyErrors {
-		if strings.Contains(bodyLower, opsErrInvalidAPIKey) || strings.Contains(bodyLower, opsErrAPIKeyRequired) {
-			return true
-		}
-	}
-
-	// Check if insufficient balance errors should be ignored
-	if settings.IgnoreInsufficientBalanceErrors {
-		if strings.Contains(bodyLower, opsErrInsufficientBalance) || strings.Contains(bodyLower, opsErrInsufficientAccountBalance) ||
-			strings.Contains(bodyLower, opsErrInsufficientQuota) ||
-			strings.Contains(bodyLower, opsErrInsufficientBalanceChinese) ||
-			strings.Contains(msgLower, opsErrInsufficientBalanceChinese) ||
-			strings.Contains(msgLower, opsErrInsufficientBalance) || strings.Contains(msgLower, opsErrInsufficientAccountBalance) {
 			return true
 		}
 	}

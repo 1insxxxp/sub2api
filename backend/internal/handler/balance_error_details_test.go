@@ -118,7 +118,7 @@ func TestBalanceErrorDetails_OpsClassificationAndIgnoreRemainCompatible(t *testi
 				require.NoError(t, err)
 				body = string(encoded)
 			}
-			require.Equal(t, ignore, shouldSkipOpsErrorLog(context.Background(), ops, message, body, "/v1/messages"))
+			require.False(t, shouldSkipOpsErrorLog(context.Background(), ops, message, body, "/v1/messages"))
 		}
 		require.False(t, shouldSkipOpsErrorLog(context.Background(), ops, inflight.Message, "", "/v1/messages"))
 		require.False(t, shouldSkipOpsErrorLog(context.Background(), ops, service.ErrBillingServiceUnavailable.Message, "", "/v1/messages"))

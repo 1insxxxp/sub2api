@@ -282,8 +282,8 @@ func TestOpsErrorLoggerMiddleware_RecordsIngressRejection(t *testing.T) {
 	require.JSONEq(t, `{"code":"INVALID_API_KEY","message":"Invalid API key"}`, w.Body.String())
 	require.Equal(t, int64(1), OpsErrorLogEnqueuedTotal(), "ingress rejection must enter the error queue")
 	job := <-opsErrorLogQueue
-	require.Equal(t, "invalid_api_key", job.entry.ErrorMessage)
-	require.Equal(t, "admission", job.entry.ErrorPhase)
+	require.Equal(t, "Invalid API key", job.entry.ErrorMessage)
+	require.Equal(t, "auth", job.entry.ErrorPhase)
 	require.Equal(t, http.StatusUnauthorized, job.entry.StatusCode)
 }
 
@@ -2234,4 +2234,50 @@ func TestOpsErrorLoggerMiddleware_RecordsClientClosedWhenIgnoreContextCanceledDi
 	require.Equal(t, int64(1), OpsErrorLogQueueLength())
 	job := <-opsErrorLogQueue
 	require.Equal(t, statusClientClosedRequest, job.entry.StatusCode)
+}
+
+func TestOpsErrorLoggerMiddleware_RecordsKnownAdmissionOwner(t *testing.T) {
+	setupOpsErrorLogTestQueue(t, 2)
+	ops := service.NewOpsService(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	router := gin.New()
+	router.Use(OpsErrorLoggerMiddleware(ops))
+	router.GET("/v1/messages", func(c *gin.Context) {
+		groupID := int64(73)
+		middleware2.SetOpsFallbackAPIKey(c, &service.APIKey{ID: 41, Key: "sk-regression-secret", User: &service.User{ID: 19}, GroupID: &groupID})
+		middleware2.MarkIngressRejected(c, middleware2.IngressRejectAPIKeyDisabled)
+		c.JSON(http.StatusForbidden, gin.H{"error": gin.H{"type": "authentication_error", "message": "API key is disabled"}})
+	})
+	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/v1/messages", nil))
+	require.Equal(t, int64(1), OpsErrorLogQueueLength())
+	entry := (<-opsErrorLogQueue).entry
+	require.Equal(t, int64(19), *entry.UserID)
+	require.Equal(t, int64(41), *entry.APIKeyID)
+	require.Equal(t, int64(73), *entry.GroupID)
+	require.Equal(t, "auth", entry.ErrorPhase)
+	require.NotContains(t, entry.ErrorBody, "sk-regression-secret")
+}
+
+func TestOpsErrorLoggerMiddleware_RequiredFailuresIgnoreLegacyFilters(t *testing.T) {
+	for _, tc := range []struct {
+		message, errorType string
+		status             int
+	}{
+		{"余额不足", "billing_error", http.StatusForbidden},
+		{"No available accounts", "api_error", http.StatusServiceUnavailable},
+		{"Invalid API key", "authentication_error", http.StatusUnauthorized},
+	} {
+		t.Run(tc.errorType, func(t *testing.T) {
+			setupOpsErrorLogTestQueue(t, 2)
+			settings := &opsAdvancedSettingsRepoStub{advanced: `{"ignore_insufficient_balance_errors":true,"ignore_invalid_api_key_errors":true,"ignore_no_available_accounts":true}`}
+			ops := service.NewOpsService(nil, settings, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+			router := gin.New()
+			router.Use(OpsErrorLoggerMiddleware(ops))
+			router.GET("/v1/messages", func(c *gin.Context) {
+				c.JSON(tc.status, gin.H{"error": gin.H{"type": tc.errorType, "message": tc.message}})
+			})
+			router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/v1/messages", nil))
+			require.Equal(t, int64(1), OpsErrorLogQueueLength())
+			require.Equal(t, tc.status, (<-opsErrorLogQueue).entry.StatusCode)
+		})
+	}
 }

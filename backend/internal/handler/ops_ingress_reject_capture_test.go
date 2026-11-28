@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestOpsCaptureWriterDoesNotCopyIngressRejectBody(t *testing.T) {
+func TestOpsCaptureWriterCapturesIngressRejectBody(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	context, _ := gin.CreateTestContext(httptest.NewRecorder())
 	writer := acquireOpsCaptureWriter(context.Writer)
@@ -21,5 +21,5 @@ func TestOpsCaptureWriterDoesNotCopyIngressRejectBody(t *testing.T) {
 	context.Status(http.StatusUnauthorized)
 	_, err := context.Writer.WriteString(`{"code":"INVALID_API_KEY","message":"Invalid API key"}`)
 	require.NoError(t, err)
-	require.Empty(t, writer.capturedBytes())
+	require.JSONEq(t, `{"code":"INVALID_API_KEY","message":"Invalid API key"}`, string(writer.capturedBytes()))
 }

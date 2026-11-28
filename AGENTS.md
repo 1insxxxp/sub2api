@@ -1573,11 +1573,15 @@ curl -fsS "${BASE}/api/v1/custom-groups/${CUSTOM_GROUP_ID}" \
 | 方法 | 端点 | 参数与响应 |
 |------|------|------------|
 | GET | `/api/v1/admin/sub-admin-commissions/exclusions` | `page`、`page_size`；分页返回当前有效名单，字段 `id`、`user_id`、`user_email`、`username`、`notes`（管理员备注）、`started_at`；仅超级管理员可访问 |
+| GET | `/api/v1/admin/sub-admin-commissions/exclusions/status` | `user_ids` 为逗号分隔的正整数列表，最多 100 个，返回当前有效名单中的 `{ "user_ids": [123] }`；搜索结果通过此接口判断跨分页状态 |
 | POST | `/api/v1/admin/sub-admin-commissions/exclusions` | JSON `{ "user_id": 123 }`；返回当前排除记录，重复添加不会重置开始时间 |
 | DELETE | `/api/v1/admin/sub-admin-commissions/exclusions/:user_id` | 移除该客户当前排除状态，返回成功信息；重复移除安全 |
 
 ```bash
 curl -s "${BASE}/api/v1/admin/sub-admin-commissions/exclusions?page=1&page_size=20" \
+  -H "x-api-key: ${KEY}"
+
+curl -s "${BASE}/api/v1/admin/sub-admin-commissions/exclusions/status?user_ids=123,456" \
   -H "x-api-key: ${KEY}"
 
 curl -s -X POST "${BASE}/api/v1/admin/sub-admin-commissions/exclusions" \
