@@ -19,6 +19,28 @@ func ptrString[T ~string](v T) *string {
 	return &s
 }
 
+func TestAdminService_GroupRechargeGateCreateAndUpdate(t *testing.T) {
+	ctx := context.Background()
+	repo := &groupRepoStubForAdmin{createID: 12}
+	svc := &adminServiceImpl{groupRepo: repo}
+	_, err := svc.CreateGroup(ctx, &CreateGroupInput{
+		Name: "welfare", Platform: PlatformGemini, RateMultiplier: 1, MinTotalRechargeUSD: 50,
+	})
+	require.NoError(t, err)
+	require.Equal(t, 50.0, repo.created.MinTotalRechargeUSD)
+
+	repo.getByID = repo.created
+	threshold := 60.0
+	for _, update := range []struct {
+		value *float64
+		want  float64
+	}{{&threshold, 60}, {nil, 60}, {new(float64), 0}} {
+		_, err := svc.UpdateGroup(ctx, 12, &UpdateGroupInput{MinTotalRechargeUSD: update.value})
+		require.NoError(t, err)
+		require.Equal(t, update.want, repo.updated.MinTotalRechargeUSD)
+	}
+}
+
 func TestAdminService_ModelAliasesCreateAndUpdate(t *testing.T) {
 	repo := &groupRepoStubForAdmin{createID: 12, getByID: &Group{ID: 12, Platform: PlatformAnthropic, RateMultiplier: 1}}
 	svc := &adminServiceImpl{groupRepo: repo}

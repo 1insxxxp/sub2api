@@ -2239,7 +2239,7 @@ func sleepGeminiBackoff(ctx context.Context, attempt int) error {
 var (
 	sensitiveQueryParamRegex  = regexp.MustCompile(`(?i)([?&](?:key|client_secret|access_token|refresh_token)=)[^&"\s]+`)
 	upstreamRequestIDRegex    = regexp.MustCompile(`(?i)(\b(?:request|delivery|trace)[_-]?id\s*[:=]\s*)[A-Za-z0-9._:-]+`)
-	upstreamProviderNameRegex = regexp.MustCompile(`(?i)\b(?:kiro|devin|cursor)\b`)
+	upstreamProviderNameRegex = regexp.MustCompile(`(?i)\b(?:kiro|devin|cursor|antigravity|vertex|aistudio|ai[- ]?studio|vet|debin)\b`)
 	retryInRegex              = regexp.MustCompile(`Please retry in ([0-9.]+)s`)
 )
 

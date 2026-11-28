@@ -888,7 +888,7 @@ POST /api/v1/admin/accounts/:id/test
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | `model_id` | string | 否 | 指定测试模型，如 `claude-opus-4-6`；不传则使用默认模型 |
-| `prompt` | string | 否 | 生图测试提示词；应明确要求生成图片 |
+| `prompt` | string | 否 | 普通文本测试的用户消息，默认 `hi`。管理后台的「渠道身份与能力自检」通过此字段发送完整问卷。生图测试可传图片描述。 |
 | `mode` | string | 否 | Grok 生图传 `image`；OpenAI 常规测试传 `default` |
 | `image_data_url` | string | 否 | Grok 图片编辑参考图，格式为 `data:<mime>;base64,...` |
 

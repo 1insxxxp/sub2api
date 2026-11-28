@@ -658,12 +658,29 @@ func TestBatchImagePublicService_StatusItemsAndCancel(t *testing.T) {
 		require.Len(t, filtered.Data, 1)
 		require.Equal(t, "failed", filtered.Data[0].Status)
 		require.NotNil(t, filtered.Data[0].Error)
-		require.Equal(t, "upstream provider operation failed", filtered.Data[0].Error.Message)
+		require.Contains(t, filtered.Data[0].Error.Message, "模型服务请求失败")
 
 		body, err := json.Marshal(filtered)
 		require.NoError(t, err)
 		requireBatchImagePublicJSONHasNoInternals(t, string(body))
 		require.NotContains(t, string(body), "download_url")
+
+		message := "请检查参数"
+		settingsService := NewSettingService(newMockSettingRepo(), &config.Config{})
+		settings := DefaultPublicGatewayErrorSettings()
+		settings.Rules = []PublicGatewayErrorRule{{ID: "signature", Name: "工具参数", Enabled: true, UpstreamStatuses: []int{400}, Pattern: "signature", Status: 400, Code: "invalid_tool_request", Message: message}}
+		require.NoError(t, settingsService.SetPublicGatewayErrorSettings(ctx, settings))
+		configuredCtx := WithPublicGatewayErrorSettings(ctx, settingsService)
+		code = "400"
+		msg = "antigravity signature https://private.invalid"
+		filtered, err = svc.ListItems(configuredCtx, testBatchImageOwner(), "imgbatch_items", BatchImageItemsQuery{Status: "failed", Limit: 100})
+		require.NoError(t, err)
+		require.Equal(t, message, filtered.Data[0].Error.Message)
+		require.Equal(t, "invalid_tool_request", filtered.Data[0].Error.Code)
+		body, err = json.Marshal(filtered)
+		require.NoError(t, err)
+		require.NotContains(t, string(body), "antigravity")
+		require.NotContains(t, string(body), "private.invalid")
 
 		_, err = svc.ListItems(ctx, BatchImageOwner{UserID: 12, APIKeyID: 22}, "imgbatch_items", BatchImageItemsQuery{})
 		require.ErrorIs(t, err, ErrBatchImageJobNotFound)

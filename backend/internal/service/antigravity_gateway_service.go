@@ -368,7 +368,7 @@ func (s *AntigravityGatewayService) TestConnection(ctx context.Context, account 
 	return s.TestConnectionWithPrompt(ctx, account, modelID, "")
 }
 
-// TestConnectionWithPrompt 测试 Antigravity 账号连接，支持为图片生成模型指定测试提示词。
+// TestConnectionWithPrompt 使用给定提示词测试 Antigravity 账号的文本或图片模型。
 func (s *AntigravityGatewayService) TestConnectionWithPrompt(ctx context.Context, account *Account, modelID string, prompt string) (*TestConnectionResult, error) {
 
 	// 获取 token
@@ -467,8 +467,7 @@ func testConnectionHandleError(
 	return nil
 }
 
-// buildGeminiTestRequestWithPrompt 构建 Gemini 格式测试请求
-// 文本模型使用最小 token 消耗：输入 "." + maxOutputTokens: 1；图片模型使用图片生成配置
+// buildGeminiTestRequestWithPrompt 构建 Gemini 格式的文本或图片测试请求。
 func (s *AntigravityGatewayService) buildGeminiTestRequestWithPrompt(projectID, model, prompt string) ([]byte, error) {
 	if isImageGenerationModel(model) {
 		imagePrompt := strings.TrimSpace(prompt)
@@ -516,7 +515,7 @@ func (s *AntigravityGatewayService) buildGeminiTestRequestWithPrompt(projectID, 
 			},
 		},
 		"generationConfig": map[string]any{
-			"maxOutputTokens": antigravityTestMaxOutputTokens,
+			"maxOutputTokens": accountTestOutputTokenLimit(prompt, antigravityTestMaxOutputTokens),
 		},
 		"toolConfig": map[string]any{
 			"functionCallingConfig": map[string]any{
@@ -543,7 +542,7 @@ func (s *AntigravityGatewayService) buildClaudeTestRequest(projectID, mappedMode
 				Content: json.RawMessage(content),
 			},
 		},
-		MaxTokens: antigravityTestMaxOutputTokens,
+		MaxTokens: accountTestOutputTokenLimit(prompt, antigravityTestMaxOutputTokens),
 		Stream:    false,
 	}
 	return antigravity.TransformClaudeToGemini(claudeReq, projectID, mappedModel)
@@ -568,7 +567,7 @@ func antigravityTestPrompt(prompt string) string {
 	if trimmed := strings.TrimSpace(prompt); trimmed != "" {
 		return trimmed
 	}
-	return defaultGeminiTextTestPrompt
+	return defaultTextTestPrompt
 }
 
 // extractContentFromSSEResponse 从 SSE 流式响应中提取文本和内联图片

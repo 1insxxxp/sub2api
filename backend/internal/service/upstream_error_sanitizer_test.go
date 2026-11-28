@@ -49,13 +49,18 @@ func TestUpstreamErrorPrivacyMessage(t *testing.T) {
 }
 
 func TestUpstreamErrorPrivacyMessageMasksProviderNames(t *testing.T) {
-	message := "Kiro/Cursor/Devin upstream rejected model claude-sonnet-5"
+	message := "Kiro/Cursor/Devin/Antigravity/Vertex/AI Studio/Vet/Debin upstream rejected model claude-sonnet-5"
 
 	got := sanitizeUpstreamErrorMessage(message)
 
 	require.NotContains(t, strings.ToLower(got), "kiro")
 	require.NotContains(t, strings.ToLower(got), "cursor")
 	require.NotContains(t, strings.ToLower(got), "devin")
+	require.NotContains(t, strings.ToLower(got), "antigravity")
+	require.NotContains(t, strings.ToLower(got), "vertex")
+	require.NotContains(t, strings.ToLower(got), "ai studio")
+	require.NotContains(t, strings.ToLower(got), "vet")
+	require.NotContains(t, strings.ToLower(got), "debin")
 	require.Contains(t, got, "[upstream]")
 }
 

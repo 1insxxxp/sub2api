@@ -81,6 +81,7 @@ type APIKeyAuthGroupSnapshot struct {
 	Name                            string                        `json:"name"`
 	Platform                        string                        `json:"platform"`
 	IsExclusive                     bool                          `json:"is_exclusive"`
+	MinTotalRechargeUSD             float64                       `json:"min_total_recharge_usd"`
 	Status                          string                        `json:"status"`
 	SubscriptionType                string                        `json:"subscription_type"`
 	IsCategoryDefault               bool                          `json:"is_category_default"`

@@ -695,7 +695,7 @@ func (s *BatchImagePublicService) ListItems(ctx context.Context, owner BatchImag
 	}
 	data := make([]BatchImagePublicItem, 0, len(items))
 	for _, item := range items {
-		data = append(data, BatchImageItemToPublic(item))
+		data = append(data, BatchImageItemToPublicContext(ctx, item))
 	}
 	return &BatchImagePublicItemsResponse{
 		Object:  "list",
@@ -1196,6 +1196,10 @@ func BatchImageJobToPublic(job *BatchImageJob) *BatchImagePublicBatch {
 }
 
 func BatchImageItemToPublic(item *BatchImageItem) BatchImagePublicItem {
+	return BatchImageItemToPublicContext(context.Background(), item)
+}
+
+func BatchImageItemToPublicContext(ctx context.Context, item *BatchImageItem) BatchImagePublicItem {
 	out := BatchImagePublicItem{
 		CustomID:      item.CustomID,
 		Status:        "failed",
@@ -1212,9 +1216,12 @@ func BatchImageItemToPublic(item *BatchImageItem) BatchImagePublicItem {
 		out.Status = "succeeded"
 		return out
 	}
+	code := batchImageDerefString(item.ErrorCode)
+	status, _ := strconv.Atoi(strings.TrimSpace(code))
+	public := ClassifyPublicGatewayErrorContext(ctx, status, code+" "+batchImageDerefString(item.ErrorMessage))
 	out.Error = &BatchImagePublicError{
-		Code:    batchImageDerefString(item.ErrorCode),
-		Message: sanitizeBatchImagePublicMessage(batchImageDerefString(item.ErrorMessage)),
+		Code:    public.Code,
+		Message: public.Message,
 		Source:  batchImageItemErrorSource(item),
 	}
 	return out
